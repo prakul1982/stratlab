@@ -1,0 +1,115 @@
+{
+ "note": "c54: the moves between layers the stored change log of each theme recorded on its last re-check, as the live R53 decks' 'Since the previous version' row prints them (the placement-inputs endpoint returns them as 'moved_before' from R53 on; the inputs here were read before it did). {theme: {symbol: [from, to]}} Metals: the deck names 6 of the 11 moved into 'Other' and '5 more'; the 5 are the rest of the 14 companies of 'Aluminium' on the live R52 deck (test_exact_replay's approved Aluminium layer), the only ones of the 14 the deck doesn't name elsewhere.",
+ "semis": {
+  "AAOI": [
+   "Makers of their own products",
+   "Chip equipment and subsystem suppliers"
+  ],
+  "INTC": [
+   "Makers of their own products",
+   "Chip equipment and subsystem suppliers"
+  ],
+  "NLST": [
+   "Makers of their own products",
+   "Chip equipment and subsystem suppliers"
+  ],
+  "LASR": [
+   "Makers of their own products",
+   "Chip equipment and subsystem suppliers"
+  ],
+  "LEDS": [
+   "Makers of their own products",
+   "Chip equipment and subsystem suppliers"
+  ]
+ },
+ "fmcg": {
+  "AWL": [
+   "Agri-processing and edible oil refining",
+   "Branded packaged foods manufacturing"
+  ],
+  "NIPPOBATRY": [
+   "Other FMCG companies",
+   "Branded packaged foods manufacturing"
+  ],
+  "JYOTHYLAB": [
+   "Other FMCG companies",
+   "Branded packaged foods manufacturing"
+  ],
+  "MCLEODRUSS": [
+   "Other FMCG companies",
+   "Mining, oil, gas and farming"
+  ],
+  "NEAGI": [
+   "Other FMCG companies",
+   "Mining, oil, gas and farming"
+  ]
+ },
+ "meddev": {
+  "UFPT": [
+   "Other medical device companies",
+   "Surgical robotics systems"
+  ]
+ },
+ "metals": {
+  "BMAL": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "HINDALUMI": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "JIVIAL": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "KANISHK": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "MAITRI": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "MMP": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "MSAFE": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "PALCO": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "PGFOILQ": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "SACHEMT": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "SUDAI": [
+   "Aluminium",
+   "Other metals and mining companies"
+  ],
+  "ARFIN": [
+   "Aluminium",
+   "Steel and alloy pipe and tube makers"
+  ],
+  "MAANALU": [
+   "Aluminium",
+   "Steel and alloy pipe and tube makers"
+  ],
+  "MANAKALUCO": [
+   "Aluminium",
+   "Steel and alloy pipe and tube makers"
+  ],
+  "SOUTHMG": [
+   "Other metals and mining companies",
+   "Coal, iron ore and mineral miners"
+  ]
+ }
+}

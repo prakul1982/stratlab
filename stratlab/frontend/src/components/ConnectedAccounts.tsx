@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
+import { aheadExample } from "../lib/dateInput";
 import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, DateField, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton, UploadProblem, useUploadProblem, Working, type Column } from "./kit";
 
 /* Settings -> Connected accounts, the "connect once" cards: the statement inbox, the broker logins (Zerodha, Upstox, Dhan),
@@ -263,7 +264,7 @@ function BrokersCard({ c, set }: P) {
       );
     } },
     { key: "act", header: "", action: true, cell: (b) => !b.available ? null : !b.connected
-      ? <button type="button" className="btn" disabled={!!busy} onClick={() => void login(b)}>Connect {b.name}</button>
+      ? <button type="button" className="btn broker-connect" disabled={!!busy} onClick={() => void login(b)}>Connect {b.name}</button>
       : <span className="k-row">
           <button type="button" className="btn" disabled={!!busy} aria-label={b.live ? `Refresh ${b.name}` : undefined} onClick={() => void (b.live ? refresh(b) : login(b))}>{b.live ? "Refresh" : `Log in to ${b.name}`}</button>
           <button type="button" className="btn quiet" disabled={!!busy} aria-label={`Disconnect ${b.name}`} onClick={() => setAsking(b)}>Disconnect</button>
@@ -324,7 +325,7 @@ function IbkrCard({ c, set }: P) {
       </> : <FormGrid label="Connect Interactive Brokers" onSubmit={(e) => { e.preventDefault(); if (token.trim() && query.trim()) void connect(); }}>
         <Field label="Flex token" type="password" autoComplete="off" value={token} maxLength={200} onChange={(e) => setToken(e.target.value)} />
         <Field label="Query id" inputMode="numeric" value={query} maxLength={20} onChange={(e) => setQuery(e.target.value.replace(/\D/g, ""))} />
-        <DateField label="Token ends on" optional value={expires} onChange={setExpires} info="The expiry date Interactive Brokers shows next to the token, so StratLab can tell you before it stops." />
+        <DateField label="Token ends on" optional value={expires} onChange={setExpires} placeholder={aheadExample(90)} info="The expiry date Interactive Brokers shows next to the token, so StratLab can tell you before it stops." />
         <FormActions><button type="submit" className="btn" disabled={busy || !token.trim() || !query.trim()}>{busy ? "Checking…" : "Connect"}</button></FormActions>
       </FormGrid>}
       <Disclosure summary="Where to find the token and query id">

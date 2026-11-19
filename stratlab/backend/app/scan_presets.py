@@ -217,7 +217,49 @@ def _f(v: float) -> str:
     return f"{v:,.2f}"
 
 
-def _detail(pid: str, ctx: Ctx, i: int, live: bool = False) -> str:
+def _day_words(iso: str) -> str:
+    d = date.fromisoformat(iso)
+    return f"{d.day} {d:%b %Y}"
+
+
+def special_sessions(days: list[str], market: str | None = None) -> list[str]:
+    """The candles' days that are special sessions: a session dated on a weekend (Diwali's Muhurat trading, a Budget-day Sunday)
+    or, for a market with a calendar, on a day it lists as shut. The exchange's own series counts them; some price histories
+    leave them out, so an average over a window holding one differs from theirs (LIVE13B-010)."""
+    out = []
+    for iso in days:
+        try:
+            d = date.fromisoformat(str(iso)[:10])
+        except ValueError:
+            continue
+        shut = d.weekday() >= 5
+        if not shut and market:
+            try:
+                from .data.calendar import is_trading_day
+                shut = not is_trading_day(market, d)
+            except Exception:
+                shut = False
+        if shut:
+            out.append(d.isoformat())
+    return out
+
+
+def _averages_note(ctx: Ctx, i: int, span: int, market: str | None = None) -> str:
+    """Words for the special sessions inside the longest average's window that ends on candle i: '' when there are none."""
+    try:
+        days = [str(t)[:10] for t in ctx.df["t"].iloc[max(0, i - span + 1):i + 1]]
+    except Exception:
+        return ""
+    found = special_sessions(days, market)
+    if not found:
+        return ""
+    names = [_day_words(d) for d in found]
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    return (f" (the averages count the exchange's special session{'s' if len(names) > 1 else ''} of {listed}, "
+            "which some price histories leave out)")
+
+
+def _detail(pid: str, ctx: Ctx, i: int, live: bool = False, market: str | None = None) -> str:
     """The numbers behind a match on one candle, as plain text. `live`: read just now, when the newest candle may be
     today's, still trading, so its price is the last price, not a close (R5O-023)."""
     px = ctx.val(Ref(t="price"), i)
@@ -230,7 +272,8 @@ def _detail(pid: str, ctx: Ctx, i: int, live: bool = False) -> str:
         if pid == "high52":
             return f"{at} {_f(px)}, above the previous 252-day high of {_f(val('dc_upper', p=YEAR))}"
         if pid == "golden_cross":
-            return f"50-day average {_f(val('sma', p=50))} crossed above the 200-day average {_f(val('sma', p=200))}"
+            return (f"50-day average {_f(val('sma', p=50))} crossed above the 200-day average {_f(val('sma', p=200))}"
+                    + _averages_note(ctx, i, 200, market))
         if pid == "rsi_bounce":
             return f"14-day RSI is {val('rsi', p=14):.1f}, back above 30 from {ctx.val(Ref(t='rsi', p=14), i - 1):.1f}"
         if pid == "volume_surge":
@@ -243,7 +286,8 @@ def _detail(pid: str, ctx: Ctx, i: int, live: bool = False) -> str:
             return f"{at} {_f(px)}, {(px / low - 1) * 100:.1f}% above the previous 252-day low of {_f(low)}" if px >= low \
                 else f"{at} {_f(px)}, below the previous 252-day low of {_f(low)}"
         if pid == "pullback":
-            return f"{at} {_f(px)}: above the 50-day average {_f(val('sma', p=50))}, below the 20-day EMA {_f(val('ema', p=20))}; 50-day above 200-day {_f(val('sma', p=200))}"
+            return (f"{at} {_f(px)}: above the 50-day average {_f(val('sma', p=50))}, below the 20-day EMA {_f(val('ema', p=20))}; 50-day above 200-day {_f(val('sma', p=200))}"
+                    + _averages_note(ctx, i, 200, market))
         if pid == "st_s2":
             return f"Stage 2, and the {word} {_f(px)} is above the Supertrend {_f(val('supertrend', p=10, m=3))}"
     except (TypeError, ValueError, ZeroDivisionError):
@@ -272,7 +316,8 @@ def _trend_days(ctx: Ctx, i: int) -> dict:
     return {"st_days": up + 1, "stage_days": since + 1, "stage_capped": bool(capped)}
 
 
-def evaluate(bars: list[dict], through: str | None = None, only: list[str] | None = None, live: bool = False, custom: tuple[list, int] | None = None) -> dict | None:
+def evaluate(bars: list[dict], through: str | None = None, only: list[str] | None = None, live: bool = False, custom: tuple[list, int] | None = None,
+             market: str | None = None) -> dict | None:
     """Every preset's answer for one stock's daily candles (up to the day `through`, "YYYY-MM-DD"):
     {"as_of", "price", "chg", "matches": {id: {"days_ago", "day", "detail"}}}. None when there are too few candles.
     A preset matches when all its conditions held on one of its last `within` candles; the latest such candle counts."""
@@ -302,7 +347,7 @@ def evaluate(bars: list[dict], through: str | None = None, only: list[str] | Non
                 if squeeze is not None and not squeeze[i]:
                     continue
                 if all(eval_cond(ctx, c, i) for c in p["conds"]):
-                    detail = _custom_detail(ctx, p["conds"], i, live) if custom else _detail(p["id"], ctx, i, live)
+                    detail = _custom_detail(ctx, p["conds"], i, live) if custom else _detail(p["id"], ctx, i, live, market)
                     out["matches"][p["id"]] = {"days_ago": back, "day": str(rows[i]["t"])[:10], "detail": detail,
                                                **(_trend_days(ctx, i) if p["id"] == "st_s2" else {})}
                     break

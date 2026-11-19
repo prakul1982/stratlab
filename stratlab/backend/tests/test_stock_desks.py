@@ -103,7 +103,10 @@ def test_expiry_day_reads_the_basis_off_the_next_contract():
 
 def test_reads_the_cash_bhavcopy_and_the_slb_bhavcopy():
     cash = X.cash_rows((FIX / "cm_bhav_01102026.csv").read_text())
-    assert cash["RELIANCE"] == {"close": 1167.7, "prev": 1187.0, "series": "EQ"}
+    # (updated on purpose, fix13 LIVE11A-006: the day's open is read too, for an issue's listing price)
+    # (updated on purpose, LIVE11B-012: the day's high and low come with the close, for the 52-week range)
+    assert {k: v for k, v in cash["RELIANCE"].items() if k not in ("open", "high", "low")} == {"close": 1167.7, "prev": 1187.0, "series": "EQ"} and "open" in cash["RELIANCE"]
+    assert cash["RELIANCE"]["high"] >= cash["RELIANCE"]["close"] >= cash["RELIANCE"]["low"]
     assert "SGBJUN28" not in cash                                            # a gold bond, not a share
     day, lines = slb.bhav_rows((FIX / "SLBM_BC_01102026.DAT").read_text())
     assert day == "2026-10-01"

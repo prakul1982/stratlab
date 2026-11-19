@@ -179,7 +179,8 @@ function DataBanner({ note, market }: { note: { closed: "weekend" | "holiday" | 
       </div>
     );
   }
-  if (back) return <div className="banner data-banner" role="status"><span>Indian price data reconnects on {back}, before the market opens.</span></div>;
+  // LIVE11A-028: the normal overnight state in a quiet note, not the alarm colour (the orange stays for a login that didn't complete)
+  if (back) return <div className="banner data-banner calm" role="status"><span>Indian price data reconnects on {back}, before the market opens.</span></div>;
   return (
     <div className="banner data-banner" role="status">
       <span>Indian market data is offline: today's data login hasn't completed.</span>
@@ -231,7 +232,7 @@ function TourRoute() {
 }
 
 function Routed() {
-  const { session, ready, dataOffline, meError, me, markets } = useApp();
+  const { session, ready, dataOffline, dataNote, dataKnown, meError, me, markets } = useApp();
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
@@ -251,16 +252,19 @@ function Routed() {
   useLayoutEffect(() => { if (!everyone && (!ready || session)) document.title = titleFor(loc.pathname); }, [everyone, ready, session, loc.pathname]);
   // the analytics question comes first in the page's order, so the keyboard and a screen reader meet it before a hundred controls
   // (A11Y-2: it was the 127th Tab stop); signed in, the Shell draws it in the first row of its page column (LIVE7B-006)
-  if (everyone) return <><Tracking /><VisitorApp userId={session?.user.id} /></>;
-  if (!ready) return <><Tracking /><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main></>;
+  if (everyone) return <><VisitorApp userId={session?.user.id} /><Tracking /></>;
+  if (!ready) return <><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main><Tracking /></>;
   // a saved sign-in the sign-in service didn't answer for is not "signed out": say it couldn't load, offer Reload (R20-002)
-  if (!session && sessionUnconfirmed(ready, session)) return <><Tracking /><main><LoadFailed what="your account" /></main></>;
-  if (!session) return <><Tracking /><VisitorApp /></>;
+  if (!session && sessionUnconfirmed(ready, session)) return <><main><LoadFailed what="your account" /></main><Tracking /></>;
+  if (!session) return <><VisitorApp /><Tracking /></>;
+  // the data status first (a moment at most, asked for beside the sign-in check): the offline line is then drawn with the page, never
+  // pushed in over it a second later (LIVE11B-004)
+  if (!dataKnown) return <><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main><Tracking /></>;
   return (
     <Shell ask={<Tracking />}>
       <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}
       {meError && <div className="banner" role="alert"><span>StratLab couldn't load your account: {meError}</span><AccountRetry /></div>}
-      {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} market={markets.find((m) => m.id === "IN")} />}
+      {dataOffline && !meError && <DataBanner note={me ? me.data_note ?? null : dataNote} market={markets.find((m) => m.id === "IN")} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
       {/* a page whose code is still on its way still has its one heading (axe page-has-heading-one, R7O-010) */}
@@ -271,6 +275,8 @@ function Routed() {
         <Route path="/" element={<SpaceHome />} />
         <Route path="/mine" element={<MineHome />} />
         <Route path="/all" element={<Redirect to="/mine" />} />
+        {/* CX2: a "home" address typed or kept from elsewhere opens My space, not "Page not found" */}
+        <Route path="/home" element={<Redirect to="/mine" />} />
         <Route path="/features" element={<FeaturesPage />} />
         {/* the landing page's own addresses, signed in: nothing to sign in to, so home; "about" is what the features page tells */}
         <Route path="/login" element={<Redirect to="/" />} />
@@ -414,6 +420,7 @@ export function firstPage(path: string): (() => Promise<unknown>) | null {
 export function startApp(root: HTMLElement) {
   // without the config the app can't tell who is signed in: never draw it as signed out
   if (!window.STRATLAB_CONFIG?.SUPABASE_URL) { window.__stratlabShowLoadError?.(); return; }
+  // (the account itself was asked for at the start, beside the app's code: entry.tsx, lib/accountEarly.ts, LIVE13B-004)
   void firstPage(location.pathname)?.().catch(() => undefined);
   createRoot(root).render(
     <StrictMode>

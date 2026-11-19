@@ -43,7 +43,7 @@ test("/start is the ad landing: one line, one way in, three points and three sam
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://stratlab.studio/");
   // the full landing is one link away
   await page.getByRole("link", { name: "See everything StratLab does →" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Test it, research it, track it.", { timeout: 30_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Is your trading idea skill or luck?", { timeout: 30_000 }); // (updated on purpose, NAV3: the hero's one promise, CX-1)
 });
 
 test("the live ad's address: / with fbclid or a social utm_source draws the ad landing and keeps its parameters", async ({ page }) => {
@@ -60,7 +60,7 @@ test("the live ad's address: / with fbclid or a social utm_source draws the ad l
 test("/ with no ad parameters (or another source) is the landing page as before", async ({ page }) => {
   for (const path of ["/", "/?utm_source=google"]) {
     await open(page, path);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Test it, research it, track it.", { timeout: 30_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Is your trading idea skill or luck?", { timeout: 30_000 }); // (updated on purpose, NAV3: the hero's one promise, CX-1)
     await expect(page.getByRole("button", { name: "Try free with Google" })).toHaveCount(0);
   }
 });

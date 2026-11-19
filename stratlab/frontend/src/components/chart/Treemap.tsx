@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { watchSize } from "../../lib/resize";
-import { layout, legend, matches, step, stepClass, tileWords, type ColorBy, type GroupBy, type Period, type Placed, type SizeBy, type Tile } from "../../lib/heatmap";
+import { groupWords, layout, legend, matches, step, stepClass, tileWords, type ColorBy, type GroupBy, type Period, type Placed, type SizeBy, type Tile } from "../../lib/heatmap";
 import "./treemap.css";
 
 /* The heatmap's drawing: a treemap of tiles, each a link to its company's page, sized and coloured by the figures the page picks
@@ -59,7 +59,9 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
     document.fonts?.ready.then(() => { if (live) { measured.clear(); setFonts((n) => n + 1); } }).catch(() => undefined);
     return () => { live = false; };
   }, []);
-  useEffect(() => {
+  // the width read before the first paint (LIVE10A-012: drawn first at its 360px floor, the map then grew to its real height, 833px for 500
+  // tiles at 1280, and moved the legend and the page under it: CLS 0.154)
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const read = () => setWidth(Math.floor(el.clientWidth));
@@ -83,7 +85,7 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
         <div key={g.name || "all"} className="hm-group" role="group" aria-label={g.name ? `${g.name}${g.value != null ? `, ${figure(g.value)}` : ""}` : undefined}>
           {g.head > 0 && (
             <div className="hm-group-head" aria-hidden="true" style={{ left: g.box.x + GAP / 2, top: g.box.y + GAP / 2, width: Math.max(0, g.box.w - GAP), height: g.head - GAP / 2 }}>
-              <span className="hm-group-name">{g.name}</span>
+              <span className="hm-group-name">{groupWords(g.name, Math.max(0, g.box.w - GAP) - 12 - (g.value != null && g.box.w >= 150 ? (textWidth(figure(g.value), 500) * 11.5) / 10 + 8 : 0), textWidth)}</span>
               {g.value != null && g.box.w >= 150 && <span className="hm-group-fig">{figure(g.value)}</span>}
             </div>
           )}
@@ -92,15 +94,15 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
             if (w < 1 || h < 1) return null;
             const cls = stepClass(step(p.value, color, period), color);
             const text = figure(p.value);
-            const { px, fig } = tileWords(p.tile.s, text, w, h, textWidth);
-            const scale = px === 15 ? " lg" : px === 10 ? " sm" : "";
+            const { px, fig, vert, split } = tileWords(p.tile.s, text, w, h, textWidth);
+            const scale = (px === 15 ? " lg" : px === 10 ? " sm" : px === 9 ? " xs" : "") + (vert ? " vert" : "");
             const off = searching && !matches(p.tile, query);
             return (
               <Link key={p.tile.s} to={href(p.tile)} tabIndex={-1} className={`hm-tile ${cls}${scale}${off ? " off" : searching ? " hit" : ""}`}
                 style={{ left: p.box.x + GAP / 2, top: p.box.y + GAP / 2, width: w, height: h }}
                 aria-label={`${p.tile.n}, ${text}`} onMouseEnter={move(p)} onMouseMove={move(p)}>
                 {/* the link's name says both in words; the tile's own letters are the picture */}
-                {px > 0 && <span className="hm-sym" aria-hidden="true">{p.tile.s}</span>}
+                {px > 0 && <span className={split ? "hm-sym two" : "hm-sym"} aria-hidden="true">{split ? <>{p.tile.s.slice(0, split)}<wbr />{p.tile.s.slice(split)}</> : p.tile.s}</span>}
                 {fig && <span className="hm-fig" aria-hidden="true">{text}</span>}
               </Link>
             );

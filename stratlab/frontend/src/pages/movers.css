@@ -3,3 +3,10 @@
 .mv-controls > .k-field { flex: 0 0 auto; max-width: 100%; margin: 0; }
 .mv-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); font-size: var(--t-label); color: var(--muted); margin: var(--s3) 0; }
 .mv-facts b { color: var(--ink); font-weight: 600; }
+/* LIVE12A-005: the card read while the lists load holds about a list's first screen, so what is under it is not pushed down on arrival */
+.mv-wait { min-height: 520px; }
+/* LIVE13A-019: on a phone the six lists are three rows of two, never "52-week lows" alone on a third row */
+@media (max-width: 640px) {
+  .mv-page .k-chiprow.wrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .mv-page .k-chiprow.wrap .k-chip { width: 100%; justify-content: center; }
+}

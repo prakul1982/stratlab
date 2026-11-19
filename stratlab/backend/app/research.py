@@ -54,8 +54,26 @@ def clean_upload(raw) -> list[dict]:
     return bars
 
 
-def load(registry, strategy, req) -> dict:
-    """Candles and settings for one test. Raises ResearchError for anything the user can fix."""
+def stored_offline(prov, inst_id: str, tf: str, hint: dict | None = None):
+    """(the stored provider, the instrument) for a daily test while the market's live data is offline and it keeps stored daily
+    closes (India's: data/stored_india.py, LIVE11B-013); None when it has none for this instrument. An intraday timeframe still
+    needs the live data, said in words."""
+    alt = getattr(prov, "stored", None)
+    if alt is None:
+        return None
+    from .data import split_id
+    inst = alt.resolve(split_id(inst_id)[1], hint)
+    if inst is None:
+        return None
+    if tf != "1d":
+        raise ResearchError(503, "data_offline", "Indian live data is offline right now, and intraday candles need it. A daily test runs now "
+                            "on the stored daily closes: set the timeframe to Daily, or run this one once the data is back.")
+    return alt, inst
+
+
+def load(registry, strategy, req, hint: dict | None = None) -> dict:
+    """Candles and settings for one test. Raises ResearchError for anything the user can fix. `hint`: the notebook's own record of
+    its instrument, which names a broker's id while the broker's list can't be read (a stored daily test, LIVE11B-013)."""
     tf = strategy.tf
     need, need_days = warmup_need(strategy)
     if req.bars:
@@ -67,7 +85,17 @@ def load(registry, strategy, req) -> dict:
                 "lot": inst["step"], "kind": "flat", "warmup": need, "warmup_days": need_days}
     if not req.instrument:
         raise ResearchError(400, "no_instrument", "Pick an instrument or upload candles first.")
-    prov, inst = registry.resolve(req.instrument)
+    from .data import split_id
+    prov = registry.provider(split_id(req.instrument)[0]) if hasattr(registry, "provider") else None
+    stored = None
+    if prov is not None and not prov.ready():
+        # LIVE11B-013: offline, a daily test of an Indian stock, ETF or index runs on the stored daily closes
+        stored = stored_offline(prov, req.instrument, tf, hint)
+        if stored is None:
+            raise ResearchError(503, "data_offline", "Market data for this market is offline right now. Try again soon.")
+        prov, inst = stored
+    else:
+        prov, inst = registry.resolve(req.instrument)
     if prov is None:
         raise ResearchError(400, "market_unavailable", "That market isn't connected yet.")
     if not prov.ready():
@@ -93,7 +121,9 @@ def load(registry, strategy, req) -> dict:
     # member of a group, the walk-forward and the similar-instruments check)
     bars = _with_fo(strategy, inst, bars)
     return {"inst": inst, "bars": bars, "start": start, "days": days, "max_days": max_days,
-            "lot": lot, "kind": C.kind_of(inst), "warmup": need, "warmup_days": need_days}
+            "lot": lot, "kind": C.kind_of(inst), "warmup": need, "warmup_days": need_days,
+            # a test on stored daily closes says the last one it read (LIVE11B-013)
+            **({"stored_through": str(bars[-1]["t"])[:10]} if stored and bars else {})}
 
 
 def _ref_len(ref) -> int:

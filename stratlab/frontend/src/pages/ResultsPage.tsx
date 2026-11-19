@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { SCOPE_OPTIONS } from "../lib/companyScope";
 import { useCompanyScope } from "../lib/useCompanyScope";
-import { ago, arrowOf, fmtDate, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
+import { ago, arrowOf, dayIn, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
 import { READ_UNTIL_MS, pricesNote, readRows, sessionDayOf, shownOrder } from "../lib/rowReads";
@@ -15,6 +15,19 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
+import { capAt, laterDays, movesEmpty, purposeShown, whenShort } from "../lib/resultsRows";
+import { resultDay } from "../lib/resultDay";
+
+/** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
+const todayIn = (region: Region): string | null => dayIn(new Date(), marketTz(region));
+
+/** The market value at the price shown beside it (capAt), with what it stands on in its title (LIVE9A-014). */
+function capCell(r: ResultRow, live: number | null | undefined, fmt: (v: number) => string) {
+  const cap = capAt(r.cap, r.last, live);
+  if (cap == null) return <span className="k-muted">–</span>;
+  const basis = live != null && r.last ? "At the price beside it" : r.last_at ? `At the close of ${resultDay(r.last_at)}` : null;
+  return <span title={[r.band ? `${SIZE_NAME[r.band]} company` : null, basis].filter(Boolean).join(" · ") || undefined}>{fmt(cap)}</span>;
+}
 
 /* /research/results: the dates companies have called their board meetings to consider results (or, in the US, set for
  * their quarterly results), week by week, for your stocks or every company, narrowed by company size, sector, index, F&O and the
@@ -56,9 +69,7 @@ export function dayHeading(iso: string, count: number, today: string) {
 }
 
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
-export function resultDay(iso: string) {
-  return fmtDate(iso.slice(0, 10), { weekday: true, year: false });
-}
+export { resultDay };
 
 export const filterCount = (f: Filters) => calCount(f, "cap") + (f.purpose ? 1 : 0);
 
@@ -189,11 +200,12 @@ export function ResultsPage() {
   const pricesLine = pricesNote({ live: isLive, asOf: quoteAt ? fmtTime(quoteAt, { tz, zone: true }) : null, rows: symbols.length, cap: LIVE_ROWS, closeDay,
     older: olderRows.length, olderDay: olderRows.map((r) => r.last_at!.slice(0, 10)).sort()[0] ?? null, reading: quotesReading }, resultDay);
 
+  const mvEmpty = movesEmpty(shown, moves);
   const columns: Column<ResultRow>[] = [
     // two lines a row (owner, 5 Nov: "still shit ui", rows stacked company, name, purpose and filing link four lines high): the symbol and
     // its tags with the name beside it, then the meeting and a small link to the filing; a long line ends in "…" with the whole of it on hover
     { key: "co", header: "Company", rowHeader: true, cell: (r) => {
-      const purpose = `${r.purpose}${r.when ? `, ${r.when}` : ""}`;
+      const purpose = purposeShown(r.region, r.purpose);
       const numbers = r.out?.numbers.length ? ` · ${r.out.numbers.map((x) => `${x.label} ${x.value}`).join(" · ")} (as stated)` : "";
       const plain = !r.out && !r.when && /^financial results$/i.test(r.purpose.trim());
       return (
@@ -202,10 +214,12 @@ export function ResultsPage() {
             <Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
             {scope === "all" && r.mine && <span className="k-note k-muted">Yours</span>}
             {r.fo && <span className="k-note k-muted">F&amp;O</span>}
+            {/* when it reports, in its own place: the line under it ends in "…" when long, and the timing was cut there (LIVE9A-014) */}
+            {r.when && <span className="k-note k-muted" data-testid="res-when">{whenShort(r.when)}</span>}
           </span>
           {/* LIVE5-002: the name starts the second line (beside the symbol and its tags it was cut to 1-3 letters at 1280); a plain results
               meeting leaves the line to it, any other meeting follows it */}
-          <span className="k-note k-muted res-sub" title={[r.name, r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose].filter(Boolean).join(" · ")}>
+          <span className="k-note k-muted res-sub" title={[r.name, r.when ? whenShort(r.when) : null, r.out ? `${r.purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : r.purpose].filter(Boolean).join(" · ")}>
             {r.name && <span className="res-name">{r.name}</span>}
             <span className={`res-purpose${plain ? " res-plain" : ""}`}>
               {purpose}
@@ -219,11 +233,12 @@ export function ResultsPage() {
     // LIVE4-010: short headers that stay on one line at 1440 (the (i) says the rest); on a phone each company is two short lines (the table's
     // `compact`): the symbol with the price and the day's move at its right, then the usual move and what the options imply; market value,
     // revenue and profit stay on the desktop table and the company page (a fifth figure ran the line onto a third)
-    { key: "cap", header: "Market value", numeric: true, phone: false, narrow: false, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
+    { key: "cap", header: "Market value", numeric: true, phone: false, narrow: false, cell: (r) => capCell(r, quotes[r.symbol]?.price, (v) => screenCap(v, r.region)) },
     { key: "px", header: "Price", numeric: true, brief: true, csvHeader: "Price now", cell: (r) => {
       const x = quotes[r.symbol];
-      if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur)}</span>;
-      return r.last == null ? <span className="k-muted">–</span> : <span className="k-muted" title={r.last_at ? `Last close, ${resultDay(r.last_at)}` : "Last close"}>{price(r.last, cur)}</span>;
+      // LIVE9A-028: an Indian share is priced to the paisa ("₹0.7800" had four places under ₹1)
+      if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur, region === "IN" ? 2 : undefined)}</span>;
+      return r.last == null ? <span className="k-muted">–</span> : <span className="k-muted" title={r.last_at ? `Last close, ${resultDay(r.last_at)}` : "Last close"}>{price(r.last, cur, region === "IN" ? 2 : undefined)}</span>;
     } },
     { key: "day", header: "Day", numeric: true, brief: true, cell: (r) => {
       const x = quotes[r.symbol];
@@ -235,7 +250,8 @@ export function ResultsPage() {
       <span className="res-q"><span><span className="k-muted">Rev </span><Growth v={r.q?.sales} of={r.q?.of} /></span><span><span className="k-muted">Profit </span><Growth v={r.q?.profit} of={r.q?.of} /></span></span>) },
     { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} />, csv: (r) => r.q?.sales ?? null },
     { key: "pat", header: "Profit", csvHeader: "Profit YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} />, csv: (r) => r.q?.profit ?? null },
-    { key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
+    // LIVE10A-020: no row with a past results-day move once every row's read is back (US: "–" on every row): no column for it
+    ...(mvEmpty ? [] : [{ key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
       const a = moves[r.symbol], m = a?.moves ?? r.moves;
       const since = a?.since;
       if (!m && !since) return a === undefined ? <Working inline label="Reading earlier results days" /> : <span className="k-muted">–</span>;
@@ -245,9 +261,10 @@ export function ResultsPage() {
             {m ? <b>±{m.avg.toFixed(1)}%</b> : <span className="k-muted">–</span>}
             {since && <span className="k-note k-muted" title={`Since the results of ${resultDay(since.date)}, close to latest close`}>since {resultDay(since.date)} <Move v={since.pct} /></span>}
           </span>
-          {m && <span className="k-note res-moves k-tight-hide" title="The latest four, newest first, in %">{m.last.map((v, i) => <Move key={i} v={v} bare />)}</span>}
+          {/* LIVE9A-028: a space between the latest moves, so two flat ones never read as "0.00.0" */}
+          {m && <span className="k-note res-moves k-tight-hide" title="The latest four, newest first, in %">{m.last.map((v, i) => <span key={i}>{i > 0 ? " " : ""}<Move v={v} bare /></span>)}</span>}
         </span>);
-    } },
+    } } as Column<ResultRow>]),
     ...(showImplied ? [{ key: "im", header: "Implied", cardLabel: "Implied", csvHeader: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {
       // R15 #11 (owner, 7 Nov: "there is still no implied vols"): implied moves exist only for F&O stocks, so a row that has none says why
       if (!r.fo) return <span className="k-muted" title="Implied moves are read from futures and options; this stock has none">Not F&O</span>;
@@ -271,7 +288,9 @@ export function ResultsPage() {
         <CalendarFilters region={region} facets={data?.facets ?? null} filters={filters} set={set} firstSort="cap" sorts={SORT_NAME} active={n}
           total={data?.total ?? null} matching={data?.matching ?? null} unknownSize={data?.unknown_size ?? 0} onClear={() => set(NO_FILTERS)} testId="results-count"
           days={[{ value: "", label: "Every day" }, { value: "today", label: "Today" }, { value: "tomorrow", label: "Tomorrow" },
-            ...(data?.weeks ?? []).flatMap((w) => (w.days ?? []).map((d) => ({ value: d.date, label: resultDay(d.date) })))]}
+            // today is the "Today" chip above, not again by its date (LIVE8A-025: "Today" and "Sat 14 Nov" both)
+            // one chip per later day with companies on it: no day gone by, no "Tomorrow" again by its date, no empty holiday (LIVE9A-014)
+            ...laterDays((data?.weeks ?? []).flatMap((w) => w.days ?? []), todayIn(region), region).map((d) => ({ value: d, label: resultDay(d) }))]}
           search={<>
             {scope === "all" && (
               <Field key={region} label="Find a company">

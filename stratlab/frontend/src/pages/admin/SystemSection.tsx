@@ -6,7 +6,7 @@ import { fmtDateTime } from "../../lib/format";
 import { Card, CardHead, DataTable, Disclosure, EmptyState, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
-import { errorCounts, groupErrors, mailFix, service, type ErrorGroup } from "./attention";
+import { errorBuild, errorCounts, groupErrors, mailFix, service, type ErrorGroup } from "./attention";
 import { PlatformPanel } from "./PlatformPanel";
 import { sendErrorLine, sentryTestLine } from "./testSend";
 import { APP_BUILD, buildLine } from "../../lib/buildInfo";
@@ -18,11 +18,11 @@ type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string
 // grouped, and in India time as the rest of Admin (DJ-035: UTC here, IST elsewhere, and 22 rows of the same error)
 // each error is a two-line row: what happened in words, then when and where (Ref · Request · Newest); the program's own text and its place
 // in the code are behind Details, so nothing hides behind a fade at the edge (LIVE1C-022, LIVE1C-024)
-const ERRORS: Column<ErrorGroup>[] = [
+const errorColumns = (live: string | null | undefined): Column<ErrorGroup>[] => [
   { key: "err", header: "Error", rowHeader: true, wrap: true, cell: (x) => (
     <span className="k-stack tight">
       <b className="k-small">{x.plain ?? "An unexpected error in the server."}</b>
-      <span className="k-note k-muted">Ref <span className="adm-mono">{x.ref}</span> · <span className="adm-mono adm-break">{x.path}</span> · newest {fmtDateTime(x.at, { seconds: true, zone: true, tz: IST })}</span>
+      <span className="k-note k-muted">Ref <span className="adm-mono">{x.ref}</span> · <span className="adm-mono adm-break">{x.path}</span> · newest {fmtDateTime(x.at, { seconds: true, zone: true, tz: IST })}{errorBuild(x.build, live) && <> · {errorBuild(x.build, live)}</>}</span>
       <Disclosure summary="Details" className="adm-err-details"><span className="adm-cell adm-break">{x.error}</span><br /><span className="adm-mono adm-break k-muted">{x.where}</span></Disclosure>
     </span>) },
   { key: "n", header: "Times", numeric: true, cell: (x) => x.count },
@@ -98,7 +98,7 @@ export function SystemSection() {
         <CardHead title={sv ? `Server errors (${counted.since} since the last restart${counted.before ? `, ${counted.before} kept from before it` : ""})` : "Server errors"}
           info="Crashes newest first: those since the server last started, and the last ones from before it, which are kept across a restart. Users see the ref code in the error message." />
         {!sv ? <Skeleton label="Loading the server errors" lines={2} onRetry={() => { void reload(); }} /> : !errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
-          : <DataTable label="Server errors" rows={errors} rowKey={(x) => x.key} columns={ERRORS} stack />}
+          : <DataTable label="Server errors" rows={errors} rowKey={(x) => x.key} columns={errorColumns(sv?.build?.short)} stack />}
       </Card>
 
       <Card label="Other services">

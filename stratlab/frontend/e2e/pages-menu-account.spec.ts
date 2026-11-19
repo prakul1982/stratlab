@@ -11,7 +11,7 @@ test.describe("a visitor from the UK", () => {
   test("sees prices in rupees, with the dollar figure beside them", async ({ page }) => {
     const errors = await open(page, "/plans", "Plans");
     await expect(page.getByText("₹699 / month", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("about-basic")).toHaveText(/^about \$\d+$/);
+    await expect(page.getByTestId("about-basic")).toHaveText(/^US price \$\d+$/);          // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when it has one, not the rupees converted)
     await expect(page.locator("main")).not.toContainText("£");
     await sane(page, errors);
   });
@@ -50,6 +50,10 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   await expect(row("All 20+ indicators in strategy rules")).toHaveText(["All 20+ indicators in strategy rules", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
   await expect(row("Indian F&O in notebooks and backtests")).toHaveText(["Indian F&O in notebooks and backtests", "–", "–", "✓"]);   // Basic's options paper trading is its own row (R54-008)
+  // (updated on purpose, NAV3, CX-1 "about 60 feature rows": 12 rows at a glance in view, every row above one fold below them)
+  await expect(table.locator('[data-plans-group="glance"] tbody tr')).toHaveCount(12);
+  await expect(row("Backtests a month")).toHaveText(["Backtests a month", "5", "100", "Unlimited"]);
+  await table.getByText("The full comparison, row by row").click();
   // what every plan has is one folded table, and what each plan adds is under its own subheadings (DP1-022, DI-032)
   await expect(table.getByRole("heading", { name: "Trading" })).toBeVisible();
   await expect(table.getByRole("heading", { name: "Money and tax" })).toBeVisible();
@@ -170,7 +174,8 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
-  await expect(foot.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ })).toBeVisible();
+  // (updated on purpose, LIVE8B-027: one market open is named, "Crypto open", not counted)
+  await expect(foot.getByRole("button", { name: /^India (open|closed) · (\d+\/\d+ markets|[A-Za-z][A-Za-z .&/]*) open$/ })).toBeVisible();
   await expect(foot.getByRole("button", { name: /Pro plan, account menu$/ })).toBeVisible();
   expect((await foot.boundingBox())!.height, "the footer stays slim").toBeLessThanOrEqual(100);
   const scrolls = await side.evaluate((aside) => [aside, ...aside.querySelectorAll("*")].filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)).map((el) => el.className));
@@ -231,28 +236,25 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await expect(page.getByRole("radiogroup", { name: "Watchlist view" }).getByRole("radio", { name: "At a glance" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("hub-tabs").locator("a")).toHaveText(["Stocks", "Alerts"]);
 
-  // the keyboard: Tab from the search button passes the space's home and the highlighted Themes beside it (R16, changed on purpose:
-  // owner, 7 Nov) and lands on the first entry, with a visible focus ring
+  // the keyboard: Tab from the search button passes the space's home and lands on the first entry, Themes (owner, 18 Nov, changed on
+  // purpose: Themes is Invest's first entry, no pill beside the home link), with a visible focus ring
   side = await menu(page, phone);
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
   await page.keyboard.press("Tab");
   await expect(side.getByRole("link", { name: "Invest home" })).toBeFocused();
   await page.keyboard.press("Tab");
-  const themes = side.locator(".side-home a.side-feature");
-  await expect(themes).toBeFocused();
-  await expect(themes).toHaveText("Themes");
-  await expect(themes).toHaveAttribute("href", "/research/themes");
-  await expect(themes).not.toHaveAttribute("aria-current", /.*/);
-  await page.keyboard.press("Tab");
   const first = side.locator(".side-entries > .side-entry > .side-head > a").first();
   await expect(first).toBeFocused();
+  await expect(first).toHaveText("Themes");
+  await expect(first).toHaveAttribute("href", "/research/themes");
   expect(await first.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
   await sane(page, errors);
 });
 
-// R16 (owner, 7 Nov: Themes is one of StratLab's best tools but was buried in Invest → Themes): highlighted beside the space's home on
-// the menu's first row, in every space, on a laptop and in the phone's drawer; it opens Themes, whose own Invest entry is the one lit
-test("R16: the highlighted Themes link heads the menu in My space and Invest (not Trade or Money) and opens Themes", async ({ page }, info) => {
+// R16 (owner, 7 Nov: Themes is one of StratLab's best tools but was buried in Invest → Themes). Changed on purpose (owner, 18 Nov: "put it
+// at top like above the companies"): Themes is ONE entry, the first of Invest's menu above Companies, its own row with its compass icon
+// styled like the other entries; no orange pill beside the space's home in any space, no second Themes entry lower in Invest's list
+test("R16: Themes is Invest's first menu entry, above Companies, styled like the others, once in the menu, and opens Themes", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
   const errors = await open(page, "/research", "Companies");
@@ -261,32 +263,37 @@ test("R16: the highlighted Themes link heads the menu in My space and Invest (no
     await side.getByRole("group", { name: "Space" }).getByRole("button", { name }).click();
     const again = await menu(page, phone);
     await expect(again.getByRole("group", { name: "Space" }).getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
-    const themes = again.getByRole("navigation", { name: "Main" }).locator(".side-home a.side-feature");
-    // owner, 7 Nov (changed on purpose): My space and Invest only; Trade and Money stay as they were
-    if (name === "Trade" || name === "Money") {
+    const nav = again.getByRole("navigation", { name: "Main" });
+    // the space's home alone on the first row: no pill beside it, in any space
+    await expect(nav.locator(".side-home a"), name).toHaveCount(1);
+    await expect(nav.locator(".side-feature"), name).toHaveCount(0);
+    const themes = nav.getByRole("link", { name: "Themes", exact: true });
+    if (name !== "Invest") {
       await expect(themes, name).toHaveCount(0);
       if (phone) await page.keyboard.press("Escape");
       continue;
     }
-    await expect(themes, name).toBeVisible();
-    await expect(themes).toHaveText("Themes");
-    // on the first row, beside the home link, and tinted with the accent
-    const [home, t] = await Promise.all([again.locator(".side-home > a").first().boundingBox(), themes.boundingBox()]);
-    expect(Math.abs(home!.y - t!.y), `${name}: Themes shares the home link's row`).toBeLessThanOrEqual(1);
-    // the home link's words stay on one line, whole (owner, 7 Nov: "Invest home" broke onto two lines)
-    const label = again.locator(".side-home > a").first().locator(".side-home-label");
+    await expect(themes, "one Themes entry in Invest's menu").toHaveCount(1);
+    const heads = nav.locator(".side-entries > .side-entry > .side-head > a");
+    await expect(heads.first()).toHaveText("Themes");
+    await expect(heads.nth(1)).toHaveText("Companies");
+    await expect(heads.first().locator("svg")).toHaveCount(1);
+    // styled like the other entries: the same height, left edge and border, no accent edge (both read at once: the phone's drawer slides)
+    const [t, c] = await heads.evaluateAll((els) => els.slice(0, 2).map((el) => { const s = getComputedStyle(el), b = el.getBoundingClientRect();
+      return { h: Math.round(b.height), x: Math.round(b.left), edge: s.borderLeftWidth, bg: s.backgroundColor }; }));
+    expect(t, "Themes looks like Companies").toEqual(c);
+    // the home label stays on one line, whole (owner, 7 Nov: "Invest home" broke onto two lines)
+    const label = nav.locator(".side-home > a").first().locator(".side-home-label");
     expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().height < 24), `${name}: home label fits on one line`).toBe(true);
-    expect(await themes.evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("3px");
     if (phone) await page.keyboard.press("Escape");
   }
   const side = await menu(page, phone);
   await side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Invest" }).click();
-  await (await menu(page, phone)).locator(".side-home a.side-feature").click();
+  await (await menu(page, phone)).getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Themes", exact: true }).click();
   await expect(page).toHaveURL(/\/research\/themes$/);
   await expect(page.getByTestId("page-breadcrumb").or(page.locator(".crumb-row")).first()).toContainText(/Invest\s*›\s*Themes/);
   const after = await menu(page, phone);
-  // the one lit item is Invest's own Themes entry, never the shortcut
-  await expect(after.locator(".side-home a.side-feature")).not.toHaveAttribute("aria-current", /.*/);
+  // the one lit item is Invest's Themes entry (ui-lint R7)
   await expect(after.locator('[aria-current="page"]')).toHaveCount(1);
   await expect(after.locator('.side-entry[data-group="themes"] a')).toHaveAttribute("aria-current", "page");
   await sane(page, errors);
@@ -305,7 +312,8 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   const side = await menu(page, phone);
-  const btn = side.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ });
+  // (updated on purpose, LIVE8B-027: one market open is named, not counted)
+  const btn = side.getByRole("button", { name: /^India (open|closed) · (\d+\/\d+ markets|[A-Za-z][A-Za-z .&/]*) open$/ });
   const [, , total] = (await btn.innerText()).match(/(\d+)\/(\d+) markets/)!.map(Number);
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   const footBefore = (await side.locator(".side-foot").boundingBox())!.height;

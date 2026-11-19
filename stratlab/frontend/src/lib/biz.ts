@@ -37,6 +37,34 @@ export function bizValue(v: number | null | undefined, unit: string | null) {
   return `${n} ${u}`.trim();
 }
 
+// rupees in any scale a filing used, as crore (LIVE9B-007: one column read "₹45,520 million", "₹3,085 mn", "₹56,244 billion",
+// "₹6.51 lakh crore" and "₹5,542 crore"); tonnes in words
+const TO_CRORE: [RegExp, number][] = [[/^lakh\s*(crore|cr)$/i, 1e5], [/^(crore|cr|crores)$/i, 1], [/^(billion|bn)$/i, 100], [/^(million|mn|mio)$/i, 0.1],
+  [/^(lakh|lac|lakhs)$/i, 0.01], [/^(thousand|k|'000)$/i, 1e-4], [/^(trillion|tn)$/i, 1e5]];
+const TONNES: [RegExp, string][] = [[/^(lac|lakh)\s*(mt|t|tonnes?|metric tonnes?)$/i, "lakh tonnes"], [/^(mn|million|mmt)\s*(t|mt|tonnes?|metric tonnes?)?$|^mmt$/i, "million tonnes"],
+  [/^(mt|metric tonnes?)$/i, "tonnes"]];
+
+/** A figure in one unit per kind across a table of companies: rupees in crore, tonnes in words; anything else as filed (bizValue). */
+export function bizValueOne(v: number | null | undefined, unit: string | null) {
+  const u = (unit ?? "").trim();
+  if (v != null && Number.isFinite(v) && u.startsWith("₹")) {
+    const scale = u.slice(1).trim();
+    const hit = TO_CRORE.find(([rx]) => rx.test(scale));
+    if (hit) {
+      const cr = v * hit[1];
+      return `₹${cr.toLocaleString("en-IN", { maximumFractionDigits: Math.abs(cr) >= 100 ? 0 : 2 }).replace(/^-/, "−")} crore`;
+    }
+  }
+  const t = TONNES.find(([rx]) => rx.test(u));
+  return bizValue(v, t ? t[1] : unit);
+}
+
+/** How many whole months a period ("2025-03") ends before `now`. */
+export function monthsBefore(period: string, now: Date = new Date()): number {
+  const i = monthIndex(period);
+  return Number.isFinite(i) ? now.getFullYear() * 12 + now.getMonth() - i : 0;
+}
+
 /** "+24.4%", or "+1.2 pts" for a figure that is itself a percent. Plain text, no colour: a change, not a verdict. */
 export function bizChange(c: number | null | undefined, unit: string | null) {
   if (c == null) return "–";
@@ -56,4 +84,29 @@ export function tidyTitle(title: string): string {
     t = t.toLowerCase().replace(/(^|[.!?]\s+)([a-z])/g, (_m: string, a: string, b: string) => a + b.toUpperCase());
   }
   return t;
+}
+
+/** A period's place on a time axis, in months ("2026-10" → 2026 × 12 + 9), and back as "YYYY-MM": the chart puts each point at its
+ *  month, so months not read are a stretch of the axis, never drawn one step apart (LIVE8B-002: the chart went Oct 2025 → Jun 2026 at
+ *  the spacing of one month). */
+export function monthIndex(period: string): number {
+  const [y, m] = period.split("-").map(Number);
+  return y && m ? y * 12 + (m - 1) : NaN;
+}
+export function monthOf(i: number): string {
+  const k = Math.round(i);
+  return `${Math.floor(k / 12)}-${String((k % 12) + 1).padStart(2, "0")}`;
+}
+
+/** A company's update filings, the same subject filed again and again folded into one row (owner, 18 Nov: the quarterly "Intimation under
+ *  SEBI (LODR) Regulations, 2015" listed four times): groups in the list's own order (latest first), each with every filing of that subject. */
+export function foldFilings<F extends { title: string }>(filings: F[]): { title: string; items: F[] }[] {
+  const by = new Map<string, { title: string; items: F[] }>();
+  for (const f of filings) {
+    const title = tidyTitle(f.title);
+    const key = title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const g = by.get(key);
+    if (g) g.items.push(f); else by.set(key, { title, items: [f] });
+  }
+  return [...by.values()];
 }

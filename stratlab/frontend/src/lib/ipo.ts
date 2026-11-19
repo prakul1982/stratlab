@@ -13,7 +13,7 @@ export interface Perf { listing_price?: number; listing_change_pct?: number; lat
 export interface IpoRow {
   id: string; market: Market; segment?: "mainboard" | "sme"; name: string; symbol?: string; stage: Stage;
   open?: string; close?: string; close_time?: string; allotment?: string; allotment_expected?: boolean; listing?: string; listing_expected?: boolean;
-  low?: number; high?: number; price?: number; lot?: number; min_amount?: number; min_basis?: string; size?: number; size_basis?: string;
+  low?: number; high?: number; price?: number; lot?: number; min_amount?: number; min_basis?: string; size?: number; size_basis?: string; /** LIVE9A-015: a US size without the underwriters' option */ size_base?: number | null;
   exchanges?: string[]; exchange?: string; expected?: string; priced?: string; filed?: string; shares?: number; currency: string;
   docs?: string[]; sub_times?: number; sub_as_of?: string; sub_read?: string; perf?: Perf;
   issue_status?: IssueStatus;

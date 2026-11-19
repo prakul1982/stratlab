@@ -2,7 +2,7 @@
  * tests load it alone; the card pieces in components/LibraryBits.tsx re-export it. */
 import type { LibEntry } from "../components/LibraryBits";
 import { num, TF_NAME } from "./format";
-import { groupLabel, plainTerms } from "./plainTerms";
+import { groupLabel, plainTerms } from "../content/seo";
 
 /** A library card's one result line: the return against buy and hold in points, nothing else ("108.5 points behind buy and hold").
  * The card used to say it four times (a pill, a sentence, the checks line again, and a note); the figures stay in its stats row

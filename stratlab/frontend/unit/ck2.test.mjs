@@ -85,7 +85,9 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.match(ev, /<div className="ev-remind">/);
   assert.ok(ev.indexOf('className="ev-weekgrid"') < ev.indexOf("<RemindCard v={v} onSave={save} />"));
   const evc = read("src/pages/trade/events.css");
-  assert.match(evc, /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\);/);
+  // (updated on purpose, LIVE9B-032: the week's events are one table, beside the count lines)
+  assert.match(ev, /<DataTable label="The next seven days"/);
+  assert.match(evc, /\.ev-weekgrid > \.ev-week \{ min-width: 0; \}/);
   assert.match(evc, /\.ev-remind \{ display: grid; grid-template-columns: minmax\(0, 1\.4fr\) minmax\(0, 1fr\);/);
   // the plans: each card its own height, its button under its list
   assert.match(css, /\.k-plans \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\); gap: var\(--s4\); align-items: start; \}/);

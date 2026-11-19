@@ -394,6 +394,10 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     if os.environ.get("MAIN_DB_TEST_DSN"):
         monkeypatch.setattr(db, "_client", _on_postgres(fake_db, monkeypatch))
     db._profiles.clear()
+    # blog2: the theme posts committed with a release (app/blog_themes) are stored by the job's first blog check after a deploy; a test
+    # world starts with none of them (tests/test_blog2_theme_posts.py stores them on purpose)
+    from app import blog_research
+    monkeypatch.setattr(blog_research, "SEED_DIR", blog_research.SEED_DIR / "none-in-the-test-world")
     from app import invite_rewards, plans, pricing
     plans.forget_free_basic()                   # free Basic time another test gave
     # FREE-TIER: the smaller Free plan started before this world's accounts were made (fake_db dates them 1 Sep), so they have Free's

@@ -2,7 +2,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { num, pct } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
-import { plainTerms } from "../lib/plainTerms";
+import { plainTerms } from "../content/seo";
+import { termMeanings } from "../lib/termMeanings";
 import { libMeta, strategyName } from "../lib/libraryList";
 import { pricesStop, testedRange } from "../lib/libraryText";
 import { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
@@ -21,7 +22,9 @@ export interface LibEntry {
   tf: string; side: string; range: { from: string; to: string } | null; strategy: Strategy;
   verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number; checks?: { id: string; status: string }[];
     /** the server's words for the result, from the checks themselves (R6V-005): the same on the card and the page */
-    label?: string; fact_headline?: string; fact_summary?: string };
+    label?: string; fact_headline?: string; fact_summary?: string;
+    /** a landing card's line, verdict first (LIVE11A-022) */
+    card_headline?: string };
   /** the return after costs beside buy and hold over the same period, in percent (gap < 0: behind buy and hold) */
   vs_hold?: { ret: number; hold: number; gap: number } | null;
   stats: { ret: number | null; buy_hold: number | null; mdd: number | null; trades: number | null; unseen: number | null };
@@ -162,6 +165,8 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
       {e.range && <p className="k-note lib-line" data-testid="lib-window">Tested {testedRange(e.range)}{e.stats.trades != null ? ` · ${e.stats.trades} trades` : ""}</p>}
       {e.reason && <p className="k-note lib-line lib-reason">{e.reason}</p>}
       {e.description && <p className="k-small lib-about">{plainTerms(e.description)}</p>}
+      {/* CX2 #7 (jargon): what the trading terms in its name mean, in plain words, with its rules (an (i) in the name widened the table past 1280) */}
+      {termMeanings(strategyName(e)).length > 0 && <p className="k-note lib-line" data-testid="lib-terms">{termMeanings(strategyName(e)).join(" ")}</p>}
       {rules && <Rules s={e.strategy} />}
       {extra?.(e)}
     </div>

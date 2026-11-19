@@ -28,7 +28,7 @@ test("the landing's sample cards name no real company and show no quote 'today' 
 
 test("the margin from operating profit before depreciation is called EBITDA margin wherever it shows (R5V-004)", () => {
   assert.match(read("src/pages/Screens.tsx"), /\{ id: "opm", label: "EBITDA margin"/);
-  assert.match(read("src/pages/DeepDive.tsx"), /n\.bank \? "Financing margin" : "EBITDA margin"/);
+  // (updated on purpose, owner 18 Nov: the deep dive's quarters table is gone; the company page's quarters below say it)
   const research = read("src/components/Research.tsx");
   // a bank's quarters say "Financing margin" (R7O-001); every other company's, "EBITDA margin"
   assert.match(research, /\{ name: bank \? "Financing margin" : "EBITDA margin", cells: q\.opm/);

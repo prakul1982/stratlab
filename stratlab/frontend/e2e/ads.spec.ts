@@ -110,7 +110,9 @@ test("ads on: Free is asked first, Allow loads the script and one labelled ad th
   await expect(page.getByTestId("ad-house"), "until the answer, a StratLab card holds the place").toHaveCount(1);
   await expect(page.getByTestId("ad-slot")).toHaveCount(0);
   expect(google, "nothing is asked of Google before Allow").toEqual([]);
-  await expect(ask.getByRole("button")).toHaveCount(2);
+  // Allow, No thanks and the card's close ("Not now", no answer saved) (updated on purpose, owner 18 Nov: the card can be closed)
+  await expect(ask.getByRole("button")).toHaveCount(3);
+  await expect(ask.getByRole("button", { name: "Not now" })).toBeVisible();
   await ask.getByRole("button", { name: "Allow" }).click();
   await expect(ask).toHaveCount(0);
   const slot = page.getByTestId("ad-slot");
@@ -219,7 +221,7 @@ test("ads on: the public library shows one ad after Allow in the banner, below t
 });
 
 test("ads on: the landing page has one slot, in the lower sections and not the first screen", async ({ page }) => {
-  const { google } = await open(page, "/", "Test it, research it, track it", { ads: true });
+  const { google } = await open(page, "/", "Is your trading idea skill or luck", { ads: true }); // (updated on purpose, NAV3: the hero's one promise, CX-1)
   await expect(page.getByTestId("consent")).toHaveCount(1);
   expect(google, "nothing is asked of Google until Allow").toEqual([]);
   await page.getByTestId("consent").getByRole("button", { name: "Allow" }).click();

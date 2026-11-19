@@ -132,7 +132,8 @@ export type TimeTick = { t: number; label: string };
 function onStep(p: ReturnType<typeof parts>, unit: Unit, n: number): boolean {
   if (unit === "minute") return p.mi % n === 0;
   if (unit === "hour") return p.mi === 0 && p.h % n === 0;
-  if (unit === "day") return n === 1 || (n === 2 ? p.d % 2 === 1 : n === 7 ? [1, 8, 15, 22].includes(p.d) : [1, 15].includes(p.d));
+  // a weekly step ticks on each Monday, seven days apart (LIVE10A-025: the 1st/8th/15th/22nd left a 10-day gap at each month's end)
+  if (unit === "day") return n === 1 || (n === 2 ? p.d % 2 === 1 : n === 7 ? new Date(Date.UTC(p.y, p.mo - 1, p.d)).getUTCDay() === 1 : [1, 15].includes(p.d));
   if (unit === "month") return p.d === 1 && (p.mo - 1) % n === 0;
   return p.mo === 1 && p.d === 1 && p.y % n === 0;
 }

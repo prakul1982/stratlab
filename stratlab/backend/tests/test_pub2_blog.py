@@ -65,7 +65,8 @@ def test_the_strategy_tables_have_short_unwrapped_headers_fixed_widths_and_no_em
     assert checks["head"][1:] == ["Passed", "Failed", "Not run"] and len(checks["rows"]) == 4 and checks["align"] == "lrrr" and "widths" not in checks      # a small table sizes itself to a phone
     html = blog.blocks_html([tables[0]])
     # (VR5-007's data-l names each figure's column, and a table of five columns or more is also drawn as cards on a phone: "wide")
-    assert '<div class="btbl fx wide"><table>' in html and "<colgroup>" in html and html.count('<th scope="col" class="l">') == 2 and html.count('<td class="l" data-l="Checks">') == len(tables[0]["rows"])
+    # (updated on purpose, fix11 LIVE10A-042: column names that each fit one line add " top", each figure level at its cell's top on a phone)
+    assert '<div class="btbl fx wide top"><table>' in html and "<colgroup>" in html and html.count('<th scope="col" class="l">') == 2 and html.count('<td class="l" data-l="Checks">') == len(tables[0]["rows"])
     assert 'scope="row" class="l"' in html
 
 

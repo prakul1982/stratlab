@@ -140,9 +140,10 @@ def test_a_layer_resting_on_under_half_its_companies_says_so_plainly_in_the_deck
     mid = next(v for v in vc if v["layer"].startswith("Cloud"))
     assert mid["model"]["sparse"] and mid["model"]["known"] * 2 < mid["model"]["of"]
     # R27 (changed on purpose): the others are listed but left out of the layer's figures and rankings, said with how many and why; q1 (changed on purpose): capacity is connectivity to businesses, operators are telecom_services
-    assert mid["model"]["line"] == (f"How they earn is shown for only {mid['model']['known']} of these {mid['model']['of']} companies, mainly renting "
-                                    "out computing, data-centre or network capacity, and connectivity to businesses; the other 3 are listed but left out "
-                                    "of this layer's figures and rankings, as their evidence doesn't show how they earn.")
+    # gl52 (R52, updated on purpose): a way of earning shown for fewer than 3 companies (here 1) is not said to be what they mainly earn by
+    assert mid["model"]["known"] < B.MODEL_LINE_MIN
+    assert mid["model"]["line"] == (f"How they earn is shown for only {mid['model']['known']} of these {mid['model']['of']} companies; the other 3 "
+                                    "are listed but left out of this layer's figures and rankings, as their evidence doesn't show how they earn.")
     from app import deck
     assert deck.layer_common(mid) == mid["model"]["line"]
     assert deck.layer_common({"model": {"line": "They earn mainly from x.", "known": 3, "of": 4}}) == "In common: they earn mainly from x."

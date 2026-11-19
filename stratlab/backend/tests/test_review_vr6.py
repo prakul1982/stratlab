@@ -60,9 +60,10 @@ def test_a_table_of_three_or_four_columns_wraps_to_fit_a_phone_and_the_four_chec
     assert ".btbl.wide.w4 tr{grid-template-columns:repeat(4,minmax(0,1fr))}" in css
     assert ".kpis li:last-child:nth-child(odd){grid-column:1/-1}" in css                       # three tiles: the third takes its row, not half of one
     five = [{"t": "table", "head": ["Check", "Passed", "Warning", "Failed", "Not run"], "rows": [["Unseen data", "10", "10", "23", "0"]]}]
-    assert '<div class="btbl wide w4">' in blog.blocks_html(five)
+    # (updated on purpose, fix11 LIVE10A-042: column names that each fit one line add " top" to the phone card's class)
+    assert '<div class="btbl wide w4 top">' in blog.blocks_html(five)
     six = [{"t": "table", "head": ["A", "B", "C", "D", "E", "F"], "rows": [["x", "1", "2", "3", "4", "5"]]}]
-    assert '<div class="btbl wide">' in blog.blocks_html(six)
+    assert '<div class="btbl wide top">' in blog.blocks_html(six)
 
 
 def test_a_long_tile_is_half_a_row_on_a_phone_like_the_others_and_only_an_odd_last_tile_takes_its_row():

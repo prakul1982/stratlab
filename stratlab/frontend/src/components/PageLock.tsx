@@ -51,7 +51,10 @@ export function PageLock() {
     const main = document.querySelector("main");
     if (main) mo.observe(main, { childList: true, subtree: true });
     return () => mo.disconnect();
-  }, [locked, pathname]);
+    // Release 69 (CI, LIVE6-020 at 390px again): with the app drawn once /me is in (the data status first, LIVE11B-004), the plan is
+    // known before the page mounts, so this look ran while the page was still "Opening…" and the title's slot arriving later painted the
+    // note for a frame before the observer hid it: looked again, before paint, whenever the title's slot appears
+  }, [locked, pathname, slot]);
   if (!locked || own || loading || !gate || !me) return null;
   if (!gate.whole && !(slot && slot.isConnected)) return null;          // the page itself still opening (its title not drawn yet)
   const plan = PLAN_NAME[gatePlan(gate)];

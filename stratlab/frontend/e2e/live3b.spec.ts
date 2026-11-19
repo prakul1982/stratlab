@@ -34,10 +34,12 @@ test("the analytics question is a slim bar on a phone on every page that asks it
     await expect(ask, path).toBeVisible({ timeout: 30_000 });
     const box = (await ask.boundingBox())!;
     expect(box.height, `${path}: the bar's height`).toBeLessThanOrEqual(112);
-    // (updated on purpose, LIVE7B-006: along the window's foot it covered the P&L card on a phone) it is in the page's own flow, at the top
-    // of the page (signed in, under the top bar), so it covers nothing; the app itself still starts at the top of the window (LIVE6-014)
+    // (updated on purpose, LIVE7B-006: along the window's foot it covered the P&L card on a phone) it is in the page's own flow, so it covers
+    // nothing; the app itself still starts at the top of the window (LIVE6-014)
+    // (updated on purpose, LIVE8B-004: at the top of the page its arrival after the first paint pushed the page down) it comes after the page
     expect(await ask.evaluate((e) => getComputedStyle(e).position), `${path}: in the page's flow`).not.toBe("fixed");
-    expect(Math.round(box.y), `${path}: at the top of the page`).toBeLessThan(120);
+    const main = (await page.locator("main#main").boundingBox())!;
+    expect(Math.round(box.y), `${path}: after the page`).toBeGreaterThanOrEqual(Math.round(main.y + main.height) - 1);
     if (who && await page.locator(".shell").count()) expect(Math.round((await page.locator(".shell").boundingBox())!.y), `${path}: the app not moved`).toBe(0);
     await expect(ask.locator(".consent-short"), path).toBeVisible();
     await expect(ask.locator(".consent-long"), path).toBeHidden();

@@ -1,0 +1,1159 @@
+{
+ "adjacent_n": 26,
+ "as_of": "2026-11-13",
+ "basis": "Each company's latest full fiscal year, in $ million. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [],
+  "highest": null,
+  "line": "Median EBITDA margin by layer: Implants and electrotherapy devices 16.4% (11 of 13 companies); Specialty therapy and procedural devices 10.9% (19 of 21 companies); Orthopedic and surgical device makers −0.5%; Home and wearable monitoring devices 21.6% (8 of 10 companies); High-volume disposables and supplies 12.9%. Stock-based pay differs 2.5 times between these layers (High-volume disposables and supplies 1.9% of revenue, Home and wearable monitoring devices 4.8%), and an EBITDA margin counts it as a cost, so they are not ranked on it.",
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": null
+ },
+ "lender": false,
+ "listed": 100,
+ "members": 74,
+ "notable": [],
+ "page": "/themes/us/medical-device",
+ "period": {
+  "n": 65,
+  "of": 74,
+  "year": "Dec 2025"
+ },
+ "read_on": "2026-11-16",
+ "region": "US",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Boston Scientific Corp",
+     "out": "",
+     "symbol": "BSX",
+     "unverified": false,
+     "what": "Boston Scientific Corporation is a global developer, manufacturer and marketer of medical devices that are used in a broad range of interventional medical specialties",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Medtronic plc",
+     "out": "",
+     "symbol": "MDT",
+     "unverified": false,
+     "what": "Medtronic plc is an international medical device company",
+     "year": "Apr 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Abbott Laboratories",
+     "out": "other business",
+     "symbol": "ABT",
+     "unverified": false,
+     "what": "The company produces pharmaceuticals for sale outside the United States, diagnostic products, nutritional products, and medical devices",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Glaukos Corp",
+     "out": "",
+     "symbol": "GKOS",
+     "unverified": false,
+     "what": "Glaukos is an ophthalmic pharmaceutical and medical technology company focused on developing novel, dropless therapies and commercializing associated products for the treatment…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "AtriCure, Inc.",
+     "out": "",
+     "symbol": "ATRC",
+     "unverified": false,
+     "what": "It is the most common cardiac arrhythmia encountered in clinical practice and results in high utilization of healthcare services and significant cost burden",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lemaitre Vascular Inc",
+     "out": "",
+     "symbol": "LMAT",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Inspire Medical Systems, Inc.",
+     "out": "",
+     "symbol": "INSP",
+     "unverified": false,
+     "what": "We are a medical technology company focused on the development and commercialization of innovative, minimally invasive solutions for patients with obstructive sleep apnea (\"OSA\")",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NovoCure Ltd",
+     "out": "",
+     "symbol": "NVCR",
+     "unverified": false,
+     "what": "Our therapy is delivered through a medical device",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alpha Tau Medical Ltd.",
+     "out": "",
+     "symbol": "DRTS",
+     "unverified": false,
+     "what": "We are a clinical-stage oncology therapeutics company focused on harnessing the innate relative biological effectiveness and short range of alpha particles for use as a localized…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Artivion, Inc.",
+     "out": "",
+     "symbol": "AORT",
+     "unverified": false,
+     "what": "Artivion, Inc. is a distributor of cryogenically preserved human tissues for cardiac and vascular transplant applications and develops medical devices",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mimedx Group, Inc.",
+     "out": "",
+     "symbol": "MDXG",
+     "unverified": false,
+     "what": "MIMEDX is a pioneer and leader focused on helping humans heal",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "LivaNova PLC",
+     "out": "",
+     "symbol": "LIVN",
+     "unverified": false,
+     "what": "LivaNova, plc is a medical device manufacturer that is a foreign domiciled company based in the U.K. for tax inversion purposes",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CapsoVision, Inc",
+     "out": "",
+     "symbol": "CV",
+     "unverified": false,
+     "what": "We are a global commercial-stage medical technology company focused on creating diagnostic and screening products to identify abnormalities of the GI tract",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Edwards Lifesciences Corp",
+     "out": "",
+     "symbol": "EW",
+     "unverified": false,
+     "what": "The company has manufacturing facilities at the Irvine headquarters, as well as in Draper, Utah",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 16.4,
+   "ebitda_n": 11,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Implants and electrotherapy devices",
+   "listed": 14,
+   "n": 13,
+   "net": 6.9,
+   "net_n": 10,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.2,
+   "pb_n": 13,
+   "revenue": 67626.06000000001,
+   "roce": 8.4,
+   "roce_n": 9,
+   "roe": 2.2,
+   "roe_n": 13,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Intuitive Surgical Inc",
+     "out": "",
+     "symbol": "ISRG",
+     "unverified": false,
+     "what": "As of 31 December 2021, Intuitive Surgical had an installed base of 6,730 da Vinci Surgical Systems, including 4,139 in the U.S., 1,199 in Europe, 1,050 in Asia, and 342 in the…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Stryker Corp",
+     "out": "",
+     "symbol": "SYK",
+     "unverified": false,
+     "what": "The company's products are used for medical surgery and neurotechnology, which include surgical equipment, patient and caregiver safety technologies, endoscopy systems, and…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Penumbra Inc",
+     "out": "",
+     "symbol": "PEN",
+     "unverified": false,
+     "what": "Penumbra, the world’s leading thrombectomy company, is focused on developing the most innovative technologies for challenging medical conditions such as ischemic stroke, venous…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Globus Medical Inc",
+     "out": "",
+     "symbol": "GMED",
+     "unverified": false,
+     "what": "Globus is focused on the design, development, and commercialization of products that enable surgeons to promote healing in patients with musculoskeletal disorders",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Heartflow, Inc.",
+     "out": "way of earning not shown",
+     "symbol": "HTFL",
+     "unverified": false,
+     "what": "We believe that we are the most widely adopted AI-powered test for CAD. Our novel platform leverages AI and advanced computational fluid dynamics to create a personalized 3D…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pulse Biosciences, Inc.",
+     "out": "",
+     "symbol": "PLSE",
+     "unverified": false,
+     "what": "We are a novel ablation company committed to health innovation using our patented Nano-pulse Stimulation (“NPS”) technology, a revolutionary energy modality that delivers…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ufp Technologies Inc",
+     "out": "",
+     "symbol": "UFPT",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "PROCEPT BioRobotics Corp",
+     "out": "",
+     "symbol": "PRCT",
+     "unverified": false,
+     "what": "We are a surgical robotics company focused on advancing patient care by developing transformative solutions in urology",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Iradimed Corp",
+     "out": "",
+     "symbol": "IRMD",
+     "unverified": false,
+     "what": "IRADIMED CORPORATION develops, manufactures, markets and distributes Magnetic Resonance Imaging (“MRI”) compatible medical devices and related accessories…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bioventus Inc.",
+     "out": "",
+     "symbol": "BVS",
+     "unverified": false,
+     "what": "We are a global medical device company focused on helping patients recover and live life to the fullest by relieving pain and addressing musculoskeletal challenges through a…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sight Sciences, Inc.",
+     "out": "",
+     "symbol": "SGHT",
+     "unverified": false,
+     "what": "Our mission is to develop transformative, interventional technologies that allow eyecare providers to procedurally elevate the standards of care – empowering people to keep seeing",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tactile Systems Technology Inc",
+     "out": "",
+     "symbol": "TCMD",
+     "unverified": false,
+     "what": "Tactile Systems Technology, Inc. is a medical technology company that develops and provides innovative medical devices for the treatment of underserved chronic diseases",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Angiodynamics Inc",
+     "out": "",
+     "symbol": "ANGO",
+     "unverified": false,
+     "what": "AngioDynamics is a dynamic, diversified medical technology company committed to expanding treatment options and improving patient outcomes and quality of life by designing…",
+     "year": "May 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "AVITA Medical, Inc.",
+     "out": "",
+     "symbol": "RCEL",
+     "unverified": false,
+     "what": "Avita Medical is a clinical and commercial company developing and marketing a range of regenerative medicine products",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cerus Corp",
+     "out": "",
+     "symbol": "CERS",
+     "unverified": false,
+     "what": "We are a biomedical products company focused on developing and commercializing the INTERCEPT Blood System to enhance blood safety",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Brainsway Ltd.",
+     "out": "",
+     "symbol": "BWAY",
+     "unverified": false,
+     "what": "BrainsWay Ltd. is an international company that is engaged in the development of a medical device that uses H-coil for deep transcranial magnetic stimulation as a non-invasive…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Accuray Inc",
+     "out": "",
+     "symbol": "ARAY",
+     "unverified": false,
+     "what": "",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SS Innovations International, Inc.",
+     "out": "",
+     "symbol": "SSII",
+     "unverified": false,
+     "what": "We are a commercial-stage surgical robotics company focused on transforming patient lives by democratizing access to advanced surgical robotics technologies",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ClearPoint Neuro, Inc.",
+     "out": "",
+     "symbol": "CLPT",
+     "unverified": false,
+     "what": "From our inception in 1998, we have deployed significant resources to fund our efforts to develop the foundational capabilities for enabling magnetic resonance imaging (“MRI”)…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Medline Inc.",
+     "out": "",
+     "symbol": "MDLN",
+     "unverified": false,
+     "what": "It was the nation's largest privately held manufacturer and distributor of medical supplies providing products, education, clinical programs and services across the continuum of…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Solventum Corp",
+     "out": "",
+     "symbol": "SOLV",
+     "unverified": false,
+     "what": "MedSurg is a provider of solutions including negative pressure wound therapy",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Stevanato Group S.p.A.",
+     "out": "",
+     "symbol": "STVN",
+     "unverified": false,
+     "what": "We are a leading global provider of drug containment, drug delivery and diagnostic solutions as well as engineering solutions to the pharmaceutical, biotechnology and life…",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 10.9,
+   "ebitda_n": 19,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Specialty therapy and procedural devices",
+   "listed": 22,
+   "n": 21,
+   "net": 4.1,
+   "net_n": 19,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.5,
+   "pb_n": 20,
+   "revenue": 80717.70958400001,
+   "roce": 10.4,
+   "roce_n": 14,
+   "roe": 9.9,
+   "roe_n": 20,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Zimmer Biomet Holdings, Inc.",
+     "out": "",
+     "symbol": "ZBH",
+     "unverified": false,
+     "what": "We design, manufacture and market orthopedic reconstructive products",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Smith & Nephew PLC",
+     "out": "",
+     "symbol": "SNN",
+     "unverified": false,
+     "what": "It is an international producer of advanced wound management products, arthroscopy products, trauma and clinical therapy products, and orthopaedic reconstruction products",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Enovis CORP",
+     "out": "",
+     "symbol": "ENOV",
+     "unverified": false,
+     "what": "Enovis is headquartered in Dallas, Texas and is listed on the NYSE as ENOV. The company has over 8,000 employees operating at 30 sites around the world",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Integra Lifesciences Holdings Corp",
+     "out": "",
+     "symbol": "IART",
+     "unverified": false,
+     "what": "Integra LifeSciences Holdings Corporation is a global medical device manufacturing company headquartered in Princeton",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alphatec Holdings, Inc.",
+     "out": "",
+     "symbol": "ATEC",
+     "unverified": false,
+     "what": "We are a medical technology company, headquartered in Carlsbad, California, focused on the design, development, and advancement of technology for better surgical treatment of…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Si-Bone, Inc.",
+     "out": "",
+     "symbol": "SIBN",
+     "unverified": false,
+     "what": "We are a leader in developing innovative procedural solutions for compromised bone, grounded in expertise in biomechanical design and anatomy-specific innovation",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orthopediatrics Corp",
+     "out": "",
+     "symbol": "KIDS",
+     "unverified": false,
+     "what": "The Company’s Common Stock is traded on the Nasdaq Global Market under the symbol KIDS. OrthoPediatrics Corp. is a medical device company committed to designing, developing and…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Carlsmed, Inc.",
+     "out": "",
+     "symbol": "CARL",
+     "unverified": false,
+     "what": "Our technology is powered by AI-enabled, outcome-based algorithms that provide personalized surgical plans for spine fusion",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shoulder Innovations, Inc.",
+     "out": "",
+     "symbol": "SI",
+     "unverified": false,
+     "what": "We are a commercial-stage medical technology company exclusively focused on transforming the shoulder surgical care market",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Treace Medical Concepts, Inc.",
+     "out": "",
+     "symbol": "TMCI",
+     "unverified": false,
+     "what": "Treace Medical Concepts, Inc. is a medical device company, headquartered in Ponte Vedra Beach, Florida, specializing in the design, manufacture, and marketing of foot and ankle…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orthofix Medical Inc.",
+     "out": "",
+     "symbol": "OFIX",
+     "unverified": false,
+     "what": "By providing medical technologies that heal musculoskeletal pathologies, Orthofix delivers exceptional experiences and life-changing solutions to patients around the world",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Conmed Corp",
+     "out": "",
+     "symbol": "CNMD",
+     "unverified": false,
+     "what": "They have manufacturing facilities in the United States and Mexico, offices internationally, and a vast global footprint",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Delcath Systems, Inc.",
+     "out": "",
+     "symbol": "DCTH",
+     "unverified": false,
+     "what": "Delcath has a Cooperative Research and Development Agreement (CRADA) with the National Cancer Institute and has received Fast Track and a Special Protocol Assessment from the…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "InMode Ltd.",
+     "out": "",
+     "symbol": "INMD",
+     "unverified": false,
+     "what": "We are a leading global provider of innovative, energy-based, minimally invasive surgical medical treatment solutions",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Axogen, Inc.",
+     "out": "",
+     "symbol": "AXGN",
+     "unverified": false,
+     "what": "Axogen is a developer of surgical solutions, including human tissue grafts, based in Tampa, Florida",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": -0.5,
+   "ebitda_n": 15,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Orthopedic and surgical device makers",
+   "listed": 15,
+   "n": 15,
+   "net": -16.8,
+   "net_n": 13,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.6,
+   "pb_n": 15,
+   "revenue": 22668.71,
+   "roce": -10.5,
+   "roce_n": 15,
+   "roe": -12.2,
+   "roe_n": 15,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "DexCom Inc",
+     "out": "",
+     "symbol": "DXCM",
+     "unverified": false,
+     "what": "It operates internationally with global headquarters and R&D center in San Diego, California, U.S., and manufacturing facilities in Mesa, Arizona, U.S",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Insulet Corp",
+     "out": "",
+     "symbol": "PODD",
+     "unverified": false,
+     "what": "Insulet Corporation is primarily engaged in the development, manufacture, and sale of its proprietary continuous insulin delivery systems for people with insulin-dependent diabetes",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tandem Diabetes Care Inc",
+     "out": "",
+     "symbol": "TNDM",
+     "unverified": false,
+     "what": "Headquartered in San Diego, California, its principal pump platforms are the t:slim X2 and Tandem Mobi, both of which use the company's Control-IQ+ software with compatible…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Resmed Inc",
+     "out": "",
+     "symbol": "RMD",
+     "unverified": false,
+     "what": "It primarily provides cloud-connectable medical devices for the treatment of sleep apnea, chronic obstructive pulmonary disease (COPD), and other respiratory conditions",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "MiniMed Group, Inc.",
+     "out": "",
+     "symbol": "MMED",
+     "unverified": false,
+     "what": "We are a scaled global medical technology company that develops, manufactures, and markets a comprehensive suite of solutions for the management of diabetes",
+     "year": "Apr 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "iRhythm Holdings, Inc.",
+     "out": "way of earning not shown",
+     "symbol": "IRTC",
+     "unverified": false,
+     "what": "Our principal business is the design, development, and commercialization of device-based technology to provide ambulatory cardiac monitoring services that we believe allow…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kestra Medical Technologies, Ltd.",
+     "out": "",
+     "symbol": "KMTS",
+     "unverified": false,
+     "what": "We are a commercial-stage wearable medical device and digital healthcare company focused on transforming patient outcomes in cardiovascular disease through connected monitoring…",
+     "year": "Apr 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Beta Bionics, Inc.",
+     "out": "",
+     "symbol": "BBNX",
+     "unverified": false,
+     "what": "We are a commercial-stage medical device company engaged in the design, development, and commercialization of innovative solutions to improve the health and quality of life of…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orchestra BioMed Holdings, Inc.",
+     "out": "",
+     "symbol": "OBIO",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Embecta Corp.",
+     "out": "",
+     "symbol": "EMBC",
+     "unverified": false,
+     "what": "Embecta Corp. (also referred to herein as \"Embecta\") is a leading global medical device company, primarily focused on providing solutions to improve the health and well-being of…",
+     "year": "Sep 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "InfuSystem Holdings, Inc",
+     "out": "way of earning not shown",
+     "symbol": "INFU",
+     "unverified": false,
+     "what": "the Company operates through its subsidiary InfuSystem, Inc., a Delaware corporation (\"InfuSystem\" or \"ISI\")",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TransMedics Group, Inc.",
+     "out": "",
+     "symbol": "TMDX",
+     "unverified": false,
+     "what": "As such, the OCS represents a paradigm shift that transforms organ preservation for transplantation from a static state to a dynamic environment that enables new capabilities…",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 21.6,
+   "ebitda_n": 8,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Home and wearable monitoring devices",
+   "listed": 12,
+   "n": 10,
+   "net": 8.8,
+   "net_n": 7,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.7,
+   "pb_n": 9,
+   "revenue": 19055.030000000002,
+   "roce": 6.95,
+   "roce_n": 8,
+   "roe": -9.2,
+   "roe_n": 9,
+   "scale": null,
+   "words": "These firms make wearable or home-use devices such as insulin pumps, glucose sensors, sleep therapy and cardiac monitors, sold to patients and clinics."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Becton Dickinson & Co",
+     "out": "",
+     "symbol": "BDX",
+     "unverified": false,
+     "what": "BD is a global medical technology company engaged in the development, manufacture and sale of a broad range of medical supplies, devices, laboratory equipment and diagnostic…",
+     "year": "Sep 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Baxter International Inc",
+     "out": "",
+     "symbol": "BAX",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Teleflex Inc",
+     "out": "",
+     "symbol": "TFX",
+     "unverified": false,
+     "what": "By 2011, the company had substantially realigned to focus on its current business as a medical-device manufacturer, having undergone several years of active acquisitions and…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Merit Medical Systems Inc",
+     "out": "",
+     "symbol": "MMSI",
+     "unverified": false,
+     "what": "Merit Medical Systems, Inc. is a leading manufacturer and marketer of proprietary medical devices used in interventional, diagnostic and therapeutic procedures, particularly in…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Icu Medical Inc",
+     "out": "",
+     "symbol": "ICUI",
+     "unverified": false,
+     "what": "ICU Medical products are designed to prevent bloodstream infections and protect healthcare workers from exposure to infectious diseases or hazardous drugs",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ceribell, Inc.",
+     "out": "",
+     "symbol": "CBLL",
+     "unverified": false,
+     "what": "We are a medical technology company focused on transforming the diagnosis and management of patients with serious neurological conditions",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 12.9,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "High-volume disposables and supplies",
+   "listed": 6,
+   "n": 6,
+   "net": -4.25,
+   "net_n": 6,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.25,
+   "pb_n": 6,
+   "revenue": 38912.94,
+   "roce": 2.1,
+   "roce_n": 5,
+   "roe": -7.8,
+   "roe_n": 6,
+   "scale": null,
+   "words": "These companies manufacture needles, syringes, catheters and infusion sets that hospitals use in large volumes every day."
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Natera, Inc.",
+     "out": "",
+     "symbol": "NTRA",
+     "unverified": false,
+     "what": "Natera, Inc. is a clinical genetic testing company based in Austin, Texas that specializes in non-invasive, cell-free DNA (cfDNA) testing technology, with a focus on women's…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Labcorp Holdings Inc.",
+     "out": "",
+     "symbol": "LH",
+     "unverified": false,
+     "what": "Labcorp Holdings Inc., operating under the brand name Labcorp, headquartered in Burlington, North Carolina, provides laboratory services used for diagnosis and healthcare decisions",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Quest Diagnostics Inc",
+     "out": "",
+     "symbol": "DGX",
+     "unverified": false,
+     "what": "A Fortune 500 company, Quest operates in the United States, Puerto Rico, Mexico, and Brazil",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Guardant Health, Inc.",
+     "out": "",
+     "symbol": "GH",
+     "unverified": false,
+     "what": "We are a leading precision oncology company focused on guarding wellness and giving every person more time free from cancer",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Grail, Inc.",
+     "out": "",
+     "symbol": "GRAL",
+     "unverified": false,
+     "what": "We are an innovative commercial-stage healthcare company focused on shifting the paradigm in early cancer detection at population scale",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "BillionToOne, Inc.",
+     "out": "",
+     "symbol": "BLLN",
+     "unverified": false,
+     "what": "In 2019, we launched our first prenatal product, UNITY. UNITY is the first NIPT that uses cfDNA to provide fetal risk assessment for recessive conditions such as sickle cell…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CareDx, Inc.",
+     "out": "",
+     "symbol": "CDNA",
+     "unverified": false,
+     "what": "The Company's integrated solutions include non-invasive molecular testing for heart",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Veracyte, Inc.",
+     "out": "",
+     "symbol": "VCYT",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Personalis, Inc.",
+     "out": "",
+     "symbol": "PSNL",
+     "unverified": false,
+     "what": "NeXT Personal Dx has been shown to potentially detect cancer recurrence ahead of traditional imaging and is designed to aid decision making throughout a patient's cancer journey",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Castle Biosciences Inc",
+     "out": "",
+     "symbol": "CSTL",
+     "unverified": false,
+     "what": "Castle Biosciences is a molecular diagnostics company offering innovative test solutions to aid clinicians in the diagnosis and treatment of dermatologic cancers, Barrett’s…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fulgent Genetics, Inc.",
+     "out": "",
+     "symbol": "FLGT",
+     "unverified": false,
+     "what": "Our laboratory services business includes technical laboratory and testing services and professional interpretation of laboratory results by licensed physicians",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Caris Life Sciences, Inc.",
+     "out": "",
+     "symbol": "CAI",
+     "unverified": false,
+     "what": "We are a leading, patient-centric, next-generation AI TechBio company and precision medicine pioneer",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "YD Bio Ltd",
+     "out": "",
+     "symbol": "YDES",
+     "unverified": false,
+     "what": "We are a publicly listed biotechnology company focused on regulated diagnostics, life science clinical services, and healthcare product commercialization",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Freenome, Inc.",
+     "out": "",
+     "symbol": "FRNM",
+     "unverified": false,
+     "what": "Adam Stone, our Chief Executive Officer, is the Chief Investment Officer of Perceptive Advisors and Michael Altman, our Chief Business Officer, is a Managing Director at…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "RadNet, Inc.",
+     "out": "",
+     "symbol": "RDNT",
+     "unverified": false,
+     "what": "The company operates outpatient diagnostic imaging services",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 7.5,
+   "ebitda_n": 11,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Diagnostic and genetic testing labs",
+   "listed": 15,
+   "n": 15,
+   "net": -5.6,
+   "net_n": 11,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.0,
+   "pb_n": 13,
+   "revenue": 33213.45,
+   "roce": 2.8,
+   "roce_n": 11,
+   "roe": -5.1,
+   "roe_n": 13,
+   "scale": null,
+   "words": "Clinical and molecular laboratories that earn fees by running diagnostic, genomic and cancer tests for patients, physicians and drug developers."
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "HCA Healthcare, Inc.",
+     "out": "",
+     "symbol": "HCA",
+     "unverified": false,
+     "what": "As of 2024, HCA Healthcare is ranked #61 on the Fortune 500 rankings of the largest United States corporations by total revenue",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tenet Healthcare Corp",
+     "out": "",
+     "symbol": "THC",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Encompass Health Corp",
+     "out": "",
+     "symbol": "EHC",
+     "unverified": false,
+     "what": "Encompass Health Corporation, formerly Amcare and HealthSouth, based in Birmingham, Alabama, is the United States's largest provider of inpatient rehabilitative services…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Universal Health Services Inc",
+     "out": "",
+     "symbol": "UHS",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Surgery Partners, Inc.",
+     "out": "",
+     "symbol": "SGRY",
+     "unverified": false,
+     "what": "We are a leading healthcare services company with an integrated outpatient delivery model focused on providing high-quality, cost-effective solutions for surgical and related…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ardent Health, Inc.",
+     "out": "",
+     "symbol": "ARDT",
+     "unverified": false,
+     "what": "We deliver care through a system of 30 acute care hospitals",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pediatrix Medical Group, Inc.",
+     "out": "",
+     "symbol": "MD",
+     "unverified": false,
+     "what": "Pediatrix is a leading provider of physician services including newborn, maternal-fetal, and other pediatric subspecialty care",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Community Health Systems Inc",
+     "out": "",
+     "symbol": "CYH",
+     "unverified": false,
+     "what": "It was the largest provider of general hospital healthcare services in the United States in terms of number of acute care facilities",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 16.2,
+   "ebitda_n": 8,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Hospital and care facility operators",
+   "listed": 8,
+   "n": 8,
+   "net": 7.6,
+   "net_n": 8,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.45,
+   "pb_n": 6,
+   "revenue": 144241.91999999998,
+   "roce": 16.5,
+   "roce_n": 8,
+   "roe": 19.8,
+   "roe_n": 6,
+   "scale": null,
+   "words": "Operators of hospitals, surgery centers and rehabilitation facilities that earn patient service revenue from insurers and government payers."
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Integer Holdings Corp",
+     "out": "",
+     "symbol": "ITGR",
+     "unverified": false,
+     "what": "Integer Holdings Corporation, headquartered in Plano, Texas, is one of the world’s largest medical device contract development and manufacturing organizations (“CDMOs”), serving…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SkinHealth Systems Inc.",
+     "out": "",
+     "symbol": "SKIN",
+     "unverified": false,
+     "what": "The Beauty Health Company is a global medical aesthetics company delivering an integrated ecosystem of clinically proven solutions designed to help consumers achieve superior…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "West Pharmaceutical Services Inc",
+     "out": "",
+     "symbol": "WST",
+     "unverified": false,
+     "what": "West Pharmaceutical Services, Inc. is a designer and manufacturer of injectable pharmaceutical packaging and delivery systems",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SpyGlass Pharma, Inc.",
+     "out": "no revenue figure",
+     "symbol": "SGP",
+     "unverified": false,
+     "what": "We are a late-stage biopharmaceutical company dedicated to transforming the treatment paradigm for patients living with chronic eye conditions through long-acting, sustained drug…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Celcuity Inc.",
+     "out": "",
+     "symbol": "CELC",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fortrea Holdings Inc.",
+     "out": "",
+     "symbol": "FTRE",
+     "unverified": false,
+     "what": "Its customers are primarily in the pharmaceutical, biotechnology, and medical device industries",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Haemonetics Corp",
+     "out": "",
+     "symbol": "HAE",
+     "unverified": false,
+     "what": "Our innovative solutions addressing critical medical needs include a suite of hospital technologies designed to advance standards of care and help enhance outcomes for patients",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Johnson & Johnson",
+     "out": "",
+     "symbol": "JNJ",
+     "unverified": false,
+     "what": "Johnson & Johnson is a holding company, with operating companies conducting business in virtually all countries of the world",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 19.55,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other medical device companies",
+   "listed": 8,
+   "n": 7,
+   "net": 6.4,
+   "net_n": 6,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 8.4,
+   "pb_n": 7,
+   "revenue": 103478.96,
+   "roce": 7.6,
+   "roce_n": 6,
+   "roe": 5.9,
+   "roe_n": 7,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Medical devices",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Medical devices",
+ "total": 222,
+ "unit": "$ million",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 222,
+  "shown": 100
+ }
+}

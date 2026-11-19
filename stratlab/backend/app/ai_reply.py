@@ -122,18 +122,55 @@ def extract_json(raw: str) -> dict:
     """The JSON object in a reply, even if it's wrapped in ``` fences or a sentence."""
     text = re.sub(r"^```(?:json)?|```$", "", strip_thinking(raw or ""), flags=re.M).strip()
     try:
-        data = json.loads(text)
+        # r581 (Admin's AI row: "reply wasn't the JSON asked for (claude-sonnet-5-5)", 16 Nov 03:04 UTC, during a theme check): a line break
+        # or tab written as is inside a string (a long description over two lines) is read, as the model meant it
+        data = json.loads(text, strict=False)
     except json.JSONDecodeError:
-        a, b = text.find("{"), text.rfind("}")
-        if a < 0 or b <= a:
-            raise AIError("The AI reply couldn't be read. Try rephrasing the idea.") from None
-        try:
-            data = json.loads(text[a:b + 1])
-        except json.JSONDecodeError:
+        data = first_object(text)
+        if data is None:
             raise AIError("The AI reply couldn't be read. Try rephrasing the idea.") from None
     if not isinstance(data, dict):
         raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
     return data
+
+
+_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
+
+
+def first_object(text: str) -> dict | None:
+    """r58 (Admin's AI row: "reply wasn't the JSON asked for" from a model that answered with the object between sentences that hold braces
+    of their own, "{...}" in a note after it, or a trailing comma): the first whole JSON object in a text, read from each "{" in turn (a
+    note after it never spoils it), the largest whole one, read as written and with trailing commas taken out."""
+    dec = json.JSONDecoder(strict=False)
+    best = None
+    for src in (text, _TRAILING_COMMA.sub(r"\1", text)):
+        for i in _outer_starts(src):
+            try:
+                obj, end = dec.raw_decode(src, i)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict) and (best is None or end - i > best[0]):
+                best = (end - i, obj)
+    return best[1] if best is not None else None
+
+
+def _outer_starts(text: str) -> list[int]:
+    """Where each "{" outside every other brace and string opens: an object inside one cut off (a reply that hit the length limit) is a part,
+    never read as the whole answer."""
+    out, depth, in_str, esc = [], 0, False, False
+    for j, ch in enumerate(text):
+        if in_str:
+            esc, in_str = (False, True) if esc else (ch == "\\", ch != '"')
+            continue
+        if ch == '"' and depth:
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                out.append(j)
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+    return out
 
 
 def salvage_items(raw: str, key: str) -> list[dict]:

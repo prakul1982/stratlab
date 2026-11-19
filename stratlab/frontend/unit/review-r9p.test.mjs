@@ -47,7 +47,10 @@ test("R9P-006: the confirm step names the rupee charge in the currency shown, fr
   assert.equal(chargeAboutNote(true, "$8", null), "");
   const src = read("src/pages/PlansPage.tsx");
   // item 34: the confirm step says the rupee charge and its dollar figure, the same "about $" as the cards
-  assert.match(src, /const chargeWords = \(p: "basic" \| "pro"\) => `\$\{rupeeCharge\(rupees\(p, period\), gst\)\} \(\$\{aboutUsd\(rupees\(p, period\), rate\)\}\), every \$\{period\}`;/);
+  // (updated on purpose: owner 16 Nov) with dollars shown and rupees charged it says "shown as $8; charged in rupees" in place of
+  // "about $8", and with dollars charged the dollar amount alone
+  assert.match(src, /return `\$\{rupeeCharge\(rupees\(p, period\), gst\)\} \(\$\{c\.usdShown \? `shown as \$\{c\.shown\}; charged in rupees` : aboutUsd\(rupees\(p, period\), rate\)\}\), every \$\{period\}`;/);
+  assert.match(src, /if \(c\.chargedCur === "USD"\) return `\$\{c\.charged\}, every \$\{period\}`;/);
   // the headline prices are the owner's fixed ones and are not touched here
   assert.match(read("../backend/app/pricing.py"), /FIXED/);
 });

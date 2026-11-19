@@ -21,6 +21,7 @@ sys.path.insert(0, ".")
 _web = os.environ.get("E2E_WEB_PORT", "5599")
 os.environ.setdefault("AUTOFIX", "0")      # no self-healing sweep re-running jobs under the browser tests
 os.environ.setdefault("THEME_AUTO_POST", "0")     # no hidden blog post drafted beside the browser tests' theme reads
+os.environ.setdefault("THEME_DESCRIBE_MORE", "0")  # no background description read beside the browser tests' theme views
 os.environ.setdefault("FRONTEND_ORIGIN", f"http://127.0.0.1:{_web},http://localhost:{_web}")   # the browser tests' page
 from tests import e2e_clock  # noqa: E402
 # the world's fixed moment (tests/e2e_clock.py), set before the app reads any time. Only when run as the server: a test
@@ -504,6 +505,13 @@ def blog_posts():
                 got += 1
             day -= timedelta(days=1)
     print("blog:", blog_research.generate(builders=blog_research.source_posts()))
+    # blog2: the theme posts committed with the code (app/blog_themes), stored and published as a release stores them (e2e/blog.spec.ts)
+    from pathlib import Path
+    kept, blog_research.SEED_DIR = blog_research.SEED_DIR, Path(blog_research.__file__).with_name("blog_themes")
+    try:
+        print("blog theme posts:", blog_research.seed_theme_posts())
+    finally:
+        blog_research.SEED_DIR = kept
 
 
 def invite_rewards():
@@ -585,6 +593,7 @@ def vix_history(mp):
     from app import vix
     vix.fetch(date.today() - timedelta(days=400), date.today(), main.filings_feed, sleep=lambda s: None, pace=0)
     mp.setattr(main.vix_job, "start", lambda: None)
+    mp.setattr(main.mood_job.job, "start", lambda: None)      # no mood read on a clock under the browser tests (LIVE8A-006)
 
 
 def positioning_history():
@@ -670,6 +679,11 @@ def screen_index():
         if region == "IN":          # the stored purchase dates reach back 120 days: the 30 and 90 day windows are covered, 180 and 365 not (RC3M-009)
             index["insider_from"] = (date.today() - timedelta(days=120)).isoformat()
         db.set_setting(screens.INDEX_KEY + region, json.dumps(index))
+        # ...and its copy in memory goes, as build_index's store does: a page read before this (fix9b's holdings sectors, read by the
+        # owner's holdings import above; the company read's one_cap in the loop) kept the empty index for ten minutes, and the heatmap,
+        # the peers and the screens drew no market value (ci60)
+        with screens._mem_lock:
+            screens._mem.pop(region, None)
 
 
 def company_tables_world(mp):

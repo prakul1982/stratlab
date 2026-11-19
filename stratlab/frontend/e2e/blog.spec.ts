@@ -53,7 +53,8 @@ test("blog: the public header, menu and footer carry a Blog link, and it opens t
 test("blog: the landing page's header and footer, and the signed-in Account and Plans footers, link to it", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".lp-foot").getByRole("link", { name: "Blog" })).toHaveAttribute("href", "/blog", { timeout: 30_000 });
-  await expect(page.locator('nav[aria-label="Sections"] a[href="/blog"], nav[aria-label="Sections (menu)"] a[href="/blog"]').first()).toHaveAttribute("href", "/blog");
+  // (updated on purpose, NAV3/LIVE9A-019: the landing page's header is the public menu, "Site" as on every public page)
+  await expect(page.locator('nav[aria-label="Site"] a[href="/blog"], nav[aria-label="Site (menu)"] a[href="/blog"]').first()).toHaveAttribute("href", "/blog");
   // the hero says nothing about it: one more link in the header, not a new button over the fold
   await expect(page.locator(".lp-hero a[href='/blog'], main a[href='/blog']")).toHaveCount(0);
 });
@@ -190,5 +191,35 @@ test("PUB-2: a post has one content width, headline numbers as tiles, tables tha
   // (on a phone a table of five columns or more is a card per row, VR5-007: its figures are laid out left, each under its column's name)
   if (!phone) expect(await t.locator("tbody tr").first().locator("td").evaluateAll((e) => e.map((x) => getComputedStyle(x).textAlign))).toEqual(["right", "right", "right", "right", "left"]);
   await noSideways(page);
+  expect(errors).toEqual([]);
+});
+
+// blog2 (the owner, 16 Nov: "keep posting blog of the 9+ decks"): the theme posts committed with a release (backend app/blog_themes), each
+// a readable page on a desktop and a phone, with its deck's table, the theme page and its deck linked, facts only, and in the sitemap
+const ADVICE = /\b(buy|sell|hold|accumulate|avoid|cheap|expensive|overpriced|underpriced|overvalued|undervalued|recommend\w*|target price)\b/i;
+const THEME_POSTS = ["theme-it-services-margins-in", "theme-private-banks-margins-in", "theme-cybersecurity-margins-us", "theme-medical-devices-margins-us"];
+
+test("blog2: a 9+ deck's theme post is a readable page with its deck's table, its theme page and deck linked, facts only", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  for (const slug of THEME_POSTS) {
+    await page.goto(`/blog/${slug}`);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("along the chain", { timeout: 30_000 });
+    await expect(page.locator("p.facts")).toContainText("Facts, not advice");
+    await expect(page.getByRole("heading", { level: 2, name: "Every layer in figures" })).toBeVisible();
+    await expect(page.locator(".btbl").first()).toContainText("Companies");
+    await expect(page.locator("article a[href^='/themes/']").first()).toBeVisible();
+    await expect(page.locator("article a[href^='/research/themes?q=']").first()).toBeVisible();
+    // facts only: the page's words, less its own lines that it is no advice or recommendation
+    const words = (await page.locator("article").innerText()).replace(/[^.]*\b(not investment advice|nothing here is investment advice)[^.]*\./gi, " ");
+    expect(words, slug).not.toMatch(ADVICE);
+    await noSideways(page);
+    await shot(page, slug, info);
+  }
+  expect((await page.request.get("/blog/theme-cybersecurity-margins-us")).status()).toBe(200);
+  const map = await (await page.request.get("/sitemaps/blog.xml")).text();
+  for (const slug of THEME_POSTS) expect(map).toContain(`/blog/${slug}`);
+  await page.goto("/blog/research");
+  expect(await page.locator("ul.posts a.post[href^='/blog/theme-']").count()).toBeGreaterThanOrEqual(10);
   expect(errors).toEqual([]);
 });

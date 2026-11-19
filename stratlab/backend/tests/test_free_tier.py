@@ -312,20 +312,44 @@ def test_a_free_reader_opening_a_company_basic_already_read_costs_nothing(counts
 # ---------- the sample deck ----------
 def test_the_sample_deck_is_the_kept_theme_pdf(monkeypatch):
     from app import computed, main, sample_deck
-    rows = [{"id": "a", "label": "Railways (PDF, 2026-11-10)", "region": "IN"},
-            {"id": "b", "label": "India defence (PPTX, 2026-11-09)", "region": "IN"},
-            {"id": "c", "label": "India defence (PDF, 2026-11-08)", "region": "IN"}]
-    assert sample_deck.pick(rows)["id"] == "c"                        # the fixed theme's newest PDF
-    assert sample_deck.pick(rows[:2])["id"] == "a"                    # not kept: the newest PDF of any theme
-    assert sample_deck.pick(rows[1:2]) is None
+    # (updated on purpose, blog2: each kept deck says the versions it was made under, as computed.put records them; only today's are offered)
+    now_v = {"versions": computed.versions("deck:theme")}
+    rows = [{"id": "old", "label": "India defence (PDF, 2026-11-11)", "region": "IN", "meta": {"versions": [0, 0, 0, 0]}},
+            {"id": "a", "label": "Railways (PDF, 2026-11-10)", "region": "IN", "meta": now_v},
+            {"id": "b", "label": "India defence (PPTX, 2026-11-09)", "region": "IN", "meta": now_v},
+            {"id": "c", "label": "India defence (PDF, 2026-11-08)", "region": "IN", "meta": now_v}]
+    assert sample_deck.pick(rows)["id"] == "c"                        # the fixed theme's newest PDF of today's versions, not the older release's
+    assert sample_deck.pick(rows[:3])["id"] == "a"                    # not kept: the newest current PDF of any theme
+    assert sample_deck.pick(rows[2:3]) is None
     monkeypatch.setattr(computed, "entries", lambda kind, q="", region="", limit=500: rows if kind == "deck:theme" else [])
     monkeypatch.setattr(computed, "get_hk", lambda kind, hk: {"value": base64.b64encode(b"%PDF-sample").decode()} if hk == "c" else None)
     c = TestClient(main.app)                                          # no sign-in: a visitor
     info = c.get("/pricing/sample-deck/info").json()
-    assert info == {"available": True, "theme": "India defence", "region": "IN"}
+    # (updated on purpose, LIVE12B-021: /info names the deck's id too, which the link carries so the file is the theme it names)
+    assert info == {"available": True, "theme": "India defence", "region": "IN", "id": "c"}
     r = c.get("/pricing/sample-deck")
     assert r.status_code == 200 and r.content == b"%PDF-sample" and r.headers["content-type"] == "application/pdf"
     assert 'filename="stratlab-sample-deck-india-defence.pdf"' in r.headers["content-disposition"]
+
+
+def test_the_sample_deck_link_downloads_the_deck_it_names_even_after_a_newer_one_is_kept(monkeypatch):
+    """LIVE12B-021: the Plans page read /info ("Cement"), a newer deck was kept, and the download was the newest (Oil and gas): the link
+    carries the id /info named and gets that deck while it is still a current kept PDF; an id no longer kept falls back to the pick."""
+    from app import computed, main
+    now_v = {"versions": computed.versions("deck:theme")}
+    rows = [{"id": "cem", "label": "Cement (PDF, 2026-11-17)", "region": "IN", "meta": now_v}]
+    monkeypatch.setattr(computed, "entries", lambda kind, q="", region="", limit=500: rows if kind == "deck:theme" else [])
+    monkeypatch.setattr(computed, "get_hk", lambda kind, hk: {"value": base64.b64encode(f"%PDF-{hk}".encode()).decode()})
+    c = TestClient(main.app)
+    info = c.get("/pricing/sample-deck/info").json()
+    assert info["theme"] == "Cement" and info["id"] == "cem"
+    rows.insert(0, {"id": "oil", "label": "Oil and gas (PDF, 2026-11-18)", "region": "IN", "meta": now_v})     # kept after the page read /info
+    r = c.get("/pricing/sample-deck", params={"id": info["id"]})
+    assert r.status_code == 200 and r.content == b"%PDF-cem"
+    assert 'filename="stratlab-sample-deck-cement.pdf"' in r.headers["content-disposition"]
+    r = c.get("/pricing/sample-deck", params={"id": "gone"})
+    assert r.content == b"%PDF-oil" and 'filename="stratlab-sample-deck-oil-and-gas.pdf"' in r.headers["content-disposition"]
+    assert c.get("/pricing/sample-deck").content == b"%PDF-oil"
 
 
 def test_no_sample_deck_kept_says_so(monkeypatch):

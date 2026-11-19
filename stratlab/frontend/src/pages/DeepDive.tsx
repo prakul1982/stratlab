@@ -7,20 +7,19 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { deckLock, deepDiveLimitLine } from "../lib/account";
 import { SampleDeckLink } from "../components/SampleDeck";
-import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
+import { asOf, CRORE, inrCompact, lowerKeepAcronyms, marketTz, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
+import { millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
-import { BizUpdatesPanel } from "../components/BizUpdates";
-import { CompanyTables } from "../components/CompanyTables";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { Badge, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Badge, CardNote, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { SaveButton } from "../components/SavedSearches";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { ShareResearchButton } from "../components/ShareResearch";
 import { track } from "../lib/analytics";
 import { CHECK_BADGE, checkCountsLine } from "../lib/checklistText";
+import { busyLine, busyRetryIn } from "../lib/busyRetry";
 
 type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
   capex_pct_sales: number | null; cfo: number | null; cfi: number | null; fcf: number | null; debt: number | null };
@@ -42,6 +41,8 @@ export interface DeepView {
   symbol: string; region?: "IN" | "US"; ai?: boolean; source_url?: string | null; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   as_of?: string | null; numbers_at?: string | null; price_at?: string | null;
+  /** the source was busy: the figures are the company's last whole read, from numbers_at (rel1) */ figures_kept?: boolean;
+  /** the market trading: its live price and when it was read; the valuation stays on the last close of price_at (rel1) */ live?: { price: number; at: string | null } | null;
   industry_measures?: { key: string; label: string | null; measures: string[] };
   snapshot?: { div_yield: number | null };
   valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
@@ -135,7 +136,7 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
             } },
           ]} />
       ) : <p className="k-small k-muted">No specific targets were found in these {c.read.length > 0 && c.read.every((d) => d.kind === "earnings_release") ? "earnings releases" : "calls"}.</p>}
-      <p className="k-note">Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), a revenue or profit amount (at least the target, less 2%) and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p>
+      <CardNote summary="How each target is checked"><p>Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), a revenue or profit amount (at least the target, less 2%) and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p></CardNote>
     </>
   );
 }
@@ -201,6 +202,8 @@ export function DeepDivePage() {
   const [error, setError] = useState<string | null>(null);
   const [limited, setLimited] = useState(false);         // the plan's monthly deep dives are used up
   const [tries, setTries] = useState(0);                   // one more with each "Try again" (RC5-001)
+  const [busy, setBusy] = useState<string | null>(null);   // the source is busy: the page asks again on its own (busyRetry)
+  const auto = useRef(0);                                  // automatic tries since the last one a person asked for
   const u = me?.usage;
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
@@ -222,12 +225,24 @@ export function DeepDivePage() {
 
   useEffect(() => {
     let live = true;
+    let timer = 0;
     setV(null); setError(null); setLimited(false); setReading(false); setCarding(false);
     api<DeepView>(`/research/deep/${encodeURIComponent(sym)}${q()}`)
-      .then((x) => { if (live) { setV(x); void refreshMe(); } })
-      .catch((e) => { if (live) { setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402); } });
-    return () => { live = false; };
+      .then((x) => { if (live) { setV(x); setBusy(null); auto.current = 0; void refreshMe(); } })
+      .catch((e) => {
+        if (!live) return;
+        const wait = busyRetryIn(e, auto.current);
+        if (wait != null) {         // busy: said, and asked again a little later, never an error wall at once
+          setBusy(busyLine((e as Error).message, wait));
+          timer = window.setTimeout(() => { auto.current += 1; setTries((n) => n + 1); }, wait);
+          return;
+        }
+        auto.current = 0;           // a "Try again" after the error starts the automatic tries afresh
+        setBusy(null); setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402);
+      });
+    return () => { live = false; window.clearTimeout(timer); };
   }, [sym, region, tries]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { auto.current = 0; setBusy(null); }, [sym, region]);
 
   const readDocs = async (refresh = false) => {
     const mine = here.current;
@@ -257,13 +272,12 @@ export function DeepDivePage() {
   const cur = millionsOf(n?.unit);       // a US-listed company reporting in another currency: its figures in that currency
   // sales and profit, side by side, share one unit (a profit chart in crore never sits beside sales in lakh crore)
   const salesS = scaleFor(years.flatMap((y) => [y.sales, y.profit]), us, n?.unit), profitS = salesS;
-  const qS = scaleFor((n?.quarters ?? []).slice(-8).flatMap((q) => [q.sales, q.profit]), us, n?.unit);
   const capS = scaleFor([...years].reverse().slice(0, 8).flatMap((y) => [y.sales, y.capex, y.cfo, y.fcf, y.debt]), us, n?.unit);
   const b = v?.reads?.business, p = v?.reads?.plans;
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title={`${v?.name ?? sym}: business, capex and growth`}
-        asOf={v?.numbers_at} asOfLabel="Reported numbers as of" asOfTz={marketTz(region)}
+        asOf={v?.numbers_at} asOfPending={!v} asOfLabel="Reported numbers as of" asOfTz={marketTz(region)}
         lede={us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in {cur === "$" ? "dollars" : `the currency it reports in (${cur})`}, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}
@@ -272,7 +286,8 @@ export function DeepDivePage() {
           <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
           {v && <SaveButton kind="deep_dive" label="Save deep dive" name={`${v.name ?? sym} deep dive`} params={{ region, symbol: sym }} />}
         </>} />
-      <div className="k-row">
+      {/* the tools' row keeps a button's height while the dive loads, so the page doesn't drop when they arrive (LIVE9B-013: 0.196) */}
+      <div className="k-row dd-tools">
         {v && <>
           {/* FREE-TIER: no decks on Free: a locked button that says where they are, and the sample deck beside it */}
           {u?.deck_limit === 0 ? <>
@@ -291,9 +306,14 @@ export function DeepDivePage() {
         {v && <ShareResearchButton kind="deep" region={region} target={sym} label="this deep dive" />}
         {v && <Link className="btn quiet sm" to="/research/investor">Watchlist at a glance →</Link>}
       </div>
+      {/* owner, 18 Nov ("why are we putting repeated thing which we already have in the normal stock page?"): the deep dive keeps what it adds
+          (10 years, growth rates, the checklist, capex and cash, the company's own documents, the report card); the rest is the company page's */}
+      {v && <p className="k-small k-muted" data-testid="dd-elsewhere">Price, valuation, peers, the statements, shareholding, business updates and filings are on the{" "}
+        <Link className="link" to={`/research/${region}/${encodeURIComponent(sym)}`}>company page</Link>.</p>}
       {limited && <PlanNote>{error}</PlanNote>}
       {!limited && error && <ErrorState title="The deep dive couldn't be opened" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
-      {!v && !error && <Card><Skeleton label="Reading the reported numbers" lines={5} /></Card>}
+      {!v && !error && <Card>{busy && <p className="k-small" role="status" data-testid="deep-busy">{busy}</p>}<Skeleton label="Reading the reported numbers" lines={5} /></Card>}
+      {v?.figures_kept && <p className="k-small k-muted" data-figures-kept>These are the company's figures as read on {fmtDate(v.numbers_at ?? "")}: the latest couldn't be read just now.</p>}
       {v && u?.deepdive_limit != null && (
         <p className="k-note">{deepDiveLimitLine(u.deepdive_used ?? 0, u.deepdive_limit, u.deck_used ?? 0, u.deck_limit)} <Link className="link" to="/plans">Plans</Link></p>
       )}
@@ -324,38 +344,12 @@ export function DeepDivePage() {
               <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.profit as number) / profitS.k }))} label="Net profit" unit={profitS.unit}
                 baseSales={(() => { const f = years.find((y) => y.profit != null); return f?.sales != null ? f.sales / profitS.k : null; })()} />
             </div>
-            {n.quarters.length > 0 && (
-              <DataTable csv={`${sym} last eight quarters`} label="The last eight quarters" stack rows={n.quarters.slice(-8)} rowKey={(q) => q.quarter}
-                columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
-                  { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
-                  { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
-                  ...(n.bank && n.quarters.slice(-8).every((q) => q.opm == null) ? [] : [{ key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q: (typeof n.quarters)[number]) => marginText(q.opm) }]),
-                  { key: "p", header: "Net profit", numeric: true, cell: (q) => qS.fmt(q.profit) }]} />
-            )}
           </Panel>
           </ReportScope>
 
-          {v.valuation && (
-            <ReportScope section="How it's valued" source="The latest price and the company's reported figures">
-            <Panel title="How it's valued" info={v.valuation.why}>
-              <div className="dd-fit"><DataTable label="How it's valued" rows={[
-                { k: "v", name: v.valuation.name, v: v.valuation.value == null ? "–" : `${v.valuation.value.toFixed(1)}×` },
-                ...(v.valuation.short !== "P/E" ? [{ k: "pe", name: "Price to earnings", v: v.valuation.pe == null ? "–" : `${v.valuation.pe.toFixed(1)}×` }] : []),
-                ...(v.snapshot?.div_yield != null ? [{ k: "dy", name: "Dividend yield", v: `${v.snapshot.div_yield.toFixed(2)}%` }] : []),
-              ]} rowKey={(r) => r.k} stack={false}
-                columns={[{ key: "n", header: "Measure", rowHeader: true, cell: (r) => r.name }, { key: "v", header: "Value", numeric: true, cell: (r) => <b>{r.v}</b> }]} /></div>
-              <p className="k-note">{v.valuation.why} A number to compare with similar companies, not a verdict on the price.</p>
-            </Panel>
-            </ReportScope>
-          )}
-
-          {/* lane c-f2: the same peers, statements and shareholding cards as the company page */}
-          <CompanyTables region={region} symbol={v.symbol} ids="dd" />
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
 
-          {!us && <BizUpdatesPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Business updates" right={right}
-            info="Monthly or quarterly numbers the company files between results, copied from its own filing with the line and page each comes from.">{body}</Panel>} />}
 
           {/* the named holders and the deals tables are the company page's (DD-054); no card here that only linked to them (R15, owner 7 Nov) */}
 
@@ -390,7 +384,7 @@ export function DeepDivePage() {
               empty="Only the company profile was read: no document was found." />}
             {v.doc_note && <p className="k-note">Filings: {v.doc_note}</p>}
             {reading && <Skeleton label={us ? "Reading the annual report (10-K) and earnings releases" : "Reading the latest investor presentation and earnings calls"} lines={3} />}
-            {!v.reads && !reading && <p className="k-small k-muted">The business model, {v.industry_measures?.label ? `the ${v.industry_measures.label.toLowerCase()} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
+            {!v.reads && !reading && <p className="k-small k-muted">The business model, {v.industry_measures?.label ? `the ${lowerKeepAcronyms(v.industry_measures.label)} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
             {v.reads?.problems?.length ? <p className="k-note">Couldn't read: {v.reads.problems.join(" · ")}</p> : null}
           </Card>
 
@@ -478,8 +472,8 @@ export function DeepDivePage() {
               <DocTable label="Documents" docs={v.documents} />
             </Panel>
           )}
-          <p className="k-note inv-text">Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report." : ""}
-            {" "}The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it. Nothing here is investment advice.</p>
+          <CardNote><p className="inv-text">Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report." : ""}
+            {" "}The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it. Nothing here is investment advice.</p></CardNote>
         </>
       )}
     </div>

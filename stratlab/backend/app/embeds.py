@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from . import public_themes, stock_pages
 from .config import settings
 from .share import day_text, public_words
+from .titles import page_title
 
 router = APIRouter(include_in_schema=False)
 
@@ -52,7 +53,7 @@ def _doc(title: str, body: str) -> str:
 
 
 def _missing(what: str):
-    return HTMLResponse(_doc("Not available · StratLab", f'<p>{html.escape(what)}</p><p class="small"><a href="{settings.PUBLIC_SITE_URL}/" target="_blank" '
+    return HTMLResponse(_doc(page_title("Not available"), f'<p>{html.escape(what)}</p><p class="small"><a href="{settings.PUBLIC_SITE_URL}/" target="_blank" '
                                                           f'rel="noopener">StratLab</a></p>'),
                         status_code=404, headers={"Cache-Control": MISSING_CACHE})
 
@@ -115,7 +116,7 @@ def embed_price(region: str, symbol: str, request: Request, range: str = "1y"):
     sym, co = hit
     resp = _prices(region.lower(), sym, request)
     if resp.status_code != 200:
-        return HTMLResponse(_doc("Prices busy · StratLab", "<p>Prices can't be read right now. Try again in a minute.</p>"), status_code=503,
+        return HTMLResponse(_doc(page_title("Prices busy"), "<p>Prices can't be read right now. Try again in a minute.</p>"), status_code=503,
                             headers={"Retry-After": "60", "Cache-Control": "no-store"})
     points = price_points(json.loads(resp.body), RANGES.get(range, 365))
     if len(points) < 2:
@@ -129,7 +130,7 @@ def embed_price(region: str, symbol: str, request: Request, range: str = "1y"):
             f'<p class="small muted">Daily close, last {"6 months" if range == "6m" else "5 years" if range == "5y" else "year"}</p>'
             + svg + f'<p class="sr-only">{html.escape(label)}</p>'
             + _caption("exchange closing prices", day_text(points[-1][0]), back, f"{name} on StratLab"))
-    return HTMLResponse(_doc(f"{name} price · StratLab", body), headers={"Cache-Control": PRICE_CACHE})
+    return HTMLResponse(_doc(page_title(f"{name} price"), body), headers={"Cache-Control": PRICE_CACHE})
 
 
 @router.get("/embed/price/{symbol}")
@@ -160,4 +161,4 @@ def embed_theme(region: str, slug: str):
             '<p class="small muted">Checked companies in each layer of the theme</p>' + svg + f'<p class="sr-only">{html.escape(label)}</p>'
             + _caption("company filings and the exchange's industry classification", day_text(v["day"]) or "the map's date", back,
                        f"The {v['label']} theme on StratLab"))
-    return HTMLResponse(_doc(f"{v['label']} theme · StratLab", body), headers={"Cache-Control": THEME_CACHE})
+    return HTMLResponse(_doc(page_title(f"{v['label']} theme"), body), headers={"Cache-Control": THEME_CACHE})

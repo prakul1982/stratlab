@@ -1,6 +1,8 @@
 /* What a paper session says about stopping it (R11C-002). */
 
 /** The stop dialog: an open position stays open, valued at the last price, and the stopped page shows it that way. */
+/** An options session's stop: its open legs are bought or sold back at the last prices, so the trade is booked (LIVE10B-028). */
+export const OPTIONS_STOP_DIALOG = "Open paper legs are squared off at the last price before the stop, and the trade is booked. Nothing more is traded, and the session can't be restarted.";
 export const STOP_DIALOG = "Open paper positions stay open, valued at the last price before the stop. Nothing more is traded, and the session can't be restarted.";
 
 /** A stopped session's line for the position it still holds: "Stopped with a position open: 29 bought at $335.35, valued at

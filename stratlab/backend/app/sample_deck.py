@@ -2,8 +2,9 @@
 Plans page and the locked deck buttons offer one fixed theme deck that is already kept in the shared store (computed.py, kind
 "deck:theme", made by theme_routes.theme_dive_deck) for anyone, signed in or not, to download and see what a deck holds.
 
-Nothing is made here: no AI call, no data source, no deck build, nothing counted. The deck is SAMPLE_THEME's newest kept PDF; when that
-theme has none kept, the newest kept PDF of any theme; when nothing is kept, 404 (the pages then show no link: GET /pricing/sample-deck/info).
+Nothing is made here: no AI call, no data source, no deck build, nothing counted. The deck is SAMPLE_THEME's newest kept PDF made under
+today's versions (blog2: never a deck an older release made); when that theme has none, the newest such PDF of any theme; when none is kept,
+404 (the pages then show no link: GET /pricing/sample-deck/info).
 """
 import base64
 
@@ -28,10 +29,19 @@ def _is_pdf(label: str) -> bool:
     return "(PDF," in (label or "")
 
 
-def pick(rows: list[dict]) -> dict | None:
-    """The kept deck to offer, from computed.entries (newest first): SAMPLE_THEME's newest PDF, else the newest PDF, else None."""
+def current(row: dict, versions: list | None = None) -> bool:
+    """Whether a kept deck was made under today's versions (its rules, deck, dive text and sector figures: computed.VERSIONS): blog2, the owner,
+    16 Nov ("fix ... old deck ... make it all updated"): the index keeps the entries of older versions too, so the newest PDF can be one
+    a deploy has since replaced; a deck kept before the versions were recorded is not current either."""
+    want = computed.versions(KIND) if versions is None else versions
+    return want is None or ((row.get("meta") or {}).get("versions") == want)
+
+
+def pick(rows: list[dict], versions: list | None = None) -> dict | None:
+    """The kept deck to offer, from computed.entries (newest first): of the PDFs made under today's versions (current), SAMPLE_THEME's
+    newest, else the newest; None when no current PDF is kept (the pages then show no link until a deck is made again)."""
     from .intel import theme_library
-    pdfs = [r for r in rows if _is_pdf(r.get("label") or "")]
+    pdfs = [r for r in rows if _is_pdf(r.get("label") or "") and current(r, versions)]
     region, theme = SAMPLE_THEME
     for r in pdfs:
         if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme:
@@ -39,9 +49,16 @@ def pick(rows: list[dict]) -> dict | None:
     return pdfs[0] if pdfs else None
 
 
-def chosen() -> dict | None:
+def chosen(deck_id: str | None = None) -> dict | None:
+    """The deck to offer; with `deck_id` (the one /info named, LIVE12B-021), that same deck while it is still a current kept PDF, so the
+    file downloaded is the theme the link says even when a newer deck has been kept since the page read /info."""
     try:
-        return pick(computed.entries(KIND))
+        rows = computed.entries(KIND)
+        if deck_id:
+            same = next((r for r in rows if r.get("id") == deck_id and _is_pdf(r.get("label") or "") and current(r)), None)
+            if same:
+                return same
+        return pick(rows)
     except Exception:
         return None
 
@@ -57,13 +74,14 @@ def file_name(theme: str) -> str:
 def sample_info():
     """Whether there is a sample deck to download, and which theme it is (the Plans page and the deck lock show the link only then)."""
     r = chosen()
-    return {"available": bool(r), "theme": _name(r["label"]) if r else None, "region": r.get("region") if r else None}
+    return {"available": bool(r), "theme": _name(r["label"]) if r else None, "region": r.get("region") if r else None, "id": r.get("id") if r else None}
 
 
 @router.get("/pricing/sample-deck")
-def sample_deck():
-    """The sample deck's PDF, for anyone (no sign-in): an existing kept theme deck, sent as it was made."""
-    r = chosen()
+def sample_deck(id: str | None = None):
+    """The sample deck's PDF, for anyone (no sign-in): an existing kept theme deck, sent as it was made. `id`: the deck /info named (the
+    link carries it), so the label and the file are the same theme (LIVE12B-021: "Cement" downloaded the Oil and gas deck)."""
+    r = chosen((id or "")[:200] or None)
     got = computed.get_hk(KIND, r["id"]) if r else None
     body = None
     if got and isinstance(got.get("value"), str):

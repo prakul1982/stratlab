@@ -59,6 +59,7 @@ class Check:
     action: str = "Open Admin to see what failed."
     to: str = "/admin"
     owner_only: bool = False        # only the owner can fix it (a key, a payment, a setting): escalates at once
+    mail: bool = True               # False: escalates into Needs your attention only, never mailed
     tries: int = TRIES
     backoff: tuple = BACKOFF
     settle: float = SETTLE
@@ -152,6 +153,8 @@ def escalate(st: dict, now: datetime, check: Check, issue: dict, send: Callable[
     mail = st["mail"] if st["mail"].get("day") == day else {"day": day, "sent": 0}
     st["mail"] = mail
     issue["escalated"] = issue.get("escalated") or _at(now)
+    if not check.mail:                      # listed under Needs your attention only: no mail (the owner's choice for this kind of check)
+        return False
     if mail["sent"] >= MAILS_PER_DAY:
         issue["held"] = True                # over today's cap: it stays in Needs your attention, mailed tomorrow if still open
         return False
@@ -225,6 +228,35 @@ def sweep(checks: list[Check], now: datetime | None = None, st: dict | None = No
         # a check no source lists any more (the job was removed, the provider's key taken out): closed without a word
         del st["open"][gone]
     return st
+
+
+# ---------- a part that failed in one run only is not a check (owner, 13 Nov: "Admin alerts keep popping": the IPO job's "2 company
+# filing pages the SEC didn't answer just now" opened and cleared on the retry about every few hours, 8 times in 2 days) ----------
+# A job that reads many parts (company pages, a market's prices, the feature check's lines) re-reads a part that didn't answer at its next
+# run by itself; a check opens only when the same part keeps failing, REPEAT_RUNS runs in a row, or when a large share failed in one run.
+REPEAT_RUNS = 2
+LARGE_SHARE, LARGE_LEAST = 0.5, 3           # half of the parts tried or more, and at least this many: a source down, not a part
+STREAK_MAX = 60                             # parts kept in a streak (the rest drop out, the oldest first)
+
+
+def streaks(before: dict | None, failing, read=()) -> dict[str, int]:
+    """Each part's failing runs in a row after this run: one more for each part failing now, gone for each part read now, and the rest
+    (not tried this run) as they were."""
+    before = {str(k): int(v) for k, v in (before or {}).items() if isinstance(v, (int, float))}
+    failing = [str(k) for k in failing]
+    gone = {str(k) for k in read} | set(failing)
+    out = {k: before.get(k, 0) + 1 for k in failing}
+    out.update({k: v for k, v in before.items() if k not in gone})
+    return dict(list(out.items())[:STREAK_MAX])
+
+
+def lasting(failing, counts: dict | None, tried: int, runs: int = REPEAT_RUNS) -> list[str]:
+    """The failing parts worth a check: every one when a large share of the `tried` failed in this run, else those failing `runs` runs in
+    a row (`counts`: streaks(...) after this run)."""
+    failing = [str(k) for k in failing]
+    if len(failing) >= LARGE_LEAST and len(failing) >= LARGE_SHARE * max(1, tried):
+        return failing
+    return [k for k in failing if (counts or {}).get(k, 0) >= runs]
 
 
 # ---------- a job's own "Run now", called in-process ----------

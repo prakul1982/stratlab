@@ -174,7 +174,10 @@ export function XYChart(p: XYChartProps) {
   const target = view ?? ext;
   const [a, b] = useTween(target, 280, instant);
   const i0 = Math.max(0, lowerBound(X, a) - 1), i1 = Math.min(n - 1, lowerBound(X, b));
-  const in0 = Math.min(n - 1, lowerBound(X, a - 1e-9)), in1 = Math.max(0, lowerBound(X, b + 1e-9) - 1);     // points inside the window
+  // points inside the window. The slack is relative: on a time axis (milliseconds, about 1.8e12) "+ 1e-9" added nothing, so the last point
+  // fell outside its own window and out of the y range (LIVE10B-007: one +₹451 trade drawn on an axis of ₹0 to ₹1)
+  const eps = 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+  const in0 = Math.min(n - 1, lowerBound(X, a - eps)), in1 = Math.max(0, lowerBound(X, b + eps) - 1);
 
   // ---- values, possibly indexed to 100 at the window's first point ----
   const shown = series.filter((s) => !hidden.has(key(s)));

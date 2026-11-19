@@ -151,7 +151,9 @@ class CandleBuilder:
         start = open_ + timedelta(minutes=k * self.minutes)
         return start, min(start + timedelta(minutes=self.minutes), close)
 
-    def on_tick(self, price: float, ts: datetime, cum_vol) -> list[dict]:
+    def on_tick(self, price: float, ts: datetime, cum_vol, day: dict | None = None) -> list[dict]:
+        """`day`: the tick's own day figures (the broker's "ohlc": the session's open, high and low so far), which a daily
+        candle takes, so a session started mid-day builds today's real candle, not one from its own first tick (LIVE10B-013)."""
         closed = self.flush(ts)
         b = self._bucket(ts)
         if b is None:
@@ -170,12 +172,23 @@ class CandleBuilder:
             self.cur["h"] = max(self.cur["h"], price)
             self.cur["l"] = min(self.cur["l"], price)
             self.cur["c"] = price
+        if self.minutes is None and day:
+            self._take_day(day)
         if vol is not None:
             if self.vol0 is None:
                 self.vol0 = vol - self.cur["v"]   # a resumed candle keeps the volume it had
             self.cur["v"] = max(0.0, vol - self.vol0)
             self.last_vol = vol
         return closed
+
+    def _take_day(self, day: dict):
+        try:
+            o, h, lo = (float(day.get(k) or 0) for k in ("open", "high", "low"))
+        except (TypeError, ValueError):
+            return
+        c = self.cur
+        if o > 0 and h >= o and 0 < lo <= o:          # a sane day: never a zero or a previous day's figures half-filled
+            c["o"], c["h"], c["l"] = o, max(c["h"], h), min(c["l"], lo)
 
     def flush(self, now: datetime) -> list[dict]:
         if self.cur and now >= self.cur["end"]:
@@ -336,7 +349,7 @@ class LiveSession:
         with self.lock:
             self.last_price = float(price)
             self.last_tick_at = tick_time(ts)
-            for c in self.builder.on_tick(float(price), ts, tick.get("volume_traded")):
+            for c in self.builder.on_tick(float(price), ts, tick.get("volume_traded"), tick.get("ohlc")):
                 self._on_candle(c)
 
     def on_timer(self, now: datetime):
@@ -530,7 +543,10 @@ class LiveSession:
                 "last_price": px, "last_tick_at": self.last_tick_at,
                 "feed_connected": self.poll_ok if self.polled else self.mgr.hub.connected,
                 "bars": [chart_bar(b) for b in view],
-                "forming": None if not forming else {"t": forming["start"].isoformat(), "c": forming["c"]},
+                # the candle as built, with its open, high and low: the page drew it from the prices it saw since it was opened
+                # (LIVE10B-013: "O25,422.55 H25,422.55" an hour after the day opened at 25,277.30)
+                "forming": None if not forming else {"t": forming["start"].isoformat(), "o": forming["o"], "h": forming["h"],
+                                                     "l": forming["l"], "c": forming["c"]},
                 "overlays": overlays, "oscillators": osc,
                 "events": e.events[-200:],
                 "equity_curve": self.equity_curve,

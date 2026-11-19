@@ -17,8 +17,24 @@ const AppPanel = lazy(() => importWithRetry(loadApp)) as unknown as ComponentTyp
 const PublicPanel = lazy(() => importWithRetry(loadPublic)) as unknown as ComponentType<PanelProps>;
 
 /** Open (or shut, or flip) the panel from anywhere on the page; with `chart`, on that instrument's chart ("IN:RELIANCE"). */
-export function openMarkets(detail: { open?: boolean | "toggle"; chart?: string } = { open: true }) {
+export function openMarkets(detail: { open?: boolean | "toggle"; chart?: string; list?: string } = { open: true }) {
   window.dispatchEvent(new CustomEvent("stratlab:markets", { detail }));
+}
+
+/** The signed-in person's id as their saved sign-in holds it, read at once from this device (the sign-in library keeps it under
+ * sb-<project>-auth-token), so the page's first frame uses the person's own panel layout. The account's own answer arrives
+ * later: a panel kept open under the guest's key used to be drawn first and then shut when it came, and the whole page moved
+ * sideways (LIVE12B-011, /new CLS 0.24). null when there is none. */
+export function savedUserId(store: Pick<Storage, "length" | "key" | "getItem"> | null = (() => { try { return localStorage; } catch { return null; } })()): string | null {
+  try {
+    for (let i = 0; store && i < store.length; i++) {
+      const k = store.key(i);
+      if (!k || !/^sb-.+-auth-token$/.test(k)) continue;
+      const id = (JSON.parse(store.getItem(k) ?? "null") as { user?: { id?: unknown } } | null)?.user?.id;
+      if (typeof id === "string" && id) return id;
+    }
+  } catch { /* storage off or not JSON */ }
+  return null;
 }
 
 function useViewport(): [number, number] {
@@ -34,7 +50,8 @@ function useViewport(): [number, number] {
 /** `button`: how the button is drawn when it differs from the panel (someone signed in on a public page has the app's panel and the visitor's button);
  * `autoOpen`: open at once (the visitor's button has just been pressed and this is its code arriving). */
 export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mode: "app" | "public"; userId?: string; button?: "app" | "public"; autoOpen?: boolean }) {
-  const [raw, setRaw] = usePersisted<PanelLayout>(`${LAYOUT_KEY}.${mode === "app" ? userId ?? "guest" : "visitor"}`, DEFAULT_LAYOUT);
+  const [who] = useState(() => (mode === "app" ? savedUserId() : null));
+  const [raw, setRaw] = usePersisted<PanelLayout>(`${LAYOUT_KEY}.${mode === "app" ? userId ?? who ?? "guest" : "visitor"}`, DEFAULT_LAYOUT);
   const [vw, vh] = useViewport();
   const layout = useMemo(() => clampLayout(raw, vw, vh), [raw, vw, vh]);
   // any change made while the panel is open is made on this page: a floating panel belongs to the page it was last used on (LIVE6-013)
@@ -65,11 +82,12 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   useEffect(() => { if (autoOpen) openIt(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- once, as this mounts
   useEffect(() => {
     const on = (e: Event) => {
-      const d = ((e as CustomEvent).detail ?? {}) as { open?: boolean | "toggle"; chart?: string };
+      const d = ((e as CustomEvent).detail ?? {}) as { open?: boolean | "toggle"; chart?: string; list?: string };
       // "toggle" goes by what is on screen: a phone's sheet kept as open but not drawn (a sheet is never open at page load) opens
       // on the first press, where it used to take two (the first only marked it shut)
       const open = d.open === "toggle" ? !shownNow.current : d.open !== false;
-      if (open) openIt(d.chart ? { chart: d.chart } : {}); else patch({ open: false });
+      // a list named (the Watchlist page's other lists, LIVE10A-014): the panel opens on that list
+      if (open) openIt(d.chart ? { chart: d.chart } : d.list ? { list: d.list, chart: null } : {}); else patch({ open: false });
     };
     window.addEventListener("stratlab:markets", on);
     return () => window.removeEventListener("stratlab:markets", on);

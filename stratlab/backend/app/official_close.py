@@ -276,6 +276,23 @@ def before_ex_date(symbol: str, day, now: datetime | None = None) -> bool:
     return any(d < ex <= today for ex in _ex_dates().get(base_symbol(symbol), ()))
 
 
+def day_range(symbol: str, day) -> tuple[float | None, float | None] | None:
+    """(high, low) of one stock's session on `day` from the exchange's cash bhavcopy (read once a day and kept in memory), for the
+    price job: a page moved to that day's official close takes the day's own high and low into its 52-week range (LIVE11B-012:
+    KOTAKBANK's 499.90 high of 17 Nov was missing from its "vs 52-week high" after the close). None when the file isn't at hand."""
+    files_fn = _src.get("files")
+    sym = str(symbol or "").upper()
+    if not files_fn or not sym or before_ex_date(sym, day):
+        return None
+    try:
+        from . import exchange_days
+        row = (exchange_days.cash_closes(files_fn(), date.fromisoformat(_day(day))) or {}).get(sym)
+    except Exception as e:                       # no range today: the close alone, as before
+        print("official closes: day range:", sym, str(e)[:120])
+        return None
+    return (row.get("high"), row.get("low")) if isinstance(row, dict) else None
+
+
 def official(symbol: str, day, use_quote: bool = True, now: datetime | None = None) -> float | None:
     """The exchange's close of one stock on one day: the bhavcopy's, else (with `use_quote`) a same-day quote's."""
     sym = str(symbol or "").upper()
@@ -534,6 +551,25 @@ def _read_ranges(d: str, files_fn) -> dict | None:
     return ranges()
 
 
+def report_through(report: dict | None) -> str | None:
+    """The newest session a 52-week report's figures cover: the latest day any of its rows names for a high or a low (every
+    session some stock makes a new 52-week high or low), never after the report's own day. The file of a day can still end on
+    the session before it (LIVE12B-015), and a candle after the covered session is not the report's to correct. None for a
+    report that names no day."""
+    if not isinstance(report, dict) or not isinstance(report.get("rows"), dict):
+        return None
+    key = ("w52through", report.get("day"), len(report["rows"]))
+    hit = _mem.get(key)
+    if hit is not None:
+        return hit or None
+    days = [str(v[i] or "")[:10] for v in report["rows"].values() if isinstance(v, (list, tuple)) and len(v) >= 4 for i in (1, 3)]
+    newest = max((d for d in days if len(d) == 10 and d[4] == "-"), default="")
+    own = str(report.get("day") or "")[:10]
+    got = min(newest, own) if newest and own else newest
+    _mem.set(key, got, 600)
+    return got or None
+
+
 def range_row(symbol: str, report: dict | None, now: datetime | None = None) -> list | None:
     """One stock's row of a 52-week report ([high, its day, low, its day]), or None. A report of a day before a bonus or
     split went ex is on the old basis, while the broker's candles are adjusted back: its row is not used for that stock
@@ -679,3 +715,37 @@ def parse_index_closes(text: str) -> dict[str, float]:
 
 def index_close(name: str, day, fetch: bool = False, now: datetime | None = None) -> float | None:
     return (index_closes(day, fetch, now) or {}).get(str(name or "").upper())
+
+
+# ---------- special sessions, from the exchange's own file (LIVE8A-014) ----------
+# Diwali's Muhurat trading on Sunday 8 Nov 2026 was on no calendar this server read, though the exchange published its daily file of
+# index closes for that day (NIFTY 50 24,986.40, -0.18%): the 9 Nov brief measured 9 Nov against 6 Nov (+0.06% where the exchange said
+# +0.23%), and the week was told as 4 sessions. A day the calendar has as shut on which that file exists held a session.
+SESSION_LOOKBACK = 10               # days back a shut day is looked at
+SWEPT_KEY = "closes:sessions-swept"  # the India day the last look was made: one look a day
+
+
+def find_sessions(now: datetime | None = None) -> list[str]:
+    """The shut days of the last SESSION_LOOKBACK days (weekends, holidays) for which the exchange published its daily file of index
+    closes: each is noted as a special session (data/calendar.note_session), so a day's change, the session before a day and a week's
+    count of sessions take it in. One look a day (a job's, never a page's); a day already known as a session is not asked again.
+    Returns the days found."""
+    from .data import calendar as tc
+    local = (now or datetime.now(timezone.utc)).astimezone(IST)
+    today = local.date().isoformat()
+    try:
+        if db.get_setting(SWEPT_KEY) == today:
+            return []
+        db.set_setting(SWEPT_KEY, today)
+    except Exception:
+        return []
+    known = tc.special_days("IN")
+    out = []
+    for k in range(1, SESSION_LOOKBACK + 1):
+        d = local.date() - timedelta(days=k)
+        if tc.is_trading_day("IN", d) or d.isoformat() in known:
+            continue
+        if index_closes(d.isoformat(), fetch=True, now=now):
+            tc.note_session("IN", d)
+            out.append(d.isoformat())
+    return out

@@ -1,0 +1,231 @@
+PAYMENTS AND FINTECH · FINDINGS
+
+
+Coverage, continued
+How many of the theme's companies, how much of its market value and which figures each total and median covers
+
+
+ Coverage                     Covered                Of what
+
+                                                     In “Card issuers and consumer lenders”: Synchrony Financial (Finance Services): membership: the theme's map names it, from
+                                                     another industry; its own words were checked to show the theme's work; comparison: in its layer's figures: confirmed, how it
+                                                     earns shown and of the layer's kind, with a figure. In “Merchant acquiring and processing”: Fiserv Inc (Business services):
+                                                     membership: the theme's map names it, from another industry; its own words were checked to show the theme's work;
+                                                     comparison: in its layer's figures: confirmed, with a figure; the map placed it here and its own words say the layer's name and
+                                                     no other way of earning; only the AI's read gave it another. In “Digital banks”, a layer of the theme's map, all its companies of
+                                                     other industries: Dave Inc. (Finance Services): membership: the theme's map names it, from another industry; its own words
+                                                     were checked to show the theme's work; comparison: in its layer's figures: confirmed, how it earns shown and of the layer's
+                                                     kind, with a figure. In “Cross-border and B2B payments”, a layer of the theme's map, all its companies of other industries:
+ From other industries        8                      Remitly Global, Inc. (Business services), Corpay, Inc. (Business services): membership: the theme's map names it, from
+                                                     another industry; its own words were checked to show the theme's work; comparison: in its layer's figures: confirmed, how it
+                                                     earns shown and of the layer's kind, with a figure. Payoneer Global Inc. (Business services): membership: the theme's map
+                                                     names it, from another industry; its own words were checked to show the theme's work; comparison: listed in its layer, left out
+                                                     of its figures: insufficient evidence, its own words don't state how it earns. In “Software products and subscriptions”: Flywire
+                                                     Corp (Business services): membership: the theme's map names it, from another industry; its own words were checked to show
+                                                     the theme's work; comparison: in its layer's figures; the layer is a group by how its companies earn, of different businesses,
+                                                     shown and never ranked. In “Other payments and fintech companies”: WISeQey Corp. (Data processing): membership: the
+                                                     theme's map names it, from another industry; its own words are not confirmed to show the theme's work yet (no description of
+                                                     its own is stored yet, so its membership is not checked yet); comparison: left out of every figure: not confirmed in the theme.
+
+ Since the previous                                  On 15 Nov 2026, against the version stored before it, after a re-check under new placement rules: removed 1: Capital One
+                              1
+ version                                             Financial Corp (business membership: its own words were checked and don't show the work of “Card issuers and lenders”).
+
+
+
+
+StratLab · Payments and fintech · Theme deep dive · 15 Nov 2026                                                                                              Not investment advice · 6 / 28
+PAYMENTS AND FINTECH · THE VALUE CHAIN
+
+
+The value chain by layer
+Each layer's companies, their revenue added together ($ million), and the layer's median margins
+
+
+ Layer                                                     Companies           Revenue     EBITDA margin       Net margin        ROCE            SBC / revenue       FCF margin
+
+ Card networks                                                        2        $78.7 bn    – (2)               – (2)             – (2)           – (2)               – (2)
+
+ Card issuers and consumer lenders
+                                                                      3        $68.7 bn    –                   26.2%             –               –                   –
+ (adjacent)
+
+ Merchant acquiring and processing                                    4        $57.3 bn    24.6%               10.9%             5.8%            2%                  17.6%
+
+ Payment platforms and crypto exchanges                               2        $40.4 bn    – (1 of 2)          – (2)             – (1 of 2)      – (1 of 2)          – (1 of 2)
+
+ Digital banks (adjacent)                                             1         $554 m     –                   – (1)             –               –                   –
+
+ Cross-border and B2B payments                                    2 of 3       $6.16 bn    – (2)               – (2)             – (2)           – (2)               – (2)
+
+ Software products and subscriptions                                  2        $6.78 bn    – (2)               – (2)             – (1 of 2)      – (2)               – (2)
+
+ Other payments and fintech companies                             1 of 2       $10.7 bn    – (1)               – (1)             – (1)           – (1)               – (1)
+
+
+Each company's latest full year, in $ million; how each figure is built: p. 25. Layer revenue: its companies added together; margins and returns: its median company. A layer is
+ranked only on a median of at least 5 companies with the figure; a layer with fewer is shown, not ranked. A median is shown for 3 companies or more. Companies: those in the
+layer's calculations, “of” those the layer lists where some are left out (who and why: the layer's page). A layer marked (adjacent): most of its companies' principal business is
+another kind than the theme's core members'; shown, in no total, median or ranking of the theme. The theme's totals are of its 14 core members with figures. Layers whose
+medians include whole-company (consolidated) figures of companies that also earn another way, no segment figures stored for them: Merchant acquiring and processing (2);
+Payment platforms and crypto exchanges (1); Software products and subscriptions (1); each layer's page names them. These layers earn in 2 different ways: fees on the value or
+number of payments they process; fees for trading, settling, holding or rating securities. Their figures are of different kinds of business, so they are set side by side and never
+ranked against each other: a ranking is made only among layers of one way of earning.
+
+StratLab · Payments and fintech · Theme deep dive · 15 Nov 2026                                                                                          Not investment advice · 7 / 28
+PAYMENTS AND FINTECH · THE VALUE CHAIN
+
+
+Smaller layers (1 of 2)
+5 layers of 2 member companies or fewer, 8 companies: the company, what it does and its key figures, one row each
+
+
+
+                                                                                                                            EBITDA
+ Layer                           Company                          What it does                                Revenue                   Net margin         ROCE      Year
+                                                                                                                             margin
+
+                                                                  It facilitates electronic funds transfers
+ Card networks                   Visa Inc.                        worldwide, most commonly through            $45.9 bn       64.3%           51.2%        48.3%      Sep 2026
+                                                                  Visa-branded credit cards
+
+                                                                  Its principal business globally is to
+                                 Mastercard Inc                   process payments between the banks          $32.8 bn       61.1%           45.6%        70.7%      Dec 2025
+                                                                  of merchants
+
+                                                                  operating an online payments system in
+ Payment platforms and
+                                 PayPal Holdings, Inc.            the majority of countries that support      $33.2 bn       21.2%           15.8%        19.2%      Dec 2025
+ crypto exchanges
+                                                                  online money transfers
+
+                                                                  We are working to update the
+                                 Coinbase Global, Inc.            century-old financial system by             $7.18 bn             –         17.6%              –    Dec 2025
+                                                                  providing a trusted platform
+
+
+
+
+Each of these layers has 2 member companies or fewer, so it has no median (a median is of 3 or more) and no page of its own; it is in the value chain's table. Rows in the value
+chain's order; each company's latest full year; how each figure is built: p. 25. What each layer does (written by AI from general knowledge, with no figures): Card networks:
+networks connect issuing and acquiring banks and authorise and settle transactions; Payment platforms and crypto exchanges: these companies run online payment systems
+and digital asset trading platforms, with PayPal moving money online and Coinbase serving as a crypto exchange; Digital banks: app-based banks gather deposits and sell cards,
+loans and investment products.
+
+StratLab · Payments and fintech · Theme deep dive · 15 Nov 2026                                                                                       Not investment advice · 11 / 28
+PAYMENTS AND FINTECH · THE VALUE CHAIN
+
+
+Smaller layers (2 of 2)
+5 layers of 2 member companies or fewer, 8 companies: the company, what it does and its key figures, one row each
+
+
+                                                                                                                            EBITDA
+ Layer                           Company                          What it does                              Revenue                     Net margin         ROCE      Year
+                                                                                                                             margin
+
+                                                                  The company is best known for
+ Digital banks                   Dave Inc.                        ExtraCash, a short-term credit product     $554 m                –         35.3%              –    Dec 2025
+                                                                  designed as an alternative to overdraft
+
+                                                                  The company provides an all-in-one
+ Software products and
+                                 Toast, Inc.                      point of sale (POS) system built on the   $6.15 bn          5.8%            5.6%        13.7%      Dec 2025
+ subscriptions
+                                                                  Android operating system
+
+                                                                  proprietary global payment network,
+                                 Flywire Corp                     and vertical-specific software help our    $623 m           6.0%            2.2%              –    Dec 2025
+                                                                  clients get paid
+
+                                 Fidelity National
+                                 Information Services,            FIS is a financial technology company
+ Other payments and
+                                 Inc.; also listed, not           providing solutions to financial          $10.7 bn         33.9%            3.6%          6.5%     Dec 2025
+ fintech companies
+                                 confirmed: WISeQey               institutions, businesses and developers
+                                 Corp.
+
+
+Each of these layers has 2 member companies or fewer, so it has no median (a median is of 3 or more) and no page of its own; it is in the value chain's table. Rows in the value
+chain's order; each company's latest full year; how each figure is built: p. 25. What each layer does (written by AI from general knowledge, with no figures): Card networks:
+networks connect issuing and acquiring banks and authorise and settle transactions; Payment platforms and crypto exchanges: these companies run online payment systems
+and digital asset trading platforms, with PayPal moving money online and Coinbase serving as a crypto exchange; Digital banks: app-based banks gather deposits and sell cards,
+loans and investment products.
+
+StratLab · Payments and fintech · Theme deep dive · 15 Nov 2026                                                                                       Not investment advice · 12 / 28
+PAYMENTS AND FINTECH · APPENDIX
+
+
+Every company's figures (1 of 2)
+18 companies with figures (18 description-verified, 0 industry-supported), one row each; Visa Inc. is the largest at $765 bn
+
+
+
+                                                                            Market
+ Company                       Layer                                                    Revenue      Growth      EBITDA         Net     ROCE         ROE          P/E       P/B
+                                                                             value
+
+ Visa Inc.                     Card networks                               $765 bn      $45.9 bn     +14.8%       64.3%      51.2%     48.3%       65.1%       32.5x      20.9x
+
+ Mastercard Inc                Card networks                             $584.5 bn      $32.8 bn     +16.4%       61.1%      45.6%     70.7%     193.5%        34.5x      74.6x
+
+ American Express Co           Card issuers and consumer lenders           $215 bn      $41.3 bn      +6.4%            –     26.2%          –      32.4%       18.0x        6.4x
+
+ Block, Inc.                   Merchant acquiring and processing           $51.4 bn     $24.2 bn      +0.3%        8.6%       5.4%      5.8%        5.9%      114.3x        2.3x
+
+ PayPal Holdings, Inc.         Payment platforms and crypto exchanges      $49.2 bn     $33.2 bn      +4.3%       21.2%      15.8%     19.2%       25.8%       11.3x        2.4x
+
+ Fiserv Inc                    Merchant acquiring and processing           $33.9 bn     $21.2 bn      +3.6%       30.6%      16.4%     10.6%       13.5%            –       1.3x
+
+ Coinbase Global, Inc.         Payment platforms and crypto exchanges      $33.8 bn     $7.18 bn           –           –     17.6%          –       8.5%            –       2.3x
+
+ Corpay, Inc.                  Cross-border and B2B payments               $29.6 bn     $4.53 bn     +13.9%       52.7%      23.6%     14.4%       27.5%       25.4x        7.6x
+
+ Global Payments Inc           Merchant acquiring and processing           $24.3 bn     $7.71 bn      −0.4%       38.7%      18.2%      3.9%        6.1%            –       1.1x
+
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). Revenue growth above 100% either way, or from a
+base under 5% of the median company's, with its base: Dave Inc. +59.7%, from $347 m to $554 m.
+
+
+
+
+StratLab · Payments and fintech · Theme deep dive · 15 Nov 2026                                                                                     Not investment advice · 27 / 28
+PAYMENTS AND FINTECH · APPENDIX
+
+
+Every company's figures (2 of 2)
+18 companies with figures (18 description-verified, 0 industry-supported), one row each; Visa Inc. is the largest at $765 bn
+
+
+
+                                                                                      Market
+ Company                                         Layer                                          Revenue    Growth    EBITDA        Net    ROCE        ROE        P/E       P/B
+                                                                                       value
+
+ Affirm Holdings, Inc.                           Card issuers and consumer lenders   $22.9 bn   $4.26 bn   +32.2%          –    45.3%          –    35.2%      11.3x       4.2x
+
+ Synchrony Financial                             Card issuers and consumer lenders   $22.5 bn   $23.1 bn    −4.3%          –    15.4%          –    21.2%        7.5x      1.3x
+
+ Toast, Inc.                                     Software products & subscriptions   $20.6 bn   $6.15 bn   +24.1%      5.8%      5.6%    13.7%      16.1%      37.7x       9.7x
+
+ Fidelity National Information Services          Other payments & fintech            $15.2 bn   $10.7 bn    +5.4%     33.9%      3.6%      6.5%      2.7%        4.4x      1.1x
+
+ Remitly Global, Inc.                            Cross-border and B2B payments       $4.83 bn   $1.64 bn   +29.4%      6.3%      4.2%      7.5%      7.8%      13.7x       5.6x
+
+ Dave Inc.                                       Digital banks                       $3.88 bn    $554 m    +59.7%          –    35.3%          –    55.5%      22.4x     11.0x
+
+ Shift4 Payments, Inc.                           Merchant acquiring and processing   $3.36 bn   $4.18 bn   +25.5%     18.7%      2.8%      5.9%      8.3%      23.5x       2.3x
+
+ Flywire Corp                                    Software products & subscriptions   $2.73 bn    $623 m    +26.6%      6.0%      2.2%          –     1.6%      37.1x       3.3x
+
+ Payoneer Global Inc.                            Cross-border and B2B payments       $2.45 bn   $1.05 bn    +7.7%     18.1%      7.0%    17.7%      10.4%      51.4x       3.5x
+
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). Revenue growth above 100% either way, or from a
+base under 5% of the median company's, with its base: Dave Inc. +59.7%, from $347 m to $554 m. Layer names in full: Software products & subscriptions = Software products
+and subscriptions; Other payments & fintech = Other payments and fintech companies.
+
+
+
+StratLab · Payments and fintech · Theme deep dive · 15 Nov 2026                                                                                    Not investment advice · 28 / 28
+

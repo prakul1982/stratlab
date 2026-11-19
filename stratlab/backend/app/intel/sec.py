@@ -78,6 +78,21 @@ INTEREST = ("InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDe
 BANK_INTEREST = ("InterestAndDividendIncomeOperating", "InterestIncomeOperating", "InterestAndFeeIncomeLoansAndLeases",
                  "InterestAndFeeIncomeLoansAndLeasesHeldInPortfolio", "RevenueFromInterest")
 BANK_OTHER = ("NoninterestIncome", "FeeAndCommissionIncome")
+# r58 (R58, the owner's review of the live R57.2 decks: a regional bank's revenue read as $80 m, its lease income alone, and a net
+# margin of 3,152.5%; two others' fee revenue in scope of the contract-revenue standard, $1.56 bn and $1.66 bn, as their whole
+# revenue): each sector's own accounting. A bank's revenue is its net interest income plus its non-interest income (its own total
+# net of interest expense when it files one). A filing that reports both is a bank's, whatever narrower line named like revenue it
+# also tags. Net interest income is the filed line, else interest income less interest expense. IFRS banks: net interest and net fee
+# and commission income.
+BANK_NET_TOTAL = ("RevenuesNetOfInterestExpense",)
+BANK_NII = ("InterestIncomeExpenseNet", "InterestRevenueExpense")
+BANK_NONINTEREST = ("NoninterestIncome", "FeeAndCommissionIncomeExpense")
+BANK_INTEREST_COST = ("InterestExpenseOperating", "InterestExpense")
+# an insurer's revenue: its total revenue, else premiums earned plus net investment income and fees and commissions. A total below
+# its premiums earned is a part (a fee line in scope of the contract-revenue standard), never the insurer's revenue
+INSURER_PREMIUMS = ("PremiumsEarnedNet", "InsuranceRevenue")
+INSURER_INVESTMENT = ("NetInvestmentIncome", "InvestmentIncomeInterestAndDividend")
+INSURER_FEES = ("InsuranceCommissionsAndFees", "InsuranceServicesRevenue")
 NET_INCOME = ("NetIncomeLoss", "ProfitLossAttributableToOwnersOfParent", "NetIncomeLossAvailableToCommonStockholdersBasic",
               "ProfitLoss", "IncomeLossFromContinuingOperations",
               "IncomeLossFromContinuingOperationsIncludingPortionAttributableToNoncontrollingInterest",
@@ -369,6 +384,13 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     for c in TOP_LINE:
         for end, v in read((c,)).items():
             seen.setdefault(end, []).append(v)
+    # a lender's or broker's whole revenue net of interest expense beside a top-line concept that holds only a part of it: the
+    # fee revenue in scope of the contract-revenue standard (lane dat57: American Express's 2025 10-K tags $41.3 bn of contract
+    # revenue and $72.2 bn of revenue net of interest expense; the part made its revenue, growth and net margin wrong). It
+    # counts as one more top-line figure, so the larger is the top line and a thousandfold slip is still caught
+    for end, v in read(("RevenuesNetOfInterestExpense",)).items():
+        if end in seen and v > 0:
+            seen[end].append(v)
     cost = read(COST_OF_SALES)
     for end, vs in seen.items():
         out[end] = top_line(vs, cost.get(end))
@@ -399,10 +421,136 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     # an income statement whose operating result is its operating costs to the dollar has no sales in it: a line named like
     # revenue for that period is a note's figure, not the top line (DATA, every company: JSPR's $9 m milestone and $8.3 m
     # lease "revenue", tagged beside a loss of exactly its $36.8 m and $76.2 m of costs)
+    for end, v in sector_revenue(read).items():
+        out[end] = v
     op_costs = read(OPERATING_COSTS)
     for end in [e for e in out if out[e] and no_sales_in_statement(op, op_costs, e)]:      # a nil stays: it is the right figure
         del out[end]
     return out
+
+
+def sector_revenue(read) -> dict[str, float]:
+    """{period end: revenue} by the sector's own accounting (r58), for the periods a bank's or an insurer's lines are filed: a bank's
+    total net of interest expense, else net interest income plus non-interest income; an insurer's premiums earned plus net investment
+    income and fees, where its total revenue is missing or below its premiums. `read` reads a tuple of concepts by period."""
+    out: dict[str, float] = {}
+    nii, nonint = read(BANK_NII), read(BANK_NONINTEREST)
+    interest, cost = read(BANK_INTEREST), read(BANK_INTEREST_COST)
+    for end in set(nii) | set(interest):
+        if end not in nonint:
+            continue
+        # (no interest expense filed: the interest income, as the bank's figure has always been read)
+        net = nii[end] if end in nii else interest[end] - cost.get(end, 0.0)
+        if net + nonint[end] > 0:
+            out[end] = net + nonint[end]
+    for end, v in read(BANK_NET_TOTAL).items():
+        if end in out and v > 0:
+            out[end] = v
+    premiums = read(INSURER_PREMIUMS)
+    if premiums:
+        total = {}
+        for c in TOP_LINE:
+            for end, v in read((c,)).items():
+                total[end] = max(total.get(end, 0.0), v)
+        invest, fees = read(INSURER_INVESTMENT), read(INSURER_FEES)
+        for end, p in premiums.items():
+            if end in out or p <= 0 or total.get(end, 0.0) >= p:
+                continue
+            out[end] = p + max(invest.get(end, 0.0), 0.0) + max(fees.get(end, 0.0), 0.0)
+    return out
+
+
+def revenue_basis(facts: dict, end: str, value: float, kind: str = "annual", unit: str = "USD") -> str:
+    """The concept a period's revenue was read from (the first that gives exactly that figure), else "a sum of lines"."""
+    read = (lambda cs: flows(facts, cs, "annual", unit)) if kind == "annual" else (lambda cs: quarterly(facts, cs, unit))   # noqa: E731
+    for c in ALL_REVENUE + BANK_NET_TOTAL + INSURER_PREMIUMS:
+        if read((c,)).get(end) == value:
+            return c
+    return "a sum of lines"
+
+
+# r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue $8.17 bn against $8.231 bn in its annual report, the
+# basis of neither said; the annual report's figure is its non-GAAP "total revenue, FTE", net interest income on a fully taxable-equivalent
+# basis plus noninterest income): the lines a year's revenue is read from, named, with the accounting standard, so a deck says each
+# financial filer's basis. A bank's revenue here is as filed: its net interest income is never put on a taxable-equivalent basis.
+BASIS_WORDS = {
+    "bank_net_total": "total revenue net of interest expense, as filed",
+    "bank_nii": "net interest income plus noninterest income, as filed",
+    "bank_interest_net": "interest income less interest expense, plus noninterest income, as filed",
+    "bank_interest": "interest income plus noninterest income, as filed (no interest expense filed)",
+    "insurer_parts": "premiums earned plus net investment income and fees, as filed",
+    "line": "the filing's revenue line",
+}
+BANK_BASES = ("bank_net_total", "bank_nii", "bank_interest_net", "bank_interest")
+
+
+def revenue_parts(facts: dict, end: str, value: float, unit: str = "USD") -> dict:
+    """r60b: how a year's revenue (`value`, as revenue() read it for the period ending `end`) is made: {"key" (BASIS_WORDS), "words", "lines":
+    [{"line", "value"} in millions], "standard" ("US GAAP" or "IFRS"), "concept" (the one line it was read from, "line" only), "fte": False for a
+    US GAAP bank (as filed, not on a fully taxable-equivalent basis)}. The first reading whose lines give the figure exactly."""
+    def read(cs):
+        return flows(facts, cs, "annual", unit)
+
+    def at(cs):
+        return read(cs).get(end)
+    ifrs = any(c in (facts.get("ifrs-full") or {}) for c in BANK_NII + BANK_NONINTEREST + INSURER_PREMIUMS + TOP_LINE)
+    std = "IFRS" if ifrs and not any(c in (facts.get("us-gaap") or {}) for c in ("NetIncomeLoss", "Revenues")) else "US GAAP"
+    same = lambda a: a is not None and abs(a - value) <= 0.5          # noqa: E731  (to the unit filed)
+    nii, nonint, interest, cost = at(BANK_NII), at(BANK_NONINTEREST), at(BANK_INTEREST), at(BANK_INTEREST_COST)
+    net_total = at(BANK_NET_TOTAL)
+
+    nonint_word = "net fee and commission income" if at(("FeeAndCommissionIncomeExpense",)) == nonint and at(("NoninterestIncome",)) is None \
+        else "noninterest income"
+
+    def out(key, lines, **kw):
+        return {"key": key, "words": BASIS_WORDS[key].replace("noninterest income", nonint_word),
+                "lines": [{"line": n, "value": _mn(v)} for n, v in lines], "standard": std,
+                **({"fte": False} if key in BANK_BASES and std == "US GAAP" else {}), **kw}
+    if nonint is not None and (nii is not None or interest is not None):
+        if same(net_total):
+            return out("bank_net_total", [("total revenue net of interest expense", net_total)])
+        if nii is not None and same(nii + nonint):
+            return out("bank_nii", [("net interest income", nii), (nonint_word, nonint)])
+        if interest is not None and cost is not None and same(interest - cost + nonint):
+            return out("bank_interest_net", [("interest income", interest), ("interest expense", -cost), (nonint_word, nonint)])
+        if interest is not None and same(interest + nonint):
+            return out("bank_interest", [("interest income", interest), (nonint_word, nonint)])
+    prem = at(INSURER_PREMIUMS)
+    if prem is not None:
+        inv, fees = max(at(INSURER_INVESTMENT) or 0.0, 0.0), max(at(INSURER_FEES) or 0.0, 0.0)
+        if same(prem + inv + fees):
+            return out("insurer_parts", [("premiums earned", prem)] + ([("net investment income", inv)] if inv else [])
+                       + ([("fees and commissions", fees)] if fees else []))
+    return out("line", [("revenue", value)], concept=revenue_basis(facts, end, value, "annual", unit))
+
+
+def reconcile_financial(facts: dict, subs: dict | None, unit: str, rev_a: dict, ni_a: dict, rev_q: dict, ni_q: dict) -> list[str]:
+    """A bank's or an insurer's revenue checked against its net profit before any margin is worked out (r58): a net profit above the
+    revenue (a net margin above 100%) means the revenue was read from a part, so that period's revenue is withheld (no margin is
+    made from it) and the error names the line it came from. Returns those errors; changes rev_a and rev_q in place."""
+    fam = financial_filer(facts, subs)
+    errors: list[str] = []
+    if not fam:
+        return errors
+    for kind, rev, ni in (("annual", rev_a, ni_a), ("quarter", rev_q, ni_q)):
+        for end in sorted(e for e in rev if e in ni and rev[e] > 0 and ni[e] > rev[e]):
+            basis = revenue_basis(facts, end, rev[end], kind, unit)
+            if kind == "annual":
+                errors.append(f"{_label(end)}: a {fam}'s net profit {ni[end] / M:,.1f} is above its revenue {rev[end] / M:,.1f}, read "
+                              f"from {basis}; the {fam}'s own revenue lines are not filed for it, so its revenue is withheld")
+            del rev[end]
+    return errors
+
+
+def financial_filer(facts: dict, subs: dict | None = None) -> str | None:
+    """"bank" or "insurer" when the filing reports a bank's or an insurer's lines (or its SEC industry code says so), else None."""
+    sic = str((subs or {}).get("sic") or "")
+    names = set((facts.get("us-gaap") or {})) | set((facts.get("ifrs-full") or {}))
+    if names & set(BANK_NII) and names & set(BANK_NONINTEREST) or sic in BANK_SIC:
+        return "bank"
+    if names & set(INSURER_PREMIUMS) or sic[:3] in ("631", "632", "633", "635", "636", "641"):
+        return "insurer"
+    return None
 
 
 SCALE_SLIP = (1e3, 1e6)          # a figure tagged in thousands or millions too many (lane n2: Tigo Energy's 2025 10-K)
@@ -740,7 +888,23 @@ PROFIT_TOTAL = ("ProfitLoss",)
 MINORITY_PROFIT = ("ProfitLossAttributableToNoncontrollingInterests", "NetIncomeLossAttributableToNoncontrollingInterest")
 
 
-def owner_sign(owners: dict, total: dict, minority: dict) -> None:
+def owners_profit(read) -> dict[str, float]:
+    """{period end: the profit attributable to the parent's shareholders}: as filed (NetIncomeLoss, or the IFRS line), else the total
+    profit less the minority's share where both are filed, and only then the narrower or wider lines (profit available to common
+    shareholders after preferred dividends and accretion, the total profit). Lane dat57: Pomdoctor's 20-F files no NetIncomeLoss, its
+    loss of CNY 130.9 m as ProfitLoss with a nil minority share, and CNY 212.6 m available to common shareholders after the accretion of
+    its preferred shares; the page showed the latter, a net margin of -53.2% against -32.7%. `read`: concepts -> {end: value}."""
+    out = read(NET_INCOME[:2])
+    total, minority = read(PROFIT_TOTAL), read(MINORITY_PROFIT)
+    for end, t in total.items():
+        if end not in out and end in minority:
+            out[end] = t - minority[end]
+    for end, v in read(NET_INCOME[2:]).items():
+        out.setdefault(end, v)
+    return out
+
+
+def owner_sign(owners: dict, total: dict, minority: dict, pretax: dict | None = None) -> None:
     """The shareholders' profit filed with the wrong sign, put right in place (R7V-003: Santander Chile's reports for
     2019 to 2021 tag the profit attributable to its shareholders as -842,467 for a year whose total profit was +852,428,
     so the page showed a bank losing money in a year it made one). A period whose shareholders' profit has the opposite
@@ -750,6 +914,12 @@ def owner_sign(owners: dict, total: dict, minority: dict) -> None:
     for end, v in list(owners.items()):
         t = total.get(end)
         if not v or not t or (v > 0) == (t > 0):
+            continue
+        # ...unless the profit before tax has the shareholders' sign and the total's is the one filed the wrong way round (lane dat57:
+        # Aeluma's 10-K tags its net loss of $9.2 m as NetIncomeLoss -9.2 m, profit before tax -9.2 m, and ProfitLoss +9.2 m; the page
+        # turned the loss into a 205% net margin)
+        p = (pretax or {}).get(end)
+        if p and (p > 0) == (v > 0) and 0.5 <= abs(v) / abs(p) <= 2:
             continue
         if end in minority:
             parent = t - minority[end]
@@ -864,9 +1034,9 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     subs = subs or {}
     cur = currency(facts) or "USD"
     rev_a, rev_q = revenue(facts, "annual", cur), revenue(facts, "quarter", cur)
-    ni_a, ni_q = flows(facts, NET_INCOME, "annual", cur), quarterly(facts, NET_INCOME, cur)
-    owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur))
-    owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur))
+    ni_a, ni_q = owners_profit(lambda cs: flows(facts, cs, "annual", cur)), owners_profit(lambda cs: quarterly(facts, cs, cur))
+    owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur), flows(facts, PRETAX, "annual", cur))
+    owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur), quarterly(facts, PRETAX, cur))
     # a loss-making company whose income statement stops at the loss before tax (nothing to tax): that is its profit
     # (MS1-013: Micromem's 20-F tags ProfitLossBeforeTax and no ProfitLoss)
     for ni, tax, pre in ((ni_a, flows(facts, TAX, "annual", cur), flows(facts, PRETAX, "annual", cur)),
@@ -874,6 +1044,7 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
         for e, v in pre.items():
             if e not in ni and (tax.get(e) == 0 or tax.get(e) is None and v < 0):
                 ni[e] = v
+    figure_errors = reconcile_financial(facts, subs, cur, rev_a, ni_a, rev_q, ni_q)
     op_a, op_q = flows(facts, OPERATING, "annual", cur), quarterly(facts, OPERATING, cur)
     # many companies show no operating profit line (Alcoa, HCA): then profit before tax with the interest it paid added
     # back (EBIT, as EBITDA is usually defined), else revenue less total costs
@@ -1050,17 +1221,32 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     # $279M against $1.2B)
     year_end_held = [float(f["val"]) for c in SHARES_HELD for f in _facts(facts, c, "shares")
                      if f.get("val") and float(f["val"]) > 0 and not f.get("start") and f.get("end") == last]
+    # ...or unless a report after that year, on a new share basis, agrees with it: a split or reverse split since the annual
+    # report changes every count after it, and the year's earnings per share stay on the old basis until the next annual report
+    # (lane dat57: CrowdStrike's 4:1 split of July 2026 put 1,023,934,842 shares on its August cover, the year to January 2026
+    # implied 250 M, and its market value showed $56.7 bn against $232 bn; SkinHealth's 1:20 reverse split showed $1.94 bn
+    # against $107 m). The later count is a quarter's average or a balance sheet's, from a filing other than the cover's own fact
+    later = [float(f["val"]) for c in ("WeightedAverageNumberOfSharesOutstandingBasic", "WeightedAverageNumberOfDilutedSharesOutstanding")
+             + SHARES_HELD for f in _facts(facts, c, "shares")
+             if f.get("val") and float(f["val"]) > 0 and f.get("end", "") > ends[-1] and (f["end"], float(f["val"])) != shares]
     if shares and abs(eps_basic.get(last) or 0) >= 0.05 and ni_a.get(last):
         implied = ni_a[last] / eps_basic[last]
         # (a count that grew, by at most ten times: a thousandfold count is a unit error whatever the balance sheet says)
         agrees = 1 < shares[1] / implied <= 10 and any(0.5 <= shares[1] / h <= 2 for h in year_end_held)
+        thousandfold = implied > 0 and any(abs(shares[1] / implied / k - 1) < 0.1 or abs(implied / shares[1] / k - 1) < 0.1
+                                           for k in SCALE_SLIP)
+        agrees = agrees or (not thousandfold and any(0.5 <= shares[1] / h <= 2 for h in later))
         if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3 and not agrees:
-            shares = (last, float(round(implied)))
+            # (dated by the annual report that gave the earnings per share: they are restated for a split before it was filed)
+            filed = max((f.get("filed") or "" for c in ("EarningsPerShareBasic", "BasicEarningsLossPerShare")
+                         for f in _facts(facts, c, f"{cur}/shares") if f.get("end") == last and f.get("form") in ANNUAL), default="")
+            shares = (filed or last, float(round(implied)))
             from_cover = False
     out = {"name": subs.get("name") or facts_json.get("entityName") or "", "ratios": {}, "growth": {}, "pros": [], "cons": [],
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million" if cur == "USD" else f"{cur} million", "currency": cur, "region": "US",
-           "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "fiscal_year_end": subs.get("fiscalYearEnd"),
+           "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "shares_at": shares[0] if shares else None,
+           "fiscal_year_end": subs.get("fiscalYearEnd"),
            "shares_from": "cover" if shares and from_cover else None, "avg_shares": avg, "no_cover_count": no_cover_count,
            # the periods the latest figures run to, and earnings per share for the P/E (R7V-002, R7V-003)
            "year_end": ends[-1], "ttm_end": max(rev_q) if has_ttm else None, "eps": eps_ttm(facts, cur, ends[-1], eps_a),
@@ -1069,10 +1255,16 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "eps_q": {e: round(v, 4) for e, v in sorted(quarterly(facts, EPS, f"{cur}/shares").items())[-8:] if v is not None},
            "interest_shown": None if lender else any(abs(_days(e, ends[-1])) <= 10 for e in read_a(INTEREST)),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
+           # fix12 (CX2): the exchange each of its tickers is listed on, as the SEC's filing list names it ("AAPL": "Nasdaq")
+           "listings": listings(subs),
            "bank": kind is None and lender,
-           "kind": kind, "no_revenue": no_revenue, "sales_untagged": sales_untagged, "profit_untagged": profit_untagged,
+           "kind": kind, "no_revenue": no_revenue, "figure_errors": figure_errors, "sales_untagged": sales_untagged, "profit_untagged": profit_untagged,
            "capex_untagged": capex_untagged,
-           "url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={facts_json.get('cik')}&type=10-K"}
+           # r60b: the lines the latest year's revenue is read from, named, with its standard (revenue_parts)
+           # (None when the year has no revenue read: the key itself says the page was built with this rule, stock_pages.basis_missing)
+           "revenue_basis": {**revenue_parts(facts, ends[-1], rev_a[ends[-1]], cur), "year": _label(ends[-1]),
+                             "filer": financial_filer(facts, subs) or ""} if rev_a.get(ends[-1]) else None,
+           "url":f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={facts_json.get('cik')}&type=10-K"}
     if no_margin:
         out["margin_note"] = MORTGAGE_REIT if kind == "reit" and not any(ppe.get(e) for e in ends) else NO_MARGIN[kind]
     if left_out and not no_margin:
@@ -1334,6 +1526,14 @@ class SEC(Source):
         idx = self._json(d["folder"] + "index.json")
         names = [i.get("name", "") for i in ((idx.get("directory") or {}).get("item") or [])]
         ex = [n for n in names if re.search(r"ex-?99", n, re.I) and n.lower().endswith((".htm", ".html", ".txt"))]
+        if not ex:
+            # m53 (R53): many filers name the release by its subject ("pypl3q-26earningsrelease.htm", "deltaairlinesannouncessept.htm"), not
+            # "ex99", and the 8-K cover was read in its place (no figure of the release in the filings index): the one other document of the
+            # folder is the release; with none, or more than one, the cover as before
+            own = d["url"].rsplit("/", 1)[-1].lower()
+            ex = [n for n in names if n.lower().endswith((".htm", ".html")) and n.lower() != own and not re.match(r"r\d+\.htm", n, re.I)
+                  and "-index" not in n.lower()]
+            ex = ex if len(ex) == 1 else []
         url = d["folder"] + sorted(ex)[0] if ex else d["url"]
         return url, self.document(url)
 
@@ -1479,9 +1679,14 @@ class SEC(Source):
                     raise
                 facts = None
             before = self.predecessor(cik, subs) if _forms(subs) & {"8-K12B", "8-K12G3"} else None
+            reporting_name = ""
             if before:                            # the years before a new holding company took over: the old company's
                 try:
                     old = self._json(f"/api/xbrl/companyfacts/CIK{before[0]:010d}.json")
+                    # r69e (owner, 18 Nov: XOM shown as "ExxonMobil Holdings Corp"): the company whose reports the figures are, the
+                    # registrant that still files them, named as its own filings name it (dei EntityRegistrantName: "Exxon Mobil
+                    # Corporation"), never the new holding company's interim name
+                    reporting_name = str(old.get("entityName") or (before[1] or {}).get("name") or "").strip()
                     facts = merge_facts(old, facts) if facts else old
                 except SourceError as e:
                     if e.busy:
@@ -1490,6 +1695,8 @@ class SEC(Source):
                 raise NoNumbers(self.name, no_results(subs, None, symbol))
             facts = self.with_latest_annual(cik, subs, facts)
             p = build(facts, subs, symbol=symbol.upper())
+            if reporting_name:
+                p["name"], p["registrant"] = reporting_name, p.get("name") or ""
             if facts.get("annual_unread"):
                 p["annual_unread"] = str(facts["annual_unread"].get("filed") or "")[:10] or True
             latest = latest_filing(subs, ANNUAL_FORMS)
@@ -1502,7 +1709,7 @@ class SEC(Source):
                 got = self.filing_data(cik, latest)
                 cs = (got or {}).get("cover_shares")
                 if cs and cs.get("end", "") >= (date.fromisoformat(p["year_end"]) - timedelta(days=400)).isoformat():
-                    p["shares"], p["shares_from"] = cs["value"], "cover"
+                    p["shares"], p["shares_from"], p["shares_at"] = cs["value"], "cover", cs.get("end") or p.get("shares_at")
                     if cs.get("treasury"):         # a count of the shares issued: net of those held in treasury (R12-005)
                         p = net_of_treasury({**p, "avg_shares": p.get("avg_shares") or cs.get("avg")}, cs["treasury"])
             elif p.get("no_cover_count") and len([t for t in subs.get("tickers") or [] if not non_common(t)]) <= 1:
@@ -1514,7 +1721,7 @@ class SEC(Source):
                 cs = (got or {}).get("cover_shares")
                 if (cs and cs.get("classes", 0) > 1 and cs["value"] > (p.get("shares") or 0)
                         and cs.get("end", "") >= (date.fromisoformat(p["year_end"]) - timedelta(days=400)).isoformat()):
-                    p["shares"], p["shares_from"] = cs["value"], "cover"
+                    p["shares"], p["shares_from"], p["shares_at"] = cs["value"], "cover", cs.get("end") or p.get("shares_at")
         except SourceError as e:
             if not e.busy:
                 with self._build_lock:
@@ -1601,10 +1808,21 @@ def has_filing(facts_json: dict, accn: str) -> bool:
     return False
 
 
+def listings(subs: dict | None) -> dict[str, str]:
+    """{ticker as quote screens write it: exchange} from the SEC's filing list, which gives the two side by side."""
+    subs = subs or {}
+    return {price_symbol(t): str(x).strip() for t, x in zip(subs.get("tickers") or [], subs.get("exchanges") or [])
+            if t and x and str(x).strip()}
+
+
 def for_symbol(p: dict, symbol: str) -> dict:
     """The company as one of its tickers sees it: with several classes of stock, the share count in that class's
-    terms (BRK-B's in Class B shares, BRK-A's in Class A shares), so price times shares is the whole company's value."""
+    terms (BRK-B's in Class B shares, BRK-A's in Class A shares), so price times shares is the whole company's value;
+    and the exchange that ticker is listed on (`listed_on`), when the SEC names it."""
     out = {**p, "symbol": symbol.upper()}
+    on = (p.get("listings") or {}).get(price_symbol(symbol))
+    if on:
+        out["listed_on"] = on
     shares = (p.get("class_shares") or {}).get(price_symbol(symbol))
     if shares:
         out["shares"] = shares
@@ -1702,6 +1920,42 @@ def market_value(p: dict, price: float | None) -> float | None:
     if shares and p.get("ads_ratio"):
         shares = shares / p["ads_ratio"]
     return price * shares / M if price and shares else None
+
+
+def split_since(p: dict, splits: list[dict] | None, today: str | None = None) -> dict:
+    """`p` with its share count on the price's basis: a split or reverse split the price history lists after the day the count is
+    dated (`shares_at`: a cover page's or balance sheet's day, or the annual report's filing day for a count its earnings per share
+    imply) multiplies it by the split's ratio, said in `share_note`. The price is already on the new basis from the split's ex-date,
+    while no filing gives the new count until the next report (lane dat57: Cytosorbents' 1:20 reverse split of 8 Sep 2026 beside
+    62,842,748 shares on its 31 Jul cover put its value at $306 m against $15 m). `splits`: [{"date", "numerator", "denominator"}]."""
+    at, shares = p.get("shares_at"), p.get("shares")
+    if not at or not shares or not splits:
+        return p
+    if p.get("ads_ratio") or str(p.get("annual_form") or "").startswith(("20-F", "40-F")) or p.get("ads_unread"):
+        # a foreign filer: its US price history's "split" is often a change in how many ordinary shares a depositary share stands for
+        # (AstraZeneca's 1-for-2 of 2 Feb 2026, its ordinary shares listed in place of ADSs), which the depositary ratio already covers
+        return p
+    k, done = 1.0, []
+    for s_ in sorted(splits, key=lambda s_: str(s_.get("date") or "")):
+        d, n, m = str(s_.get("date") or "")[:10], s_.get("numerator"), s_.get("denominator")
+        if d > at and (today is None or d <= today) and n and m and n > 0 and m > 0 and n != m:
+            k *= n / m
+            done.append(f"{_fmt_ratio(n, m)} on {d}")
+    if not done:
+        return p
+    out = {**p, "shares": round(shares * k), "shares_at": max(str(s_.get("date"))[:10] for s_ in splits if str(s_.get("date"))[:10] > at)}
+    for key in ("class_shares",):
+        if isinstance(p.get(key), dict):
+            out[key] = {c: round(v * k) for c, v in p[key].items() if isinstance(v, (int, float))}
+    note = (f"Shares: the {shares:,.0f} counted at {at} are put on today's basis for the split{'s' if len(done) > 1 else ''} since "
+            f"({', '.join(done)}): {out['shares']:,.0f}.")
+    out["share_note"] = (p["share_note"] + " " + note) if p.get("share_note") else note
+    return out
+
+
+def _fmt_ratio(n: float, m: float) -> str:
+    f = lambda x: str(int(x)) if float(x).is_integer() else f"{x:g}"      # noqa: E731
+    return f"{f(n)}-for-{f(m)}"
 
 
 def pe_and_basis(p: dict, price: float | None, mcap: float | None = None) -> tuple[float | None, dict | None]:
@@ -1940,7 +2194,7 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
 # ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
 BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
 BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
-BUSINESS_KEY = ("business", 2)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again
+BUSINESS_KEY = ("business", 3)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read
 BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
     (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
     # lane n2 (the outside review of the live R33 decks: TSMC's and UMC's 20-F gave nothing, or a line on process technology): a 20-F's
@@ -1985,7 +2239,7 @@ def _prose(body: str, limit: int) -> list[str]:
     """The whole sentences of a part of a report, in order: sub-headings, page numbers, table cells and sentences about the report itself
     left out; about 4 x `limit` characters of them at most."""
     picks, lines = [], []
-    for line in body.split("\n"):              # a paragraph set as one line a printed line (TSMC's 20-F) is one paragraph again
+    for line in _listed(body.split("\n")):       # a paragraph set as one line a printed line (TSMC's 20-F) is one paragraph again
         if lines and len(lines[-1].split()) >= 8 and not lines[-1].rstrip().endswith((".", "!", "?", ":", "”", '"')) and line[:1].strip():
             lines[-1] += " " + line
         else:
@@ -1995,11 +2249,69 @@ def _prose(body: str, limit: int) -> list[str]:
             continue
         for x in _SENTENCE_END.split(line):
             x = x.strip()
-            if len(x.split()) >= 6 and x.endswith((".", "!", "?")) and not _REPORT_TALK.search(x):
+            if len(x.split()) >= 6 and x.endswith((".", "!", "?")) and not _REPORT_TALK.search(x) and not _STRUCTURE.search(x):
                 picks.append(x)
         if sum(len(x) for x in picks) > 4 * limit:
             break
     return picks
+
+
+# r67e (the owner's review of the live R65 REITs deck: Vornado moved out of "Office landlords" as its words say nothing of offices; its
+# 10-K's Item 1 opens on three sentences of how it is held, "conducts its business through ... the Operating Partnership", "the sole general
+# partner of ... the common limited partnership interest", and says what it owns only in a list: "We currently own all or portions of:" /
+# "•19.2 million square feet of office space in 26 of the properties;"): a sentence of how the company is held or financed (its operating
+# partnership, its general partner's interest, its cash flow owed to creditors first) says nothing of its work, and a list the opening
+# introduces ("we own:", "consisting of:") is one sentence of its items
+_STRUCTURE = re.compile(r"\boperating partnership\b|\bgeneral partner\b|\blimited partnership (?:interest|units?)\b|\bumbrella partnership\b|"
+                        r"\bupreit\b|\bability to pay dividends\b|\bobligations to (?:its |their )?creditors\b|\bdirect and indirect subsidiaries\b",
+                        re.I)
+_LIST_ITEM = re.compile(r"^\s*(?:[•●▪◦·‣∙○■□–—-]|\(?[a-z0-9ivx]{1,3}[.)])\s*")
+LIST_CHARS = 420                        # of a list's items joined into the sentence that introduces them
+
+
+def _listed(lines: list[str]) -> list[str]:
+    """r67e: report lines with each list the prose introduces ("We currently own all or portions of:" and its bulleted items, a sub-heading
+    of the list such as "New York:" passed over) joined into that one sentence, items by "; ", at most LIST_CHARS of them, ending in a full stop."""
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        if line.rstrip().endswith(":") and len(line.split()) >= 4 and not _LIST_ITEM.match(line):
+            items, j = [], i + 1
+            while j < len(lines):
+                nxt = lines[j].strip()
+                if _LIST_ITEM.match(nxt):
+                    items.append(_LIST_ITEM.sub("", nxt).rstrip(" ;,.").replace(" and", "", 1) if nxt.rstrip().endswith("; and") else
+                                 _LIST_ITEM.sub("", nxt).rstrip(" ;,."))
+                elif nxt.endswith(":") and len(nxt.split()) <= 5:
+                    pass                                  # a heading inside the list ("New York:")
+                else:
+                    break
+                j += 1
+            if items:
+                said, size = "", 0
+                for x in items:
+                    x = x.strip()
+                    if not x.rstrip(":") or size + len(x) > LIST_CHARS:
+                        break
+                    # (an item that opens a list of its own, "51 properties consisting of:", runs on into its first item)
+                    said += ("" if not said else " " if said.endswith(":") else "; ") + x
+                    size += len(x) + 2
+                said = said.rstrip(":").strip()
+                if said:
+                    out.append(f"{line.rstrip()} {said}.")
+                    i = j
+                    continue
+        out.append(line)
+        i += 1
+    return out
+
+
+def structure_only(text: str) -> bool:
+    """r67e: whether a stored description's sentences all tell how the company is held or financed (_STRUCTURE), none what it does: the
+    opening a 10-K reader kept before it passed over them (read again, theme_routes.thin_about)."""
+    xs = [x for x in _SENTENCE_END.split(str(text or "").strip()) if len(x.split()) >= 4]
+    return bool(xs) and all(_STRUCTURE.search(x) or not _SAYS_WORK.search(x) and not re.search(r"\b(?:own|operat|lease|sell|make|provid)\w*\b", x, re.I)
+                            for x in xs) and any(_STRUCTURE.search(x) for x in xs)
 
 
 def business_opening(text: str, limit: int = 700) -> str:

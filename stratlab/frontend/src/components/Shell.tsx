@@ -23,6 +23,7 @@ import { watchSize } from "../lib/resize";
 import { importWithRetry } from "../lib/lazyRetry";
 import { scrollBehavior } from "../lib/motion";
 import { setSectionUser } from "../lib/sections";
+import { callsInFlight, onIdle } from "../lib/inflight";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => importWithRetry(() => import("./SearchPalette")).then((m) => ({ default: m.SearchPalette })));
@@ -42,11 +43,30 @@ export const MINE_LINKS = ["/news", "/alerts", "/research/watchlist", "/calendar
 export const MINE_GROUPS = ["watch", "calendar"];
 /** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): they open Mine's menu. */
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
-/** The page the menu's highlighted shortcut opens, under the search box in every space (R16). */
-export const THEMES = "/research/themes";
 
-/** `ask`: the analytics question (Tracking), drawn first in the page's order and in the first row of the page column (LIVE7B-006). */
-export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode }) {
+/** `ask`: the analytics question (Tracking), in the page column after the page (LIVE8B-004: above it, its arrival after the first paint
+ * pushed the page down, CLS 0.19 a time). */
+/** True once the page's calls to the server have all been back for a moment (or after CALLS_SETTLE_CAP at the most): the analytics question
+ * then comes after the page's cards have their content, so their filling in never pushes it down the screen (LIVE13B-011: on a phone it
+ * was drawn mid-screen at y 712 while /mine's cards loaded, then moved to y 2,496, CLS 0.117). */
+const CALLS_QUIET_MS = 700, CALLS_SETTLE_CAP = 6_000;
+function useCallsSettled(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (on) return;
+    let quiet = 0;
+    const done = () => setOn(true);
+    const wait = () => { window.clearTimeout(quiet); quiet = window.setTimeout(() => { if (!callsInFlight()) done(); }, CALLS_QUIET_MS); };
+    // armed when a call comes back with none left out (the page's code may still be on its way at first, with no call asked yet)
+    const stop = onIdle(wait);
+    const cap = window.setTimeout(done, CALLS_SETTLE_CAP);
+    return () => { stop(); window.clearTimeout(quiet); window.clearTimeout(cap); };
+  }, [on]);
+  return on;
+}
+
+export function Shell({ children, ask: question }: { children: ReactNode; ask?: ReactNode }) {
+  const ask = useCallsSettled() ? question : null;
   useScrollMemory();
   const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);
@@ -293,24 +313,24 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
         </button>
       </div>
       <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>
-        {/* Themes, one of StratLab's best tools (owner, 7 Nov: "buried" in Invest), highlighted on the menu's first row in My space and Invest and
-            in the phone's drawer, beside the space's home: no row of its own, so the menu still fits a 1280x800 laptop unscrolled (IA-2).
-            It stays in Invest's menu too, where its breadcrumb puts it; that entry is the one highlighted item on its page (ui-lint R7), so
-            on the Themes page the pill loses its orange and is a plain link (LIVE6-016: both looked selected) */}
+        {/* Themes is one entry, the first of Invest's menu above Companies (owner, 18 Nov: "put it at top like above the companies"), not a
+            pill beside the space's home: on its page that entry is the one highlighted item (ui-lint R7) */}
         <div className="side-list side-home">
           <NavLink to={homeOf(space)} end><Compass size={16} /><span className="side-home-label">{homeLabel}</span></NavLink>
-          {/* owner, 7 Nov: on My space and Invest only, where people research; Trade and Money stay as they were */}
-          {(space === "invest" || space === "mine") && <Link to={THEMES} className={`side-feature${path.startsWith(THEMES) ? " here" : ""}`} title="Themes: map a sector or trend and see the listed companies linked to it"><Compass size={16} />Themes</Link>}
         </div>
         {spaceGroups ?? minePart}
       </nav>
       {/* the menu's faded bottom edge says there is more; this says it in words and scrolls to it (R5O-038). The mouse
-          wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. */}
+          wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. It has a row of its
+          own under the menu's edge line, so it never sits over a menu item, and it goes once the menu's last item is in view (owner,
+          18 Nov: it sat over "ETF vs NAV" at 1440x900) */}
       {(fade === "bottom" || fade === "both") && (
-        <button type="button" className="side-more" tabIndex={-1} aria-hidden="true"
-          onClick={() => sideScroll.current?.scrollBy({ top: Math.round((sideScroll.current?.clientHeight ?? 300) * 0.6), behavior: scrollBehavior() })}>
-          More below <Chevron size={12} />
-        </button>
+        <div className="side-more-row">
+          <button type="button" className="side-more" tabIndex={-1} aria-hidden="true"
+            onClick={() => sideScroll.current?.scrollBy({ top: Math.round((sideScroll.current?.clientHeight ?? 300) * 0.6), behavior: scrollBehavior() })}>
+            More below <Chevron size={12} />
+          </button>
+        </div>
       )}
       <div className="side-foot">
         <MarketsNow markets={markets} />
@@ -332,7 +352,6 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
         to?.focus();
       }}>Skip to the page's sections</a>
       <a className="skip-link sr-only" href="#side-menu" onClick={(e) => { e.preventDefault(); sideScroll.current?.querySelector<HTMLElement>("a, button")?.focus(); }}>Skip to the menu</a>
-      {ask}{/* after the skip links, before the menu: the keyboard meets it among the first stops (A11Y-2) */}
       {slim && <button className="side-show" aria-label="Show the menu" title="Show the menu" onClick={() => setSlim(false)}><Menu /></button>}
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" aria-expanded={open} aria-controls="side-menu" onClick={() => setOpen(true)}><Menu /></button>
@@ -346,6 +365,7 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
       <main className="main" id="main" tabIndex={-1}><div className="page"><div className="crumb-row"><PageBreadcrumb mine={space === "mine"} space={space} />{at && <HubTabs at={at} path={path} />}</div>{children}</div></main>
+      {ask}{/* after the page (LIVE8B-004): its coming and going never moves the page, and "Skip to content" lands on the page, not on it */}
       <Suspense fallback={null}>
         {search && <SearchPalette onClose={() => setSearch(false)} />}
       </Suspense>
@@ -367,14 +387,18 @@ export function mainAction(space: SpaceView, focus: string | null | undefined, h
 }
 
 /** Which edges of a scrolling box have more behind them ("top", "bottom", "both" or "none"): kept as the box scrolls, resizes
- * or its content changes (a group opens). The CSS fades those edges. */
+ * or its content changes (a group opens). The CSS fades those edges. "Below" means the last item is not wholly in view: the box's
+ * own padding under it is not "more" (owner, 18 Nov: "More below" stayed up with the last item in view). */
 function useScrollFade(ref: { current: HTMLElement | null }): "top" | "bottom" | "both" | "none" {
   const [fade, setFade] = useState<"top" | "bottom" | "both" | "none">("none");
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const look = () => {
-      const above = el.scrollTop > 2, below = el.scrollHeight - el.clientHeight - el.scrollTop > 2;
+      const above = el.scrollTop > 2;
+      const kids = Array.from(el.children).filter((c) => getComputedStyle(c).position !== "absolute");
+      const last = kids[kids.length - 1];
+      const below = last ? last.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom > 1 : el.scrollHeight - el.clientHeight - el.scrollTop > 2;
       setFade(above && below ? "both" : above ? "top" : below ? "bottom" : "none");
     };
     look();

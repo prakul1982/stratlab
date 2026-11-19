@@ -350,20 +350,31 @@ export { jobDetail };
 
 /** The server errors as groups (DJ-035: 22 of 24 rows the same "RemoteProtocolError … contextlib.py:158 in __exit__"): one row
  * per kind of error and place, newest first, with how many and the newest's ref; a known upstream fault said in plain words. */
-export type ErrorGroup = { key: string; count: number; at: string; ref: string; path: string; error: string; where: string; plain: string | null };
-export function groupErrors(rows: { ref: string; at: string; method: string; path: string; error: string; where: string }[]): ErrorGroup[] {
+/** `build`: the build the newest of the group happened on, when it was kept with it (ops49: the list outlives a deploy, so an error a
+ * later build fixed read as a live one). */
+export type ErrorGroup = { key: string; count: number; at: string; ref: string; path: string; error: string; where: string; plain: string | null; build: string | null };
+export function groupErrors(rows: { ref: string; at: string; method: string; path: string; error: string; where: string; build?: string | null }[]): ErrorGroup[] {
   const by = new Map<string, ErrorGroup>();
   for (const e of rows) {
     const kind = String(e.error ?? "").split(":")[0].trim();
     const key = `${kind}|${e.where}`;
     const g = by.get(key);
-    if (!g) by.set(key, { key, count: 1, at: e.at, ref: e.ref, path: `${e.method} ${e.path}`, error: e.error, where: e.where, plain: plainServerError(e.error) });
+    if (!g) by.set(key, { key, count: 1, at: e.at, ref: e.ref, path: `${e.method} ${e.path}`, error: e.error, where: e.where, plain: plainServerError(e.error), build: e.build ?? null });
     else {
       g.count += 1;
-      if (Date.parse(e.at) > Date.parse(g.at)) Object.assign(g, { at: e.at, ref: e.ref, path: `${e.method} ${e.path}`, error: e.error });
+      if (Date.parse(e.at) > Date.parse(g.at)) Object.assign(g, { at: e.at, ref: e.ref, path: `${e.method} ${e.path}`, error: e.error, build: e.build ?? null });
     }
   }
   return [...by.values()].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+}
+
+/** Which build an error happened on, against the live one: "on this build", "on an earlier build (abc1234)", or "" when either isn't
+ * known (an error kept from before builds were recorded). */
+export function errorBuild(build: string | null | undefined, live: string | null | undefined): string {
+  if (!build || !live) return "";
+  const n = Math.min(build.length, live.length, 40);
+  if (n < 7) return "";
+  return build.slice(0, n).toLowerCase() === live.slice(0, n).toLowerCase() ? "on this build" : `on an earlier build (${build.slice(0, 7)})`;
 }
 
 /** A known upstream fault in words, or null: the raw text stays beside it. */

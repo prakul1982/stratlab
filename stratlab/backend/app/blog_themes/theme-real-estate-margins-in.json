@@ -1,0 +1,1127 @@
+{
+ "adjacent_n": 5,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Residential developers"
+  ],
+  "highest": null,
+  "line": null,
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": []
+ },
+ "lender": false,
+ "listed": 101,
+ "members": 87,
+ "notable": [
+  {
+   "from": -7.1,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Engineering and construction contracts",
+   "move": 8.4,
+   "n": 4,
+   "to": 1.3,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/real-estate",
+ "period": {
+  "n": 87,
+  "of": 87,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "LIC Housing Finance Limited",
+     "out": "",
+     "symbol": "LICHSGFIN",
+     "unverified": false,
+     "what": "LIC Housing Finance Limited is a housing finance company registered with National Housing Bank (NHB) and is mainly engaged in financing purchase / construction of residential…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "PNB Housing Finance Limited",
+     "out": "",
+     "symbol": "PNBHOUSING",
+     "unverified": false,
+     "what": "PNB Housing Finance offers retail customers housing and non-housing loans, including individual home loans, loan against property, non-resident property loan, among others",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 0.95,
+   "gnpa_n": 1,
+   "layer": "Home loan lenders",
+   "listed": 2,
+   "n": 2,
+   "net": 23.2,
+   "net_n": 2,
+   "nii_assets": 3.41,
+   "nii_assets_n": 2,
+   "official": false,
+   "pb": 1.05,
+   "pb_n": 2,
+   "revenue": 37332.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 13.55,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "DLF Limited",
+     "out": "",
+     "symbol": "DLF",
+     "unverified": false,
+     "what": "DLF Ltd with its subsidiaries, associates and JVs is engaged in real estate development, from the identification and acquisition of land to planning, execution, construction and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lodha Developers Limited",
+     "out": "",
+     "symbol": "LODHA",
+     "unverified": false,
+     "what": "Lodha Developers Ltd is primarily engaged in the business of real estate development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Prestige Estates Projects Limited",
+     "out": "",
+     "symbol": "PRESTIGE",
+     "unverified": false,
+     "what": "Prestige Estate Projects has diversified business model across various segments, viz Residential, Office, Retail, Hospitality, Property Management and Warehouses with operations…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Oberoi Realty Limited",
+     "out": "",
+     "symbol": "OBEROIRLTY",
+     "unverified": false,
+     "what": "It is the part of Oberoi Realty Group, focused on developments in the residential, office space, retail, hospitality, and social infrastructure verticals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Godrej Properties Limited",
+     "out": "",
+     "symbol": "GODREJPROP",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Brigade Enterprises Ltd",
+     "out": "",
+     "symbol": "BRIGADE",
+     "unverified": false,
+     "what": "It is a real estate developer in South India, based in Bengaluru, and expanding its area of operations in other parts of India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Anant Raj Ltd",
+     "out": "",
+     "symbol": "ANANTRAJ",
+     "unverified": false,
+     "what": "It is primarily engaged in the development and construction of IT parks",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Horizon Industrial Parks Ltd",
+     "out": "",
+     "symbol": "HORIZONIND",
+     "unverified": false,
+     "what": "Horizon Industrial Parks, backed by Blackstone Group, is India’s largest industrial and logistics infrastructure developer, owner, and operator by total network",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Aditya Birla Real Estate Ltd",
+     "out": "",
+     "symbol": "ABREL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sobha Ltd",
+     "out": "",
+     "symbol": "SOBHA",
+     "unverified": false,
+     "what": "Sobha Limited, incorporated in 1995, is a real estate developer engaged in construction to operations of townships, housing projects, commercial premises, and other related…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sri Lotus Developers & Realty Ltd",
+     "out": "",
+     "symbol": "LOTUSDEV",
+     "unverified": false,
+     "what": "Incorporated in February 2015, Sri Lotus Developers and Realty Limited is a developer of residential and commercial properties located in Mumbai, specializing in redevelopment…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SignatureGlobal India Ltd",
+     "out": "",
+     "symbol": "SIGNATURE",
+     "unverified": false,
+     "what": "Signatureglobal (India) Limited is a real estate development company operating in the National Capital Region of Delhi (\"Delhi NCR\") focussed on offering affordable and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Max Estates Ltd",
+     "out": "",
+     "symbol": "MAXESTATES",
+     "unverified": false,
+     "what": "Company is a leading Real Estate player in Delhi - NCR. Max Group The company is a part of Max Group which has nurtured strong companies over the last 40 years like Max Life, Max…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Embassy Developments Ltd",
+     "out": "",
+     "symbol": "EMBDL",
+     "unverified": false,
+     "what": "Embassy Developments Ltd is a real estate developer of residential, commercial, and SEZ projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mahindra Lifespace Developers Ltd",
+     "out": "",
+     "symbol": "MAHLIFE",
+     "unverified": false,
+     "what": "Mahindra Lifespace Developers Ltd was incorporated in 1999, it is engaged in the business of development of the real estate, residential facilities, commercial complexes and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ganesh Housing Ltd",
+     "out": "",
+     "symbol": "GANESHHOU",
+     "unverified": false,
+     "what": "The company is a real estate developer and a pioneer in organized real estate in Gujarat, engaged in the development and construction of residential and commercial projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kalpataru Ltd",
+     "out": "",
+     "symbol": "KALPATARU",
+     "unverified": false,
+     "what": "Integrated Real Estate Player They are an integrated real estate development company involved in all key activities associated with real estate development, including the…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Puravankara Ltd",
+     "out": "",
+     "symbol": "PURVA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sunteck Realty Ltd",
+     "out": "",
+     "symbol": "SUNTECK",
+     "unverified": false,
+     "what": "Sunteck Realty Limited is a Mumbai-based real estate developer focused on developing premium residential and commercial properties across Mumbai Metropolitan Region (MMR)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Valor Estate Ltd",
+     "out": "",
+     "symbol": "DBREALTY",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Keystone Realtors Ltd",
+     "out": "",
+     "symbol": "RUSTOMJEE",
+     "unverified": false,
+     "what": "Keystone Realtors Limited is one of the prominent real estate developers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kolte Patil Developers Ltd",
+     "out": "",
+     "symbol": "KOLTEPATIL",
+     "unverified": false,
+     "what": "Company markets its projects under two brands: 'Kolte-Patil’ (addressing the mid-income segment) ‘24K’ (addressing the premium luxury segment)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "AGI Infra Ltd",
+     "out": "",
+     "symbol": "AGIIL",
+     "unverified": false,
+     "what": "It is in the business of construction and real estate development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Raymond Realty Ltd",
+     "out": "",
+     "symbol": "RAYMONDREL",
+     "unverified": false,
+     "what": "The company got listed on BSE and NSE on July 1st, 2025, and solely focuses on real…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kesar India Ltd",
+     "out": "",
+     "symbol": "KESAR",
+     "unverified": false,
+     "what": "Kesar Lands Ltd is in the business of real estate development and constructing residential and commercial projects, industrial buildings, factory buildings, workshop buildings, etc",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tarc Ltd",
+     "out": "",
+     "symbol": "TARC",
+     "unverified": false,
+     "what": "TARC Ltd. (The Anant Raj Corporation) started out as a construction and contracting company and evolved to become one of the largest real estate development companies and land…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ashiana Housing Ltd",
+     "out": "",
+     "symbol": "ASHIANA",
+     "unverified": false,
+     "what": "It treats land as raw material, relies on in-house construction, sales, marketing, and facility management to ensure quality, on-time delivery, and customer satisfaction",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Runwal Enterprises Ltd",
+     "out": "",
+     "symbol": "RUNWALENTR",
+     "unverified": false,
+     "what": "Incorporated in February 2016, Runwal Enterprises Limited is a real estate developer with a presence across the full spectrum of real estate development, with a focus on…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Elpro International Ltd",
+     "out": "",
+     "symbol": "ELPROINTL",
+     "unverified": false,
+     "what": "Elpro International Limited is engaged in manufacturing surge arresters, construction and development of real estate properties, equity investment in third parties and windmill…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alembic Ltd",
+     "out": "way of earning not shown",
+     "symbol": "ALEMBICLTD",
+     "unverified": false,
+     "what": "The company develops residential and commercial real estate projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Marathon Nextgen Realty Ltd",
+     "out": "",
+     "symbol": "MARATHON",
+     "unverified": false,
+     "what": "It is primarily engaged in the business of construction, development and sale of commercial and residential real estate projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Arvind SmartSpaces Ltd",
+     "out": "",
+     "symbol": "ARVSMART",
+     "unverified": false,
+     "what": "Product Offerings Horizontal (Plotting, Villas) and Vertical (Luxury, MIG residential housing) Portfolio - ▪ Delivered 4.9 msf ▪ Ongoing projects of 26.9 msf ▪ Planned projects…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ajmera Realty & Infra India Ltd",
+     "out": "",
+     "symbol": "AJMERA",
+     "unverified": false,
+     "what": "Ajmera Realty and Infra Limited (ARIIL) is in the business of providing residential and rented commercial properties",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hubtown Ltd",
+     "out": "",
+     "symbol": "HUBTOWN",
+     "unverified": false,
+     "what": "Hubtown Ltd is in the business of real estate development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Arkade Developers Ltd",
+     "out": "",
+     "symbol": "ARKADE",
+     "unverified": false,
+     "what": "Arkade Developers Limited is a real estate development company focused on developing high-end, sophisticated lifestyle residential developments in Mumbai, Maharashtra",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Omaxe Ltd",
+     "out": "",
+     "symbol": "OMAXE",
+     "unverified": false,
+     "what": "Omaxe Limited is a real-estate developer operating across 31 cities in 8 states, mainly in North and Central India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Avishkar Infra Realty Ltd",
+     "out": "",
+     "symbol": "AIRLTD",
+     "unverified": false,
+     "what": "Avishkar Infra Realty Ltd is in the business of real estate development in",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "PVP Ventures Ltd",
+     "out": "",
+     "symbol": "PVP",
+     "unverified": false,
+     "what": "PVP Ventures Ltd develops urban infrastructure and investments in various ventures",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shriram Properties Ltd",
+     "out": "",
+     "symbol": "SHRIRAMPPS",
+     "unverified": false,
+     "what": "They are one of the leading residential real estate development companies in South India primarily focused on the mid-market and affordable housing categories",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Unitech Ltd",
+     "out": "",
+     "symbol": "UNITECH",
+     "unverified": false,
+     "what": "Unitech Ltd is in the business of Real Estate, Power Transmission and Hospitality Government-appointed management and court process: The Supreme Court superseded the erstwhile…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Arihant Foundations & Housing Ltd",
+     "out": "",
+     "symbol": "ARIHANT",
+     "unverified": false,
+     "what": "Arihant Foundations & Housing Ltd is in the business of constructions of residential, commercial complexes and IT parks",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Modis Navnirman Ltd",
+     "out": "",
+     "symbol": "MODIS",
+     "unverified": false,
+     "what": "Modis Navnirman Limited is a Mumbai-based real estate developer focused on premium residential and redevelopment projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Arihant Superstructures Ltd",
+     "out": "",
+     "symbol": "ARIHANTSUP",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "B-Right RealEstate Ltd",
+     "out": "",
+     "symbol": "BRRL",
+     "unverified": false,
+     "what": "B-Right Real Estate Ltd is in the business of Real Estate Development and Investments",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Prozone Realty Ltd",
+     "out": "",
+     "symbol": "PROZONER",
+     "unverified": false,
+     "what": "Prozone Realty Ltd is in the business of developing, owning and operating of Shopping Malls, Commercial and Residential Premises and providing related management consultancy…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suraj Estate Developers Ltd",
+     "out": "",
+     "symbol": "SURAJEST",
+     "unverified": false,
+     "what": "Suraj Estate Developers Limited is a real estate construction company that develops residential and commercial real estate in the South Central Mumbai region",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Eldeco Housing & Industries Ltd",
+     "out": "",
+     "symbol": "ELDEHSG",
+     "unverified": false,
+     "what": "Eldeco Housing and Industries Ltd develops real estate properties for residential, commercial and retail purposes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shraddha Prime Projects Ltd",
+     "out": "",
+     "symbol": "SHRADDHA",
+     "unverified": false,
+     "what": "Shraddha Prime Projects Ltd is in the business of",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Geecee Ventures Ltd",
+     "out": "",
+     "symbol": "GEECEE",
+     "unverified": false,
+     "what": "GeeCee Ventures Ltd is in the business of real estate development, financials services & renewable energy",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Veegaland Developers Ltd",
+     "out": "",
+     "symbol": "VEEGALAND",
+     "unverified": false,
+     "what": "Veegaland Developers Limited is engaged in real estate development, focusing on residential, commercial, and mixed-use projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Peninsula Land Ltd",
+     "out": "",
+     "symbol": "PENINLAND",
+     "unverified": false,
+     "what": "The company is engaged in real estate development for residential and commercial projects, with focus on 4 key cities in India viz",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pansari Developers Ltd",
+     "out": "",
+     "symbol": "PANSARI",
+     "unverified": false,
+     "what": "Pansari Developers Ltd is in the business of construction and real estate development of residential and commercial projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suratwwala Business Group Ltd",
+     "out": "",
+     "symbol": "SBGLP",
+     "unverified": false,
+     "what": "Suratwwala Business Group Ltd is in the business of construction of residential, commercial, IT Parks, renting of immovable properties and in solar power generating activity…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nila Spaces Ltd",
+     "out": "",
+     "symbol": "NILASPACES",
+     "unverified": false,
+     "what": "Nila Spaces Ltd does development of real estate comprising of residential and commercial projects Parent Organisation NSL is a part of Ahmedabad-based Sambhaav Group , which is…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nimbus Projects Ltd",
+     "out": "",
+     "symbol": "NIMBSPROJ",
+     "unverified": false,
+     "what": "Nimbus Projects Ltd is a Delhi-NCR real-estate developer developing residential, commercial, and mixed-use projects in Noida, Greater Noida, and the Yamuna Expressway corridor",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "RDB Real Estate Construction Ltd",
+     "out": "",
+     "symbol": "RRECL",
+     "unverified": false,
+     "what": "RDB Real Estate Constructions Ltd is in the business of real estate development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Emami Realty Ltd",
+     "out": "",
+     "symbol": "EMAMIREAL",
+     "unverified": false,
+     "what": "It undertakes development of real estate projects in residential, retail, and commercial sectors",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "RDB Infrastructure and Power Ltd",
+     "out": "",
+     "symbol": "RDBIPL",
+     "unverified": false,
+     "what": "RDB Realty & Infrastructure Ltd is in the business of Real Estate construction, development and other related activities Listed entity and legacy business: The realty division…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Baroda Rayon Corporation Ltd",
+     "out": "",
+     "symbol": "BARODARY",
+     "unverified": false,
+     "what": "Damodarbhai B. Patel with the objective of monetizing the company’s land bank through real estate development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Samor Reality Ltd",
+     "out": "",
+     "symbol": "SAMOR",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ratnabhumi Developers Ltd",
+     "out": "",
+     "symbol": "RATNABHUMI",
+     "unverified": false,
+     "what": "The company has executed a total of 22 residential and commercial projects to date and is currently executing three mixed- development projects under the brand Turquoise",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lancor Holdings Ltd",
+     "out": "",
+     "symbol": "LANCORHOL",
+     "unverified": false,
+     "what": "Lancor Holdings Ltd is in the business of real estate development, leasing of commercial properties and allied activities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shradha Realty Ltd",
+     "out": "way of earning not shown",
+     "symbol": "SHRADHA",
+     "unverified": false,
+     "what": "SIPL is a real estate infrastructure development company that has worked on various construction projects viz. highways",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ravinder Heights Ltd",
+     "out": "",
+     "symbol": "RVHL",
+     "unverified": false,
+     "what": "Ravindra Heights Ltd is in the business of the Real Estate, township development and housing projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sumit Woods Ltd",
+     "out": "",
+     "symbol": "SUMIT",
+     "unverified": false,
+     "what": "Sumit Woods Ltd is in the business of real estate development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "National Standard (India) Ltd",
+     "out": "",
+     "symbol": "NATIONSTD",
+     "unverified": false,
+     "what": "National Standard (India) Limited, incorporated in 1962, is presently engaged in the business of Real Estate Development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "HB Estate Developers Ltd",
+     "out": "",
+     "symbol": "HBESD",
+     "unverified": false,
+     "what": "HB Estate Developers Ltd is engaged in the business of owning and managing hotels and real estate properties",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alpine Housing Development Corporation Ltd",
+     "out": "",
+     "symbol": "ALPINEHOU",
+     "unverified": false,
+     "what": "Alpine Housing Development Corporation Ltd is in the business of Property development, Construction and Railway Concrete Sleepers SG & Grey Iron Castings",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rainbow Foundations Ltd",
+     "out": "",
+     "symbol": "RAINBOWF",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Justo Realfintech Ltd",
+     "out": "",
+     "symbol": "JUSTO",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mega Nirman & Industries Ltd",
+     "out": "",
+     "symbol": "MNIL",
+     "unverified": false,
+     "what": "Mega Nirman & Industries Ltd is in the business of trading small passenger electric vehicles and their components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "AMJ Land Holdings Ltd",
+     "out": "",
+     "symbol": "AMJLAND",
+     "unverified": false,
+     "what": "AMJ Land Holdings Ltd is in the business of real estate development, leasing of real estate, wind power and investments",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vipul Ltd",
+     "out": "",
+     "symbol": "VIPULLTD",
+     "unverified": false,
+     "what": "Vipul Ltd is in the business of",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Prajay Engineers Syndicate Ltd",
+     "out": "",
+     "symbol": "PRAENG",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Thakkers Developers Ltd",
+     "out": "",
+     "symbol": "THAKDEV",
+     "unverified": false,
+     "what": "It develops residential and commercial properties",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Raja Bahadur International Ltd",
+     "out": "",
+     "symbol": "RAJABAH",
+     "unverified": false,
+     "what": "Raja Bahadur International Ltd is in the business of real estate development and construction",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Supreme Holdings & Hospitality Ltd",
+     "out": "",
+     "symbol": "SUPREME",
+     "unverified": false,
+     "what": "Supreme Holdings and Hospitality India Ltd is engaged in development of commercial and residential projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Parsvnath Developers Ltd",
+     "out": "no revenue figure",
+     "symbol": "PARSVNATH",
+     "unverified": false,
+     "what": "Parsvnath Developers Ltd is in the business of promotion, construction and development of real estate",
+     "year": null
+    }
+   ],
+   "ebitda": 20.0,
+   "ebitda_n": 71,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Residential developers",
+   "listed": 78,
+   "n": 75,
+   "net": 10.4,
+   "net_n": 63,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.2,
+   "pb_n": 71,
+   "revenue": 101422.09999999999,
+   "roce": 7.6,
+   "roce_n": 72,
+   "roe": 6.4,
+   "roe_n": 72,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "membership_unverified",
+     "name": "Embassy Office Parks REIT",
+     "out": "not confirmed",
+     "symbol": "EMBASSY-RR",
+     "unverified": true,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "membership_unverified",
+     "name": "Mindspace Business Parks REIT",
+     "out": "not confirmed",
+     "symbol": "MINDSPACE-RR",
+     "unverified": true,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "membership_unverified",
+     "name": "Brookfield India Real Estate Trust - REIT",
+     "out": "not confirmed",
+     "symbol": "BIRET-RR",
+     "unverified": true,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Property Share Investment Trust- Propshare Titania",
+     "out": "",
+     "symbol": "PSTITANIA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Property Share Investment Trust- Propshare Platina",
+     "out": "",
+     "symbol": "PSPLATINA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Property Share Investment Trust-Propshare Celestia",
+     "out": "",
+     "symbol": "PSCELESTIA",
+     "unverified": false,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Manas Properties Ltd",
+     "out": "",
+     "symbol": "MANAS",
+     "unverified": false,
+     "what": "Manas Properties is in the business of construction, re-development, and leasing of properties",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 95.0,
+   "ebitda_n": 1,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Rent-yielding commercial property trusts",
+   "listed": 7,
+   "n": 4,
+   "net": 77.4,
+   "net_n": 1,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.0,
+   "pb_n": 4,
+   "revenue": 31.0,
+   "roce": 18.4,
+   "roce_n": 2,
+   "roe": 6.9,
+   "roe_n": 3,
+   "scale": null,
+   "words": "Trusts that own completed commercial properties and collect rent from tenants, distributing the cash to unitholders."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "The Phoenix Mills Limited",
+     "out": "",
+     "symbol": "PHOENIXLTD",
+     "unverified": false,
+     "what": "Phoenix Mills Ltd is engaged in the operation & management of malls, construction of commercial & residential property and hotel business in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "membership_unverified",
+     "name": "Nexus Select Trust - REIT",
+     "out": "not confirmed",
+     "symbol": "NXST-RR",
+     "unverified": true,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Golden Tobacco Ltd",
+     "out": "other business",
+     "symbol": "GOLDENTOBC",
+     "unverified": false,
+     "what": "Golden Tobacco Ltd deals in tobacco and tobacco related products",
+     "year": null
+    }
+   ],
+   "ebitda": 59.7,
+   "ebitda_n": 1,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Retail mall owners",
+   "listed": 3,
+   "n": 1,
+   "net": 35.2,
+   "net_n": 1,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 8.9,
+   "pb_n": 1,
+   "revenue": 4418.0,
+   "roce": 12.4,
+   "roce_n": 1,
+   "roe": 11.0,
+   "roe_n": 1,
+   "scale": null,
+   "words": "These owners lease shop space in malls to retailers, earning fixed rent plus a share of sales."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Vascon Engineers Ltd",
+     "out": "other business",
+     "symbol": "VASCONEQ",
+     "unverified": false,
+     "what": "Vascon Engineers Ltd is a is a Pune-based player, engaged in engineering, procurement and construction (EPC), real estate construction and development Business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Consolidated Construction Consortium Ltd",
+     "out": "",
+     "symbol": "CCCL",
+     "unverified": false,
+     "what": "Consolidated Construction Consortium Limited is is an integrated turnkey construction service provider which is engaged in construction design, engineering, procurement…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Coromandel Engineering Company Ltd",
+     "out": "",
+     "symbol": "COROENGG",
+     "unverified": false,
+     "what": "Coromandel Engineering Company Ltd, incorporated in 1947 and based in Chennai, executes civil construction and property-development work",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nila Infrastructures Ltd",
+     "out": "",
+     "symbol": "NILAINFRA",
+     "unverified": false,
+     "what": "Nila Infrastructures Ltd is involved in the construction and development of infrastructures projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Veer Global Infraconstruction Ltd",
+     "out": "",
+     "symbol": "VGIL",
+     "unverified": false,
+     "what": "Veer Global Infra Construction Ltd does construction of commercial and residential buildings",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Atal Realtech Ltd",
+     "out": "other business",
+     "symbol": "ATALREAL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Generic Engineering Construction & Projects Ltd",
+     "out": "other business",
+     "symbol": "GENCON",
+     "unverified": false,
+     "what": "It focuses on general contracting",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 10.25,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Engineering and construction contracts",
+   "listed": 7,
+   "n": 4,
+   "net": 7.1,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.3,
+   "pb_n": 4,
+   "revenue": 667.99,
+   "roce": 9.7,
+   "roce_n": 4,
+   "roe": 2.95,
+   "roe_n": 4,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Elevate Campuses Ltd",
+     "out": "",
+     "symbol": "ELEVATE",
+     "unverified": false,
+     "what": "Elevate Campuses Ltd. is an education infrastructure company engaged in owning, operating, and managing on-campus student accommodation for higher education institutions (HEIs)…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Pranav Constructions Ltd",
+     "out": "",
+     "symbol": "PRANAV",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hampton Sky Realty Ltd",
+     "out": "no revenue figure",
+     "symbol": "HAMPTON",
+     "unverified": false,
+     "what": "Hampton Sky Realty Ltd is in the business of Real Estate, Textiles, and trading in Shares and",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Madala Holdings Ltd",
+     "out": "no revenue figure",
+     "symbol": "MADALA",
+     "unverified": false,
+     "what": "Softsol India is in the business of information and technology services and Infrastructural facilities including leasing of properties or spaces",
+     "year": null
+    }
+   ],
+   "ebitda": 44.05,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other real estate companies",
+   "listed": 4,
+   "n": 2,
+   "net": 19.95,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 1.55,
+   "pb_n": 2,
+   "revenue": 1331.0,
+   "roce": 18.85,
+   "roce_n": 2,
+   "roe": 18.95,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Real estate",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Real estate",
+ "total": 191,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 190,
+  "shown": 101
+ }
+}

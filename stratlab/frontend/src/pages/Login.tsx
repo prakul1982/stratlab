@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Link } from "react-router-dom";
-import { aboutUsd, usdNote, usePricing } from "../lib/currency";
+import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../lib/currency";
+import { cardPrice, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
+import { CurrencySwitch } from "../components/CurrencySwitch";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/planCore";   // the cards only: the tables (plans.ts) stay off the landing download
-import { signIn, signInUnfinished } from "../lib/signin";
+import { emailSignInOn, signIn, signInUnfinished, startSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
@@ -15,22 +17,26 @@ import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
 import { SkipLink } from "../components/SkipLink";
 import { Seg } from "../components/kit/Seg";
 import { publicGet } from "../lib/http";
-import { plainTerms } from "../lib/plainTerms";
+import { plainTerms } from "../content/seo";
 import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeUi";
 import type { LibEntry } from "../components/LibraryBits";
+import { exampleEyebrow, pickExamples } from "../lib/landingExamples";
 import { importWithRetry } from "../lib/lazyRetry";
 import { adsLive } from "../lib/ads";
 import { CONFIG } from "../lib/adsConfig";
 
 /** A landing card's checks line, unless its headline already gives the count (R61-007). */
 const cardChecks = (e: LibEntry) => underHeadline(lostMoney(e.verdict.verdict, e.stats?.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total),
-  e.verdict.fact_headline ?? e.verdict.headline);
+  e.verdict.card_headline ?? e.verdict.fact_headline ?? e.verdict.headline);
 // asked for again when its download fails, like every other lazy piece (R64-005: a 502 on a chunk just after a deploy)
 // ADS-1, AS1: the ad slot's code loads only when ads can draw here; with ads off (the default) the landing page asks for no extra file
 const ADS_HERE = adsLive(CONFIG, "public");
 const PublicAdLazy = lazy(() => import("../components/AdUnit").then((m) => ({ default: m.PublicAd })));
 const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></Suspense> : null);
 const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
+// sign-in by email (owner, 16 Nov): on the sign-in page only while /config.js switches it on; its code loads only then
+import { EmailWay } from "../components/EmailWay";
+const EmailSignIn = lazy(() => importWithRetry(() => import("../components/EmailSignIn")).then((m) => ({ default: m.EmailSignIn })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). Every button that signs in
@@ -39,23 +45,24 @@ const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanC
 type Status = "pass" | "warn" | "fail";
 const STATUS: Record<Status, string> = { pass: "Passed", warn: "Warning", fail: "Failed" };
 
-/** Three sample ideas for the hero demo: what you write, how it's read, what the verdict says. */
+/** Three sample ideas for the hero demo: what you write, how it's read, what the verdict says. One that held up first, then one that failed
+ * and one with too few trades (NAV3, CX-1: the first screen showed only a failure). */
 const DEMOS: {
   tab: string; idea: string; rule: [string, boolean][]; meta: string; verdict: string; tone: "blue" | "orange" | "ink"; why: string; checks: [string, Status][];
 }[] = [
-  {
-    tab: "NIFTY 50", idea: "Buy NIFTY 50 when the 20-day average crosses above the 50-day, with a 2% stop loss",
-    rule: [["Buy when", false], ["SMA 20", true], ["crosses above", true], ["SMA 50", true], ["· stop loss", false], ["2%", true]],
-    meta: "Experiment v3 · NIFTY 50 · 38 trades", verdict: "Failed on unseen years.", tone: "orange",
-    why: "It made money on the years it was tuned on, then lost on years it had never seen.",
-    checks: [["Unseen data", "fail"], ["Nearby settings", "fail"], ["Bad-luck drawdown", "warn"], ["Enough trades", "pass"]],
-  },
   {
     tab: "Bitcoin", idea: "Buy Bitcoin when RSI drops below 30, sell when it goes back above 55",
     rule: [["Buy when", false], ["RSI 14", true], ["falls below", true], ["30", true], ["· sell when above", false], ["55", true]],
     meta: "Experiment v5 · BTC/USD · 61 trades", verdict: "Held up on unseen years.", tone: "blue",
     why: "It kept working on data it had never seen, and small changes to the settings didn't break it.",
     checks: [["Unseen data", "pass"], ["Nearby settings", "pass"], ["Bad-luck drawdown", "warn"], ["Enough trades", "pass"]],
+  },
+  {
+    tab: "NIFTY 50", idea: "Buy NIFTY 50 when the 20-day average crosses above the 50-day, with a 2% stop loss",
+    rule: [["Buy when", false], ["SMA 20", true], ["crosses above", true], ["SMA 50", true], ["· stop loss", false], ["2%", true]],
+    meta: "Experiment v3 · NIFTY 50 · 38 trades", verdict: "Failed on unseen years.", tone: "orange",
+    why: "It made money on the years it was tuned on, then lost on years it had never seen.",
+    checks: [["Unseen data", "fail"], ["Nearby settings", "fail"], ["Bad-luck drawdown", "warn"], ["Enough trades", "pass"]],
   },
   {
     tab: "NVIDIA", idea: "Short NVDA when it falls below its 20-day low, with a 5% trailing stop",
@@ -184,14 +191,9 @@ const REAL_COMPANIES: [string, string][] = [["/stocks/in/RELIANCE", "Reliance In
 const HELP_LINKS: [string, string][] = [["/contact", "Contact us"], ["/plans", "Plans and prices"], ["/refunds", "Cancel a plan and refunds"],
   ["/library", "How a strategy's checks come out, in the library"], ["/privacy", "What we keep, and who sees it"]];
 
-const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], ["money", "Money"],
-  ["alerts", "Alerts"], ["pricing", "Plans"], ["faq", "FAQ"]];
-
-/** The header's links. The landing page: its sections, then the two public pages that show real work, the strategy library
- * and the company pages (DK-008: the library was reachable only from one link far down the page). /plans has no sections to
- * scroll to, so it carries the same links as every other public page (DK-004). */
-const NAV_LINKS = (plansOnly: boolean): [string, string][] => (plansOnly ? PUBLIC_MENU
-  : [...SECTIONS.map(([id, label]): [string, string] => [`#${id}`, label]), ["/library", "Library"], ["/stocks", "Companies"], ["/blog", "Blog"]]);
+/** The header's links: the site's public pages, the same list on the landing page as on every other public page and the pages the
+ * server draws (NAV3, LIVE9A-019: the landing page had its own row of section links, "Trade Invest Money Alerts Plans FAQ…"). */
+const NAV_LINKS = PUBLIC_MENU;
 
 /** A section's eyebrow, heading and one line under it. */
 function Head({ eyebrow, title, children, h1 }: { eyebrow: string; title: string; children?: ReactNode; h1?: boolean }) {
@@ -224,7 +226,8 @@ function ToolList({ items, label, shown = 4, three = false }: { items: [string, 
       <div className={cls}>{items.slice(0, shown).map(tool)}</div>
       {items.length > shown && (
         <details className="lp-more">
-          <summary>{items.length - shown} more {label}</summary>
+          {/* NAV3 (CX-1): no "16 more tools" count, a plain way to the rest */}
+          <summary>Every {label}</summary>
           <div className={cls}>{items.slice(shown).map(tool)}</div>
         </details>
       )}
@@ -240,7 +243,7 @@ function MoneyCards() {
     <div className="stack">
       <div className="lp-money">{PORTFOLIO.slice(0, shown).map(moneyCard)}</div>
       <details className="lp-more">
-        <summary>{rest} more Money tools</summary>
+        <summary>Every Money tool</summary>
         {/* six more in four columns left two on a second line; in three they are two full rows (VR3-013) */}
         <div className={`lp-money${rest % 4 !== 0 && rest % 3 === 0 ? " lp-money-3" : ""}`}>{PORTFOLIO.slice(shown).map(moneyCard)}</div>
       </details>
@@ -270,6 +273,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
   // LIVE7B-008: /login and /signup are one sign-in panel: the heading, one line, one Google button and what signing in reads (a dialog
   // with the same heading and button over the page, and a second band with a third button, said it all three times)
   const login = slim === "login";
+  const signup = login && location.pathname === "/signup";   // LIVE10B-003: "Sign up for StratLab" over "Sign in with…" lines
   useLayoutEffect(() => {
     if (!section) return;
     const go = () => document.getElementById(section)?.scrollIntoView({ behavior: "instant" });
@@ -309,17 +313,17 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
       <SkipLink />
       <header className="lp-nav">
         <a href={ownMenu ? "/" : "#top"} className="brand" aria-label="StratLab home"><Logo size={46} /></a>
-        <nav aria-label="Sections">
-          {NAV_LINKS(ownMenu).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
+        <nav aria-label="Site">
+          {NAV_LINKS.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
         </nav>
         {/* on a phone the section links fold into a small menu (the row above hides there) */}
         <details className="lp-menu" ref={menu}>
           <summary>Menu</summary>
-          <nav aria-label="Sections (menu)" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
-            {NAV_LINKS(ownMenu).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
+          <nav aria-label="Site (menu)" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
+            {NAV_LINKS.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        {!login && <button type="button" className="btn outline sm" onClick={go}>Sign in</button>}
+        {!login && <button type="button" className="btn outline sm" onClick={() => void startSignIn().catch(() => setError("Couldn't start sign-in. Check your connection and try again."))}>Sign in</button>}
       </header>
 
       <main id="main" tabIndex={-1}>
@@ -327,21 +331,29 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
       {/* VR1-170: /help starts at the questions: no hero with a second "Help" title, the home page's tagline and a sign-in button above them */}
       {helpOnly && error && <p className="banner lp-wrap" role="alert">{error}</p>}
       {!helpOnly && <section id="top" className="lp-hero ruled">
-        <div className={`lp-wrap lp-hero-grid${full ? "" : " lp-hero-solo"}`}>
+        {/* /login and /signup: one centred column the width of the sign-in on a gated page, not a block in the left 45% (LIVE9B-012) */}
+        <div className={`lp-wrap lp-hero-grid${full ? "" : " lp-hero-solo"}${login ? " lp-hero-login" : ""}`}>
           <div className="stack g22 lp-hero-copy">
             {/* an address of its own (/help, /faq, /pricing, /about) leads with its own heading and line, not the home page's
                 hero under a renamed eyebrow (DI-033) */}
-            <span className="eyebrow">{heading ? <><em>Test</em> it, research it, track it.</> : "Trade · Invest · Money"}</span>
+            {/* NAV3 (CX-1: "Test it, research it, track it" named three products and nothing said why over what people use): one promise,
+                who it is for, and what is different, in facts (content/seo.ts TAGLINE says the same to crawlers) */}
+            <span className="eyebrow">{heading ? <>Is your trading idea <em>skill</em> or luck?</> : "For traders and investors in India and the US"}</span>
             {heading
               ? <h1 className="serif lp-h1 lp-own-h1">{heading}</h1>
-              : <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>}
-            <p className="serif lp-lede">{heading && intro ? intro : "One place for trading ideas, company research and your own money."}</p>
+              : <h1 className="serif lp-h1">Is your trading idea <em>skill</em> or luck?</h1>}
+            <p className="serif lp-lede">{login && emailSignInOn() ? `${signup ? "Sign up" : "Sign in"} with your Google account or your email address: no password to set up.` : heading && intro ? intro : "Write it in plain words. StratLab tests it on years of real prices after every charge, then checks four ways whether the result could be luck. Company research, your holdings and your tax sit beside it."}</p>
             <div className="row wrap g12">
               {cta()}
-              {full && <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>}
+              {/* R61/R64: beside Continue with Google, the email way in as a button of its own, while email sign-in is on (the sign-in page has the form itself) */}
+              {!login && <EmailWay className="lp-cta-2" />}
+              {/* NAV3: a real result anyone can open without signing in (the public library: rules, verdict and checks) */}
+              {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
             </div>
+            {/* its place held from the first frame (LIVE12B-008: the form arrived after it and pushed the small print 208 px down on a phone) */}
+            {login && emailSignInOn() && <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>}
             {error && <p className="banner" role="alert">{error}</p>}
-            {login ? <p className="small muted">Signing in only reads your name and email from Google. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
+            {login ? <p className="small muted">Google sign-in reads only your name and email address{emailSignInOn() ? "; email sign-in reads only your email address" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
           </div>
           {full && <HeroDemo />}
         </div>
@@ -397,7 +409,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
 
           <PhoneFold label="Real verdicts, open to read"><LibraryExamples /></PhoneFold>
 
-          <PhoneFold label="Options, more Trade tools and the markets">
+          <PhoneFold label="Options, every Trade tool and the markets">
           <div className="lp-card lp-travel lp-options">
             <div className="stack g6">
               <span className="eyebrow">Options</span>
@@ -406,7 +418,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             </div>
           </div>
 
-          <ToolList items={TOOLS} label="Trade tools" />
+          <ToolList items={TOOLS} label="Trade tool" />
 
           <div id="markets" className="stack lp-anchor g14">
             <h3 className="serif lp-h3">Test where you trade.</h3>
@@ -437,7 +449,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             </div>
             <PhoneFold label="See a sample company page"><ResearchMock /></PhoneFold>
           </div>
-          <ToolList items={RESEARCH} label="research tools" />
+          <ToolList items={RESEARCH} label="research tool" />
         </div>
       </section>
 
@@ -456,7 +468,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
           <Head eyebrow="Alerts" title="Hear about it when it happens.">
             On your phone or by email, including every paper trade. Alerts report what happened, never what to do about it.
           </Head>
-          <ToolList items={ALERTS} label="kinds of alert" shown={3} three />
+          <ToolList items={ALERTS} label="kind of alert" shown={3} three />
         </div>
       </section>
 
@@ -492,16 +504,19 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
           </div>
           <div className="lp-faq">
             {FAQ.slice(0, 5).map(faqItem)}
-            {FAQ.length > 5 && <PhoneFold label={`${FAQ.length - 5} more questions`}>{FAQ.slice(5).map(faqItem)}</PhoneFold>}
+            {FAQ.length > 5 && <PhoneFold label="More questions">{FAQ.slice(5).map(faqItem)}</PhoneFold>}
           </div>
         </div>
       </section>}
 
       {!login && <section className="lp-final ruled">
         <div className="lp-wrap stack g20 lp-center">
-          <p className="serif lp-h2 lp-final-h">Test it, research it, track it.</p>
-          <p className="lp-p">Sign in with Google, no card needed. Your home page shows the first steps.</p>
-          {cta("Continue with Google")}
+          <p className="serif lp-h2 lp-final-h">Is your trading idea skill or luck?</p>
+          <p className="lp-p">Sign in with Google{emailSignInOn() ? " or your email" : ""}, no card needed. Your home page shows the first steps.</p>
+          <div className="row wrap g12 lp-final-ways">
+            {cta("Continue with Google")}
+            <EmailWay className="lp-cta-2" />
+          </div>
         </div>
       </section>}
       </>}
@@ -528,13 +543,17 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
 function Pricing({ top }: { top?: { heading: string; error: string | null } } = {}) {
   const { pricing, status, rate } = usePricing();
   const loading = status === "loading";
+  // owner, 16 Nov: rupees or US dollars on a switch in view; dollars for the US region until the visitor picks (lib/priceCurrency)
+  const pc = usePriceCur();
+  const usd = usdRowOf(pricing), cur = usd ? pc.cur : "INR", usdOn = usdCheckoutOn();
   // what's on sale today comes from the server (plans.offer_state), the same answer the Plans page reads
   const offer = pricing?.offer ?? null;
   const rupees = (p: PlanId, year = false) => `₹${PRICE[p][year ? 1 : 0].toLocaleString("en-IN")}`;
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
-  // the fine print's yearly prices are the ones a card shows
-  const yearly = (p: PlanId) => rupees(p, true);
+  // the fine print's yearly prices are the ones a card shows: dollars while dollars are shown (LIVE10B-002: "Paying yearly: Basic
+  // ₹6,999" in the dollar view)
+  const yearly = (p: "basic" | "pro") => (cur === "USD" && usd ? dollarText(usd[`${p}_year`]) : rupees(p, true));
   // "incl. GST" only while the invoices carry GST (the seller's GSTIN is set); nothing speaks of it before (R7M-001)
   const gst = pricing?.invoice?.gst === true;
   const small = finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
@@ -565,19 +584,20 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
-          {/* no currency picker (item 34): rupees, with the dollar beside each price, for every visitor */}
+          {!loading && usd && <CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} />}
         </div>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
             const year = showYear && period === "year" && p !== "free";
             const act = landingAction(offer, p);
             const per = showYear && period === "year" ? "year" : "month";     // Free's $0 follows the switch too (R17-001)
-            // a year's saving in rupees, with its dollar figure
-            const save = p !== "free" && year ? yearlySaving(PRICE[p][0], PRICE[p][1]) : null;
-            const saveText = save == null ? "" : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
-            // the rupee price in dollars, whole units, at the app's USD/INR rate, beside it (item 34)
+            // the card's price in the currency shown, and beside it the dollar figure of a rupee price or the rupee charge of a dollar one
             const inr = PRICE[p][year ? 1 : 0];
-            const about = inr > 0 ? aboutUsd(inr, rate) : null;
+            const price = p === "free" ? null : cardPrice({ plan: p, period: year ? "year" : "month", cur, inr, usd, checkoutOn: usdOn, aboutUsd: (v) => aboutUsd(v, rate) });
+            const about = price?.about ?? null;
+            // a year's saving in the currency shown (in rupees with its dollar figure)
+            const save = p !== "free" && year ? (price?.usdShown && usd ? yearlySaving(usd[p], usd[`${p}_year`]) : yearlySaving(PRICE[p][0], PRICE[p][1])) : null;
+            const saveText = save == null ? "" : price?.usdShown ? dollarText(save) : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
                 <div className="stack g2">
@@ -587,7 +607,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 <div className="stack g2">
                   {loading ? <span className="lp-skel lp-skel-amount" role="img" aria-label="Loading the price" /> : (
                     <div className="lp-amount-row">
-                      <div className="serif lp-amount">{rupees(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
+                      <div className="serif lp-amount">{price ? price.shown : freePrice(cur, usd)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
                     </div>
                   )}
@@ -595,13 +615,16 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   {p !== "free" && (loading || gst || save != null) && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
-                        : gst ? "incl. GST" : ""}
+                        : gst && price?.chargedCur !== "USD" ? "incl. GST" : ""}
                       {!loading && save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
                     </span>
                   )}
                 </div>
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
-                  : <button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>}
+                  // LIVE11B-001: the Google and email buttons are ONE row of the card's four-row subgrid (name, price, ways in, list): as two
+                  // children the email button took the list's row and the list ran under it, its ticks boxed under "Sign in with email"
+                  : <div className="lp-plan-ways"><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
+                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" label={act.label.replace("Continue with Google", "Sign in with email")} /></div>}
                 {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
                 <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">
@@ -615,7 +638,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         </div>
         <AllFeatures />
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
-        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p></PhoneFold>}
+        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p></PhoneFold>}
       </div>
     </section>
   );
@@ -728,20 +751,22 @@ function ResearchMock() {
         <p className="small">"Enter when the 20-day EMA crosses above the 50-day EMA; exit when it crosses back below; 7% stop loss."</p>
         <span className="small muted">A template for a test, not a suggestion. The test shows how it would have done on past prices.</span>
         <button type="button" className="btn sm lp-idea-btn" onClick={() => void signIn("/new")}>Continue with Google to test it →</button>
+        <EmailWay next="/new" small />
       </div>
     </div>
   );
 }
 
-/** A few of StratLab's own library strategies with the verdict each earned: real output anyone can open without signing in.
- * One of each kind of verdict where there is one (the ones that failed are shown like the ones that held up), up to three. */
+/** A few of StratLab's own library strategies with the verdict each earned: real output anyone can open without signing in. One whose checks
+ * all passed and one that failed, from different markets, Indian and US stocks and crypto first (lib/landingExamples.ts; LIVE9A-019: three
+ * rupee currency pairs), up to three. */
 function LibraryExamples() {
   const [rows, setRows] = useState<LibEntry[] | null>(null);
   const [total, setTotal] = useState(0);
   useEffect(() => {
     let live = true;
     publicGet<{ entries: LibEntry[]; total: number }>("/public/library?sort=new&limit=60")
-      .then((r) => { if (!live) return; const seen = new Set<string>(); setTotal(r.total); setRows(r.entries.filter((e) => e.ran !== false && !seen.has(e.verdict.verdict) && !!seen.add(e.verdict.verdict)).slice(0, 3)); })
+      .then((r) => { if (!live) return; setTotal(r.total); setRows(pickExamples(r.entries)); })
       .catch(() => { if (live) setRows([]); });
     return () => { live = false; };
   }, []);
@@ -753,16 +778,19 @@ function LibraryExamples() {
       {rows === null ? <div className="lp-examples lp-examples-skel" aria-busy="true"><span className="lp-skel lp-skel-card" /><span className="lp-skel lp-skel-card" /><span className="lp-skel lp-skel-card" /></div>
         : rows.length > 0 && (
           <div className="lp-examples">
-            {rows.map((e) => (
+            {rows.map((e) => {
+              const title = plainTerms(e.name), eyebrow = exampleEyebrow(e, title);
+              return (
               <Link key={e.id} to={`/library/${encodeURIComponent(e.id)}`} className="lp-card lp-example">
-                <span className="eyebrow">{e.group ? e.group.name : e.instrument?.symbol ?? e.market}</span>
-                <b className="serif">{plainTerms(e.name)}</b>
-                <span className="small">{e.verdict.fact_headline ?? e.verdict.headline}</span>
+                {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+                <b className="serif">{title}</b>
+                <span className="small">{e.verdict.card_headline ?? e.verdict.fact_headline ?? e.verdict.headline}</span>
                 {/* the count once: most headlines already end with it */}
                 {cardChecks(e) && <span className="small muted">{cardChecks(e)}</span>}
                 <span className="small lp-space-go">Open the verdict and rules →</span>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       <p><Link className="link" to="/library">{total > 1 ? `See all ${total} StratLab strategies` : "See StratLab's strategy"} and the verdict each earned</Link></p>

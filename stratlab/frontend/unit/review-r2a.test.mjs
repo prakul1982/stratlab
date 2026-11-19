@@ -40,11 +40,11 @@ test("a build that finds no rule blames our side when the sentence plainly holds
 
 test("signed-out tab titles say what they wait for (R2A-025)", async () => {
   const { signedOutTitle } = await import("../src/lib/title.ts");
-  assert.equal(signedOutTitle("/options"), "Sign in · Options builder · StratLab");
-  assert.equal(signedOutTitle("/holdings").startsWith("Sign in · "), true);
+  assert.equal(signedOutTitle("/options"), "Sign in: Options builder · StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
+  assert.equal(signedOutTitle("/holdings").startsWith("Sign in: "), true);
   assert.equal(signedOutTitle("/pricing"), "Plans · StratLab");
-  assert.equal(signedOutTitle("/plans"), "Plans and prices · StratLab");
-  assert.equal(signedOutTitle("/"), "StratLab: backtest trading ideas, research stocks, track money");     // keywords in the title (DK-013)
+  assert.equal(signedOutTitle("/plans"), "Plans · StratLab");
+  assert.equal(signedOutTitle("/"), "StratLab");     // the brand alone on the landing page (updated on purpose, owner 18 Nov)
 });
 
 test("the closing auction says closed before the open, not continuous trading (R2A-006)", async () => {

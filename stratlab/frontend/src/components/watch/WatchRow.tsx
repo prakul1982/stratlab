@@ -19,6 +19,8 @@ export interface RowProps {
   canMove: boolean; dragging: boolean;
   /** Added a moment ago: marked so the eye finds it. */
   fresh?: boolean;
+  /** Its price is this device's earlier read, not yet read again: drawn faded (LIVE10A-031). */
+  old?: boolean;
   lists: WatchList[]; listId: string;
   onOpen: () => void; onRemove: () => void; onMoveTo: (listId: string) => void;
   onGrip: (e: PointerEvent<HTMLButtonElement>) => void; onNudge: (by: -1 | 1) => void;
@@ -39,7 +41,7 @@ export const WatchRow = forwardRef<HTMLLIElement, RowProps>(function WatchRow(p,
   const others = p.lists.filter((l) => l.id !== p.listId);
   const sub = subtitleOf(item);
   return (
-    <li ref={ref} className={`mw-row${p.dragging ? " drag" : ""}${p.fresh ? " fresh" : ""}`} data-key={item.id}>
+    <li ref={ref} className={`mw-row${p.dragging ? " drag" : ""}${p.fresh ? " fresh" : ""}${p.old ? " old" : ""}`} data-key={item.id}>
       {p.canMove
         ? <button type="button" className="mw-grip" aria-label={`Move ${label}. Drag, or press the up or down arrow.`} title="Drag to reorder" onPointerDown={p.onGrip} onKeyDown={key}><i aria-hidden="true" /></button>
         : <span className="mw-grip off" aria-hidden="true" />}

@@ -20,8 +20,10 @@ def _with_debt(fn, ratios: dict):
     for s_, x in f.items():
         for p_, k in ratios.items():
             if s_.startswith(p_):
-                x["debt"] = x["years"][-1]["sales"] * k
-    return region, m, f, market
+                # (updated on purpose, ex49: the debt of the revenue's own year is the one the capital proxy reads, theme_data.capital_inputs)
+                x["debt"] = x["years"][-1]["debt"] = x["years"][-1]["sales"] * k
+    from tests.gl50_read import read
+    return region, read(m), f, market        # gl50 (R50, updated on purpose): the layers' way of earning read, so the capital rule is what decides
 
 
 def _texts(slides):
@@ -65,7 +67,9 @@ def test_layers_alike_in_capital_needs_are_still_ranked(monkeypatch):
         assert v["chain"]["highest"] and "highest" in v["chain"]["line"], name
     # no capital figure at all (no debt or price to book): nothing to compare, the R29 rules alone decide
     region, m, f, _ = S.utilities_in()
-    assert deck_of(region, m, f)[0]["chain"]["highest"]
+    from tests.gl50_read import read
+    assert deck_of(region, read(m), f)[0]["chain"]["highest"]           # gl50 (updated on purpose): the way of earning read
+    assert deck_of(region, m, f)[0]["chain"]["highest"] is None         # gl50 (R50): none read, none ranked
 
 
 def test_capital_per_revenue_and_the_threefold_rule(monkeypatch):
@@ -75,7 +79,8 @@ def test_capital_per_revenue_and_the_threefold_rule(monkeypatch):
     assert D.capital_per_revenue(1000, 2.0, 500, None, 1000) == 1.0         # equity 500 + debt 500 over revenue 1,000
     assert D.capital_per_revenue(None, None, 600, 2.0, 300) == 3.0          # equity from debt over debt to equity
     assert D.capital_per_revenue(1000, -1.0, None, None, 1000) is None and D.capital_per_revenue(1000, 2.0, 0, None, 0) is None
-    rows = [("A", 30.0, 3, 3, None, "full", 0.5), ("B", 10.0, 3, 3, None, "full", 1.4)]
+    read_ = {"id": "manufacturing", "family": "making"}        # gl50 (R50, updated on purpose): a way of earning read, else nothing is ranked
+    rows = [("A", 30.0, 3, 3, read_, "full", 0.5), ("B", 10.0, 3, 3, read_, "full", 1.4)]
     pick = dict(of=lambda t: t[3], model=lambda t: t[4], basis=lambda t: t[5], intensity=lambda t: t[6])
     assert D.rank_pair(rows, lambda t: t[1], lambda t: t[2], **pick)[0][0] == "A"
     assert D.rank_pair([rows[0], rows[1][:6] + (2.0,)], lambda t: t[1], lambda t: t[2], **pick) is None
@@ -96,10 +101,14 @@ def _row(**kw):
 
 def test_a_net_profit_lifted_on_a_negative_return_and_negative_equity_is_held_with_its_checks():
     r = _row(book_value=-3.3)
-    assert r["net"] is None and not r["one_off"] and r["roe"] is None
-    assert r["held"]["net"]["value"] == 82.2
-    # (updated on purpose, R44): the sign check makes the net margin invalid; an invalid figure is not checked for being unusual as well
-    assert r["held"]["net"]["checks"] == [D.CHECKS["sign"]] and r["verify"]["net"]["state"] == D.INVALID
+    # (updated on purpose, R48: the outside review of the live R46 decks): a positive net profit beside a negative ROCE alone never makes the
+    # net margin invalid. The stored lines give negative capital employed (book equity −₹1,650 crore, debt ₹100 crore), so the ROCE is the
+    # figure with a calculation defect (invalid); the 82.2% net margin is checked as any unusual margin: above its EBITDA margin with no stored
+    # line to cover it, it is shown with † and left out of the medians (not reconciled), never "–"
+    assert r["net"] == 82.2 and r["one_off"] and r["roe"] is None and r["roce"] is None and "net" not in r["held"]
+    assert r["verify"]["net"]["state"] == D.UNVERIFIED and D.CHECKS["sign"] in r["verify"]["net"]["checks"]
+    assert r["verify"]["net"]["sign"]["kind"] == "negative_capital"
+    assert r["held"]["roce"]["checks"] == [D.CHECKS["neg_capital"]] and r["verify"]["roce"]["state"] == D.INVALID
     assert r["held"]["roe"]["checks"] == [D.CHECKS["neg_equity"]]
 
 
@@ -111,7 +120,10 @@ def test_other_income_sign_and_ebitda_checks():
     assert "income outside operations of ₹6,000 crore is 67% of the net profit" in r["verify"]["net"]["why"] and not r["one_off"]
     assert _row(profits=[1, 1, 1, 9000], roce=5.0, other_income=1000)["net"] == 20.0
     r = _row(profits=[1, 1, 1, 9000], roce=5.0, net_margin=-4.0)
-    assert r["held"]["net"]["checks"] == [D.CHECKS["sign_page"]]
+    # (updated on purpose, R48): a net margin of the other sign from the page's own is reconciled with the stored years, never invalid for
+    # the sign alone: no stored year gives the page's −4%, so it is not reconciled (shown with †, out of the medians)
+    assert r["net"] == 20.0 and "net" not in (r.get("held") or {}) and r["verify"]["net"]["state"] == D.UNVERIFIED
+    assert r["verify"]["net"]["checks"] == [D.CHECKS["sign_page"]] and "no stored year's net profit over revenue gives it" in r["verify"]["net"]["why"]
     a, b = {"symbol": "A", "ebitda": 95.0}, {"symbol": "B", "ebitda": 95.0}
     D.validate_model(a, "services")
     D.validate_model(b, "royalties")
@@ -126,12 +138,15 @@ def test_a_held_figure_leaves_medians_and_is_named_on_the_data_confidence_page()
     f[sym]["years"][-1]["profit"] = f[sym]["years"][-1]["sales"] * 0.77
     v, slides = deck_of(region, m, f, index_rows=lambda: market)
     held = v["checks"]["held"]
-    assert [x["key"] for x in held if x["symbol"] == sym] == ["net", "roe"]
+    # (updated on purpose, R48): the positive net profit beside the negative ROCE is reconciled with the stored lines first: they give negative
+    # capital employed, so the ROCE is held (invalid) and the 77% net margin, above its EBITDA margin with no line to cover it, is shown with
+    # † and left out of the net-margin median, never held as "–" for the signs alone
+    assert [x["key"] for x in held if x["symbol"] == sym] == ["roce", "roe"]
     lay = v["layers"][0]
-    assert all(c.get("net") != 77.0 for c in lay["companies"]) and lay["stats"]["net"]["n"] == len(lay["companies"]) - 1
+    assert lay["stats"]["net"]["n"] == len(lay["companies"]) - 1 and sym in lay["one_off"]
     conf = next(s for s in slides if s.title == "Data confidence")
     row = next(r for b in conf.blocks if b["kind"] == "table" for r in b["rows"] if r[0] == "Figure checks")
-    assert "net margin 77%" in row[1] and D.CHECKS["sign"] in row[1] and deck.ANOMALY_WHY in row[2]
+    assert "ROCE −1.7%" in row[1] and D.CHECKS["neg_capital"] in row[1] and deck.ANOMALY_WHY in row[2]
     assert not any(w in row[1] + row[2] for w in ("because", "due to", "one-off gain"))
 
 
@@ -183,10 +198,13 @@ def test_unknown_models_with_descriptions_now_kept_are_asked_once_in_one_bounded
     ev = lambda s: about.get(s) or ""                     # noqa: E731
     calls = []
     out, _, conf, reasked = B.reask_unknown(models, {}, {}, [], list(models), about.get, {}, ev, _ask(calls), "Telecom")
-    assert len(calls) == 1 and len(calls[0]) == B.REASK_MAX and "T0" not in calls[0] and "T49" not in calls[0]
-    assert all(out[s] == "property" and conf[s] for s in calls[0]) and reasked == sorted(calls[0])
+    # gl50 (R50, updated on purpose): REASK_MAX a check (60), in answers of REASK_BATCH (20) each, never hundreds in one answer
+    asked = [s for c in calls for s in c]
+    assert all(len(c) <= B.REASK_BATCH for c in calls) and len(asked) == min(B.REASK_MAX, 48) and "T0" not in asked and "T49" not in asked
+    assert all(out[s] == "property" and conf[s] for s in asked) and reasked == sorted(asked)
+    n = len(calls)
     again = B.reask_unknown(out, {}, conf, reasked, list(models), about.get, {}, ev, _ask(calls), "Telecom")[3]
-    assert len(calls) == 2 and not set(calls[1]) & set(calls[0]) and set(again) >= set(reasked)
+    assert not {s for c in calls[n:] for s in c} & set(asked) and set(again) >= set(reasked)
     calls.clear()
     B.reask_unknown(out, {}, conf, [f"T{i}" for i in range(50)], list(models), about.get, {}, ev, _ask(calls), "Telecom")
     assert calls == []                                    # every one asked before: never again
@@ -202,9 +220,11 @@ def test_a_placement_kept_under_the_rules_before_carries_over(monkeypatch):
     monkeypatch.setattr(computed, "get", get)
     got = {}
     # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None: (got.update(kept=kept), (out, kept))[1])
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None, published=None, figures_of=None: (got.update(kept=kept), (out, kept))[1])  # p57 (updated on purpose): `published` too; r59 (updated on purpose): `figures_of` too, the placement always gets the stored-figures reader (theme_base.listed_out)
     T.placed("IN", "Telecom", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
-    assert seen == [B.RULES, T.PLACE_CARRY[B.RULES]] and got["kept"]["assign"]["X"]["layer"] == "L"
+    # rv51 (R51, updated on purpose): once found, the walk goes on back for an earlier answer of the same map (at most EARLIER_MAX versions)
+    assert seen[:2] == [B.RULES, T.PLACE_CARRY[B.RULES]] and got["kept"]["assign"]["X"]["layer"] == "L"
+    assert len(seen) == 2 + T.EARLIER_MAX and len(seen) == len(set(seen))
 
 
 # ---------- 5. a layer page's header ----------
@@ -269,12 +289,13 @@ def test_a_placement_is_carried_back_past_versions_that_kept_none_of_their_own(m
     monkeypatch.setattr(computed, "get", get)
     got = {}
     # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None:
+    # p57 (R56, updated on purpose): place_rest also takes the published memory (`published`, every live placement)
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None, published=None, figures_of=None:  # r59 (updated on purpose): `figures_of` too, the placement always gets the stored-figures reader (theme_base.listed_out)
                         (got.update(kept=kept, carried=carried), (out, kept))[1])
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     # lane s2-exact bumped RULES to 41, carrying 40; lane s3-r40 to 42, carrying 41: found at 40 (updated on purpose)
-    assert B.RULES == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
-    assert seen == [45, 44, 43] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # tx2 (R45): from 45 (updated on purpose); c1 (R44): from 44 (updated on purpose); lane d1: from 43
+    assert B.RULES == 71 and T.PLACE_CARRY[71] == 70 and T.PLACE_CARRY[70] == 69 and T.PLACE_CARRY[69] == 68 and T.PLACE_CARRY[68] == 67 and T.PLACE_CARRY[67] == 66 and T.PLACE_CARRY[66] == 65 and T.PLACE_CARRY[65] == 64 and T.PLACE_CARRY[64] == 63 and T.PLACE_CARRY[63] == 62 and T.PLACE_CARRY[62] == 61 and T.PLACE_CARRY[61] == 60 and T.PLACE_CARRY[60] == 59 and T.PLACE_CARRY[59] == 58 and T.PLACE_CARRY[58] == 57 and T.PLACE_CARRY[57] == 56 and T.PLACE_CARRY[56] == 55 and T.PLACE_CARRY[55] == 54 and T.PLACE_CARRY[54] == 53 and T.PLACE_CARRY[53] == 52 and T.PLACE_CARRY[52] == 51 and T.PLACE_CARRY[51] == 50 and T.PLACE_CARRY[50] == 49 and T.PLACE_CARRY[49] == 48 and T.PLACE_CARRY[48] == 47 and T.PLACE_CARRY[47] == 46 and T.PLACE_CARRY[46] == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # r69e (R69): RULES 71, PLACE_CARRY[71] = 70, EARLIER_MAX 26, deck 81, dive text 41 (updated on purpose); r68e (R68): RULES 70, PLACE_CARRY[70] = 69, EARLIER_MAX 25, deck 80, dive text 40 (updated on purpose); r67e (R67): RULES 69, PLACE_CARRY[69] = 68, EARLIER_MAX 24, deck 79, dive text 39 (updated on purpose); r66e (R66): RULES 68, PLACE_CARRY[68] = 67, EARLIER_MAX 23, deck 78, dive text 38 (updated on purpose); r65e (R65): RULES 67, PLACE_CARRY[67] = 66, EARLIER_MAX 22, deck 77, dive text 37 (updated on purpose); r64e (R64): RULES 66, PLACE_CARRY[66] = 65, EARLIER_MAX 21, deck 76, dive text 36 (updated on purpose); r63e (R63): RULES 65, PLACE_CARRY[65] = 64, EARLIER_MAX 20, deck 75, dive text 35 (updated on purpose); r62 (R62): RULES 64, PLACE_CARRY[64] = 63, EARLIER_MAX 19, deck 74, dive text 34 (updated on purpose); r60 (R60): RULES 63, PLACE_CARRY[63] = 62, EARLIER_MAX 18, deck 73, dive text 33 (updated on purpose); r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); r571 (R57.1): RULES 57, PLACE_CARRY[57] = 56 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose); c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49 (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); cl48 (R48): RULES 47, PLACE_CARRY[47] = 46, deck 58, dive text 18, primary-business validation and the coverage control (updated on purpose); cv47 (R47): RULES 46, PLACE_CARRY[46] = 45, filing titles are no words of a company's own, the AI's industry pick kept across rules changes (PICK_RULES); deck and dive text unchanged (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert seen[:3] == [71, 70, 69] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # r69e (R69): RULES 71, PLACE_CARRY[71] = 70, EARLIER_MAX 26, deck 81, dive text 41 (updated on purpose); r68e (R68): RULES 70, PLACE_CARRY[70] = 69, EARLIER_MAX 25, deck 80, dive text 40 (updated on purpose); r67e (R67): RULES 69, PLACE_CARRY[69] = 68, EARLIER_MAX 24, deck 79, dive text 39 (updated on purpose); r66e (R66): RULES 68, PLACE_CARRY[68] = 67, EARLIER_MAX 23, deck 78, dive text 38 (updated on purpose); r65e (R65): RULES 67, PLACE_CARRY[67] = 66, EARLIER_MAX 22, deck 77, dive text 37 (updated on purpose); r64e (R64): RULES 66, PLACE_CARRY[66] = 65, EARLIER_MAX 21, deck 76, dive text 36 (updated on purpose); r63e (R63): RULES 65, PLACE_CARRY[65] = 64, EARLIER_MAX 20, deck 75, dive text 35 (updated on purpose); r62 (R62): RULES 64, PLACE_CARRY[64] = 63, EARLIER_MAX 19, deck 74, dive text 34 (updated on purpose); r60 (R60): RULES 63, PLACE_CARRY[63] = 62, EARLIER_MAX 18, deck 73, dive text 33 (updated on purpose); r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); r571 (R57.1): RULES 57, PLACE_CARRY[57] = 56 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, the walk from 55 (updated on purpose); v55 (R55 review): RULES 54, the walk from 54 (updated on purpose); c54 (R53 review): RULES 53, the walk from 53 (updated on purpose); d53 (R53): RULES 52, the walk from 52 (updated on purpose); gl52 (R52): RULES 51, found at 49 (updated on purpose); rv51 (R51): RULES 50, found at 48, then the walk back for an earlier answer (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): from 48 (updated on purpose); cl48 (R47): from 47 (updated on purpose); cv47 (R46): from 46 (updated on purpose); tx2 (R45): from 45 (updated on purpose); c1 (R44): from 44 (updated on purpose); lane d1: from 43
 
 
 def test_the_carry_back_stops_when_no_version_kept_a_placement(monkeypatch):
@@ -282,6 +303,6 @@ def test_the_carry_back_stops_when_no_version_kept_a_placement(monkeypatch):
     seen = []
     monkeypatch.setattr(computed, "get", lambda kind, key: seen.append(key[-1]) or None)
     # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None: (out, kept))
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None, published=None, figures_of=None: (out, kept))  # p57 (updated on purpose): `published` too; r59 (updated on purpose): `figures_of` too, the placement always gets the stored-figures reader (theme_base.listed_out)
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     assert seen[0] == B.RULES and seen[-1] == min(T.PLACE_CARRY.values()) and len(seen) == len(set(seen))

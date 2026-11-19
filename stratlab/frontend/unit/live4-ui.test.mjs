@@ -51,7 +51,8 @@ test("LIVE4-010: the results calendar is compact on a phone and its headers fit 
   for (const k of ["cap", "q"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);   // LIVE5-002: rev and pat are one "q" column
   for (const k of ["rev", "pat"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*csvOnly: true`), k);
   assert.match(invCss, /\.inv-day \.k-table thead th \{ white-space: nowrap; \}/);
-  assert.match(invCss, /\.k-tbl-wrap\.compact \.res-moves, \.k-tbl-wrap\.compact \.res-plain, \.k-tbl-wrap\.compact \.res-name \{ display: none; \}/);
+  // (updated on purpose, fix11 LIVE10A-027: the company name now shows on a phone row too; the arrows and plain line stay hidden)
+  assert.match(invCss, /\.k-tbl-wrap\.compact \.res-moves, \.k-tbl-wrap\.compact \.res-plain \{ display: none; \}/);
   // the day's CSV button shares the day's heading line; on a phone it says "CSV"
   assert.match(invCss, /\.inv-day > \.k-eyebrow \+ \.k-tbl-tools \{ grid-column: 2;/);
   assert.match(read("src/components/kit/DataTable.tsx"), /<span className="k-csv-verb">Download <\/span>CSV/);
@@ -116,7 +117,8 @@ test("LIVE4-005 / 007: the live count's time in its header; the read time with i
   assert.equal(P.sessionHeader(null, (d) => d), "Today");
   assert.equal(P.sessionHeader("2026-11-05", () => "5 Nov"), "5 Nov");
   const mood = read("src/pages/PulseMood.tsx");
-  assert.match(mood, /header: b\.live \? \(b\.at \? `Today, \$\{b\.at\}` : "Today"\) : day\(b\.day\)/);
+  // (updated on purpose, fix18 LIVE13A-030: the count at the closing prices is headed "Today, at the close", every other live count by its time)
+  assert.match(mood, /header: b\.live \? \(b\.at_close \? "Today, at the close" : b\.at \? `Today, \$\{b\.at\}` : "Today"\) : day\(b\.day\)/);
   // (merged with LIVE4-024's "read day, time" line: the time part carries the zone)
   assert.match(mood, /\$\{fmtTime\(m\.read_at, \{ tz: marketTz\(region\), zone: true \}\)\}/);
   assert.doesNotMatch(mood, /toLocaleTimeString\(region/);
@@ -150,7 +152,8 @@ test("LIVE4-008: the breadth card is a table of two days, each column headed wit
   assert.match(homes, /setRows\(\{ today, total: Math\.max\(counted, today\.length\), next \}\)/);
   // the consent question is a slim bar in the page column in the app too, never over the side menu
   // (updated on purpose, LIVE7B-006: the first row of the page column, in the page's flow, not a bar over the page's foot)
-  assert.match(css, /\.shell > \.consent \{ grid-column: -2 \/ -1; grid-row: 1;/);
+  // (updated on purpose, LIVE8B-004: the page column's last row, after the page, so its arrival never pushes the page down)
+  assert.match(css, /\.shell > \.consent \{ grid-column: -2 \/ -1; grid-row: 2;/);
 });
 
 test("LIVE4-009: Market Watch says when its prices are from, and draws no arrow on 0.00%", async () => {
@@ -225,7 +228,9 @@ test("LIVE4-020: one source for the plan cards (landing and Plans page alike); t
   assert.doesNotMatch(read("src/lib/plans.ts"), /export const FEATURES/);
   const F = await import("../src/lib/planFeatures.ts");
   for (const p of ["free", "basic", "pro"]) assert.ok(F.FEATURES[p].length >= 6, p);
-  assert.match(css, /\.lp-examples > \.lp-example:nth-child\(n\+2\), \.lp-examples-skel > \.lp-skel-card:nth-child\(n\+2\) \{ display: none; \}/);
+  // (updated on purpose, NAV3, CX-1 "no example shows what a good result looks like": two on a phone, one that passed and one that failed,
+  // inside the page's own fold, so the page's length is unchanged)
+  assert.match(css, /\.lp-examples > \.lp-example:nth-child\(n\+3\), \.lp-examples-skel > \.lp-skel-card:nth-child\(n\+3\) \{ display: none; \}/);
   // /features for a visitor is the landing page at its Trade section, kept out of search: noindex from the server and no canonical address
   const vercel = JSON.parse(read("vercel.json"));
   const noindex = vercel.headers.find((h) => h.headers.some((x) => x.key === "X-Robots-Tag" && /noindex/.test(x.value)) && new RegExp(`^${h.source.replace(/\(\?:/g, "(?:")}$`).test("/features"));

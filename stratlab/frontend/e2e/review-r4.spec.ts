@@ -132,7 +132,7 @@ test("R4-017: every public page has its own tab title, and /login, /signup, /abo
   for (const [path, title, h1] of [["/login", "Sign in · StratLab", "Sign in to StratLab"], ["/signup", "Sign up · StratLab", "Sign up for StratLab"]] as const) {
     await page.goto(path);
     await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toHaveText(h1, { timeout: 30_000 });
-    await expect(page.locator(".lp").getByText("it, research it, track it.").first()).toBeVisible();
+    await expect(page.locator(".lp").getByText("Is your trading idea").first()).toBeVisible(); // (updated on purpose, NAV3: the hero's one promise, CX-1)
     await expect(page).toHaveTitle(title);
     await expect(page.getByText("Page not found")).toHaveCount(0);
   }

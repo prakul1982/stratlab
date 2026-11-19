@@ -23,14 +23,17 @@ def _currency(snap: dict) -> str:
 
 
 def open_value(snap: dict) -> float:
-    """What the open positions are worth now: shares or coins at the last price, option legs at their marks."""
+    """What the open positions are worth now: shares or coins at the last price, option legs at their marks. A sold option
+    or a short position counts as minus, what buying it back would cost (LIVE10B-029: a short straddle's ₹4,420 read as
+    something owned)."""
     kind = snap.get("kind")
     if kind == "group":
-        return sum(abs((m.get("position") or {}).get("qty", 0) * (m.get("price") or 0)) for m in snap.get("members") or [])
+        return sum((m.get("position") or {}).get("qty", 0) * (m.get("price") or 0) for m in snap.get("members") or [])
     if kind == "options":
-        return sum(abs(l.get("qty", 0) * (l.get("mark") or 0)) for l in snap.get("legs") or [] if l.get("open"))
+        return sum((-1 if l.get("side") == "sell" else 1) * abs(l.get("qty", 0)) * (l.get("mark") or 0)
+                   for l in snap.get("legs") or [] if l.get("open"))
     acct = snap.get("account") or {}
-    return abs((acct.get("qty") or 0) * (snap.get("last_price") or 0))
+    return (acct.get("qty") or 0) * (snap.get("last_price") or 0)
 
 
 def _daily(curve: list[dict]) -> dict[str, float]:
@@ -200,4 +203,4 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             "curve": [{"t": d, "pnl": round(v, 2)} for d, v in line][-180:],
         })
     currencies.sort(key=lambda c: -c["capital"])
-    return {"currencies": currencies, "sessions": sorted(sessions, key=lambda r: -r["open_value"])}
+    return {"currencies": currencies, "sessions": sorted(sessions, key=lambda r: -abs(r["open_value"]))}

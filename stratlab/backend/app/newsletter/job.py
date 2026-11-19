@@ -159,7 +159,10 @@ def save(issue: dict) -> dict:
 
 def recent(kind: str, scope: str, limit: int = 20) -> list[dict]:
     out = []
-    for iid in ids(kind, scope)[:max(1, min(INDEX_CAP, limit))]:
+    want = ids(kind, scope)[:max(1, min(INDEX_CAP, limit))]
+    # the issues in one database call, not one call each (LIVE10A-036: the US list took over 4 s to come)
+    db.prefetch_settings([_key(*p) for p in map(parse_id, want) if p])
+    for iid in want:
         issue = load(iid)
         if issue:
             out.append(issue)
@@ -254,6 +257,33 @@ def repair_index_moves(region: str, days: int = 60) -> int:
         f = {"kind": "market", "region": region, "day": issue["day"], "weekly": False, "indices": indices, "rotation": rotation}
         issue.update(indices=indices, subject=write.subject(f), title=write.headline(f), summary=write.template(f), ai=False)
         issue.pop("ai_summary", None)                 # the AI's words restated the wrong changes
+        issue["sections"] = write.market_sections({**f, "rotation": []})[:1] + [s for s in issue.get("sections") or [] if s.get("title") != "Indices"]
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(iid)
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        fixed += 1
+    return fixed
+
+
+def repair_official_changes(region: str = "IN", days: int = 60) -> int:
+    """LIVE10A-017: the daily India briefs stored in the last `days` days with each index's change as the exchange's own daily file of
+    index closes gives it, against the session before as the calendar now knows it (the 9 Nov brief kept NIFTY 50 +0.06% against
+    6 Nov; against the 8 Nov Muhurat session it was +0.23%). Rebuilt as repair_index_moves rebuilds an issue; the rest stays. Returns
+    how many issues changed."""
+    from datetime import timedelta
+    from .. import blog
+    fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
+    for iid in ids("market", region):
+        issue = _stored(iid)
+        if not issue or issue.get("weekly") or issue.get("day", "") < cutoff or not issue.get("indices"):
+            continue
+        indices, changed = blog.official_changes(region, date.fromisoformat(issue["day"]), issue["indices"])
+        if not changed:
+            continue
+        rotation = next((s["items"] for s in issue.get("sections") or [] if s.get("title") == "Sector rotation"), [])
+        f = {"kind": "market", "region": region, "day": issue["day"], "weekly": False, "indices": indices, "rotation": rotation}
+        issue.update(indices=indices, subject=write.subject(f), title=write.headline(f), summary=write.template(f), ai=False)
+        issue.pop("ai_summary", None)                 # the AI's words restated the old changes
         issue["sections"] = write.market_sections({**f, "rotation": []})[:1] + [s for s in issue.get("sections") or [] if s.get("title") != "Indices"]
         issue["html"], issue["text"] = write.render(issue)
         kind, scope, dkey = parse_id(iid)
@@ -778,6 +808,19 @@ class Job:
         db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
         print(f"newsletters: stamped {n} stored US briefs in New York time")
 
+    def official_once(self):
+        """Once per database: the stored India briefs' changes from the exchange's own index closes (see repair_official_changes)."""
+        flag = "newsfix:official-changes-1"
+        if db.get_setting(flag):
+            return
+        try:
+            n = repair_official_changes("IN")
+        except Exception as e:
+            print("newsletters official changes:", str(e)[:160])
+            return
+        db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
+        print(f"newsletters: index changes from the exchange's closes in {n} stored briefs")
+
     def _loop(self):
         booted = False
         while True:
@@ -789,6 +832,7 @@ class Job:
                     self.r7_once()
                     self.et_once()
                     self.facts_once()
+                    self.official_once()
                     booted = True
                 except Exception as e:
                     self.status["last_error"] = str(e)[:200]
@@ -929,12 +973,14 @@ class Job:
         check after a deploy that changed them (blog_research.GEN), and the brief posts are written again from their stored issues
         (blog.BRIEF_GEN): not at the next month's run, and not by hand. Remembered in memory once looked at, so a check with nothing
         to do reads nothing. Theme posts whose figures were worked out under older theme rules are worked out again from the theme's dive
-        (blog_research.refresh_theme_posts_if_due, lane upd1)."""
-        want = (blog.BRIEF_GEN, blog_research.GEN, tuple(blog_research.theme_stamp()))
+        (blog_research.refresh_theme_posts_if_due, lane upd1). Theme posts committed with a release are stored and published (blog2:
+        blog_research.seed_theme_posts)."""
+        want = (blog.BRIEF_GEN, blog_research.GEN, tuple(blog_research.theme_stamp()), blog_research.seed_mark())
         if self.last.get("blog-gen") == want:
             return
         try:
             blog_research.run_if_stale(now)
+            blog_research.seed_theme_posts(now)            # blog2: a theme post committed since the last run, without a GEN bump
             blog_research.refresh_theme_posts_if_due(now)
             if db.get_setting("blog:brief:gen") != str(blog.BRIEF_GEN):
                 issues = recent("market", "IN", INDEX_CAP) + recent("market", "US", INDEX_CAP)

@@ -112,22 +112,25 @@ def rows_of(text: str) -> list[dict]:
 
 
 def cash_rows(text: str) -> dict[str, dict]:
-    """The cash market's common bhavcopy: {symbol: {"close", "prev", "series"}} for the equity series (EQ, BE, BZ, SM,
-    ST). A file without that shape is an error."""
+    """The cash market's common bhavcopy: {symbol: {"close", "prev", "series", "open", "high", "low"}} for the equity series (EQ, BE, BZ, SM,
+    ST) and the units of REITs and InvITs (RR, IV), which trade like shares (LIVE9B-025: an InvIT's dividend row had no price or
+    yield). A file without that shape is an error."""
     out: dict[str, dict] = {}
     rows = rows_of(text)
     if rows and "TckrSymb" not in rows[0]:
         raise ValueError("not the cash bhavcopy")
     for r in rows:
         sym, series = r.get("TckrSymb", "").upper(), r.get("SctySrs", "").upper()
-        if not sym or series not in ("EQ", "BE", "BZ", "SM", "ST"):
+        if not sym or series not in ("EQ", "BE", "BZ", "SM", "ST", "RR", "IV"):
             continue
         close = num(r.get("ClsPric")) or num(r.get("LastPric"))
         if close is None or close <= 0:
             continue
         if sym in out and out[sym]["series"] == "EQ":
             continue                                    # a stock's main line wins over its other series
-        out[sym] = {"close": close, "prev": num(r.get("PrvsClsgPric")), "series": series}
+        # the session's high and low too, so a 52-week range moved to that close takes in the day's own extremes (LIVE11B-012)
+        out[sym] = {"close": close, "prev": num(r.get("PrvsClsgPric")), "series": series, "open": num(r.get("OpnPric")),
+                    "high": num(r.get("HghPric")), "low": num(r.get("LwPric"))}
     return out
 
 

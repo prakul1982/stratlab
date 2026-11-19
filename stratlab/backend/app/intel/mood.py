@@ -187,7 +187,9 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
            "pct200": num(lv.get("pct200")) if lv else v("pct200"),
            # the live count's own quarter-hour ("12:15", IST), so the page says which count it is (LIVE4-005: Mood's 111/388 "read 12:29"
            # beside Breadth's 123/376 "as of 12:30" were two different rounds with nothing saying so)
-           "at": (lv.get("at") or None) if lv else None}
+           "at": (lv.get("at") or None) if lv else None,
+           # LIVE13A-030: the count at the closing prices, said as such (the 15:30 round before it is "before the closing prices")
+           "at_close": bool(lv.get("close")) if lv else False}
     out["ratio"] = round(adv / dec, 2) if adv is not None and dec else None
     rows = []
 
@@ -196,9 +198,11 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
                      "change": round(now - before, 1 if unit == "%" else 0) if now is not None and before is not None else None})
     # live: each count against the last close's, the last close's figure in its own column
     before = v if lv else prev
-    row("adv", "Stocks that rose", adv, before("adv"), "count", "Stocks closing above the previous close.")
-    row("dec", "Stocks that fell", dec, before("dec"), "count", "Stocks closing below the previous close.")
-    row("unch", "Unchanged", unch, before("unch"), "count", "Stocks closing at the previous close.")
+    # LIVE12A-017: a live count is of stocks above the previous close so far, not closing above it
+    row("adv", "Stocks that rose", adv, before("adv"), "count", "Stocks above the previous close at the latest count." if lv else "Stocks closing above the previous close.")
+    row("dec", "Stocks that fell", dec, before("dec"), "count", "Stocks below the previous close at the latest count." if lv else "Stocks closing below the previous close.")
+    # LIVE13A-015: the unchanged row too ("Stocks closing at the previous close" under "Today, 14:00")
+    row("unch", "Unchanged", unch, before("unch"), "count", "Stocks at the previous close at the latest count." if lv else "Stocks closing at the previous close.")
     # LIVE5-003: the live rounds count today's new 52-week highs and lows too (a day's high past the last 251 sessions' highest), so
     # after the close the day's figure is in its own column, not "At the close" for the hours until the evening run
     hi_now, lo_now = (num(lv.get("hi")), num(lv.get("lo"))) if lv else (out["highs"], out["lows"])
@@ -311,6 +315,13 @@ def quote_rows(spec: list[tuple], got: dict[str, dict | None], today: str) -> li
 
 
 # ---------- the words ----------
+def same_session(breadth: dict | None, session: str | None) -> dict | None:
+    """The breadth count when it is of `session` (a live round, or the stored count of that day), else None (LIVE9A-002)."""
+    if not breadth:
+        return None
+    return breadth if breadth.get("live") or (session and breadth.get("day") == session) else None
+
+
 def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None, breadth: dict | None = None) -> str:
     """One short headline the figures below justify: the day's tone from the index moves, how big a day it is against the
     usual, and (when there is a count) how many sector indices went the same way. No level and no move is repeated.
@@ -356,6 +367,9 @@ def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None, bre
     return out + "."
 
 
+ZONE = {"IN": "IST", "US": "ET"}           # the clock a market's live counts are timed in
+
+
 def lines_of(p: dict) -> list[str]:
     """Three to five plain lines, each from one table of the payload, in this order of importance. No advice, no forecast."""
     out: list[tuple[str, str]] = []
@@ -367,7 +381,11 @@ def lines_of(p: dict) -> list[str]:
     b = p.get("breadth")
     if b and b.get("adv") is not None and b.get("dec") is not None:
         # after the close the live round is the day's final count: "on 6 Nov", never "so far today" (LIVE5-009)
-        when = ("so far today" if p.get("is_open", True) else f"on {day_words(b.get('day'))}" if b.get("day") else "") if b.get("live") \
+        # LIVE12A-012: in session the count says its own quarter-hour, so a card read at 09:36 with the 09:30 count is never taken for the
+        # table's later figures beside it ("118 … rose and 382 fell so far today" at 09:54 while Breadth showed 77/422 at 09:45)
+        at = f" (the {b['at']} {ZONE.get(p.get('region'), '')} count)".replace(" )", ")") if b.get("at") else ""
+        shut = " (the count at the closing prices)" if b.get("at_close") else f" (the {b['at']} {ZONE.get(p.get('region'), '')} count, before the closing prices)".replace(" ,", ",") if b.get("at") else ""
+        when = (f"so far today{at}" if p.get("is_open", True) else f"on {day_words(b.get('day'))}{shut}" if b.get("day") else "") if b.get("live") \
             else f"on {day_words(b.get('day'))}" if b.get("day") else ""
         tail = f"; {fpct(b['pct50'], 1, sign=False)} are above their 50-day average" if b.get("pct50") is not None else ""
         out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))
@@ -435,6 +453,95 @@ def verify(p: dict) -> list[str]:
     return problems
 
 
+# ---------- one closing read per session (LIVE11A-001/002) ----------
+# LIVE11A-001: at 04:35 IST, 13 h after the 17 Nov close, a visit re-read India's card while the broker's quotes were off for the night:
+# the re-read had no sector quotes, so the sector clause, its line and the whole 16-row Sectors table went, and the card kept changing with
+# each visit. A closed session's re-read now keeps every section an earlier read of the same session had (a newer figure replaces an
+# older one, a missing one never replaces a present one), and once the session's read is complete it is served as it is.
+CARRY = ("compare", "breadth", "sectors", "movers", "flows", "risk", "global", "calendar")
+
+
+def missing_parts(p: dict | None) -> list[str]:
+    """What a closed session's read still lacks before it is that session's final read: the sector table, the breadth count stored
+    for that very session (the evening's figures, not the live round: LIVE11A-002/015) and, for India, the institutions' flows of that
+    session. Empty when complete; ["open"] while the market trades."""
+    if not p:
+        return ["read"]
+    if p.get("is_open"):
+        return ["open"]
+    s = p.get("session")
+    out = [] if s else ["session"]
+    if not (p.get("sectors") or {}).get("rows"):
+        out.append("sectors")
+    b = p.get("breadth") or {}
+    if b.get("live") or not s or b.get("day") != s:
+        out.append(f"breadth of {s}" + (f" (has {b.get('day')})" if b.get("day") else ""))
+    if p.get("region") == "IN" and (p.get("flows") or {}).get("as_of") != s:
+        out.append(f"flows of {s}")
+    return out
+
+
+def is_final(p: dict | None) -> bool:
+    return not missing_parts(p)
+
+
+def carry_over(old: dict | None, new: dict) -> dict:
+    """`new` with every section `old` had and `new` lost (or holds an older day of), when both are closed reads of the same session;
+    the headline and lines are worked out again from the result. Otherwise `new` as it is."""
+    if not old or not new or old.get("is_open") or new.get("is_open") or not new.get("session") or old.get("session") != new.get("session"):
+        return new
+    out, kept = dict(new), []
+    for k in CARRY:
+        o, n = old.get(k), new.get(k)
+        if not o:
+            continue
+        older = (k == "breadth" and not o.get("live") and (o.get("day") or "") > ((n or {}).get("day") or "")) or \
+                (k == "flows" and (o.get("as_of") or "") > ((n or {}).get("as_of") or ""))
+        if not n or older:
+            out[k] = o
+            kept.append(k)
+    if not kept:
+        return new
+    if out.get("moves"):
+        out["headline"] = headline_of(out["moves"], out.get("sectors"), out.get("compare"), same_session(out.get("breadth"), out["session"]))
+        out["lines"] = lines_of(out)
+        if verify(out):
+            out["headline"], out["lines"] = old.get("headline") or "", list(old.get("lines") or [])
+    else:                                       # a read kept from before the index moves were stored: the earlier read's words
+        out["headline"], out["lines"] = old.get("headline") or new.get("headline") or "", list(old.get("lines") or new.get("lines") or [])
+    out["carried"] = kept
+    return out
+
+
+def tables_of(p: dict | None) -> str | None:
+    """LIVE11A-002: the session a read's tables are complete for: its index day once the breadth count is of that same session (the US
+    read at 16:47 ET on 17 Nov carried 16 Nov's "145 rose and 353 fell" under 17 Nov's index moves), else what it is still missing."""
+    s = (p or {}).get("session")
+    if not s:
+        return None
+    return s if same_session((p or {}).get("breadth"), s) else f"{s} without that session's breadth count"
+
+
+def newest_rows(p: dict, other: dict | None) -> dict:
+    """LIVE11A-015: a price both markets' cards show (the US 10-year yield, gold, the dollar) at its newest close on both: India's card
+    said "5.12% on 16 Nov" while the US card said "5.10% on 17 Nov". A row is replaced only by the same symbol of a newer day."""
+    if not p or not other:
+        return p
+    out = p
+    for blk in ("risk", "global"):
+        mine, theirs = (p.get(blk) or {}).get("rows"), {r.get("symbol"): r for r in ((other.get(blk) or {}).get("rows") or [])}
+        if not mine:
+            continue
+        rows = []
+        for r in mine:
+            t = theirs.get(r.get("symbol"))
+            newer = t and t.get("tag") != "vol" and t.get("day") and (t["day"] > (r.get("day") or ""))
+            rows.append({**t, "label": r.get("label"), "tag": r.get("tag"), "same_day": False} if newer else r)
+        if rows != mine:
+            out = {**out, blk: {**p[blk], "rows": rows}}
+    return out
+
+
 def session_of(levels: list[dict], name: str) -> str | None:
     """The session a market's index levels are of: the main index's own day, else the newest day among them."""
     lvl = next((i for i in levels if i.get("name") == name and i.get("day")), None)
@@ -453,6 +560,25 @@ def _closes_of(candles: list[dict], today: str) -> list[float]:
         if px and t and t < today:
             out.append(px)
     return out
+
+
+def coming_from(region: str, today: date, now: datetime | None = None) -> date:
+    """The first day "Coming up" lists: today, or tomorrow once today's session is over (LIVE8A-015: at 21:45 ET on
+    Friday 13 Nov the US page listed "13 Nov Results MUFG / SMFG", results already out)."""
+    from zoneinfo import ZoneInfo
+    from ..data.calendar import is_trading_day
+    from ..data.markets import BY_ID
+    from ..stock_pages import close_of
+    tz = (BY_ID.get(region) or {}).get("tz") or "UTC"
+    local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(tz))
+    if local.date() != today:
+        return today
+    try:
+        # a day with no session keeps its own results (Indian companies report on a Saturday too)
+        over = is_trading_day(region, today) and local.strftime("%H:%M") >= close_of(region, today)
+    except Exception:
+        over = False
+    return today + timedelta(days=1) if over else today
 
 
 class Mood:
@@ -497,10 +623,25 @@ class Mood:
             self.payloads.put(region, value, at)
             self._kept_at[region] = at
 
-    def _build_kept(self, region: str) -> dict:
-        value = self.build(region)
+    def _build_kept(self, region: str, force: bool = False) -> dict:
+        hit = self.payloads.kept(region)
+        value = carry_over(hit[1] if hit else None, self.build(region))      # LIVE11A-001: a re-read never drops a section
+        value["final"] = is_final(value)
+        if value["final"] and not (hit and (hit[1] or {}).get("final")):
+            force = True                          # the session's final read is kept at once: a restart serves it, never re-reads it
+        if force:
+            self._kept_at[region] = 0.0
         self._keep(region, value)
         return value
+
+    def refresh_now(self, region: str, timeout: float = 120.0) -> dict | None:
+        """LIVE9A-001: the payload read now (joining a read already running), kept in memory and written to the database at once
+        (not held back by KEEP_EVERY), for the clock after each close (mood_job); None when the read failed or took too long."""
+        f = self.payloads._start(region, lambda: self._build_kept(region, force=True))
+        try:
+            return f.result(timeout=timeout)
+        except Exception:
+            return None
 
     def forget(self):
         self.payloads = Snapshot(FRESH_OPEN, give_up=40)
@@ -668,8 +809,9 @@ class Mood:
             print("flows unavailable:", str(e)[:100])
             return None
 
-    def _calendar(self, region: str, today: date, caps: dict[str, float]) -> dict:
+    def _calendar(self, region: str, today: date, caps: dict[str, float], now: datetime | None = None) -> dict:
         out = {"results": [], "ipos": [], "events": []}
+        today = coming_from(region, today, now)       # after the day's close, "Coming up" starts tomorrow (LIVE8A-015)
         end = today + timedelta(days=6)
         try:
             from .. import results
@@ -730,7 +872,10 @@ class Mood:
             live = None
             if region in breadth_live.LIVE_REGIONS:
                 lv = breadth_live.settled(breadth_live.view(group, ready=self.hub._kite()), (vt.get("today") or {}).get("day"))
-                live = {**lv["latest"], "at": lv.get("as_of")} if lv and lv.get("state") in ("live", "final") and lv.get("latest") else None
+                # LIVE13A-030: whether the day's last count is the one at the closing prices (the round after the bell), not the 15:30
+                # round run in the closing minute: two figures were both "the 15:30 IST count" on 18 Nov (125/374, then 123/376)
+                live = {**lv["latest"], "at": lv.get("as_of"), "close": lv.get("state") == "final" and bool(lv.get("close"))} \
+                    if lv and lv.get("state") in ("live", "final") and lv.get("latest") else None
             b = breadth_block(vt.get("today"), live, vt["group"]["name"], today_s)
         except Exception as e:
             print("breadth unavailable:", region, str(e)[:100])
@@ -759,8 +904,12 @@ class Mood:
              "levels_at": max((i["at"] for i in levels if i.get("at")), default=None),
              "compare": cmp, "breadth": b, "sectors": sectors, "movers": movers, "flows": flows,
              "risk": {"rows": risk} if risk else None, "global": {"rows": glob} if glob else None,
-             "calendar": cal if any(cal.values()) else None}
-        p["headline"] = headline_of(levels, sectors, cmp, b)
+             "calendar": cal if any(cal.values()) else None,
+             # the index moves the headline is worked out from, so a later read of the session can word it again (LIVE11A-001)
+             "moves": [{"name": i["name"], "change_pct": i["change_pct"]} for i in levels if i.get("name") and num(i.get("change_pct")) is not None][:4]}
+        # LIVE9A-002: the headline sets the index moves against a breadth count of the same session only (at 14:23 ET on Mon 16 Nov: "all
+        # three indices down on the day, but 313 of 499 S&P 500 stocks rose", the count being Friday's); the dated line under it stays
+        p["headline"] = headline_of(levels, sectors, cmp, same_session(b, p["session"]))
         p["lines"] = lines_of(p)
         bad = verify(p)
         if bad:                           # a line the tables don't bear out is never shown (the tables still are)
@@ -777,6 +926,13 @@ class Mood:
         return session_of(levels or [], INDEX_SYMBOL[region][0])
 
     def get(self, region: str, wait: float = 20.0) -> tuple[dict | None, float | None]:
+        value, at = self._get(region, wait)
+        if value:
+            other = self.payloads.kept("US" if region == "IN" else "IN")
+            value = newest_rows(value, other[1] if other else None)
+        return value, at
+
+    def _get(self, region: str, wait: float = 20.0) -> tuple[dict | None, float | None]:
         from .company import market_open
         open_now = market_open(region)
         self.payloads.fresh_for = FRESH_OPEN if open_now else FRESH_SHUT
@@ -789,13 +945,20 @@ class Mood:
             # marked as being read again, and the fresh read starts behind it
             self.payloads._start(region, lambda: self._build_kept(region))
             return {**hit[1], "session": was, "is_open": open_now, "refreshing": True, "behind": now_day}, hit[0]
+        if hit and not open_now and is_final(hit[1]) and (not now_day or was == now_day):
+            # LIVE11A-001: the closed session's final read (its sectors, the evening's breadth count and, for India, the day's flows all
+            # in): served as it is until the next session, never read again on a visit
+            return {**hit[1], "final": True}, hit[0]
         if hit and bool((hit[1] or {}).get("is_open")) != open_now:
             # a copy from the other side of the open or the close (the first visit after a quiet spell got a market-hours copy
             # saying "live" at 17:13 IST): answered at once, never as live once the market has shut (its `is_open` is the market's
             # now) and marked as being read again; the page shows its read time with the small bar and asks again for the fresh
             # read, started here (LIVE6-015: India's Mood waited six seconds for it and showed "Reading the tape…" for 10.6 s)
             self.payloads._start(region, lambda: self._build_kept(region))
-            return {**hit[1], "is_open": open_now, "refreshing": True}, hit[0]
+            # LIVE10A-001: a market-hours copy served after the close says so ("Read 14:47 IST, during the session"): its lines'
+            # "so far today" are of that moment, never the closed session's figures
+            during = bool((hit[1] or {}).get("is_open")) and not open_now
+            return {**hit[1], "is_open": open_now, "refreshing": True, **({"during": True} if during else {})}, hit[0]
         return self.payloads.get(region, lambda: self._build_kept(region), wait)
 
 

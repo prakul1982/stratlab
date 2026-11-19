@@ -132,13 +132,14 @@ def test_a_new_theme_post_carries_the_versions_its_figures_were_made_under():
 
 def test_a_stored_post_from_older_rules_takes_the_new_figures_and_keeps_its_address_and_state(posts):
     slug = _store_post(posts, ROWS_OLD, [theme_base.RULES - 1, theme_data.DIVE_TEXT, sector_metrics.VERSION])
-    assert "Micron" in json.dumps(posts[slug]["body"]["blocks"][-3:])
+    # (updated on purpose, blog2: who is in each layer is a list of its companies under the layer's name, not a table of names)
+    assert "Micron" in json.dumps(posts[slug]["body"]["blocks"])
     assert BR.carry_to_stored(slug, _src(ROWS_NEW, BR.theme_stamp())) == "updated"
     got = posts[slug]
     assert got["published"] is True and got["body"]["src"]["stamp"] == BR.theme_stamp()
     assert [r["layer"] for r in got["body"]["src"]["rows"]] == ["Equipment", "Memory makers", "Designers"]
-    who = next(b for b in got["body"]["blocks"] if b.get("t") == "table" and b["head"] == ["Layer", "Companies"])
-    assert "Micron" not in json.dumps(who["rows"][0]) and "Micron" in json.dumps(who["rows"][1])
+    who = {b["title"]: json.dumps(b["blocks"]) for b in got["body"]["blocks"] if b.get("t") == "fold"}
+    assert "Micron" not in who["Equipment"] and "Micron" in who["Memory makers"]
 
 
 def test_a_stored_post_from_todays_rules_is_left_alone_and_one_the_new_figures_cant_stand_is_hidden(posts):

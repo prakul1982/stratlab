@@ -14,6 +14,7 @@ whether to apply, and nothing here forecasts a listing. An allotment or listing 
 the one SEBI's timetable gives (allotment the working day after the close, listing three working days after it), and is
 marked as expected."""
 import json
+import os
 import re
 import threading
 import time
@@ -23,7 +24,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from . import admin, alerts as alerts_mod, db, ipo_docs as D, job_status, leader, memguard, official_close
+from . import admin, alerts as alerts_mod, autofix, db, ipo_docs as D, job_status, leader, memguard, official_close
 from . import ai_providers as AI
 from .ai_providers import AIError
 from .auth import current_profile
@@ -66,7 +67,30 @@ def awaits(line: str) -> bool:
     return any(a in line for a in AWAITS)
 
 
+# e57 (owner, 15 Nov: a red herring prospectus filed three days before, no exchange list naming the issue yet, was a Check that the
+# self-healing re-ran and mailed about): an issuer files its red herring prospectus some days before the exchanges list its dates, so
+# within RHP_WAIT_DAYS of its filing such an issue is waiting for the exchange's dates: shown in Admin, the job's state stays ok, no re-run
+# and no mail. Only one still unlisted after the window is a Check (awaits), which the self-healing follows up as before.
+RHP_WAIT_DAYS_DEFAULT = 10
+WAITING = "waiting for the exchange's dates"
+
+
+def rhp_wait_days() -> int:
+    """The window, in days after its filing, that a red herring prospectus no exchange lists yet waits for the exchange's dates
+    (IPO_RHP_WAIT_DAYS, default RHP_WAIT_DAYS_DEFAULT; at least 1)."""
+    try:
+        return max(1, int(os.environ.get("IPO_RHP_WAIT_DAYS") or RHP_WAIT_DAYS_DEFAULT))
+    except ValueError:
+        return RHP_WAIT_DAYS_DEFAULT
+
+
+def waiting(line: str) -> bool:
+    """Whether a line of the check is an issue waiting for the exchange's dates within the window (not a failure, not a Check)."""
+    return WAITING in line
+
+
 TIMETABLE_DAYS = 14                   # days after SEBI's timetable listing day that its dates still show for an issue not confirmed listed
+LISTING_DAYS_EVERY = 10 * 60          # seconds between looks for recently listed issues still without their listing-day figures (LIVE12A-004)
 LISTINGS_EVERY = 30 * 60              # seconds between looks for closed issues' stocks in the broker's list, through the day (LIVE4-003)
 LISTING_CHECK_DAYS = 30               # days after its timetable listing day that a closed issue is looked for in the broker's list
 CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
@@ -172,6 +196,10 @@ def stage_of(row: dict, now: datetime | None = None) -> str:
     if row["market"] == "US":
         if row.get("priced"):
             return "listed" if row["priced"] <= now.astimezone(NY).date().isoformat() else "closed"
+        # LIVE9A-015: an offering whose expected pricing day has passed (a day's grace for the calendar to list it priced) and that has not
+        # priced is not "upcoming" (Rezera "Expected to price 12 Nov" on 16 Nov): it is back among the filed ones, with the day it missed
+        if row.get("expected") and row["expected"] < (now.astimezone(NY).date() - timedelta(days=1)).isoformat():
+            return "filed"
         return "upcoming" if row.get("expected") else "filed"
     local = now.astimezone(IST)
     today, hm = local.date().isoformat(), local.strftime("%H:%M")
@@ -212,11 +240,19 @@ def timeline(row: dict, now: datetime | None = None) -> dict:
     return out
 
 
+OVER_ALLOT = 0.15                     # the underwriters' option on a US offering: 15% more shares (LIVE9A-015)
+OPTION_BASIS = "including the underwriters' option of 15% more shares"
+
+
 def sizes(row: dict) -> dict:
     """The issue's size in rupees crore (or dollars): what the issue states, else the shares times the top of the band."""
     if row["market"] == "US":
         shares, price = row.get("shares"), row.get("price") or row.get("high")
         amount = row.get("amount") or (round(shares * price, 0) if shares and price else None)
+        # LIVE9A-015: the calendar's dollar value can include the underwriters' option to sell 15% more shares (825 m shares at $78 is
+        # $64.35 billion; it said $74 billion, 1.15 times that): said so, with the size without it
+        if row.get("amount") and shares and price and abs(row["amount"] / (shares * price) - (1 + OVER_ALLOT)) < 0.005:
+            return {"amount": amount, "basis": OPTION_BASIS, "base": round(shares * price, 0)}
         return {"amount": amount, "basis": "stated" if row.get("amount") else "shares at the offer price" if amount else None}
     stated = None
     top = row.get("price") or row.get("high")
@@ -269,6 +305,8 @@ def public(row: dict, now: datetime | None = None) -> dict:
             pass
     sz = sizes(row)
     out["size"], out["size_basis"] = sz["amount"], sz["basis"]
+    if sz.get("base"):
+        out["size_base"] = sz["base"]
     if sz.get("in_bids"):
         out["size_in_bids"] = sz["in_bids"]
     anchor = re.search(r"anchor[^0-9]{0,30}([\d,]{5,})\s+equity shares", str(row.get("issue_text") or ""), re.I)
@@ -415,7 +453,7 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
             row = {"id": india_id(r["symbol"], None), "market": "IN", "segment": r["segment"], "name": r["name"], "symbol": r["symbol"],
                    "series": r.get("series"), "open": r.get("open"), "close": r.get("close"), "low": r.get("low"), "high": r.get("high"),
                    "size_shares": r.get("size_shares"), "exchanges": ["NSE"], "currency": "INR", "nkey": S.name_key(r["name"]),
-                   "issue_status": r.get("issue_status"), "social": r.get("social")}
+                   "issue_status": r.get("issue_status"), "social": r.get("social"), **({"lot": r["lot"]} if r.get("lot") else {})}
             if kind == "past":
                 row.update(listing=r.get("listing"), price=r.get("price"))
                 if not r.get("listing"):
@@ -429,13 +467,15 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
             row["exchanges"] = sorted(set(row.get("exchanges", []) + ["BSE"]))
             row["bse_code"] = b["code"]
             row.setdefault("face_value", b.get("face_value"))
+            if b.get("lot") and not row.get("lot"):
+                row["lot"] = b["lot"]                    # BSE's list has the lot the NSE row lacks
             row["issue_status"] = row.get("issue_status") or b.get("issue_status")       # either exchange's note stands
             row["social"] = row.get("social") or b.get("social") or None
             continue
         put({"id": india_id(None, b["code"]), "market": "IN", "segment": b["segment"], "name": b["name"].title() if b["name"].isupper() else b["name"],
              "symbol": None, "bse_code": b["code"], "open": b.get("open"), "close": b.get("close"), "low": b.get("low"), "high": b.get("high"),
              "face_value": b.get("face_value"), "size_shares": b.get("size_shares"), "exchanges": ["BSE"], "currency": "INR", "nkey": key,
-             "issue_status": b.get("issue_status"), "social": b.get("social")})
+             "issue_status": b.get("issue_status"), "social": b.get("social"), **({"lot": b["lot"]} if b.get("lot") else {})})
     # BSE's table of how its listed issues have traded: the issue price and listing day for the BSE-only ones, and a cross-check
     perf = {S.name_key(p["name"]): p for p in bse_perf}
     for r in out.values():
@@ -768,11 +808,21 @@ def india_gaps(rows: list[dict], nse: dict, bse: list[dict], perf: list[dict], r
             elif stage_of(row, now) != "listed" and not row.get("issue_status") and not row.get("social"):
                 out.append(f"{p['name']} is listed on BSE ({p['listed']}); our row is not marked listed.")
     late = (today - timedelta(days=3)).isoformat()
+    # e57: one filed within the window waits for the exchange's dates (a line Admin shows, not a Check); past it, a Check as before
+    wait_days = rhp_wait_days()
+    fresh = (today - timedelta(days=wait_days)).isoformat()
     for e in red:
-        if e["kind"] in ("rhp", "prospectus") and since <= e["date"] <= late:
-            row = by_key.get(S.name_key(e["company"]))
-            if row is None or not row.get("open"):
-                out.append(f"{e['company']} filed a red herring prospectus with SEBI on {e['date']}; no exchange list names the issue and our row has no dates.")
+        if e["kind"] not in ("rhp", "prospectus") or not since <= e["date"] <= today.isoformat():
+            continue
+        row = by_key.get(S.name_key(e["company"]))
+        if row is not None and row.get("open"):
+            continue
+        if e["date"] > fresh:
+            age = (today - date.fromisoformat(e["date"])).days
+            out.append(f"{e['company']}: red herring prospectus filed with SEBI on {e['date']} ({age} day{'' if age == 1 else 's'} ago); {WAITING}, "
+                       f"no exchange list names the issue yet (a Check if still so {wait_days} days after its filing).")
+        elif e["date"] <= late:
+            out.append(f"{e['company']} filed a red herring prospectus with SEBI on {e['date']}; no exchange list names the issue and our row has no dates.")
     return list(dict.fromkeys(out))
 
 
@@ -805,10 +855,12 @@ def _backfill(r: dict, today: date, age: int) -> bool:
     return not r.get("detail_at") or r["detail_at"][:10] <= (today - timedelta(days=7)).isoformat()
 
 
-def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10, check: list | None = None) -> tuple[list[dict], list[str]]:
+def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10, check: list | None = None,
+               pages: dict | None = None) -> tuple[list[dict], list[str]]:
     """Read the US calendar (last two months, this and the next) and the SEC's filings for the offerings that have a date, then the
     final prospectuses the SEC took in over the last 30 days against the rows (see add_final_prospectuses). `check`, a list, is filled
-    with the IPOs that have a final prospectus and no row."""
+    with the IPOs that have a final prospectus and no row. `pages`, a dict, is filled with the company filing pages looked up ("read")
+    and those the SEC didn't answer ("failed"): a page that didn't answer is looked up again at the next run, not two days later."""
     now = now or _now()
     problems: list[str] = []
     old = load("US")["rows"]
@@ -821,6 +873,7 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
     rows = merge_us(old, cal, today)
     finals = _try(problems, "final prospectuses", lambda: edgar.final_prospectuses(today - timedelta(days=FINALS_DAYS), today), [])
     add_final_prospectuses(rows, finals, edgar, today, problems, check)
+    fill_exchanges(rows, edgar, problems)
     n = 0
     for r in rows:
         if n >= lookups:
@@ -831,7 +884,14 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
         if not (r.get("expected") or r.get("priced") or r.get("filed", "") >= (today - timedelta(days=45)).isoformat()):
             continue
         n += 1
+        before = len(problems)
         got = _try(problems, f"{MINOR_PREFIX}{r['name'][:30]}", lambda r=r: edgar.docs_for(r["name"], today))
+        if len(problems) > before:              # not answered: looked up again at the next run (the job's own retry), not marked read
+            if pages is not None:
+                pages.setdefault("failed", []).append(r["name"][:30])
+            continue
+        if pages is not None:
+            pages.setdefault("read", []).append(r["name"][:30])
         r["docs_checked"] = today.isoformat()
         if got and got.get("docs"):
             r["docs"] = [{"kind": d["form"], "form": d["form"], "label": d["form"], "url": d["url"], "link": d.get("link"), "date": d["date"], "source": "sec"}
@@ -844,6 +904,31 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
 FINALS_DAYS = 30                       # the SEC's final prospectuses are compared with the US rows over this many days
 FIRST_KEY = "ipo:us:first"             # {cik: 1 (its final prospectus was the company's first offering) or 0}: asked of the SEC once per company
 FIRST_LOOKUPS = 30                    # (the first run asks about every company in the month; after it, the day's new ones)
+
+
+EXCHANGE_LOOKUPS = 6                  # US rows without an exchange looked up in one run (their SEC filing list, kept three hours)
+SEC_EXCHANGE = {"nasdaq": "NASDAQ", "nyse": "NYSE", "nyse american": "NYSE American", "nyse arca": "NYSE Arca", "cboe": "Cboe"}
+
+
+def fill_exchanges(rows: list[dict], edgar, problems: list[str], limit: int = EXCHANGE_LOOKUPS) -> int:
+    """LIVE13A-022: a US row with no exchange (one found from its SEC prospectus, not the calendar: two recently listed rows had none beside
+    "NASDAQ Global" and "NYSE") takes the exchange the SEC's filing list names for the company. Returns how many rows it filled."""
+    filled, asked = 0, 0
+    for r in rows:
+        if asked >= limit:
+            break
+        if r.get("market") != "US" or r.get("exchange"):
+            continue
+        cik = r.get("cik") or (str(r.get("id") or "")[len("us-sec-"):] if str(r.get("id") or "").startswith("us-sec-") else None)
+        if not cik or not str(cik).isdigit():
+            continue
+        asked += 1
+        sub = _try(problems, f"SEC filings of {str(r.get('name') or '')[:30]}", lambda cik=cik: edgar.filings(cik))
+        names = [str(x).strip() for x in ((sub or {}).get("exchanges") or []) if str(x or "").strip()]
+        if names:
+            r["exchange"] = SEC_EXCHANGE.get(names[0].lower(), names[0])
+            filled += 1
+    return filled
 
 
 def add_final_prospectuses(rows: list[dict], finals: list[dict], edgar, today: date, problems: list[str], check: list | None = None) -> int:
@@ -956,7 +1041,60 @@ def _settle(row: dict, bars: list[dict], first: dict | None, now: datetime) -> t
     last = fix(bars[-1], True)
     if first is not None:
         first = last if first["t"] == bars[-1]["t"] else fix(first, False)
-    return bars[:-1] + [last], first
+    return bars[:-1] + [last] + later_closes(row, bars[-1]["t"][:10], now), first
+
+
+LATER_DAYS = 7                         # how far past the last candle the exchange's own closes are looked for
+
+
+def later_closes(row: dict, after: str, now: datetime, fetch_today: bool = True) -> list[dict]:
+    """The exchange's official closes of an NSE issue for the trading days after its last daily candle, as candles (LIVE8A-016: an SME
+    issue's candles ran two sessions behind, "₹304.35 · Close 11 Nov" where the exchange's 13 Nov close was ₹274.70; the cash
+    bhavcopy has the SME series too). Days whose file isn't stored yet are left out; nothing past today's settled close."""
+    from .data.calendar import is_trading_day
+    sym = row.get("symbol") or ""
+    if row.get("market") != "IN" or not sym or not after:
+        return []
+    try:
+        d = date.fromisoformat(after)
+    except ValueError:
+        return []
+    today = now.astimezone(IST).date()
+    out = []
+    for _ in range(LATER_DAYS):
+        d += timedelta(days=1)
+        if d > today:
+            break
+        if not is_trading_day("IN", d):
+            continue
+        if d == today:
+            try:
+                if now < official_close.out_at(d.isoformat(), "cash"):
+                    break                      # today's session isn't settled: no close yet
+            except ValueError:
+                break
+        c = _official(sym, d.isoformat(), now, fetch_today and d == today)
+        if c is None:
+            continue
+        out.append({"t": d.isoformat(), "o": c, "h": c, "l": c, "c": c, "v": None, "official": True})
+    return out
+
+
+US_FIRST_SESSION_DAYS = 4             # a US issue prices after a close and trades from the next session (a Friday pricing: the Monday)
+
+
+def first_session(row: dict, day: str, listed: str | None) -> bool:
+    """Whether a daily candle of `day` is the issue's first session: an Indian issue's listing day itself; a US issue's first session on
+    or within US_FIRST_SESSION_DAYS after the day it priced (LIVE12B-020: the calendar's date is the pricing, the stock trades from the
+    next session, so no US issue had a listing price)."""
+    if not day or not listed:
+        return False
+    if row.get("market") != "US":
+        return day == listed
+    try:
+        return 0 <= (date.fromisoformat(day[:10]) - date.fromisoformat(listed[:10])).days <= US_FIRST_SESSION_DAYS
+    except ValueError:
+        return False
 
 
 def performance(row: dict, yahoo, today: date | None = None, now: datetime | None = None) -> dict | None:
@@ -980,7 +1118,7 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
     # LIVE7A-020: an issue whose final price no list has given yet (a BSE SME issue shown with its band) still has its listing price and
     # closes, each without a change against an issue price it doesn't have (it showed "– · – · –" though its stock had traded two days)
     pct = (lambda v: round((v / issue - 1) * 100, 2)) if issue else (lambda v: None)      # noqa: E731
-    if first is None and opening is not None and opening["t"][:10] == listed and opening.get("o"):
+    if first is None and opening is not None and first_session(row, opening["t"][:10], listed) and opening.get("o"):
         # its listing day, the session still going on (LIVE6-010: Antala Industries traded from 11 Nov's open while the list kept it in a
         # fold of issues with no prices): the listing price is a fact from the open; the day's close and the latest wait for the close
         if not bars or bars[-1]["t"][:10] < opening["t"][:10]:
@@ -996,9 +1134,14 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
                     "change_pct": pct(lt) if lt else None, "listed": listed, "basis": "exchange"}
         return None
     last = bars[-1]
-    return {"issue_price": issue, "listing_price": first["o"], "listing_change_pct": pct(first["o"]), "day_close": first["c"],
-            "day_change_pct": pct(first["c"]), "latest": last["c"], "latest_date": last["t"][:10], "change_pct": pct(last["c"]),
-            "listed": first["t"][:10], "basis": "prices"}
+    # LIVE10A-016: the listing price is the listing day's own opening price; a first candle days after the listing (an SME issue whose early
+    # sessions the daily prices lack: VPFL "₹76.65", its 13 Nov close, for a 9 Nov listing that opened at ₹94.00) is no listing price
+    on_day = first_session(row, first["t"][:10], listed) and first.get("o") is not None
+    lp = first["o"] if on_day else None
+    return {"issue_price": issue, "listing_price": lp, "listing_change_pct": pct(lp) if lp else None,
+            "day_close": first["c"] if on_day else None, "day_change_pct": pct(first["c"]) if on_day else None,
+            "latest": last["c"], "latest_date": last["t"][:10], "change_pct": pct(last["c"]),
+            "listed": first["t"][:10] if on_day else listed, "basis": "prices"}
 
 
 US_CLOSE_SETTLED = (16, 15)            # New York time: after the 16:00 close and the closing print, a US daily candle is the day's close (LIVE1A-060)
@@ -1007,12 +1150,65 @@ PERF_DAYS = 75                         # issues listed within this many days hav
 PERF_RETRY_DAYS = 7                    # an older listed issue with no figures yet is tried again after this long
 
 
+LISTING_DAY_READS = 6                  # listing days' bhavcopies read at most per pass (the first pass after a deploy has a backlog)
+
+
+def listing_day_prices(row: dict, now: datetime, budget: list | None = None) -> dict | None:
+    """LIVE11A-006: an NSE issue's listing-day open and close from that day's cash bhavcopy, the exchange's own figures ({"day", "open",
+    "close"}), read once and kept on the row; None while the file can't be read (tried again the next day). The daily candles had no
+    listing-day session for some issues (VPFL showed its 13 Nov close, ₹76.65, as the price it listed at on 9 Nov)."""
+    if row.get("market") != "IN" or not row.get("symbol") or not row.get("listing"):
+        return None
+    got = row.get("listing_px")
+    if isinstance(got, dict) and got.get("day") == row["listing"] and got.get("open"):
+        return got
+    today = now.astimezone(IST).date()
+    try:
+        day = date.fromisoformat(row["listing"])
+        if day > today or (day == today and now < official_close.out_at(day.isoformat(), "cash")) or row.get("listing_px_tried") == today.isoformat():
+            return None
+    except ValueError:
+        return None
+    files_fn = official_close._src.get("files")
+    if not files_fn or (budget is not None and budget[0] <= 0):
+        return None
+    if budget is not None:
+        budget[0] -= 1
+    row["listing_px_tried"] = today.isoformat()
+    try:
+        from . import exchange_days
+        r = (exchange_days.cash_closes(files_fn(), day) or {}).get(str(row["symbol"]).upper())
+    except Exception as e:
+        print("ipo listing day prices:", row["symbol"], str(e)[:100])
+        return None
+    if not r or not r.get("open") or not r.get("close"):
+        return None
+    row["listing_px"] = {"day": day.isoformat(), "open": round(float(r["open"]), 2), "close": round(float(r["close"]), 2)}
+    return row["listing_px"]
+
+
+def with_listing_day(row: dict, perf: dict | None) -> dict | None:
+    """A performance with the listing-day figures the exchange gives (row["listing_px"]) laid in, or, without them, none from a stored
+    read whose first candle was not the listing day's (a read kept from before LIVE10A-016: its "listing price" was a later close)."""
+    px, listed = row.get("listing_px"), row.get("listing") if row.get("market") == "IN" else row.get("priced")
+    issue = (perf or {}).get("issue_price") or row.get("price") or (row.get("bse_perf") or {}).get("issue_price")
+    if isinstance(px, dict) and px.get("day") == listed and px.get("open"):
+        pct = (lambda v: round((v / issue - 1) * 100, 2)) if issue else (lambda v: None)      # noqa: E731
+        return {**(perf or {"latest": None, "latest_date": None, "change_pct": None, "basis": "exchange"}), "issue_price": issue,
+                "listing_price": px["open"], "listing_change_pct": pct(px["open"]), "day_close": px.get("close"),
+                "day_change_pct": pct(px["close"]) if px.get("close") else None, "listed": listed, "listing_basis": "exchange"}
+    if perf and perf.get("listing_price") is not None and perf.get("listed") and listed and not first_session(row, perf["listed"], listed):
+        return {**perf, "listing_price": None, "listing_change_pct": None, "day_close": None, "day_change_pct": None, "listed": listed}
+    return perf
+
+
 def attach_perf(rows: list[dict], now: datetime) -> int:
     """Store each recently listed issue's trading since its listing on its row (the lists show it without a price call each).
     An issue listed longer ago than PERF_DAYS, which the list still holds (KEEP_LISTED_DAYS is 120), is not read again at every read:
     its listing-day figures never change, so it is read once when it has none (the blog's IPO post counted 62 of 115 issues, the rest
     being those past the window), and again only after PERF_RETRY_DAYS if that read found nothing (RC4-003)."""
     n, today = 0, now.astimezone(IST).date() if rows and rows[0]["market"] == "IN" else now.astimezone(NY).date()
+    budget = [LISTING_DAY_READS]
     for r in rows:
         listed = r.get("listing") if r["market"] == "IN" else r.get("priced")
         if stage_of(r, now) != "listed" or not listed:
@@ -1022,15 +1218,69 @@ def attach_perf(rows: list[dict], now: datetime) -> int:
                 continue
             r["perf_tried"] = today.isoformat()
         got = performance(r, _wire["yahoo"](), today, now) if _wire["yahoo"] else None
+        if r["market"] == "IN" and listing_day_prices(r, now, budget):            # LIVE11A-006: the exchange's own listing-day open and close
+            got = with_listing_day(r, got or r.get("perf"))
         if got:
             r["perf"] = {**got, "at": now.isoformat(timespec="seconds")}
             n += 1
     return n
 
 
+def wants_listing_day(r: dict, now: datetime) -> bool:
+    """LIVE12A-004: a listed NSE issue of the last PERF_DAYS with no listing-day figures from its bhavcopy yet, not tried today."""
+    if r.get("market") != "IN" or not r.get("symbol") or not r.get("listing") or stage_of(r, now) != "listed":
+        return False
+    px, today = r.get("listing_px"), now.astimezone(IST).date()
+    if isinstance(px, dict) and px.get("day") == r["listing"] and px.get("open"):
+        return False
+    try:
+        age = (today - date.fromisoformat(r["listing"])).days
+    except ValueError:
+        return False
+    return 0 <= age <= PERF_DAYS and r.get("listing_px_tried") != today.isoformat()
+
+
+def backfill_listing_days(rows: list[dict], now: datetime, budget: int = LISTING_DAY_READS) -> int:
+    """LIVE12A-004: the listing-day open and close of every stored recently listed NSE issue that has none, from the listing day's
+    bhavcopy, between the list reads: the read that takes them (attach_perf) runs only after the close, so the issues listed before a
+    deploy showed "Listing price –" the next morning though the exchange's file of each listing day had the open (5 of 6 recent issues).
+    Returns how many rows took figures; the rows are changed in place (their tries too)."""
+    left, n = [budget], 0
+    for r in rows:
+        if left[0] <= 0:
+            break
+        if not wants_listing_day(r, now):
+            continue
+        if listing_day_prices(r, now, left):
+            r["perf"] = {**with_listing_day(r, r.get("perf")), "at": now.isoformat(timespec="seconds")}
+            n += 1
+    return n
+
+
+NEWEST_BACK = 10                       # days back the stored bhavcopies are looked through for an issue's newest official close
+
+
+def newest_official(row: dict, perf: dict, now: datetime) -> dict:
+    """LIVE11A-006: a performance from BSE's table of listed issues (no daily prices read) with the newest official close the stored cash
+    bhavcopies hold, dated: its "latest" was an undated, days-old figure (BCSSL "₹89.88" where the 17 Nov close was ₹83.41). Nothing is
+    read; a close far off the issue price (another listing under that symbol) is left out."""
+    today = now.astimezone(IST).date()
+    for back in range(NEWEST_BACK + 1):
+        d = (today - timedelta(days=back)).isoformat()
+        if d < str(row.get("listing") or ""):
+            break
+        c = _official(row["symbol"], d, now, False)
+        if c and 0.2 <= c / perf["issue_price"] <= 5:
+            return {**perf, "latest": c, "latest_date": d, "change_pct": round((c / perf["issue_price"] - 1) * 100, 2)}
+    return perf
+
+
 def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> dict | None:
     """A stored performance with the exchange's official closes put in where its bhavcopy is stored now (the figures kept at 20:10 may have
     been worked out before the file was out): the latest close and the listing day's, each against the issue price. Nothing is read."""
+    perf = with_listing_day(row, perf)
+    if perf and row.get("market") == "IN" and row.get("symbol") and perf.get("basis") == "exchange" and perf.get("issue_price"):
+        perf = newest_official(row, perf, now or _now())
     if not perf or row.get("market") != "IN" or not row.get("symbol") or perf.get("basis") != "prices" or not perf.get("issue_price"):
         return perf
     now, out = now or _now(), dict(perf)
@@ -1038,6 +1288,12 @@ def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> 
         c = _official(row["symbol"], out.get(day_key) or "", now, False)
         if c is not None and out.get(px_key) and official_close.same_basis(c, out[px_key]):
             out[px_key], out[pct_key] = c, round((c / out["issue_price"] - 1) * 100, 2)
+    # LIVE9A-007: a stored figure whose latest close is days old (SME issues read "₹304.35 · Close 11 Nov" on 16 Nov) takes the newest
+    # official close the stored bhavcopies hold for the trading days after it (the SME series are in the file)
+    for c in reversed(later_closes(row, out.get("latest_date") or "", now, fetch_today=False)):      # stored files only: nothing is read
+        if official_close.same_basis(c["c"], out.get("latest") or c["c"]):
+            out["latest"], out["latest_date"], out["change_pct"] = c["c"], c["t"], round((c["c"] / out["issue_price"] - 1) * 100, 2)
+            break
     return out
 
 
@@ -1321,6 +1577,7 @@ class Job:
         self._live_at = 0.0
         self._docs_at = 0.0
         self._listings_at = 0.0
+        self._listing_days_at = 0.0
         self.busy = threading.Lock()
 
     def start(self):
@@ -1377,6 +1634,9 @@ class Job:
             if not ran and self.listings_due(now):
                 if self.check_listings(now):
                     ran.append("listings")
+            if not ran and time.time() - self._listing_days_at >= LISTING_DAYS_EVERY:
+                if self.fill_listing_days(now):
+                    ran.append("listing-days")
             if self.live_due(now):
                 self.read_open(now)
                 ran.append("live")
@@ -1411,6 +1671,18 @@ class Job:
         if not ("08:15" <= local.strftime("%H:%M") <= "22:00") or time.time() - self._listings_at < LISTINGS_EVERY:
             return False
         return any(awaiting_listing(r, now) for r in load("IN")["rows"])
+
+    def fill_listing_days(self, now: datetime) -> int:
+        """backfill_listing_days over the stored Indian rows, kept again when any was tried (LIVE12A-004). Returns how many took figures."""
+        self._listing_days_at = time.time()
+        got = load("IN")
+        if not any(wants_listing_day(r, now) for r in got["rows"]):
+            return 0
+        rows = [dict(r) for r in got["rows"]]
+        n = backfill_listing_days(rows, now)
+        if rows != got["rows"]:                  # a row tried (or filled): kept, so a try is made once a day
+            save("IN", rows, got["checked"], as_of=got["as_of"])
+        return n
 
     def check_listings(self, now: datetime) -> int:
         """confirm_listings over the stored rows; the rows are kept again when one moved. Returns how many moved."""
@@ -1459,42 +1731,60 @@ class Job:
         """Read one market's sources and keep the rows; with `perf`, also how each recently listed issue has traded since."""
         today = now.astimezone(IST).date() if market == "IN" else now.astimezone(NY).date()
         missing: list[str] = []
+        pages: dict = {}
         if market == "IN":
             feed = _wire["feed"]()
             rows, problems = refresh_india(feed, _wire["sebi"](), today, now, sleep=self.sleep, check=missing)
         else:
-            rows, problems = refresh_us(_wire["calendar"](), _wire["edgar"](), today, now, check=missing)
+            rows, problems = refresh_us(_wire["calendar"](), _wire["edgar"](), today, now, check=missing, pages=pages)
         if perf:
             attach_perf(rows, now)
         if market == "IN":
             # the listed issues go into the two-year history too (ipo_history.py), so it stays current without reading anything again
             from . import ipo_history
             _try(problems, "the IPO history", lambda: ipo_history.absorb(rows, today, now))
+        # e57: the issues waiting for the exchange's dates last, so a gap or a Check is never pushed out of the kept lines by them
+        missing.sort(key=lambda x: waiting(x))
         load_ = load(market)
         # (the check compares with what the lists said this read; when they weren't read, nothing is compared)
         checked = {**load_["checked"], "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12]}
         if rows is not load_["rows"] or problems or missing:
             save(market, rows, checked, as_of=now.isoformat(timespec="seconds") if len(problems) < 4 else load_["as_of"])
         st = state()
-        st[market] = {**(st.get(market) or {}), "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12], "rows": len(rows)}
+        prev = st.get(market) or {}
+        st[market] = {**prev, "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12], "rows": len(rows)}
+        if market == "US":
+            # the company filing pages the SEC didn't answer: each runs in a row (autofix.streaks), and those worth a check (owner, 13 Nov:
+            # 2 pages that didn't answer once opened a check that cleared on the retry, every few hours): the same page failing two runs
+            # running, or a large share of the pages looked up failing in this run
+            failed, read_ = pages.get("failed") or [], pages.get("read") or []
+            counts = autofix.streaks(prev.get("pages_failing"), failed, read_)
+            keep = autofix.lasting(failed, counts, len(failed) + len(read_))
+            again = all(counts.get(k, 0) >= autofix.REPEAT_RUNS for k in keep)
+            st[market].update(pages_failing=counts, pages_note=(
+                (f"{len(keep)} company filing page{'s' if len(keep) != 1 else ''} the SEC didn't answer in {autofix.REPEAT_RUNS} runs in a row "
+                 if again else f"{len(failed)} of {len(failed) + len(read_)} company filing pages the SEC didn't answer in the last run ")
+                + f"({keep[0]}{' and more' if len(keep) > 1 else ''}); read again at the next run.") if keep else None)
         save_state(st)
         # Admin shows a gap the same day: what a list has that ours doesn't, from both markets' last reads, as the job's problems (IPO-002);
         # a line that waits on the issuer (AWAITS) is a Check, not a Problem
         lines = [(f"{'India' if m == 'IN' else 'US'}", x) for m in ("IN", "US") for x in (st.get(m) or {}).get("missing", [])[:6]]
-        gaps = [f"Missing ({where}): {x}" for where, x in lines if not awaits(x)]
+        gaps = [f"Missing ({where}): {x}" for where, x in lines if not awaits(x) and not waiting(x)]
         waits = [f"To check ({where}): {x}" for where, x in lines if awaits(x)]
+        # e57: a red herring prospectus filed within the window, no exchange list naming the issue yet: waiting, never a failure or a Check
+        pending = [f"Waiting ({where}): {x}" for where, x in lines if waiting(x)]
         # one company's filing page the SEC answered with a 500 is a Check with its own words, not a red feed (LIVE1C-002): a Problem is
         # the feed itself failing, and the same feed reads India's issues and bids besides
-        minor = [p for p in problems if p.startswith(MINOR_PREFIX)]
+        # ...and only a page that keeps failing (or many at once) is one: one that didn't answer in a single run is in the log, and the job
+        # looks it up again at its next run by itself
         major = [p for p in problems if not p.startswith(MINOR_PREFIX)]
+        minor = (st.get("US") or {}).get("pages_note")
         notes = ([f"{len(waits)} filing{'s' if len(waits) != 1 else ''} with the regulators {'has' if len(waits) == 1 else 'have'} no exchange "
-                  "listing yet; looked for again each day."] if waits else []) \
-            + ([f"{len(minor)} company filing page{'s' if len(minor) != 1 else ''} the SEC didn't answer just now ({minor[0][len(MINOR_PREFIX):].split(':')[0]}"
-                f"{' and more' if len(minor) > 1 else ''}); read again at the next run."] if minor else [])
+                  "listing yet; looked for again each day."] if waits else []) + ([minor] if minor else [])
         self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + waits + problems[:5])[:10],
                            last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
                                        if gaps else major[0][:200] if major else None),
-                           check=" ".join(notes) or None)
+                           check=" ".join(notes) or None, waiting=pending)
         return {"rows": len(rows), "problems": problems, "missing": missing}
 
     def read_open(self, now: datetime, final: bool = False) -> int:
@@ -1620,7 +1910,7 @@ def list_row(row: dict, now: datetime) -> dict:
     sub = row.get("sub") or {}
     perf = official_perf(row, row.get("perf"), now)
     keys = ("id", "market", "segment", "name", "symbol", "stage", "open", "close", "close_time", "allotment", "allotment_expected", "listing", "listing_expected",
-            "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status", "exchanges", "exchange",
+            "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_base", "size_parts", "issue_status", "exchanges", "exchange",
             "expected", "priced", "filed", "shares", "currency")
     out = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     out["docs"] = sorted({d["kind"] for d in doc_links(row) if d["kind"]})
@@ -1778,7 +2068,7 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
         perf = perf_for(row) or row.get("perf")
     perf = official_perf(row, perf, now)
     keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "close_time", "hours", "allotment", "allotment_expected",
-            "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status",
+            "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_base", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
             "shares", "amount", "currency", "industry", "credit", "credit_expected", "size_in_bids", "anchor_shares")
     ipo = {k: pub.get(k) for k in keys if pub.get(k) is not None}

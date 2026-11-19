@@ -16,8 +16,8 @@ import { BreadthAlertButton } from "../components/BreadthAlert";
 import { change as figChange, figure, liveRows, measureRows, partTone, type MeasureRow, type Part } from "../lib/breadthTable";
 import { Info } from "../components/ui";
 import {
-  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
-  type Column,
+  Badge, Card, CardHead, ChartFrame, ChipBar, CsvButton, DataTable, Delta, EmptyState, ErrorState, FoldCard, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
+  type Column, usePhone,
 } from "../components/kit";
 
 /* Market breadth: how many stocks in a group take part in the market's moves. Today's numbers for everyone; the
@@ -148,12 +148,12 @@ const LIVE_INFO = "Worked out every 15 minutes while the market is open, from li
   + "The numbers for the close, further down, are worked out after the market shuts and are not changed by these.";
 
 /** A measure's name with its (i) and a line on what it means, as the breadth tables write it. */
-function MeasureName({ r, help, extra }: { r: MeasureRow; help: Record<string, string>; extra?: ReactNode }) {
+function MeasureName({ r, help }: { r: MeasureRow; help: Record<string, string> }) {
   return (
     <>
-      <b>{r.label}</b>{r.info && help[r.info] && <Info label={`About ${r.label.toLowerCase()}`}>{help[r.info]}</Info>}
+      {/* LIVE9A-016: the (i) stays on the line of the label's last word (with the Markets panel docked it dropped onto a line of its own) */}
+      {r.info && help[r.info] ? (() => { const cut = r.label.lastIndexOf(" "); return <b>{cut > 0 ? `${r.label.slice(0, cut)} ` : ""}<span className="k-keep">{r.label.slice(cut + 1)}<Info label={`About ${r.label.toLowerCase()}`}>{help[r.info!]}</Info></span></b>; })() : <b>{r.label}</b>}
       <span className="k-sub-line">{r.means}</span>
-      {extra && <span className="k-sub-line k-alert-row">{extra}</span>}
     </>
   );
 }
@@ -166,7 +166,8 @@ const figCell = (p: Part, v: number | null) => <span className={partTone(p, v)}>
 /** The change of a row: its parts' changes with a ▲/▼ and a sign (never colour alone), green up and red down like every change pill (item 39). */
 function Changes({ parts }: { parts: Part[] }) {
   if (parts.every((p) => p.change == null)) return <>–</>;
-  return <Parts parts={parts} of={(p) => (p.change == null ? "–" : <Delta value={Number(p.change.toFixed(p.unit === "count" ? 0 : p.unit === "ratio" || p.unit === "level" ? 2 : 1))}>{figChange(p.change, p.unit)}</Delta>)} />;
+  // LIVE10A-024: a "down" part (fell, 52-week lows, down 4% or more) in the plain chip: its rise was green
+  return <Parts parts={parts} of={(p) => (p.change == null ? "–" : <Delta badRise={p.tone === "down"} value={Number(p.change.toFixed(p.unit === "count" ? 0 : p.unit === "ratio" || p.unit === "level" ? 2 : 1))}>{figChange(p.change, p.unit)}</Delta>)} />;
 }
 
 /** While the market is open: the counts so far today against the last close, as one table, with the line through the day under it. When
@@ -187,6 +188,7 @@ function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; gro
   const at = (i: number) => `${group.name}, ${s.times[i]}`;
   const final = live.state === "final";
   const rows = today ? liveRows(l, today, group.index_name, lastLevel, final) : [];
+  const liveLabel = final ? "Breadth on the day against the last close" : "Breadth so far today against the last close";
   const cols: Column<MeasureRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <MeasureName r={r} help={help} /> },
     // after the bell the column is the day's count, never "Now" (LIVE7A-015)
@@ -197,10 +199,13 @@ function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; gro
   return (
     <div className="k-page" data-testid="breadth-live">
       <Card label="Breadth today, live">
-        <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>} />
+        {/* LIVE12A-011: "Download CSV" beside the Live tag in the card's head, as on the last-close card, never alone on a row under it */}
+        <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span className="k-row" data-testid="breadth-live-tools">
+          <span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>
+          {rows.length > 0 && <CsvButton name="breadth today" label={liveLabel} columns={cols} rows={rows} />}</span>} />
         {live.late && <Notice tone="warn" role="status">The newest live point is {live.age_minutes} minutes old. A point is added every {live.every_minutes} minutes while the market is open; the next one comes when live prices are read again.</Notice>}
         {rows.length > 0
-          ? <DataTable csv="breadth today" stack label={final ? "Breadth on the day against the last close" : "Breadth so far today against the last close"} columns={cols} rows={rows} rowKey={(r) => r.key} />
+          ? <DataTable stack label={liveLabel} columns={cols} rows={rows} rowKey={(r) => r.key} />
           : <StatRow>
               <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against the previous close`} />
               <Stat label="Above 20-day average" value={share(l.pct20)} />
@@ -240,7 +245,7 @@ function Headline({ t, h, group, help, live, pending, revised, locked }: { t: To
   const rows = measureRows(t, h);
   const cols: Column<MeasureRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true,
-      cell: (r) => <MeasureName r={r} help={help} extra={r.key === "p50" && !locked ? <BreadthAlertButton group={group} /> : undefined} /> },
+      cell: (r) => <MeasureName r={r} help={help} /> },
     { key: "now", header: shortDay(t.day), numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.now)} /> },
     { key: "prev", header: t.prev_day ? shortDay(t.prev_day) : "Day before", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.before)} /> },
     { key: "chg", header: "Change", numeric: true, cell: (r) => <Changes parts={r.parts} /> },
@@ -249,8 +254,12 @@ function Headline({ t, h, group, help, live, pending, revised, locked }: { t: To
   ];
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
-      <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} />
-      <DataTable csv={`breadth ${t.day}`} stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
+      {/* LIVE9A-016: the alert on the share above the 50-day average sits in the card's head, not inside one row (it made that row taller) */}
+      {/* LIVE11A-018/024: "Download CSV" beside "Alert me" in the card's head, never alone on a row of its own under it */}
+      <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} actions={<span className="k-row" data-testid="breadth-today-tools">
+        {!locked && <BreadthAlertButton group={group} />}
+        {rows.length > 0 && <CsvButton name={`breadth ${t.day}`} label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} />}</span>} />
+      <DataTable stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
       <p className="k-note" data-testid="breadth-counted">{count(t.stocks.value)} stocks counted · {count(t.unch.value)} unchanged.</p>
       {/* DE-023: the correction is one short line with its details behind the (i), not a paragraph in the headline card */}
       {changed.length > 0 && <p className="k-note" data-testid="breadth-revised">{changed.length === 1 ? "An earlier day's count was revised" : `${changed.length} earlier counts were revised`}
@@ -285,6 +294,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
   // one spike (TRIN near 10) flattened every other day: the rare days above the cap are drawn at the top edge (DE-022)
   const trinCap = spikeCap(h.trin);
   const trinOver = trinCap == null ? 0 : h.trin.filter((v) => v != null && v > trinCap).length;
+  const phone = usePhone();
   return (
     <div data-testid="breadth-charts" className="k-page">
       <div className="k-cols">
@@ -293,7 +303,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <LineChart lines={[{ values: h.ad_line, color: A, label: "A/D line", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             format={fmtInt} ariaLabel={`Advance/decline line, ${labels[0]} to ${last}`} />
         </Box>
-        <Box title="Above the 50- and 200-day averages" info={help.ma} h={h} cols={[{ header: "Above 50-day", get: (i) => share(h.pct50[i]) }, { header: "Above 200-day", get: (i) => share(h.pct200[i]) }]} note={`Last ${last}`}>
+        <Box title="Share above averages" info={help.ma} h={h} cols={[{ header: "Above 50-day", get: (i) => share(h.pct50[i]) }, { header: "Above 200-day", get: (i) => share(h.pct200[i]) }]} note={`Last ${last}`}>
           <LineChart lines={[{ values: h.pct50, color: A, label: "Above 50-day", width: 2 }, { values: h.pct200, color: B, label: "Above 200-day", width: 2 }]} legend
             labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200} format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks above their 50- and 200-day averages" />
         </Box>
@@ -306,6 +316,11 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} upLabel="new highs" downLabel="new lows" upName="New highs" downName="New lows" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="New 52-week highs (up) and lows (down) each day" />
         </Box>
+      </div>
+      {/* LIVE10A-027: on a phone the page ran to 17,313 px; the measures after the first four, the sectors and the last 20 days are each
+          one row under a clear heading there, opened with a tap (the same charts and tables, nothing left out) */}
+      <PhoneFold phone={phone} title="More breadth measures" meta="6 charts" testId="breadth-more">
+      <div className="k-cols">
         <Box title="McClellan oscillator" info={help.mcclellan} h={h} cols={[{ header: "Oscillator", get: (i) => fmt1(h.mcclellan[i]) }]} note={`Last ${last}`}>
           <LineChart lines={[{ values: h.mcclellan, color: A, label: "Oscillator", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan oscillator" />
@@ -336,18 +351,31 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
             ariaLabel="TRIN each day, with a line at 1" />
         </Box>
       </div>
-      {data.sectors && data.sectors.rows.length > 0 && (
-        <Card>
-          <CardHead title="Sectors: share above the 50-day average" info={help.sectors} />
+      </PhoneFold>
+      {data.sectors && data.sectors.rows.length > 0 && (phone
+        ? <FoldCard title={SECTORS_FOLD} info={help.sectors} meta={`${data.sectors.rows.length} sectors`} testId="breadth-sectors-fold"><SectorHeat t={data.sectors} /></FoldCard>
+        : <Card>
+          <CardHead title={SECTORS_TITLE} info={help.sectors} />
           <SectorHeat t={data.sectors} />
-        </Card>
-      )}
-      <Card>
-        <CardHead title="The last 20 trading days" info="The counts behind the charts, newest first." />
-        <Recent h={h} />
-      </Card>
+        </Card>)}
+      {phone
+        ? <FoldCard title={RECENT_TITLE} info={RECENT_INFO} meta={`${Math.min(20, h.days.length)} days`} testId="breadth-recent-fold"><Recent h={h} /></FoldCard>
+        : <Card>
+          <CardHead title={RECENT_TITLE} info={RECENT_INFO} />
+          <Recent h={h} />
+        </Card>}
     </div>
   );
+}
+
+const SECTORS_TITLE = "Sectors: share above the 50-day average";
+const SECTORS_FOLD = "Sectors above the 50-day average";       // a phone's fold title is one line (it doesn't wrap: ui-lint R10/R26 at 390)
+const RECENT_TITLE = "The last 20 trading days";
+const RECENT_INFO = "The counts behind the charts, newest first.";
+
+/** On a phone, `children` under one tap-to-open row; elsewhere as they are. */
+function PhoneFold({ phone, title, meta, testId, children }: { phone: boolean; title: string; meta: ReactNode; testId: string; children: ReactNode }) {
+  return phone ? <FoldCard title={title} meta={meta} testId={testId}>{children}</FoldCard> : <>{children}</>;
 }
 
 function SectorHeat({ t }: { t: SectorTable }) {

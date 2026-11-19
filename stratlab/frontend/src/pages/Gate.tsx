@@ -7,12 +7,14 @@ import { Google } from "../components/Icons";
 import { PublicFrame } from "../components/PublicFrame";
 import { publicGet, type ApiError } from "../lib/http";
 import { describePath } from "../lib/deepLinks";
-import { signIn, signInEnded, signInUnfinished } from "../lib/signin";
+import { emailSignInOn, signIn, signInEnded, signInUnfinished } from "../lib/signin";
 import { UNFINISHED_SIGNIN } from "../lib/signinError";
 import { hasSavedSession } from "../lib/entry";
 import { LoadFailed } from "../components/LoadGuard";
 import { useDocTitle, withBrand } from "../lib/title";
 import { InstallSteps, onPhone } from "../components/InstallSteps";
+import { EmailSignIn } from "../components/EmailSignIn";
+import { SignInFrame } from "../components/SiteFrame";
 
 /* The pages between a visitor and what they asked for: signed out on an app address ("Sign in to see …") and an address
  * nothing is at ("Page not found"). Each says what happened and offers the way on; none moves anyone somewhere else
@@ -55,7 +57,7 @@ export function SignInGate() {
   const title = none ? `No company page for ${symbol}` : ended ? "You were signed out" : unfinished ? "That sign-in didn't finish" : d.restricted ? "Sign in to StratLab" : `Sign in to see ${what}`;
   useEffect(() => {
     if (none) document.title = withBrand("Company not found");
-    else if (co) document.title = withBrand(`Sign in · ${co.name}`);
+    else if (co) document.title = withBrand(`Sign in: ${co.name}`);
   }, [none, co]);
   // a saved sign-in, or settings that never loaded: signed out isn't known, so no sign-in prompt (R20-002)
   const unsure = !window.STRATLAB_CONFIG || hasSavedSession(window.STRATLAB_CONFIG.SUPABASE_URL, (() => { try { return localStorage; } catch { return null; } })());
@@ -74,19 +76,24 @@ export function SignInGate() {
       </div>
     </PublicFrame>
   );
+  // LIVE11B-002: the words name both ways in while email sign-in is on, and Google alone only while it is the only way
+  const email = emailSignInOn();
+  const how = email ? "sign in with Google or your email" : "sign in with Google";
   return (
-    <PublicFrame className="gate">
-      <PageHeader eyebrow="StratLab" title={title}
-        lede={none ? "StratLab has no company page at this address. Check the symbol, or sign in with Google to search every listed company."
+    <SignInFrame>
+      <span className="eyebrow">StratLab</span>
+      <h1 className="serif lp-h1 lp-own-h1">{title}</h1>
+      <p className="serif lp-lede">{none ? `StratLab has no company page at this address. Check the symbol, or ${how} to search every listed company.`
           : unfinished ? `${UNFINISHED_SIGNIN} This page opens once you're in.`
-          : ended ? `Your sign-in ended, so StratLab can't show ${what} until you sign in again. Sign in with Google and this page opens where you left it. What you saved is still in your account.`
-          : d.company ? "Company pages, with their numbers, filings, owners and charts, are inside StratLab. It's free to start: sign in with Google and the page opens if StratLab has one for this company."
-          : d.restricted ? "Sign in with Google to continue. It's free to start."
-          : `${what.charAt(0).toUpperCase()}${what.slice(1)} ${/s$/.test(what) && !/^this /.test(what) ? "are" : "is"} in your StratLab account. Sign in with Google and this page opens.`} />
-      <div className="gate-actions">
+          : ended ? `Your sign-in ended, so StratLab can't show ${what} until you sign in again. Sign in and this page opens where you left it. What you saved is still in your account.`
+          : d.company ? `Company pages, with their numbers, filings, owners and charts, are inside StratLab. It's free to start: ${how} and the page opens if StratLab has one for this company.`
+          : d.restricted ? `${how.charAt(0).toUpperCase()}${how.slice(1)} to continue. It's free to start.`
+          : `${what.charAt(0).toUpperCase()}${what.slice(1)} ${/s$/.test(what) && !/^this /.test(what) ? "are" : "is"} in your StratLab account. Sign in and this page opens.`}</p>
+      <div className="row wrap g12">
         <SignInButton />
-        <Link className="btn quiet" to="/">What is StratLab?</Link>
       </div>
+      {/* sign-in by email under Google's, the same form as /login's, while /config.js switches it on (owner, 16 Nov) */}
+      <EmailSignIn />
       {co && (
         <Card label="Public page">
           <CardHead title={`${co.name} without signing in`} level={2} />
@@ -94,8 +101,9 @@ export function SignInGate() {
           <a className="link" href={co.page}>Open the public page for {co.name}</a>
         </Card>
       )}
-      <p className="k-small k-muted">Signing in only reads your name and email from Google. No card needed.</p>
-    </PublicFrame>
+      {/* LIVE12B-004: the same consent line as /login's: this block makes an account the same way */}
+      <p className="small muted">Google sign-in reads only your name and email address{email ? "; email sign-in reads only your email address" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>. No card needed. <Link className="link" to="/">What is StratLab?</Link></p>
+    </SignInFrame>
   );
 }
 
@@ -122,9 +130,9 @@ export function NotFound({ signedIn }: { signedIn: boolean }) {
         </>
       ) : (
         <>
+          {/* no sign-in button on a page that isn't there: the way home, then the places to go (LIVE8A-013) */}
           <div className="gate-actions">
             <Link className="btn" to="/">Go to the StratLab home page</Link>
-            <button type="button" className="btn quiet" onClick={() => void signIn(null)}>Continue with Google</button>
           </div>
           <nav className="gate-links" aria-label="Places to go">
             <LinkCard to="/pricing" title="Plans">What Free, Basic and Pro include and cost.</LinkCard>

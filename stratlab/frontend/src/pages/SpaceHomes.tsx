@@ -25,10 +25,13 @@ import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
-import { resultDay, type ResultRow } from "./Research";
+// (from the small rows module, not the Research page: LIVE13B-004, the homes' file downloaded every Research page for this one line)
+import { resultDay } from "../lib/resultDay";
+import type { ResultRow } from "./ResultsPage";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
+import { nextExpiry } from "../lib/expiry";
 import { PLAN_NAME, planOf } from "../lib/plans";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
@@ -105,13 +108,14 @@ export function TradeHome() {
     { ...TRADE_TOP[1], testId: "paper-summary",
       status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? ["None running", ...notRunning(rows)].join(" · ") : "" },
     { ...TRADE_TOP[2],
-      // the journal and the tax report are two uploads of different trades: F&O lines kept in the tax report as totals are not round trips here (R10O carry-over of R7M-013)
-      ...(journal !== null && journal !== "none" && journal.count ? { line: "Your real trades as round trips, after charges. F&O lines in your tax report are kept there as totals, not counted here." } : {}),
-      // the figure named: the trades' total after charges, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3")
+      // the figure named: the trades' total, after charges as the card's line says, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3").
+      // Short, as the other cards' feet are: on a phone the strip's cards are one height, and the journal's four-line caveat about the tax
+      // report's F&O totals (said on the journal page itself) and a three-line status stretched every card ~150 px past its text (LIVE9B-011)
       status: journal === null ? null : journal !== "none" && journal.count
         // the amount's minus stays with its number on a narrow card (R57-003)
         // one span: the footer is a flex box, and loose pieces wrapped as "net / after / charge / s" (R58-003)
-        ? <span>{plural(journal.count, "closed trade")} · <span className="nowrap">{money(journal.net, "INR")}</span> net after charges</span> : "",
+        // two pieces that each stay whole, the comma with the first: no "·" left dangling at a line's end on a narrow card (LIVE9B-011)
+        ? <span><span className="nowrap">{plural(journal.count, "closed trade")},</span> <span className="nowrap">{money(journal.net, "INR")} net</span></span> : "",
       // a net loss isn't shown with the green "live" dot
       plain: journal !== null && journal !== "none" && journal.net < 0 },
     { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },
@@ -141,26 +145,38 @@ type VixBrief = { value: number | null; value_day?: string | null; quote?: VixQu
  * shows its own day; one that can't be read says so and the others stay. */
 function MarketStrip() {
   const [b, setB] = useState<Brief | null | "none">(null);
-  const [vix, setVix] = useState<VixBrief | null | "none" | "slow">(null);
+  const [vix, setVix] = useState<VixBrief | null | "none" | "slow" | "reading">(null);
   useEffect(() => { api<Brief>("/trade/positioning?brief=true&pcr=false").then(setB).catch(() => setB("none")); }, []);
-  useEffect(() => { api<VixBrief>("/trade/vix").then(setVix).catch(() => setVix("none")); }, []);
-  // the one read that goes to a live feed can be slower than its three neighbours: after a few seconds the tile says so instead of a grey bar that
-  // never ends, and takes the figure when it comes (LIVE1C-070)
-  useEffect(() => { const t = window.setTimeout(() => setVix((v) => (v === null ? "slow" : v)), 6000); return () => window.clearTimeout(t); }, []);
+  // LIVE13B-012: the tile's own short read (the value, its change and day), not the whole panel's (its minute line, a year of closes and NIFTY's
+  // IV), which kept it a grey bar for seconds after its neighbours had their values
+  useEffect(() => { api<VixBrief>("/trade/vix?brief=true").then(setVix).catch(() => setVix("none")); }, []);
+  // the one read that goes to a live feed can be slower than its three neighbours: it says it is reading, then after a few seconds that it is
+  // taking longer, instead of a grey bar that never ends, and takes the figure when it comes (LIVE1C-070)
+  useEffect(() => {
+    const a = window.setTimeout(() => setVix((v) => (v === null ? "reading" : v)), 2500);
+    const t = window.setTimeout(() => setVix((v) => (v === null || v === "reading" ? "slow" : v)), 6000);
+    return () => { window.clearTimeout(a); window.clearTimeout(t); };
+  }, []);
   // India VIX is the one live figure here (the rest are the exchange's daily files): read again each minute while India trades,
   // the tile keeping its last value when a read fails (LIVE-1)
-  useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix").then(setVix).catch(() => undefined); }, vix !== null && vix !== "none" && vix !== "slow");
+  const vixIn = vix !== null && vix !== "none" && vix !== "slow" && vix !== "reading";
+  useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix?brief=true").then(setVix).catch(() => undefined); }, vixIn);
   const ev = useEvents();
   const today = istToday();
-  const expiry = ev?.events.find((e) => e.kind === "expiry" && e.date >= today && !e.title.startsWith("SENSEX"));
+  const expiry = nextExpiry(ev?.events, today);
   const fii = b && b !== "none" ? b.cash?.fii?.net ?? null : null;
   const ban = b && b !== "none" ? b.fo_ban ?? [] : null;
   const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
-  const tiles: { to: string; k: string; v: ReactNode; note: string; id: string }[] = [
-    { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix === "slow" || vix.value == null ? "–" : vix.value.toFixed(2),
+  // LIVE9B-014: the VIX tile as its FII neighbour: the change with ▲/▼ in the up/down colour and the day it is of, not a plain grey "+0.18 (+1.16%)"
+  const vq = vixIn ? vix.quote ?? null : null;
+  const vixDay = vq?.as_of ? fmtDate(vq.as_of, { year: false, tz: "Asia/Kolkata" }) : null;
+  const vixNote = vq && vq.change != null
+    ? <><span className={signCls(vq.change)}>{vq.change > 0 ? "▲ " : vq.change < 0 ? "▼ " : ""}{vixChange(vq)}</span>{vixDay ? <><span className="vix-sep"> · </span><span className="nowrap vix-day">{vixDay}</span></> : ""}</> : null;   // the day never splits over two lines (LIVE10B-047: "17 / Nov"); on a phone it has a line of its own, no "·" left at a line's end (LIVE11B-014)
+  const tiles: { to: string; k: string; v: ReactNode; note: ReactNode; id: string }[] = [
+    { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null || vix === "reading" ? null : !vixIn || vix.value == null ? "–" : vix.value.toFixed(2),
       // a live quote comes with no day (the value is now's): its change stands in the line, so the tile is as tall as its three neighbours (VR2-013)
-      note: vix && vix !== "none" && vix !== "slow" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vix === "slow" ? "taking longer than usual"
-        : vixChange(vix ? vix.quote ?? null : null) ?? "" },
+      note: vixIn && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vix === "slow" ? "taking longer than usual"
+        : vix === "reading" ? "reading…" : vixNote ?? "" },
     { id: "fii", to: "/trade/positioning#pos-cash", k: "FII/FPI cash, net", v: b === null ? null : fii == null ? "–" : <span className={signCls(fii)}>{crore(fii)}</span>,
       note: b && b !== "none" && b.cash?.as_of ? fmtDate(b.cash.as_of, { year: false }) : b === "none" ? "couldn't be read" : "" },
     { id: "expiry", to: "/trade/events", k: "Next F&O expiry", v: ev === null ? null : expiry ? fmtDate(expiry.date, { weekday: true, year: false }) : "–",
@@ -181,13 +197,21 @@ function MarketStrip() {
   );
 }
 
+const HAD_KEY = "stratlab.notebooks.had";
+
 /** Trade's next step: for a new account, how a test goes and the button to start one; after that, the latest
  * notebooks to pick up again. */
 function NextIdea({ count = 3, hideStart = false }: { count?: number; hideStart?: boolean }) {
-  const { notebooks } = useApp();
-  if (notebooks === null) return <Card className="space-next"><PanelSkel lines={3} label="Opening your notebooks" /></Card>;
-  if (!notebooks.length && hideStart) return null;
-  if (!notebooks.length) return (
+  const { notebooks, me, session } = useApp();
+  // LIVE12B-012: whether this person had any notebook last time on this device, so a new account isn't shown a 250 px "Opening your
+  // notebooks" card that then goes (the start card is the same words for everyone, and with the first steps showing there is none)
+  const key = `${HAD_KEY}.${session?.user?.id ?? me?.id ?? "guest"}`;
+  const [had] = useState(() => { try { return localStorage.getItem(key); } catch { return null; } });
+  useEffect(() => { if (notebooks) try { localStorage.setItem(key, notebooks.length ? "1" : "0"); } catch { /* storage blocked */ } }, [notebooks, key]);
+  const none = notebooks ? !notebooks.length : had === "0";
+  if (notebooks === null && !none) return <Card className="space-next"><PanelSkel lines={3} label="Opening your notebooks" /></Card>;
+  if (none && hideStart) return null;
+  if (none || !notebooks) return (
     <Card className="space-next" label="Start here">
       <CardHead title="Start here: your first notebook" actions={<Link to="/new" className="btn">Test your first idea</Link>} />
       <ol className="how" aria-label="How a test goes">

@@ -73,8 +73,9 @@ def test_key_figures_are_tiles_with_a_short_label_a_value_and_a_unit_line():
 def test_the_minority_interest_case_keeps_both_profits_each_named_in_a_short_label():
     t = _page(profit_ttm=88167.0)
     got = {label: (value, line) for _, label, value, line in re.findall(r'<div class="stat[^"]*" title="([^"]*)"><span>([^<]*)</span><b>([^<]*)</b><small>([^<]*)</small></div>', t)}
-    assert got["Profit, last 12 months"] == ("₹53,870 cr", "to shareholders") and got["Profit incl. minorities"] == ("₹88,167 cr", "last 12 months")
-    assert got["Profit, last 12 months"][0].startswith("₹") and got["Profit, last 12 months"][0].endswith(" cr")
+    # (updated on purpose, fix12/CX2: market cap over a one-decimal P/E is said to three figures, "about")
+    assert got["Profit, last 12 months"] == ("about ₹53,900 cr", "to shareholders") and got["Profit incl. minorities"] == ("₹88,167 cr", "last 12 months")
+    assert got["Profit, last 12 months"][0].startswith("about ₹") and got["Profit, last 12 months"][0].endswith(" cr")
     assert re.search(r'title="Net profit incl\. minority interests, last 12 months \(₹ crore\)"', t)        # the full wording is the tile's title
 
 

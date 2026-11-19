@@ -90,7 +90,8 @@ test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV, the deck
   const d = read("src/components/ThemeDive.tsx");
   assert.match(d, /themeApi\.deck\(region, theme, format\)/);
   // R21: the file comes through deckWhenReady (the server answers "preparing" while the theme's AI map is written)
-  assert.match(d, /download\(blob, deckFileName\(`\$\{theme\} theme \(\$\{REGION_NAME\[region\]\}\)`, format\)\)/);
+  // r60b (LIVE9A-005, updated on purpose): a US theme's file is named by New York's day
+  assert.match(d, /download\(blob, deckFileName\(`\$\{theme\} theme \(\$\{REGION_NAME\[region\]\}\)`, format, new Date\(\), region === "US" \? "America\/New_York" : undefined\)\)/);
   assert.match(d, />\{making === "pdf" \? "Making the PDF…" : "Slides \(PDF\)"\}</);
   assert.match(d, />\{making === "pptx" \? "Making the deck…" : "Slides \(PowerPoint\)"\}</);
   assert.match(read("src/pages/ThemesPage.tsx"), /<ThemeDownloads r=\{r\} dive=\{dive\} region=\{region\} theme=\{q\} \/>/);
@@ -106,7 +107,7 @@ test("the audit as a class: every page whose main content is a table offers its 
     "src/pages/FlowsPage.tsx": 1, "src/pages/HoldersPage.tsx": 2, "src/pages/BizUpdatesPage.tsx": 1, "src/pages/MarginFundingPage.tsx": 1,
     "src/pages/StockLendingPage.tsx": 1, "src/pages/trade/ClosingAuctionPage.tsx": 1, "src/pages/ResearchScans.tsx": 4, "src/pages/CompareExperiments.tsx": 1,
     "src/pages/trade/JournalPage.tsx": 1, "src/pages/money/MutualFundsPage.tsx": 3, "src/pages/money/TaxToolsPage.tsx": 2, "src/pages/HoldingsPage.tsx": 1,
-    "src/pages/PulseMood.tsx": 1, "src/pages/money/UsTaxPage.tsx": 1, "src/pages/DeepDive.tsx": 4, "src/pages/Research.tsx": 1, "src/components/Research.tsx": 2,
+    "src/pages/PulseMood.tsx": 1, "src/pages/money/UsTaxPage.tsx": 1, "src/pages/DeepDive.tsx": 3,      /* (updated on purpose, owner 18 Nov: the last eight quarters are the company page's) */ "src/pages/Research.tsx": 1, "src/components/Research.tsx": 2,
     "src/components/watch/WatchPanel.tsx": 1,
     // (updated on purpose, Release 43) the theme's companies CSV is a server file now (Basic and up), checked with the others below
   };
@@ -142,6 +143,10 @@ test("a deck's file name reads as words: StratLab - what it is - the day in Indi
   const at = new Date("2026-11-05T20:00:00Z");                                   // 6 Nov in India
   assert.equal(deckFileName("India Defence theme (India)", "pdf", at), "StratLab - India Defence theme (India) - 6 Nov 2026.pdf");
   assert.equal(deckFileName("Reliance Industries deep dive", "pptx", at), "StratLab - Reliance Industries deep dive - 6 Nov 2026.pptx");
+  // r60b (LIVE9A-005): 02:00 UTC on 7 Nov is 6 Nov in New York and 7 Nov in India
+  const late = new Date("2026-11-07T02:00:00Z");
+  assert.equal(deckFileName("Semiconductors theme (United States)", "pdf", late, "America/New_York"), "StratLab - Semiconductors theme (United States) - 6 Nov 2026.pdf");
+  assert.equal(deckFileName("Semiconductors theme (United States)", "pdf", late), "StratLab - Semiconductors theme (United States) - 7 Nov 2026.pdf");
   assert.equal(deckFileName('AI/ML: "chips"?', "pdf", at), "StratLab - AI ML chips - 6 Nov 2026.pdf");    // no character a file system refuses
   // plain ASCII: Chrome saves a name with "–" as "download"
   assert.equal(deckFileName("Société Générale – banks", "pdf", at), "StratLab - Societe Generale - banks - 6 Nov 2026.pdf");

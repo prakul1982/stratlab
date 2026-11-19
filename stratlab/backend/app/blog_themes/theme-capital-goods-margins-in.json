@@ -1,0 +1,1262 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Cables, transformers and electrical equipment makers",
+   "Industrial machinery and engines makers",
+   "Power and transmission project contractors",
+   "Rolling stock, solar and industrial makers"
+  ],
+  "highest": "Power and transmission project contractors",
+  "line": "Among the 4 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in Power and transmission project contractors (16.2%, 16 of 17 companies) and lowest in Rolling stock, solar and industrial makers (12.1%), a gap of 4.1 points; among the map's layers, the \"Other\" group left out. Shown, not ranked: Bearings, abrasives and small electrical makers (18.3%), Defence makers and electronics manufacturers (23.3%) and Engineering and construction contracts (9.0%), fewer than 5 companies with the figure; Parts, component and ingredient makers (25.5%), a group by how they earn, of different businesses.",
+  "lowest": "Rolling stock, solar and industrial makers",
+  "measure": "ebitda",
+  "unranked": [
+   {
+    "layer": "Bearings, abrasives and small electrical makers",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Defence makers and electronics manufacturers",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Parts, component and ingredient makers",
+    "why": "a group by how they earn, of different businesses"
+   },
+   {
+    "layer": "Engineering and construction contracts",
+    "why": "fewer than 5 companies with the figure"
+   }
+  ]
+ },
+ "lender": false,
+ "listed": 103,
+ "members": 102,
+ "notable": [],
+ "page": "/themes/in/capital-good",
+ "period": {
+  "n": 95,
+  "of": 102,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Timken India Limited",
+     "out": "",
+     "symbol": "TIMKEN",
+     "unverified": false,
+     "what": "Timken India Ltd is engaged in the manufacturing, distribution and sale of anti-friction bearings, components, accessories and mechanical power transmission products for the…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Grindwell Norton Limited",
+     "out": "",
+     "symbol": "GRINDWELL",
+     "unverified": false,
+     "what": "Grindwell Norton Limited is engaged in the business of manufacturing Abrasives, Ceramics & Plastics and providing IT Services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Yash Highvoltage Ltd",
+     "out": "",
+     "symbol": "YASHHV",
+     "unverified": false,
+     "what": "Yash Highvoltage Ltd is in the business of power engineering and specialized high voltage and high current",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Spectrum Electrical Industries Ltd",
+     "out": "",
+     "symbol": "SPECTRUM",
+     "unverified": false,
+     "what": "Spectrum Electrical Industries Limited, incorporated in 1995, is engaged in the business of Injection Moulding, manufacturing of Electrical Press Components and Surface treatment…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 18.3,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Bearings, abrasives and small electrical makers",
+   "listed": 4,
+   "n": 4,
+   "net": 12.6,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.9,
+   "pb_n": 4,
+   "revenue": 7253.0,
+   "roce": 19.75,
+   "roce_n": 4,
+   "roe": 18.3,
+   "roe_n": 4,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Hitachi Energy India Limited",
+     "out": "",
+     "symbol": "POWERINDIA",
+     "unverified": false,
+     "what": "The company serves utility and industry customers, with a complete range of engineering, products, solutions, and services in areas of Power technology",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CG Power and Industrial Solutions Limited",
+     "out": "",
+     "symbol": "CGPOWER",
+     "unverified": false,
+     "what": "CG Power & Industrial Solutions is a global enterprise providing end-to-end solutions to utilities, industries and consumers for the management and application of efficient and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ABB India Limited",
+     "out": "",
+     "symbol": "ABB",
+     "unverified": false,
+     "what": "ABB India Limited is an integrated power equipment manufacturer supplying the complete range of engineering, products, solutions and services in areas of Automation and Power…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Polycab India Limited",
+     "out": "",
+     "symbol": "POLYCAB",
+     "unverified": false,
+     "what": "Polycab is India’s leading manufacturers of cables and wires and allied products such as uPVC conduits and lugs and glands",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Schneider Electric Infrastructure Ltd",
+     "out": "",
+     "symbol": "SCHNEIDER",
+     "unverified": false,
+     "what": "Schneider Electric Infrastructure Limited, incorporated in 2011, is engaged in the business of manufacturing, designing, building and servicing technologically advanced products…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Atlanta Electricals Ltd",
+     "out": "",
+     "symbol": "ATLANTAELE",
+     "unverified": false,
+     "what": "Atlanta Electricals Ltd is in the business of supplying a wide range of power transformers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Bijlee Ltd",
+     "out": "",
+     "symbol": "BBL",
+     "unverified": false,
+     "what": "Bharat Bijlee is a leading electrical engineering company in India engaged in manufacturing of transformers, electric motors, elevator systems, drives and automation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Apar Industries Ltd",
+     "out": "",
+     "symbol": "APARINDS",
+     "unverified": false,
+     "what": "Contributing to India’s process of electrification it started from manufacturing power transmission cables to having three broad business segments, which are Conductors…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shilchar Technologies Ltd",
+     "out": "",
+     "symbol": "SHILCTECH",
+     "unverified": false,
+     "what": "Shilchar Technologies is engaged in the business of manufacturing Electronics & Telecom and Power & Distribution transformers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Marine Electricals (India) Ltd",
+     "out": "",
+     "symbol": "MARINE",
+     "unverified": false,
+     "what": "Marine Electricals (India) Limited is an integrated technical services provider in the fields of electrical automation and information and communication technology solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tempsens Instruments (India) Ltd",
+     "out": "",
+     "symbol": "TEMPSENS",
+     "unverified": false,
+     "what": "Tempsens Instruments (India) Limited is a thermal engineering and specialised cable manufacturer, engaged in the design and manufacture of customized temperature sensing…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hirect Ltd",
+     "out": "",
+     "symbol": "HIRECT",
+     "unverified": false,
+     "what": "HRL manufactures power electronic equipment such as converters, inverters, propulsion system, rectifiers and railway transformation equipment like traction transformer for…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Diamond Power Infrastructure Ltd",
+     "out": "",
+     "symbol": "DIACABS",
+     "unverified": false,
+     "what": "Diamond Power Infrastructure Limited is engaged in the business of manufacturing of Transmission & distribution of power products & services in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TD Power Systems Ltd",
+     "out": "",
+     "symbol": "TDPOWERSYS",
+     "unverified": false,
+     "what": "TD Power Systems Ltd is engaged in manufacturing AC generators and Electric motors for various applications which are specifically designed to suit the needs of the customers…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Voltamp Transformers Ltd",
+     "out": "",
+     "symbol": "VOLTAMP",
+     "unverified": false,
+     "what": "Voltamp Transformers Ltd is a Baroda based company and is mainly into manufacturing of various types of Oil filled Power & Distribution Transformers of various classes",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.9,
+   "ebitda_n": 15,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Cables, transformers and electrical equipment makers",
+   "listed": 15,
+   "n": 15,
+   "net": 9.7,
+   "net_n": 15,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 11.1,
+   "pb_n": 15,
+   "revenue": 101437.0,
+   "roce": 29.4,
+   "roce_n": 15,
+   "roe": 22.15,
+   "roe_n": 14,
+   "scale": null,
+   "words": "These firms make cables, wires, transformers, switchgear, motors and automation products sold to utilities and industry."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Siemens Ltd",
+     "out": "",
+     "symbol": "SIEMENS",
+     "unverified": false,
+     "what": "Siemens Limited offers products, integrated solutions for industrial applications for manufacturing industries, drives for process industries, intelligent infrastructure and…",
+     "year": "Sep 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cummins India Limited",
+     "out": "",
+     "symbol": "CUMMINSIND",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Thermax Limited",
+     "out": "",
+     "symbol": "THERMAX",
+     "unverified": false,
+     "what": "The Company’s portfolio includes boilers and heaters, absorption chillers/ heat pumps, power plants, solar equipment, air pollution control equipment/system, water and waste…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Zetwerk Manufacturing Businesses Ltd",
+     "out": "",
+     "symbol": "ZETWERK",
+     "unverified": false,
+     "what": "It combines third-party suppliers with owned manufacturing plants to produce industrial and consumer products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jyoti CNC Automation Ltd",
+     "out": "",
+     "symbol": "JYOTICNC",
+     "unverified": false,
+     "what": "Jyoti CNC Automation is a leading manufacturer of simultaneous 5-axis CNC machines in India, with a 10% market share in the country",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kirloskar Oil Engines Ltd",
+     "out": "",
+     "symbol": "KIRLOSENG",
+     "unverified": false,
+     "what": "The company caters to the agriculture, power generation, and industrial sectors",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kaynes Technology India Ltd",
+     "out": "",
+     "symbol": "KAYNES",
+     "unverified": false,
+     "what": "The company provides conceptual design, process engineering",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Elgi Equipments Limited",
+     "out": "",
+     "symbol": "ELGIEQUIP",
+     "unverified": false,
+     "what": "Incorporated in 1960, Elgi Equipments Limited along with its subsidiaries, is in the business of manufacturing and supplying Air Compressors ** & Automotive Equipments**",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Triveni Turbine Ltd",
+     "out": "",
+     "symbol": "TRITURBINE",
+     "unverified": false,
+     "what": "The company offers industrial heat and power solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bonfiglioli Transmissions Ltd",
+     "out": "",
+     "symbol": "BONFIG",
+     "unverified": false,
+     "what": "Bonfiglioli Transmissions Ltd is one of India’s leading technology-driven companies providing mechanical and electro-mechanical power transmission and industrial drive solutions",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Action Construction Equipment Ltd",
+     "out": "",
+     "symbol": "ACE",
+     "unverified": false,
+     "what": "Action Construction Equipment Ltd is engaged in the business of manufacturing and marketing of hydraulic mobile cranes, mobile tower cranes, material handling equipment like…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lloyds Engineering Works Ltd",
+     "out": "",
+     "symbol": "LLOYDSENGG",
+     "unverified": false,
+     "what": "Lloyds Steels Industries is primarily engaged in the design, Manufacturing, and Commissioning of heavy equipment, machinery & systems for the HydroCarbon Sector, Oil & Gas, Steel…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kirloskar Brothers Ltd",
+     "out": "",
+     "symbol": "KIRLOSBROS",
+     "unverified": false,
+     "what": "Kirloskar Brothers is a part of the Kirloskar Group engaged in the business of engineering and manufacturing of systems for fluid management",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ingersoll-Rand (India) Ltd",
+     "out": "",
+     "symbol": "INGERRAND",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tega Industries Ltd",
+     "out": "",
+     "symbol": "TEGA",
+     "unverified": false,
+     "what": "Tega Industries is a leading manufacturer and distributor of specialized, critical, and recurring consumable products for the global mineral beneficiation, mining, and bulk…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Quality Power Electrical Equipments Ltd",
+     "out": "",
+     "symbol": "QPOWER",
+     "unverified": false,
+     "what": "Quality Power Electrical Equipments Limited is engaged in the business of energy transition equipment and power technologies",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Elecon Engineering Company Ltd",
+     "out": "",
+     "symbol": "ELECON",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kennametal India Ltd",
+     "out": "",
+     "symbol": "KENNAMET",
+     "unverified": false,
+     "what": "Kennametal India Ltd was incorporated in 1938, it is a 75% subsidiary of Kennametal Inc. It manufactures carbide tools and special-purpose machines for automotive, defense…",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Genus Power Infrastructures Ltd",
+     "out": "",
+     "symbol": "GENUSPOWER",
+     "unverified": false,
+     "what": "It is engaged in manufacturing and providing Metering and Metering Solutions and undertaking 'Engineering, Construction, and Contracts' on a turnkey basis (core business division)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Raymond Ltd",
+     "out": "",
+     "symbol": "RAYMOND",
+     "unverified": false,
+     "what": "The Company has a retail network of 1,638 stores, including 1,589 stores in about 600 towns and cities in India and 49 overseas stores in nine countries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Standard Engineering Technology Ltd",
+     "out": "",
+     "symbol": "SETL",
+     "unverified": false,
+     "what": "Incorporated in September 2012, Standard Engineering Technology is a manufacturer of engineering equipment for the pharmaceutical and chemical sectors in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ajax Engineering Ltd",
+     "out": "",
+     "symbol": "AJAXENGG",
+     "unverified": false,
+     "what": "Incorporated in July 1992, Ajax Engineering Limited manufactures a wide range of concrete equipment and services across the value chain",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lohia Corp Ltd",
+     "out": "",
+     "symbol": "LCL",
+     "unverified": false,
+     "what": "Lohia Corp Ltd is engaged in the manufacturing of technical textile machines",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GMM Pfaudler Ltd",
+     "out": "",
+     "symbol": "GMMPFAUDLR",
+     "unverified": false,
+     "what": "It is a leading supplier of process equipments to the pharmaceutical and chemical industries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Greaves Cotton Ltd",
+     "out": "",
+     "symbol": "GREAVESCOT",
+     "unverified": false,
+     "what": "Greaves Cotton is engaged in manufacturing of engines, engine applications and trading of power tillers, spares related to engines, electric vehicles and infrastructure equipment…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "HD Fire Protect Ltd",
+     "out": "",
+     "symbol": "HDFIRE",
+     "unverified": false,
+     "what": "The company develops a majority of its products in-house and focuses on proprietary designs that meet national and international standards",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shakti Pumps (India) Ltd",
+     "out": "",
+     "symbol": "SHAKTIPUMP",
+     "unverified": false,
+     "what": "Shakti Pumps (India) Ltd is primarily engaged in manufacturing of pumps and motors of various kinds",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Praj Industries Ltd",
+     "out": "",
+     "symbol": "PRAJIND",
+     "unverified": false,
+     "what": "It offers sustainable solutions in bioenergy, water purification, process equipment, breweries, and wastewater treatment",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Swaraj Engines Ltd",
+     "out": "",
+     "symbol": "SWARAJENG",
+     "unverified": false,
+     "what": "Swaraj Engines was established in 1989 it manufactures diesel engines specifically for tractors in the range of 22 HP to above 65 HP and hi-tech engine components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shanthi Gears Ltd",
+     "out": "",
+     "symbol": "SHANTIGEAR",
+     "unverified": false,
+     "what": "Shanthi Gears Ltd is in the business of design, manufacture, supply and servicing of gears and gear boxes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "DEE Development Engineers Ltd",
+     "out": "",
+     "symbol": "DEEDEV",
+     "unverified": false,
+     "what": "DEE Development Engineers Ltd is a design -led engineering and manufacturing company supplying specialised high-pressure process piping systems, pipe spools, fittings and bends…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GE Power India Ltd",
+     "out": "",
+     "symbol": "GVPIL",
+     "unverified": false,
+     "what": "GE Power India Ltd is engaged in business of engineering, procurement & construction (EPC) of key equipment for thermal and hydro power plants",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "The Anup Engineering Ltd",
+     "out": "",
+     "symbol": "ANUP",
+     "unverified": false,
+     "what": "It manufactures Heat Exchangers, Reactors, Pressure Vessels, Columns & Towers, Industrial Centrifuges and Formed Components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "John Cockerill India Ltd",
+     "out": "way of earning not shown",
+     "symbol": "COCKERILL",
+     "unverified": false,
+     "what": "John Cockerill India Limited, incorporated in 1986 as Flat Products Equipment India Ltd., became part of the Belgium-based John Cockerill Group in 2008 and is engaged in…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Windsor Machines Ltd",
+     "out": "",
+     "symbol": "WINDMACHIN",
+     "unverified": false,
+     "what": "Windsor Machines Ltd is in the business of manufacturing plastic processing machinery",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "HLE Glascoat Ltd",
+     "out": "",
+     "symbol": "HLEGLAS",
+     "unverified": false,
+     "what": "HLE Glascoat Ltd is in the business of manufacturing and sales of glass lined equipment and filters and dryers equipment for various industries in the country",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "LMW Ltd",
+     "out": "",
+     "symbol": "LMW",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 15.6,
+   "ebitda_n": 35,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Industrial machinery and engines makers",
+   "listed": 37,
+   "n": 36,
+   "net": 11.05,
+   "net_n": 34,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.0,
+   "pb_n": 32,
+   "revenue": 129104.0,
+   "roce": 21.0,
+   "roce_n": 35,
+   "roe": 17.8,
+   "roe_n": 35,
+   "scale": null,
+   "words": "These companies build engines, compressors, turbines, process equipment, machine tools and electronics for factories and power users."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Heavy Electricals Limited",
+     "out": "",
+     "symbol": "BHEL",
+     "unverified": false,
+     "what": "Bharat Heavy Electricals Ltd is an integrated power plant equipment manufacturer engaged in design, engineering, manufacture, erection, testing, commissioning and servicing of a…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GE Vernova T&D India Ltd",
+     "out": "",
+     "symbol": "GVT&D",
+     "unverified": false,
+     "what": "It has been in the power transmission and distribution business for more than 100 years and provides a versatile range of solutions for connecting and evacuating power from…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Siemens Energy India Ltd",
+     "out": "",
+     "symbol": "ENRIN",
+     "unverified": false,
+     "what": "Siemens Energy India Ltd is a leading energy technology Provider, delivering integrated solutions across power generation and transmission systems Siemens Energy India Limited…",
+     "year": "Sep 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suzlon Energy Ltd",
+     "out": "",
+     "symbol": "SUZLON",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Karamtara Engineering Ltd",
+     "out": "",
+     "symbol": "KARAMTARA",
+     "unverified": false,
+     "what": "Karamtara Engineering Limited manufactures products for renewable energy and transmission lines",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Inox Wind Ltd",
+     "out": "",
+     "symbol": "INOXWIND",
+     "unverified": false,
+     "what": "The company is engaged in the business of manufacturing Wind Turbine Generators (WTGs) and is a wind energy solutions provider servicing IPPs, Utilities, PSUs, Corporates and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Transformers & Rectifiers India Ltd",
+     "out": "",
+     "symbol": "TARIL",
+     "unverified": false,
+     "what": "Transformers and Rectifiers (India) Ltd. is a manufacturer of Power, Furnace and Rectifier Transformers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kanohar Electricals Ltd",
+     "out": "",
+     "symbol": "KANOHAR",
+     "unverified": false,
+     "what": "The company primarily caters to India's power transmission",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Powerica Ltd",
+     "out": "",
+     "symbol": "POWERICA",
+     "unverified": false,
+     "what": "Powerica Ltd is a power solutions company specializing in diesel generator sets (DG sets) for main and backup use",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Skipper Ltd",
+     "out": "",
+     "symbol": "SKIPPER",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Transrail Lighting Ltd",
+     "out": "",
+     "symbol": "TRANSRAILL",
+     "unverified": false,
+     "what": "Transrail Lighting Ltd is an integrated transmission & distribution, and pole manufacturing company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Waaree Renewable Technologies Ltd",
+     "out": "",
+     "symbol": "WAAREERTL",
+     "unverified": false,
+     "what": "Waaree Renewables Technologies Ltd is engaged in the business of generation of power through renewable energy sources and also provides consultancy services in this regard",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vikram Solar Ltd",
+     "out": "",
+     "symbol": "VIKRAMSOLR",
+     "unverified": false,
+     "what": "Vikram Solar Ltd manufactures solar PV modules and also provides EPC and O&M services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Wpil Ltd",
+     "out": "",
+     "symbol": "WPIL",
+     "unverified": false,
+     "what": "by Johnston Pump Company Inc., USA, WPIL is engaged in the entire value chain of Pumps & Pumping Systems from concept to commissioning and execution of water supply projects on a…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jash Engineering Ltd",
+     "out": "",
+     "symbol": "JASH",
+     "unverified": false,
+     "what": "Jash Engineering Limited is manufacturing a wide range of equipment for Water Intake Systems, Water and Waste Water Pumping Stations and Treatment Plants, Storm Water Pumping…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KEC International Limited",
+     "out": "",
+     "symbol": "KEC",
+     "unverified": false,
+     "what": "It has presence in the verticals of Power Transmission and Distribution, Railways, Civil, Urban Infrastructure, Solar, Oil & Gas Pipelines, and Cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Larsen & Toubro Limited",
+     "out": "",
+     "symbol": "LT",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 16.2,
+   "ebitda_n": 16,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Power and transmission project contractors",
+   "listed": 17,
+   "n": 17,
+   "net": 10.25,
+   "net_n": 16,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.4,
+   "pb_n": 16,
+   "revenue": 411967.0,
+   "roce": 23.5,
+   "roce_n": 16,
+   "roe": 19.55,
+   "roe_n": 16,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Electronics Limited",
+     "out": "",
+     "symbol": "BEL",
+     "unverified": false,
+     "what": "Incorporated in 1954, Bharat Electronics Ltd manufactures and supplies electronic equipment and systems to the defence sector",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hindustan Aeronautics Limited",
+     "out": "",
+     "symbol": "HAL",
+     "unverified": false,
+     "what": "64% Government-owned Maha-Ratna CPSE, designs, manufactures, upgrades and provides lifecycle MRO for aircraft, helicopters, aero -engines, avionics /accessories and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Dynamics Limited",
+     "out": "",
+     "symbol": "BDL",
+     "unverified": false,
+     "what": "It is engaged in the manufacturing of guided missiles and allied defence equipments",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mazagon Dock Shipbuilders Limited",
+     "out": "",
+     "symbol": "MAZDOCK",
+     "unverified": false,
+     "what": "It has constructed 801 vessels since 1960, including warships, submarines, cargo/passenger ships, and offshore platforms",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 23.3,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Defence makers and electronics manufacturers",
+   "listed": 4,
+   "n": 4,
+   "net": 20.9,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 7.8,
+   "pb_n": 4,
+   "revenue": 76147.0,
+   "roce": 34.0,
+   "roce_n": 4,
+   "roe": 25.75,
+   "roe_n": 4,
+   "scale": null,
+   "words": "These companies build defence electronics, aircraft, missiles and ships for the armed forces, and also make electronics for contract clients."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Titagarh Rail Systems Limited",
+     "out": "",
+     "symbol": "TITAGARH",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jupiter Wagons Limited",
+     "out": "",
+     "symbol": "JWL",
+     "unverified": false,
+     "what": "Commercial Engineers & Body Builders Company Ltd (CEBBCO) is primarily involved in the business of manufacturing metal fabrication comprising load bodies for commercial vehicles…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Texmaco Rail & Engineering Limited",
+     "out": "",
+     "symbol": "TEXRAIL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Waaree Energies Ltd",
+     "out": "",
+     "symbol": "WAAREEENER",
+     "unverified": false,
+     "what": "Market Leadership The company is the Largest Non-Chinese module manufacturer in the world",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ram Ratna Wires Ltd",
+     "out": "",
+     "symbol": "RAMRAT",
+     "unverified": false,
+     "what": "Ram Ratna Wires Limited is engaged in the manufacturing of winding wires, mainly enamelled copper wires",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Saatvik Green Energy Ltd",
+     "out": "",
+     "symbol": "SAATVIKGL",
+     "unverified": false,
+     "what": "The company is one of India’s leading solar PV module manufacturers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dynamatic Technologies Ltd",
+     "out": "",
+     "symbol": "DYNAMATECH",
+     "unverified": false,
+     "what": "They serve clients across Aerospace, automotive and hydraulic industries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kirloskar Pneumatic Company Ltd",
+     "out": "",
+     "symbol": "KIRLPNU",
+     "unverified": false,
+     "what": "It is the world's largest manufacturer of industrial gas compressors",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Beml Ltd",
+     "out": "",
+     "symbol": "BEML",
+     "unverified": false,
+     "what": "BEML Ltd manufactures a wide range of heavy earthmoving equipment catering to the mining and construction industry, vehicles for defense forces and coaches for the metro and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Premier Energies Ltd",
+     "out": "",
+     "symbol": "PREMIERENE",
+     "unverified": false,
+     "what": "Incorporated in April 1995, Premier Energies Limited specializes in manufacturing integrated solar cells and solar panels",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KSB Ltd",
+     "out": "",
+     "symbol": "KSB",
+     "unverified": false,
+     "what": "KSB Ltd manufactures a range of standard Industrial end suction and high-pressure multistage pumps, submersible motor pumps and monoblock pumps and other value-added parts, for…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Emmvee Photovoltaic Power Ltd",
+     "out": "",
+     "symbol": "EMMVEE",
+     "unverified": false,
+     "what": "Incorporated in March 2007, Emmvee Photovoltaic Power Limited is an integrated solar PV module and cell manufacturer",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fujiyama Power Systems Ltd",
+     "out": "",
+     "symbol": "UTLSOLAR",
+     "unverified": false,
+     "what": "Fujiyama Power Systems Limited manufactures products and provides solutions in the rooftop solar industry, including on-grid, off-grid, and hybrid solar systems",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 12.1,
+   "ebitda_n": 13,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Rolling stock, solar and industrial makers",
+   "listed": 13,
+   "n": 13,
+   "net": 5.7,
+   "net_n": 13,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.1,
+   "pb_n": 13,
+   "revenue": 67107.0,
+   "roce": 23.6,
+   "roce_n": 13,
+   "roe": 18.4,
+   "roe_n": 13,
+   "scale": null,
+   "words": "These companies make rail wagons and coaches, solar modules, winding wires, pumps, compressors and heavy earthmoving equipment."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Azad Engineering Ltd",
+     "out": "",
+     "symbol": "AZAD",
+     "unverified": false,
+     "what": "Azad Engineering Limited is a manufacturer of aerospace components and turbines and supplies its products to original equipment manufacturers (OEMs) in the aerospace, defense…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "MTAR Technologies Ltd",
+     "out": "",
+     "symbol": "MTARTECH",
+     "unverified": false,
+     "what": "MTAR develop and manufactures components and equipment for the defense, aerospace, nuclear and clean energy sectors",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indo-MIM Ltd",
+     "out": "",
+     "symbol": "INDOMIM",
+     "unverified": false,
+     "what": "Indo-MIM Ltd manufactures precision engineering components using metal injection molding (MIM) technology",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Omnitech Engineering Ltd",
+     "out": "",
+     "symbol": "OMNI",
+     "unverified": false,
+     "what": "Omnitech Engineering is a manufacturing and engineering solutions company that specializes in providing precision-engineered components, turnkey industrial automation solutions…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pitti Engineering Ltd",
+     "out": "",
+     "symbol": "PITTIENG",
+     "unverified": false,
+     "what": "Pitti Engg. is engaged in the manufacturing of Electrical Steel Laminations, Motor Cores, Sub-Assemblies, Die-Cast Rotors, Press Tools and machining of metal components",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 25.5,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Parts, component and ingredient makers",
+   "listed": 5,
+   "n": 5,
+   "net": 12.7,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.8,
+   "pb_n": 4,
+   "revenue": 8096.0,
+   "roce": 15.2,
+   "roce_n": 5,
+   "roe": 12.6,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Spel Semiconductor Ltd",
+     "out": "no revenue figure",
+     "symbol": "SPELS",
+     "unverified": false,
+     "what": "SPEL Semiconductor Ltd is in the business of wafer sort, assembly, test and drop-shipment services of IC chips",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Avalon Technologies Ltd",
+     "out": "",
+     "symbol": "AVALON",
+     "unverified": false,
+     "what": "Avalon Technologies Limited is a leading fully integrated Electronic Manufacturing Services (\"EMS\") company with end-to-end capabilities in delivering box-build solutions…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Syrma SGS Technology Ltd",
+     "out": "",
+     "symbol": "SYRMA",
+     "unverified": false,
+     "what": "Syrma SGS Technology Ltd is a Chennai-based electronics manufacturing services (EMS) company providing engineering, design, and manufacturing solutions",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.05,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Contract manufacturing",
+   "listed": 3,
+   "n": 2,
+   "net": 7.1,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 13.3,
+   "pb_n": 2,
+   "revenue": 6422.0,
+   "roce": 18.05,
+   "roce_n": 2,
+   "roe": 15.25,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Innovators Facade Systems Ltd",
+     "out": "",
+     "symbol": "INNOVATORS",
+     "unverified": false,
+     "what": "Innovators Façade Systems Ltd is in the Business of design, engineering, fabrication, supply, and installation of facade systems",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kalpataru Projects International Limited",
+     "out": "",
+     "symbol": "KPIL",
+     "unverified": false,
+     "what": "Established in 1981, Company is a global engineering and construction company with industry leading capabilities in energy and infrastructure projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bajel Projects Ltd",
+     "out": "",
+     "symbol": "BAJEL",
+     "unverified": false,
+     "what": "Bajel Projects Ltd is in the business of Engineering, Procurement and Construction Bajel Projects Limited (BPL) is a carved out legal entity from Bajaj Electricals Ltd. It's EPC…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 9.0,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Engineering and construction contracts",
+   "listed": 3,
+   "n": 3,
+   "net": 3.8,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.6,
+   "pb_n": 3,
+   "revenue": 30163.0,
+   "roce": 11.9,
+   "roce_n": 3,
+   "roe": 8.1,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Honeywell Automation India Ltd",
+     "out": "",
+     "symbol": "HONAUT",
+     "unverified": false,
+     "what": "HAIL is engaged primarily in the business of Automation & Control systems on turnkey basis and others",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aditya Infotech Ltd",
+     "out": "",
+     "symbol": "CPPLUS",
+     "unverified": false,
+     "what": "Aditya Infotech Limited (AIL) manufactures and provides video security and surveillance products, solutions, and services under the brand name 'CP Plus",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.25,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other capital good companies",
+   "listed": 2,
+   "n": 2,
+   "net": 9.95,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 9.85,
+   "pb_n": 2,
+   "revenue": 8903.0,
+   "roce": 22.8,
+   "roce_n": 2,
+   "roe": 19.0,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Capital goods (India)",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Capital goods",
+ "total": 317,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 317,
+  "shown": 103
+ }
+}

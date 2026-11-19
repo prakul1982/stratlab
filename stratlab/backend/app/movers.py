@@ -30,6 +30,7 @@ from . import db, heatmap
 from .auth import current_profile
 from .intel.net import TTLCache
 from .responses import err, ok
+from .titles import page_title
 
 KEY = "movers:marks:"                 # movers:marks:<region> = {"day", "at", "stocks": {symbol: [last day, 52w high, 52w low, new high, new low]}}
 LISTS = ("gainers", "losers", "traded", "spikes", "highs", "lows")
@@ -89,11 +90,11 @@ def clear() -> None:
 
 
 # ---------- the lists ----------
-def row_of(symbol: str, heat: list, f: dict | None, mark: list | None) -> dict:
+def row_of(symbol: str, heat: list, f: dict | None, mark: list | None, region: str | None = None) -> dict:
     """One stock in a list: s symbol, n name, cap market value (the market's unit), px last close, chg the day's change in percent, vol the
     day's volume, avg its 20-session average, vx the one over the other, tv the value traded (close times volume), hi and lo the 52-week
     high and low (None until the run has kept them)."""
-    t = heatmap.tile(symbol, heat, f, None)
+    t = heatmap.tile(symbol, heat, f, None, region)        # LIVE10A-038: the name in the one style
     vol, avg = _num(heat[-2]), _num(heat[-1])
     return {"s": t["s"], "n": t["n"], "cap": t["cap"], "px": t["px"], "chg": t["r"][0], "vol": vol, "avg": avg, "vx": t["vx"], "tv": t["tv"],
             "hi": _num(mark[1]) if mark else None, "lo": _num(mark[2]) if mark else None}
@@ -118,9 +119,29 @@ def lists_of(rows: list[dict], marks: dict[str, list] | None) -> dict[str, list[
     return {"gainers": up, "losers": down, "traded": traded, "spikes": spikes, "highs": highs, "lows": lows}
 
 
-def view(region: str, universe: str | None = None, min_cap: float | None = None, top: int = TOP) -> dict:
+def live_marks(marks: dict[str, list], quoted: dict[str, list], day: str, stored: dict[str, list]) -> dict[str, list]:
+    """LIVE13A-012: the 52-week marks for a day still trading (or closed but not yet run): a stock that has traded that day is marked a new
+    high when the day's high is above its 52-week high to the last close (the 251 sessions before the day, the count's own rule), a new
+    low the same way. A stock whose previous close is far from its stored close (a split or bonus went ex) isn't marked; one with no
+    trade that day has no mark, so it is on none of the day's lists."""
+    from .breadth_live import SPLIT_GAP
+    out = {}
+    for s, q in quoted.items():
+        m = marks.get(s)
+        if not m:
+            continue
+        hi, lo, base = _num(m[1]), _num(m[2]), _num((stored.get(s) or [None])[0])
+        qhi, qlo, prev = _num(q[3]) or q[0], _num(q[4]) or q[0], _num(q[1])
+        split = bool(base and prev and abs(prev / base - 1) > SPLIT_GAP)
+        out[s] = [day, hi, lo, int(not split and hi is not None and qhi > hi), int(not split and lo is not None and qlo < lo)]
+    return out
+
+
+def view(region: str, universe: str | None = None, min_cap: float | None = None, top: int = TOP, with_live: bool = True) -> dict:
     """A group's lists, each its `top` rows with its whole count. `pending` is true until the daily run has stored the market's rows once;
-    `marks` is false until a run has kept the 52-week marks of the same day (the 52-week lists are then empty, and say so)."""
+    `marks` is false until a run has kept the 52-week marks of the same day (the 52-week lists are then empty, and say so). With
+    `with_live` (the app's page), live prices of a later day than the stored closes are used (heatmap.live_rows; `live` says of when),
+    and a stock without a trade that day is left out; `behind` is true when the latest session has closed and no prices of it are in."""
     from . import breadth
     group = universe if universe in heatmap.UNIVERSES[region] else heatmap.DEFAULT[region]
     doc = heatmap.load(region)
@@ -128,8 +149,16 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     kept = load_marks(region)
     same_day = bool(kept["stocks"]) and kept["day"] == day
     marks = kept["stocks"] if same_day else {}
+    live = None
+    if with_live:
+        stocks, live, _ = heatmap.live_rows(region, doc)
+    if live:
+        marks = live_marks(marks, live["quoted"], live["day"], doc.get("stocks") or {})
+        day = live["day"]
     g = breadth.GROUPS[group]
-    out = {"market": region, "universe": group, "universe_name": g["name"], "universes": heatmap.universes(region), "as_of": day,
+    out = {"market": region, "universe": group, "universe_name": g["name"], "universes": heatmap.universes(region), "as_of": doc.get("day"),
+           "live": {k: v for k, v in live.items() if k != "quoted"} if live else None,
+           "behind": with_live and not live and heatmap.behind(region, doc.get("day")),
            "cap_unit": heatmap.CAP_UNIT[region], "pending": not stocks, "marks": same_day, "min_cap": min_cap, "top": top,
            "members": 0, "with_prices": 0, "matching": 0, "lists": {k: {"total": 0, "rows": []} for k in LISTS}}
     if not stocks:
@@ -144,7 +173,9 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
         mark = marks.get(s)
         if mark and day and mark[0] != day:          # no candle on the close's day (suspended, or no trade): not one of that day's movers
             continue
-        rows.append(row_of(s, heat, facts.get(s), mark))
+        if live and s not in live["quoted"]:         # no trade yet on the day the live prices are of
+            continue
+        rows.append(row_of(s, heat, facts.get(s), mark, region))
     out["members"], out["with_prices"] = len(want), len(rows)
     if min_cap:
         rows = [r for r in rows if r["cap"] is not None and r["cap"] >= min_cap]
@@ -153,11 +184,11 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     return out
 
 
-def cached(region: str, universe: str | None, min_cap: float | None, top: int = TOP) -> dict:
-    key = (region, universe or heatmap.DEFAULT[region], min_cap or None, top)
+def cached(region: str, universe: str | None, min_cap: float | None, top: int = TOP, with_live: bool = True) -> dict:
+    key = (region, universe or heatmap.DEFAULT[region], min_cap or None, top, with_live)
     hit = _views.get(key)
     if hit is None:
-        hit = view(region, universe, min_cap or None, top)
+        hit = view(region, universe, min_cap or None, top, with_live)
         _views.set(key, hit, VIEW_FOR)
     return hit
 
@@ -228,7 +259,7 @@ def public_page(region: str) -> str:
     from . import stock_pages as sp
     from .config import settings
     from html import escape as e
-    v = cached(region, None, None, TEASER)
+    v = cached(region, None, None, TEASER, with_live=False)        # the public page: the stored closes, as it says
     r = region.lower()
     where = WHERE[region]
     site = settings.PUBLIC_SITE_URL
@@ -287,7 +318,7 @@ def public_page(region: str) -> str:
     style = ("<style>.mv td[data-dir=up]{color:var(--up)}.mv td[data-dir=down]{color:var(--down)}.mv td:first-child{white-space:normal;min-width:180px}"
              "@media (min-width:641px){.mv table{table-layout:fixed}.mv th:first-child{width:46%}}.mv td:first-child .muted{font-size:13px;margin-left:4px}.links{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0}"
              ".links a{display:inline-flex;align-items:center;min-height:44px}.mv-cta p{margin:0;display:flex;flex-wrap:wrap;gap:12px;align-items:center}</style>")
-    title = f"{where} market movers: gainers, losers, most traded · StratLab"
+    title = page_title(f"{where} market movers: gainers, losers, most traded")
     desc = (f"{group} at the close of {day}: the top gainers and losers, the most traded stocks, volume spikes and 52-week highs and lows."
             if not v["pending"] else f"{where} stocks' gainers, losers, most traded, volume spikes and 52-week highs and lows at the close.")
     return sp._page(sp._head(title, desc, canonical, ld + style), None, "".join(body))

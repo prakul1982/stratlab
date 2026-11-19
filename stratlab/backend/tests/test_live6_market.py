@@ -205,7 +205,7 @@ def test_broken_and_twin_theme_posts_are_hidden_and_their_pages_say_nothing_is_t
     from app import blog, blog_research as BR
     day = datetime(2026, 11, 9, 6, tzinfo=timezone.utc)
     broken = {**BR.theme_post_from(_empty_src(), day), "published": True}
-    assert "sorted into 0 layers" in broken["summary"]
+    assert "sorts them into 0 layers" in broken["summary"]          # (updated on purpose, blog2: the theme post's opening line's words)
     blog.upsert_research(broken, day)
     good = {**BR.theme_post_from({**THEME_SRC, "region": "IN"}, day), "slug": "theme-cybersecurity-margins-in", "published": True}
     blog.upsert_research(good, day)

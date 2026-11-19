@@ -10,6 +10,7 @@
 No job of its own: everything is read when a page asks, through the caches the app already keeps. Memory: see DIVE_CACHE, PRICE_CACHE,
 EVIDENCE_CACHE and VERDICTS below."""
 import json
+import os
 import re
 import threading
 import time
@@ -17,19 +18,22 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from .. import computed, db
+from ..admin import admin_profile
 from ..ai_providers import AIError
 from ..auth import current_profile
 from ..guard import Window
 from ..responses import err
 from . import ai as A
-from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_library, theme_prices
-from . import sector_metrics
+from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_identity, theme_library, theme_prices
+from . import sector_metrics, sector_ops
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
 
 router = APIRouter(tags=["research"])
+admin_router = APIRouter(tags=["admin"])      # ex49: the owner's theme switches, at /admin/... (main)
 
 DIVE_TTL = 30 * 60
 DIVE_CACHE = TTLCache(max_items=24, max_bytes=3 * 1024 * 1024)            # a dive is about 60 KB of numbers
@@ -43,10 +47,24 @@ NO_DESCRIPTION_DAYS = 3                                                   # ...a
 VERDICTS: dict = {}                                                       # placement answers (a few hundred bytes each), cleared past VERDICT_KEEP
 VERDICT_KEEP = 3000
 DESCRIBE_READS = 6                                                        # descriptions read from the companies' own pages a request
-FILING_READS_PER_MINUTE = DESCRIBE_READS                                  # R35: annual reports read for a thin description a minute, across every theme
+# R35: annual reports read for a description a minute, across every theme. e57 (R57): 30, was 6 (DESCRIBE_READS): a US company's own words
+# are read from its annual report first (evidence_reader), one report's front at a time (sec.SEC.business: at most BUSINESS_BYTES read, a
+# few lines kept a month), well inside the SEC client's own limit; at 6 a minute a theme check read about 6, so Biotech's 650 smaller
+# companies would have waited months
+FILING_READS_PER_MINUTE = 30
 PLACE_READS = 60                                                          # R28: descriptions read for a theme's companies to place, in its check, at most
+PLACE_READS_MAX = 150                                                     # h56: ...for a large theme, as many as its companies without one over
+DESCRIBE_CHECKS_TO_FINISH = 3                                             # ...this many checks (describe_reads), at most this many
 PRICE_READS_PER_MINUTE = 20                                               # companies' candles read from the sources a minute, across every theme
-PRICE_BUDGET = 45.0                                                       # seconds a request may spend reading candles
+# LIVE11A-004: a request read candles for up to 45 s and held one of two gates up to 30 s more, so Semiconductors' prices answered in 35 s
+# with 53 of 58 companies still pending (a theme page 47-65 s to settle). A request now spends at most PRICE_BUDGET reading and the rest are
+# read behind it by one worker at the same allowance; the page asks again and fills as they come.
+PRICE_BUDGET = 2.0                                                        # seconds a request may spend reading candles
+PRICE_BEHIND_MAX = 600                                                    # companies waiting for the worker, at most
+PRICE_BEHIND = os.environ.get("READ_BEHIND", "1").strip().lower() not in ("0", "false", "no", "off")    # off in the test suite
+_behind: dict = {}                                                        # "<region>:<symbol>" -> its loader, in the order queued
+_behind_lock = threading.Lock()
+_behind_running = [False]
 price_reads = Window()
 filing_reads = Window()
 _price_gate = threading.BoundedSemaphore(2)
@@ -93,7 +111,12 @@ def own_filings(region: str, sym: str) -> str:
     return ("From its own filings: " + ". ".join(keep[:FILING_LINES]) + ".")[:FILING_CHARS] if keep else ""
 
 
-ABOUT_WORDS, ABOUT_V = 30, 4          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
+# r68e (R68): the version of the reader that takes another company's opening sentences off a stored description (theme_base.own_part,
+# names_other), kept beside every description read since; a stored record left with no description by an earlier version of it is read once
+# more (thin_about), and a record whose description a read emptied keeps the words it had ("was_about") until a read gives words again
+OWN_PART_V = 2
+OWN_PART_SINCE = "2026-11-17"           # the first day R66's version of it ran live (the live R65 decks were made on 17 Nov, R66's on 18 Nov)
+ABOUT_WORDS, ABOUT_V = 30, 5          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
 # lane n2 (the outside review of the live R33 decks: UMC's article, "a Taiwanese company based in Hsinchu ... founded as Taiwan's first
 # semiconductor company", has 40 words and none of what it does, so its foundry business, said in its 20-F, never reached its model)
 _DOES = re.compile(r"\b(?:provid\w*|produc(?:es|ers?|ing|ts?)|manufactur\w*|makes?|makers?|sells?|selling|suppl(?:y|ies|iers?)|designs?|develops?|"
@@ -107,7 +130,18 @@ def says_work(about) -> bool:
     return bool(_DOES.search(str(about or "")))
 
 
-def thin_about(got: dict, region: str = "") -> bool:
+def sec_business_v() -> int:
+    """r67e: the version of the annual report reader's opening (sec.BUSINESS_KEY), kept beside a description read with it."""
+    from .sec import BUSINESS_KEY
+    return BUSINESS_KEY[1]
+
+
+def sec_structure_only(about) -> bool:
+    from .sec import structure_only
+    return structure_only(str(about or ""))
+
+
+def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     """Whether a stored description is read once more: too thin to show the business and kept before the current format (GPT review of
     R31.5: Bharti Airtel's profile line names no mobile service; R35: a US company with no encyclopedia article had none at all, and its
     annual report says what it does), or the read of its annual report was put off (`owed`: FILING_READS_PER_MINUTE were taken), or (US,
@@ -115,7 +149,24 @@ def thin_about(got: dict, region: str = "") -> bool:
     about = str(got.get("about") or "")
     if got.get("owed"):
         return True
-    return got.get("v") != ABOUT_V and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (company_text(about) and says_work(about))))
+    # r68e (the live R66 Building materials deck: Jindal Steel Limited's stored words emptied by R66's reader, which read its earlier name as
+    # another company's): a record with no description, kept by R66's version of that reader (on or after the day it first ran, before
+    # this version) and not one of a company with no page, is read once more; records kept before it were never emptied by it
+    if not about and got.get("op") != OWN_PART_V and not got.get("no_page") and str(got.get("at") or "")[:10] >= OWN_PART_SINCE:
+        return True
+    # v55 (R55): none found for a listing line (a depositary receipt) looked up under its listed name, kept before its issuer was looked up
+    # ("issuer"): read once more, under the issuer's name
+    if not about and name and theme_base.listing_line(name) and "issuer" not in got:
+        return True
+    # r67e (the live R65 REITs deck: Vornado's stored words, its 10-K's three sentences of how it is held, "conducts its business through
+    # ... the Operating Partnership", none of what it owns): a US company's stored words that only tell how it is held or financed, kept
+    # before the annual report's reader passed over such sentences (sec.BUSINESS_KEY), are read once more
+    if region == "US" and about and got.get("bv") != sec_business_v() and sec_structure_only(about):
+        return True
+    # gl52 (R52): 5, a US company's stored words with no sentence of its own about its work (an encyclopedia's opening only: Visa,
+    # Mastercard, Fortinet) are read once more, so its annual report's opening is added (evidence_reader)
+    return got.get("v") != ABOUT_V and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (company_text(about) and says_work(about)
+                                                                                                    and theme_base.has_own_line(about))))
 
 
 def _business_read(sym: str) -> str:
@@ -125,15 +176,20 @@ def _business_read(sym: str) -> str:
     return (feed.business(feed.submissions(feed.cik(sym))) or {}).get("text") or ""
 
 
-def filed_business(region: str, sym: str, read=None) -> tuple[str, bool]:
+def filed_business(region: str, sym: str, read=None, until: float | None = None) -> tuple[str, bool]:
     """(what the company's latest annual report says it does, whether that read is still owed), for a description the profile and the
     encyclopedia leave thin (R35). US: the opening of its 10-K's "Item 1. Business" through the SEC feed the company pages use, at most
     FILING_READS_PER_MINUTE across every theme (a read past that is owed and made in a later batch, never a burst); a company that files
-    none has "". India: nothing more is kept in the company's own words than its profile and the lines of its filings (own_filings)."""
+    none has "". India: nothing more is kept in the company's own words than its profile and the lines of its filings (own_filings).
+    e57: `until` (a time.monotonic() deadline, the background read's: describe_missing): with the minute's reads taken, it waits for the next
+    minute while the deadline allows, rather than leaving the read owed; never past the deadline."""
     if region != "US":
         return "", False
-    if not filing_reads.hit("about", FILING_READS_PER_MINUTE):
-        return "", True
+    while not filing_reads.hit("about", FILING_READS_PER_MINUTE):
+        wait = 60.5 - time.time() % 60
+        if until is None or time.monotonic() + wait > until:
+            return "", True
+        time.sleep(wait)
     try:
         return theme_check.clean_description((read or _business_read)(sym)), False
     except SourceError as e:
@@ -144,34 +200,165 @@ def filed_business(region: str, sym: str, read=None) -> tuple[str, bool]:
 
 
 def plain_name(name: str) -> str:
-    """A company name without its legal form, for an encyclopedia lookup ("Qnity Electronics, Inc." -> "Qnity Electronics")."""
+    """A company name without its legal form, for an encyclopedia lookup ("Qnity Electronics, Inc." -> "Qnity Electronics"). v55 (R55, the
+    live R54 Payments deck: "Adyen Nv-Unspon ADR" looked up as it is listed, so no article was ever found for it): a listing line's own words
+    (a depositary receipt, sponsored or not, a share class) are taken off too, so the issuer is looked up (theme_base.issuer_name)."""
     out = re.sub(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|n\.?v|s\.?a|ag|holdings?)\.?$", "",
                  str(name or "").strip(), flags=re.I)
-    return out.strip(" ,.") or str(name or "")
+    out = out.strip(" ,.") or str(name or "")
+    return theme_base.issuer_name(out) if theme_base.listing_line(name) or theme_base.unit_line(name) else out
 
 
-def evidence_reader(region: str, names: dict):
+def _page_code(sym: str) -> str | None:
+    """The code a company listed only on BSE has its profile page under (main.bse_code: its six-digit scrip code), or None."""
+    try:
+        from .. import main
+        code = main.bse_code(sym)
+    except Exception:
+        return None
+    return str(code) if code and str(code) != str(sym) else None
+
+
+def india_profile(screener, sym: str, code_of=None) -> dict | None:
+    """gl52 (R52, the rotating review of Release 51: "Screener.in has nothing for that" for CIAN Agro, Fortis Malar, Trade-Wings and 40 more
+    small and BSE-only companies, retried on every check pass for good and never read from any other source): an Indian company's profile
+    page, by its symbol, else by the BSE code it may be listed under (the company page reads its figures the same way); None when the source
+    says it has no page for either: a final answer, so the encyclopedia and its own filings are read next and the "none" is kept
+    (NO_DESCRIPTION_DAYS), never asked again each pass. A busy source still raises: that company is read in a later batch."""
+    try:
+        return screener.company(sym)
+    except SourceError as e:
+        if e.busy:
+            raise
+    # e57 (R57: the live R56 Real estate inputs' four REITs, "EMBASSY-RR" and others, looked for in every source under the listing's series
+    # and none found): a symbol with the exchange's series after it (-RR a REIT, -IV an InvIT) is looked up under the symbol alone too
+    plain = re.sub(r"-[A-Z]{2}$", "", str(sym or ""))
+    if plain and plain != sym:
+        try:
+            return screener.company(plain)
+        except SourceError as e:
+            if e.busy:
+                raise
+    code = (code_of or _page_code)(sym)
+    if code:
+        try:
+            return screener.company(code)
+        except SourceError as e:
+            if e.busy:
+                raise
+    return None
+
+
+def keep_profile(region: str, sym: str, about, industry: str = "", now: datetime | None = None) -> bool:
+    """e57 (R57, the owner's review of the live R56 decks: CapGoods 185 of 317 and FMCG 128 of 208 description-verified, the rest kept on
+    their official industry): a company's own profile, as its stock page build has just read it from its profile page (the same page and
+    parser the theme reader uses: india_profile), kept as its stored description (the theme:evidence store every theme reads) when no
+    current one is kept, so no source is read again for it. The companies a theme check never reached (largest first, describe_reads a
+    check, the profile source's per-minute limit) had their profile read every time their page was built, and it was thrown away.
+    A profile under ABOUT_WORDS words is not kept here (the theme reader adds the encyclopedia to it). Whether it was kept."""
+    about = theme_check.kept_description(about)
+    if len(about.split()) < ABOUT_WORDS:
+        return False
+    key = f"theme:evidence:{region}:{sym}"
+    now = now or datetime.now(timezone.utc)
+    try:
+        got = db.json_value(db.get_setting(key), {}) or {}
+    except Exception:
+        got = {}
+    if got.get("about") and got.get("at") and not thin_about(got, region):
+        try:
+            if (now - datetime.fromisoformat(got["at"])).days < EVIDENCE_DAYS:
+                return False                      # a current description stands (it may hold the encyclopedia's words beside the profile)
+        except ValueError:
+            pass
+    hit = {"at": now.isoformat(timespec="seconds"), "about": about, "industry": industry or got.get("industry") or "", "v": ABOUT_V,
+           "src": "profile"}
+    try:
+        db.set_setting(key, json.dumps(hit, ensure_ascii=False))
+    except Exception as e:
+        print("theme: profile not kept:", sym, str(e)[:100])
+        return False
+    EVIDENCE_CACHE.pop(key)
+    return True
+
+
+_NAMES: dict = {}                 # market -> (when read, {symbol: name}) from the stored index, for own_got
+
+
+def _index_name(region: str, sym: str) -> str:
+    t, got = _NAMES.get(region, (0.0, {}))
+    if time.time() - t > 600:
+        try:
+            got = {x["symbol"]: str(x.get("name") or "") for x in _routes().index_rows(region) or [] if isinstance(x, dict) and x.get("symbol")}
+        except Exception:
+            got = {}
+        _NAMES[region] = (time.time(), got)
+    return got.get(sym) or ""
+
+
+def own_got(region: str, sym: str, got: dict, name: str = "") -> tuple[dict, bool]:
+    """r66e (LIVE12A-001: TOYO Co., Ltd "Description-verified" on Toyo Tire's encyclopedia article, kept as its stored description since before
+    the encyclopedia's title was checked): a stored description without the opening sentences that speak of another company
+    (theme_base.own_part), and whether that took anything off. Every reader of the stored descriptions reads it this way."""
+    about = str((got or {}).get("about") or "")
+    nm = name or _index_name(region, sym)
+    if not about:
+        # r68e: a record a read emptied keeps the words it had: read again by today's reader, they are its words when it finds them its own
+        was = theme_base.own_part(str((got or {}).get("was_about") or ""), nm)
+        return ({**got, "about": was, "restored": True}, False) if was else (got, False)
+    own = theme_base.own_part(about, nm)
+    if own == about:
+        return got, False
+    # r68e: what was taken off, said where its membership is not checked for it (theme_data.unchecked_why)
+    return {**got, "about": own, "other_cut": True, **({} if own else {"other": opening_of(about)})}, True
+
+
+def opening_of(about: str) -> str:
+    """r68e: a description's opening as a reason quotes it (its first sentence, at most 90 characters on a whole word)."""
+    first = re.split(r"(?<=[.;!?])\s+(?=[A-Z“\"(])", " ".join(str(about or "").split()), maxsplit=1)[0]
+    return first if len(first) <= 90 else first[:90].rsplit(" ", 1)[0] + "…"
+
+
+def evidence_reader(region: str, names: dict, budget: float | None = None, again=()):
     """A function symbol-list -> ({symbol: {about, industry}}, pending) that reads each company's own description once (the company
-    page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows."""
+    page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows (`budget` seconds, theme_check's
+    EVIDENCE_BUDGET by default).
+    e57 (R57, the owner's review of the live R56 decks: Biotech 159 of 820 and Software 200 of 588 description-verified): a US company's own
+    words come first from its own latest annual report (the opening of a 10-K's Item 1 or a 20-F's Item 4, filed_business), the encyclopedia
+    only beside a filing too thin or none; before, the encyclopedia was read first and the annual report only for a thin line, so a small
+    company with no article waited for one of a few annual-report reads a minute."""
     R = _routes()
+    pace = {"until": None}
 
     def read(sym):
         key = f"theme:evidence:{region}:{sym}"
         hit = EVIDENCE_CACHE.get(key)
+        prior: dict = {}
         if hit is None:
             try:
                 got = db.json_value(db.get_setting(key), {})
             except Exception:
                 got = {}
-            if got.get("at") and not thin_about(got, region):
+            prior = got
+            got, cut = own_got(region, sym, got, names.get(sym) or "")
+            # r66e: a stored description that is wholly another company's is read again (the encyclopedia's title is checked now)
+            if cut and not got.get("about"):
+                got = {}
+            # r571e: `again`, companies whose kept "none found" is read once more (describe_top: the theme's largest)
+            if got.get("at") and not thin_about(got, region, names.get(sym) or "") and not (sym in again and not got.get("about")):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(got["at"])).days
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
         if hit is None:
-            about, industry = "", ""
+            about, industry, no_page, owed, filed_first = "", "", False, False, False
             if region == "IN":
-                p = R.hub.screener.company(sym)
+                p = india_profile(R.hub.screener, sym)
+                no_page = p is None
+                p = p or {}
                 about, industry = p.get("about") or "", " > ".join(p.get("industry_path") or [])
+            elif region == "US":
+                about, owed = filed_business(region, sym, until=pace["until"])          # e57: its own annual report first
+                filed_first = True
             if len(about.split()) < ABOUT_WORDS:          # R34: none, or a line too thin to show the business: its encyclopedia summary too
                 try:
                     w = R.hub.wiki.company(plain_name(names.get(sym) or sym)) or {}
@@ -180,14 +367,28 @@ def evidence_reader(region: str, names: dict):
                 if not fits_company(names.get(sym) or sym, w):       # R35: another company's article, or one about no company (Toyo Tires, the myth's Ichor)
                     w = {}
                 about = " ".join(x for x in (about, w.get("extract") or "") if x)
-            owed = False
             # R35: still thin: what its latest annual report says it does (US), a few a minute; lane n2: also when the words it has don't
             # say what it does (UMC's article: where it is and when it was founded), a 20-F's Item 4 as a 10-K's Item 1
-            if len(about.split()) < ABOUT_WORDS or (region == "US" and not says_work(about)):
+            # gl52 (R52, the rotating review of Release 51: Visa, Mastercard, Fortinet, Trade Desk, NetEase and CoreWeave with "No description
+            # in its own words yet"): a US company whose words have no sentence of its own about its work (an encyclopedia's opening only)
+            # has its annual report's opening added too
+            if not filed_first and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (says_work(about) and theme_base.has_own_line(about, names.get(sym) or "")))):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
-            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry,
-                   "v": ABOUT_V, **({"owed": True} if owed else {})}
+            read_ = about
+            about = theme_base.own_part(about, names.get(sym) or _index_name(region, sym))          # r66e: never another company's words
+            # r68e (P0, the owner's review of the live R66 decks: "no loss of verified evidence"): a read that leaves no words of its own
+            # never takes away the words the record had: they are kept ("was_about", with what the new read opened on) and read again
+            # by each later reader (own_got)
+            old_ = str((prior or {}).get("about") or (prior or {}).get("was_about") or "")
+            keep_ = ({"was_about": old_[:3000], "was_at": (prior or {}).get("was_at") or (prior or {}).get("at")} if not about and old_ else {})
+            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
+                   "op": OWN_PART_V, **keep_, **({"other": opening_of(read_)} if read_ and not about else {}),
+                   "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),
+                   **({"filed": True} if filed_first and not owed else {}),          # e57: its annual report read first (read_chip_making)
+                   **({"bv": sec_business_v()} if region == "US" else {}),          # r67e: the annual report reader it was read with
+                   # v55: the issuer a listing line was looked up under
+                   **({"issuer": plain_name(names.get(sym) or "")} if theme_base.listing_line(names.get(sym) or "") else {})}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
             except Exception as e:
@@ -200,7 +401,10 @@ def evidence_reader(region: str, names: dict):
         return {**hit, "about": " ".join(x for x in (hit.get("about"), filed) if x)}
 
     def evidence_of(symbols):
-        return theme_check.gather_evidence(symbols, read)
+        if budget is None:
+            return theme_check.gather_evidence(symbols, read)
+        pace["until"] = time.monotonic() + budget          # e57: a background read waits for the next minute's annual reports within it
+        return theme_check.gather_evidence(symbols, read, budget=budget)
     return evidence_of
 
 
@@ -281,9 +485,28 @@ def _rows(region: str) -> list[dict]:
     return theme_base.with_sic(rows, _sic_stored()) if region == "US" else rows
 
 
-def _industries(region: str, theme: str) -> dict:
-    """The theme's official industries (theme_base.industries_for), on the market's stored index."""
-    return theme_base.industries_for(region, theme, _rows(region), _ask, db.get_setting, db.set_setting)
+def _industries(region: str, theme: str, m: dict | None = None) -> dict:
+    """The theme's official industries (theme_base.industries_for), on the market's stored index; with the map, an industry of a pick made
+    again is kept on the evidence of the previous live placement (held_industries)."""
+    rows = _rows(region)
+    held = (lambda dropped: held_industries(region, theme, m, dropped, rows)) if m is not None else None      # noqa: E731
+    return theme_base.industries_for(region, theme, rows, _ask, db.get_setting, db.set_setting, held=held)
+
+
+def held_industries(region: str, theme: str, m: dict, dropped: list[str], rows: list[dict]) -> list[str]:
+    """cl48 (R47): of the industries a pick made again leaves out, those most of whose companies were in an informative layer (any layer
+    but the theme's "Other" group) in the theme's previous live placement of the same map (previous_layers)."""
+    prev = previous_layers(region, theme, m)
+    if not prev:
+        return []
+    other = theme_base.other_label(theme)              # the name place_rest gives the group
+    ind = {r.get("symbol"): theme_base.key(r.get("industry")) for r in rows or [] if r.get("symbol")}
+    out = []
+    for i in dropped:
+        mine = [s_ for s_ in prev if ind.get(s_) == theme_base.key(i)]
+        if mine and 2 * sum(1 for s_ in mine if prev[s_] != other) > len(mine):
+            out.append(i)
+    return out
 
 
 # ---------- the AI parts, worked out behind the page (LIVE3-001) ----------
@@ -366,7 +589,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+
+
+EARLIER_MAX = 26                # (r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -382,6 +608,20 @@ def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
             seen.add(r)
             r = PLACE_CARRY[r]
             kept = (computed.get("theme:place", key + [r]) or {}).get("value") or {}
+        # rv51 (R51, the live Release 49 IT services placement: the answer kept under rules 48, asked for two new companies, had dropped the
+        # two extra layers and the layer names of the one kept under 44): the nearest earlier answer of the same map, back through the
+        # carried versions (at most EARLIER_MAX), gives the names and extra layers the kept one lacks (theme_base.with_earlier)
+        # gl52 (R52, the rotating review of Release 51: the live IT services page still without its two extra layers, as the walk stopped
+        # at the nearest earlier answer, rules 48's, the one that had lost them, and never reached rules 44's): every earlier answer of the
+        # same map within EARLIER_MAX carried versions is read, the nearest as before (with_earlier), each older one only for the layer names
+        # and extra layers still missing (fill_earlier)
+        e, steps, joined = r, 0, False
+        while kept and e in PLACE_CARRY and steps < EARLIER_MAX:
+            e, steps = PLACE_CARRY[e], steps + 1
+            prev = (computed.get("theme:place", key + [e]) or {}).get("value") or {}
+            if prev:
+                kept = theme_base.fill_earlier(kept, prev) if joined else theme_base.with_earlier(kept, prev)
+                joined = True
     except Exception:
         return {}, None
     return kept, (r if kept else None)
@@ -400,9 +640,20 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
         read_chip_making(region, out, kept)
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
+    ob = off_before(region, theme, m)                 # d53: the companies an earlier version dropped as another business
+    mb = moved_before(region, theme, m)               # c54: the moves the stored change log records, judged on what the layer sells
+    mo = moved_out(region, theme, m)                  # t56: the moves of the re-check that removed each layer the snapshot no longer has
+    # v55: each company's stored revenue, read where the map has a layer named by a stage (theme_base.stage_moves) or by scale (r571,
+    # theme_base.scale_moves), and r59 for a layer with a company left out of its figures (theme_base.listed_out): read on demand
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
-                                     carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m))
-    if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
+                                     # r59: stored figures read for a layer with a company left out too (theme_base.listed_out)
+                                     figures_of=_figures_reader(region),
+                                     carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
+                                     **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}),
+                                     **({"moved_out": mo} if mo else {}), published=published_layers(region, theme, m))
+    # p57: the misfit and audit answers (and the retry mark) are kept too, so each is asked at most once a theme and rules version
+    if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())
+                                                    or any(got.get(k) != kept.get(k) for k in ("fit", "audit", "reasked_rules") if got.get(k))):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
         except Exception as e:
@@ -423,10 +674,60 @@ def _has_description(region: str, sym: str) -> bool:
         return False
     if hit.get("about"):
         return True
+    if hit.get("owed"):      # e57: its annual report's read was put off (the minute's reads taken): read at the next check, never 3 days on
+        return False
     try:                     # none on its page: asked again after NO_DESCRIPTION_DAYS (evidence_reader)
         return (datetime.now(timezone.utc) - datetime.fromisoformat(hit["at"])).days < NO_DESCRIPTION_DAYS
     except Exception:
         return False
+
+
+DROPPED_READS = 20           # r572 round 2: companies the check left out on one layer's answer read at most, a check
+TOP_DESCRIBE = 30            # r571e: the theme's largest companies whose own words are read before its evidence check
+TOP_BUDGET = 60.0            # ...within this many seconds (the check runs in the background: no page waits on it)
+TOP_AGAIN_HOURS = 6          # ...and one of them kept as "none found" is read once more after this long
+
+
+def describe_top(region: str, m: dict, rows: list[dict], industries, n: int = TOP_DESCRIBE, budget: float = TOP_BUDGET) -> list[str]:
+    """r571e (R57, ten new themes built on R57: McDonald's "no description found in any source", GE Aerospace and RTX left out as
+    insufficient evidence on a first build): before a theme's evidence check, its `n` largest companies by market value (the map's and the
+    theme's official industries' companies, as the index lists them) with no description of their own kept, or kept as "none found" more
+    than TOP_AGAIN_HOURS ago, are read synchronously, largest first, within `budget` seconds (evidence_reader: the annual report first in the
+    US, the profile page in India; the annual-report reads wait for the next minute within the budget). At most `n` reads; no AI call. The
+    symbols read."""
+    idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
+    inds = {theme_base.key(i) for i in industries or []}
+    names = {**{s_: r.get("name") or s_ for s_, r in idx.items() if theme_base.key(r.get("industry")) in inds}, **_map_names(m)}
+    top = sorted(names, key=lambda s_: (-((idx.get(s_) or {}).get("market_cap") or 0), s_))[:n]
+    now = datetime.now(timezone.utc)
+    want, again = [], set()
+    for s_ in top:
+        got = _stored_evidence(region, s_)
+        if got.get("about") and not got.get("owed"):
+            continue
+        if got.get("at") and not got.get("owed"):
+            try:
+                if (now - datetime.fromisoformat(got["at"])).total_seconds() < TOP_AGAIN_HOURS * 3600:
+                    continue                    # looked for lately, none found
+            except ValueError:
+                pass
+            again.add(s_)
+        want.append(s_)
+    if want:
+        for s_ in want:
+            EVIDENCE_CACHE.pop(f"theme:evidence:{region}:{s_}")
+        evidence_reader(region, names, budget=budget, again=again)(want)
+    return want
+
+
+def describe_reads(missing: int) -> int:
+    """h56 (R56, the owner's review of the live R55 decks: Biotech 219 of 820 checked, FMCG 111 of 209 on industry labels): how many
+    companies' own descriptions the background check asks for at one check: PLACE_READS, or the companies still without one over
+    DESCRIBE_CHECKS_TO_FINISH when that is more, at most PLACE_READS_MAX. Still bounded in time: one evidence_reader call (theme_check's
+    EVIDENCE_BUDGET seconds, the sources' own rates: the Indian profile pages' per-minute limit, FILING_READS_PER_MINUTE annual reports);
+    a read the time or a busy source leaves is owed to a later check. No AI call: a description is read from the company's own pages."""
+    n = max(0, int(missing or 0))
+    return min(PLACE_READS_MAX, max(PLACE_READS, -(-n // DESCRIBE_CHECKS_TO_FINISH)))
 
 
 def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) -> list[str]:
@@ -434,19 +735,25 @@ def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) ->
     companies the AI added (their check reads it) and the largest DESCRIBE_MAX on the page, a few a view, so a small company the placement
     sends to the AI had no words of its own and no revenue model. Before the placement asks, the companies of the theme's industries it
     hasn't placed yet (largest first) with no kept description have their own page's description read once and kept in the shared store
-    (evidence_reader): at most PLACE_READS a theme check, never for a placement already kept, no job of its own. The symbols read."""
+    (evidence_reader): at most describe_reads a theme check, never for a placement already kept, no job of its own. The symbols read.
+    h56 (R56, the owner's review of the live R55 FMCG deck: 98 description-verified, 111 kept on industry labels): after those, every other
+    company of the map with no description looked for yet, largest first, in the same read: its own words, where a source has them, are
+    what the membership check verifies it by (theme_data.evidence_state, membership_recheck) instead of its industry label."""
     kept = kept if isinstance(kept, dict) else {}
     done = set((kept.get("assign") or {}) if isinstance(kept.get("assign"), dict) else ())
     rest = [c for v in out.get("value_chain") or [] if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")
             for c in v.get("companies") or [] if c.get("ticker") and c["ticker"] not in done]
     if not any(not v.get("official") and v.get("layer") for v in out.get("value_chain") or []):
-        return []                               # no layers of the map's own to place them in (theme_base.place_rest)
-    want = []
-    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))[:theme_base.PLACE_MAX]:
-        if len(want) >= PLACE_READS:
-            break
-        if not _has_description(region, c["ticker"]):
-            want.append(c["ticker"])
+        rest = []                               # no layers of the map's own to place them in (theme_base.place_rest): none to place
+    by_cap = lambda cs: sorted(cs, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))     # noqa: E731
+    first = {c["ticker"] for c in rest}
+    others = by_cap({c["ticker"]: c for v in out.get("value_chain") or [] for c in v.get("companies") or []
+                     if c.get("ticker") and c["ticker"] not in first}.values())
+    # e54 (R54, the owner's review of the live R53 decks: Biotech's 564 and Software's 151 "not checked yet (no description of their own is
+    # kept)" after several checks): the candidates were cut to the largest PLACE_MAX before the ones already described were passed over, so
+    # once those had their words no company past them was ever read; the next ones without a description, largest first, are read
+    missing = list(dict.fromkeys(c["ticker"] for c in by_cap(rest) + others if not _has_description(region, c["ticker"])))
+    want = missing[:describe_reads(len(missing))]
     if want:
         try:
             evidence_reader(region, names)(want)
@@ -455,11 +762,67 @@ def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) ->
     return want
 
 
+# e57 (R57, the owner's review of the live R56 decks: Biotech 159 of 820 description-verified, Software 200 of 588): a theme's companies
+# still without a description of their own were read only in its full check, at most once a day (the checked map is kept a day), within one
+# EVIDENCE_BUDGET; a view of a theme whose check is in now also starts one more such read in the background (describe_more), no page
+# waits on it, at most once in DESCRIBE_EVERY a theme, one at a time across every theme, DESCRIBE_BUDGET seconds, the sources' own rates.
+DESCRIBE_EVERY = 3600
+DESCRIBE_BUDGET = 90.0
+_described_at: dict = {}                  # (market, theme) -> when its last such read started (bounded: cleared past VERDICT_KEEP)
+_describe_gate = threading.Lock()
+
+
+def describe_more(region: str, theme: str, m: dict, now: float | None = None) -> bool:
+    """e57: on a view of a theme whose checked map is in, the next of its companies with no stored description are read in the background
+    (describe_missing), at most once in DESCRIBE_EVERY a theme; THEME_DESCRIBE_MORE=0 turns it off (the tests' fake world). Whether one was
+    started."""
+    import os
+    if os.environ.get("THEME_DESCRIBE_MORE", "1").strip().lower() in ("0", "false", "no", "off"):
+        return False
+    now = time.time() if now is None else now
+    k = (region, theme.lower())
+    if now - _described_at.get(k, 0.0) < DESCRIBE_EVERY:
+        return False
+    if len(_described_at) > VERDICT_KEEP:
+        _described_at.clear()
+    _described_at[k] = now
+    later(("describe-more",) + k, lambda: note_words(region, theme, describe_missing(region, m)), wait=0)
+    return True
+
+
+def describe_missing(region: str, m: dict, budget: float = DESCRIBE_BUDGET) -> list[str]:
+    """e57: the map's companies with no description kept or looked for lately (_has_description), largest first, at most describe_reads of
+    them, read from their own pages (evidence_reader: the profile page in India, the annual report first in the US, then the encyclopedia)
+    within `budget` seconds and kept in the shared store; one such read at a time across every theme (another running: none). No AI call.
+    The symbols asked."""
+    if not _describe_gate.acquire(blocking=False):
+        return []
+    try:
+        names = _map_names(m)
+        cos = sorted({c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}.values(),
+                     key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+        missing = [c["ticker"] for c in cos if not _has_description(region, c["ticker"])]
+        # e57 (RC6): the theme's industry-peer candidates with no description read yet, so they can join on their own words
+        missing += [t for t in theme_identity.peers_unread(m) if t not in missing and not _has_description(region, t)]
+        names = {**{x["ticker"]: x.get("name") or x["ticker"] for x in (m.get("placements") or {}).get("peer_candidates") or []
+                    if isinstance(x, dict) and x.get("ticker")}, **names}
+        want = missing[:describe_reads(len(missing))]
+        if want:
+            try:
+                evidence_reader(region, names, budget=budget)(want)
+            except Exception as e:              # a source busy: read at a later view
+                print("theme: descriptions not read:", type(e).__name__, str(e)[:100])
+        return want
+    finally:
+        _describe_gate.release()
+
+
 def _stored_evidence(region: str, sym: str) -> dict:
     try:
-        return db.json_value(db.get_setting(f"theme:evidence:{region}:{sym}"), {}) or {}
+        got = db.json_value(db.get_setting(f"theme:evidence:{region}:{sym}"), {}) or {}
     except Exception:
         return {}
+    return own_got(region, sym, got)[0]           # r66e: never another company's words
 
 
 def reread_weak(region: str, out: dict, names: dict, kept: dict | None) -> list[str]:
@@ -531,7 +894,7 @@ def read_chip_making(region: str, out: dict, kept: dict | None) -> list[str]:
         if owed:
             break
         key_ = f"theme:evidence:{region}:{s_}"
-        new = {**got, "about": theme_check.clean_description(" ".join(x for x in (filed, got["about"]) if x)), "filed": True}
+        new = {**got, "about": theme_check.kept_description(" ".join(x for x in (filed, got["about"]) if x)), "filed": True}
         try:
             db.set_setting(key_, json.dumps(new, ensure_ascii=False))
         except Exception as e:
@@ -563,8 +926,34 @@ def _facts_reader(region: str):
             business = theme_check.business_text(b)          # R27: the business read's own lines (what it sells, to whom, how it earns)
         except Exception as e:
             print("theme: segments not read:", sym, type(e).__name__, str(e)[:100])
-        return {"industry": (hit or {}).get("industry") or "", "segments": segs, "filings": own_filings(region, sym), "business": business}
+        # gl52 (R52): looked for in every source (its page, by symbol and BSE code, an encyclopedia, its annual report) and none found
+        searched = bool((hit or {}).get("at") and not (hit or {}).get("about") and not (hit or {}).get("owed"))
+        return {"industry": (hit or {}).get("industry") or "", "segments": segs, "filings": own_filings(region, sym), "business": business,
+                **({"searched": True} if searched else {})}
     return facts_of
+
+
+def _figures_reader(region: str):
+    """v55 (R55): symbol -> {"revenue", "ebitda"} of a company's latest stored year (the theme's kept page facts, theme_library.FACTS, as the
+    dive reads them; theme_data.company_row), {} when none is kept: what its stage is read from beside its words (theme_base.stage_moves).
+    Nothing is read from a source here."""
+    def figures_of(sym):
+        try:
+            hit = computed.get(theme_library.FACTS, [region, sym])
+            r = theme_data.company_row(region, sym, (hit or {}).get("value")) if hit else None
+        except Exception as e:
+            print("theme: stored figures not read:", sym, type(e).__name__, str(e)[:100])
+            r = None
+        # r581: its net margin too, which the release gate checks for a bank or insurer (above 100%: a revenue line that is not the total)
+        if r and r.get("revenue") is not None:
+            return {"revenue": r.get("revenue"), "ebitda": r.get("ebitda"), "net": r.get("net")}
+        # r65e (the live R64 Biotech deck: Erasca, Immunovant and Kodiak, pages read with a P/B and a return on equity and no revenue, as
+        # a company before its first sale has none, sent to "Other" as "no figure stored"): a page whose figures hold no revenue but a
+        # figure a median is taken of (theme_data.calc_record's rule) is a page read, "read"
+        if r and any(r.get(k) is not None for k in theme_data.STAT_KEYS):
+            return {"read": True}
+        return {}
+    return figures_of
 
 
 def _no_ai(system: str, text: str) -> dict:
@@ -576,11 +965,13 @@ def quick(region: str, theme: str, m: dict) -> dict:
     the AI's pick kept from before, or the industries named like the theme), the AI's own placements shown as not yet confirmed, and the
     tailwinds and risks as general background until they are checked against dated headlines."""
     inds = theme_base.industries_for(region, theme, _rows(region), _no_ai, db.get_setting, db.set_setting)
+    m = theme_identity.resolve_identity(m, _rows(region))          # e57 (RC7)
     unconfirmed = lambda cos: [{**c, "verified": False} for c in cos or []]      # noqa: E731
     out = {**m, "value_chain": [{**v, "companies": unconfirmed(v.get("companies"))} for v in m.get("value_chain") or []],
            "sub_themes": [{**x, "companies": unconfirmed(x.get("companies"))} for x in m.get("sub_themes") or []]}
     out["placements"] = {"checked": False, "pending": len(_map_names(m)), "left_out": 0}
     out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+    out = theme_identity.one_listing(out)                          # e57 (RC7)
     out = placed(region, theme, m, out, ask=None)                  # the answer kept with the map, else by the companies' words (no AI here)
     key = check_key(region, theme, m)
     claims = A.get("sector_claims", key) or _plain_claims(m)
@@ -605,6 +996,76 @@ def previous_layers(region: str, theme: str, m: dict) -> dict:
         return {}
 
 
+def previous_confirmed(region: str, theme: str, m: dict) -> dict:
+    """t56 (R55 review): {symbol: "confirmed" (its own words were checked to show the theme's work, theme_changes' snapshot "why") or
+    "member"} of the members of the previous live read of this same map, for theme_base.keep_confirmed. {} when none is stored, or the
+    snapshot is of another map."""
+    try:
+        snap = (theme_changes.stored(region, m.get("_library") or theme) or {}).get("snap") or {}
+        if not isinstance(snap.get("cos"), dict) or int(float(snap.get("stamp") or 0)) != int(float(m.get("generated_at") or 0)):
+            return {}
+        why = snap.get("why") if isinstance(snap.get("why"), dict) else {}
+        return {s_: "confirmed" if theme_base.CONFIRMED_SAID in str(why.get(s_) or "") else "member" for s_ in snap["cos"]}
+    except Exception as e:
+        print("theme: previous members not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def published_layers(region: str, theme: str, m: dict) -> dict:
+    """p57 (R56 review, the placement contract): {symbol: its layer in the published version} of every member of the stored version of
+    this same map (the dive's companies and every other member) and of each company a re-check under new placement rules removed on a
+    check's answer alone (theme_changes.published_members), for theme_check.check_placements `held`, theme_base.keep_published and
+    hold_published. {} for a theme read for the first time, or a snapshot of another map."""
+    try:
+        got = theme_changes.stored(region, m.get("_library") or theme) or {}
+        snap = got.get("snap") or {}
+        if not snap or int(float(snap.get("stamp") or 0)) != int(float(m.get("generated_at") or 0)):
+            return {}
+        return theme_changes.published_members(got)
+    except Exception as e:
+        print("theme: published members not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def held_groups(m: dict, published: dict, kept: dict | None) -> dict:
+    """p57: {symbol: the map group of its published layer ("" when none of the map's)} of each published member the map names, for
+    theme_check.check_placements `held` (a published member that passes the contract is not asked again)."""
+    rename = theme_base.answer_renames(kept)
+    groups = [v.get("layer") or "" for v in m.get("value_chain") or [] if not v.get("official")]
+    named = {c.get("ticker") for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    return {s_: theme_base.published_group(lay, groups, rename) or "" for s_, lay in (published or {}).items() if s_ in named}
+
+
+def off_before(region: str, theme: str, m: dict) -> dict:
+    """d53 (R53): {symbol: [name, industry]} of the companies an earlier stored version of this theme dropped as another business
+    (theme_changes.off_memory), whatever map it was of: a company's business doesn't change with the map. {} when none is stored."""
+    try:
+        return theme_changes.off_memory(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: earlier exclusions not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def moved_before(region: str, theme: str, m: dict) -> dict:
+    """c54 (R53 review): {symbol: [from, to]} of the moves between layers the stored change log records (theme_changes.move_memory), the
+    latest of each company's, so a company a re-check moved into a layer is judged on what that layer sells. {} when none is stored."""
+    try:
+        return theme_changes.move_memory(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: earlier moves not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def moved_out(region: str, theme: str, m: dict) -> dict:
+    """t56 (R55 review): {symbol: [from, to]} of the moves the one re-check that removed each layer the stored snapshot no longer has made
+    out of it (theme_changes.lost_moves), so the taxonomy guard reads the version before exactly. {} when none is stored."""
+    try:
+        return theme_changes.lost_moves(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: moves out of lost layers not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
 def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
     """The map as the page shows it, never waiting on the AI (LIVE3-001): the checked map when it is in; otherwise the checks are started
     in the background (`_check`) and the request gets the latest partly checked map, or the base with nothing checked yet (`quick`).
@@ -618,7 +1079,70 @@ def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
     if hit is None:
         later(("check",) + key, lambda: _check(region, theme, m))
         hit = A.get("sector_checked3", key) or A.get("sector_checking", key) or quick(region, theme, m)
+    elif (hit.get("placements") or {}).get("checked"):
+        hit = replaced_on_words(region, theme, m, key, hit)   # r572: words read since the check placed it: placed again, no AI
+        describe_more(region, theme, hit)          # e57: its companies still without words of their own, read in the background
     return with_caps(hit, _rows(region))
+
+
+# r572 (R57.2, Step 0 on the live R57.1 inputs: 70 companies in 13 themes placed on the words stored when the theme was checked, e.g. JMD
+# Ventures "no description of its own" in the Media deck while its words were stored since by the background reads, describe_more): the
+# checked map is kept a day, and words read after its check reached no placement until then. The map the placement read is kept (bounded,
+# in memory: UNPLACED_KEEP themes), and a view of a theme whose companies had words read since its check places it again from it, with no AI
+# (the kept answers only), at most once in REPLACE_EVERY a theme; the dive and the deck are keyed by it ("replaced")
+UNPLACED_KEEP = 6
+REPLACE_EVERY = 600
+_unplaced: dict = {}                      # check key -> the map the placement read (with_base's output)
+_words_since: dict = {}                   # (market, theme) -> how many of its companies had words stored since its last placement
+_replaced_at: dict = {}
+
+
+def keep_unplaced(key: tuple, out: dict) -> None:
+    try:
+        _unplaced.pop(key, None)
+        _unplaced[key] = json.loads(json.dumps(out, default=str))
+        while len(_unplaced) > UNPLACED_KEEP:
+            _unplaced.pop(next(iter(_unplaced)))
+        _words_since.pop((key[0], key[1]), None)
+    except (TypeError, ValueError) as e:
+        print("theme: map before placement not kept:", type(e).__name__, str(e)[:100])
+
+
+def note_words(region: str, theme: str, asked) -> int:
+    """r572: how many of the companies just asked for now have words of their own stored, added to the theme's count since its placement."""
+    n = sum(1 for s_ in asked or [] if _stored_evidence(region, s_).get("about"))
+    if n:
+        k = (region, theme.lower())
+        _words_since[k] = _words_since.get(k, 0) + n
+        if len(_words_since) > VERDICT_KEEP:
+            _words_since.clear()
+    return n
+
+
+def replaced_on_words(region: str, theme: str, m: dict, key: tuple, hit: dict, now: float | None = None) -> dict:
+    """r572: the checked map placed again from the map its placement read when words were stored since for its companies (note_words),
+    with no AI; the checked map as it is otherwise (nothing kept to place again, or placed again less than REPLACE_EVERY ago)."""
+    k = (region, theme.lower())
+    now = time.time() if now is None else now
+    if not _words_since.get(k) or key not in _unplaced or now - _replaced_at.get(k, 0.0) < REPLACE_EVERY:
+        return hit
+    _replaced_at[k] = now
+    if len(_replaced_at) > VERDICT_KEEP:
+        _replaced_at.clear()
+    try:
+        out = placed(region, theme, m, json.loads(json.dumps(_unplaced[key])), ask=None)
+    except Exception as e:
+        print("theme: not placed again on new words:", type(e).__name__, str(e)[:100])
+        return hit
+    _words_since.pop(k, None)
+    p = {**(hit.get("placements") or {}), **(out.get("placements") or {})}
+    for x in ("industries_by", "unclassified", "checked", "timed_out"):
+        if x in (hit.get("placements") or {}):
+            p[x] = hit["placements"][x]
+    p["replaced"] = int((hit.get("placements") or {}).get("replaced") or 0) + 1
+    new = {**hit, **out, "placements": p, "tailwinds": hit.get("tailwinds"), "risks": hit.get("risks")}
+    A.keep("sector_checked3", key, new, 24 * 3600)
+    return new
 
 
 def with_caps(m: dict, rows: list[dict]) -> dict:
@@ -652,15 +1176,47 @@ def _check(region: str, theme: str, m: dict) -> dict:
             return hit
         if len(VERDICTS) > VERDICT_KEEP:
             VERDICTS.clear()
-        out = theme_check.check_placements(m, evidence_reader(region, _map_names(m)), _ask, theme, VERDICTS)
+        # e57 (RC7): a company the map names under a line the index doesn't list is the index's company, never a second member
+        mi = theme_identity.resolve_identity(m, _rows(region))
+        # p57: the placement contract: a published member that passes it is not asked again (held), and one the check still leaves out on
+        # its answer alone goes back to its published group (keep_published), unless its own words contradict that group
+        pub = published_layers(region, theme, m)
+        kept_ans, _ = kept_placement(region, theme, m)
         missing = None
         if region == "US":
             try:
                 missing = fill_us_industries()
             except Exception as e:
                 print("theme: SEC codes not filled:", type(e).__name__, str(e)[:100])
-        inds = _industries(region, theme)
-        out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+        inds = _industries(region, theme, m)
+        # r571e: the theme's largest companies have their own words read before the evidence check and the placement read them
+        try:
+            describe_top(region, mi, _rows(region), inds["industries"])
+        except Exception as e:
+            print("theme: largest companies' descriptions not read:", type(e).__name__, str(e)[:100])
+        out = theme_check.check_placements(mi, evidence_reader(region, _map_names(mi)), _ask, theme, VERDICTS, held=held_groups(mi, pub, kept_ans))
+        # r572 round 2: a company the check leaves out on one layer's answer has its own description read (stored, else its page) before the
+        # placement decides whether that answer removes it (theme_base.layer_answer_removals): bounded, the one evidence read of the check
+        try:
+            gone_ = [x["ticker"] for x in (out.get("placements") or {}).get("dropped") or []
+                     if isinstance(x, dict) and x.get("ticker") and x.get("said") in ("no", "unbacked") and not _has_description(region, x["ticker"])]
+            if gone_:
+                evidence_reader(region, {x["ticker"]: x.get("name") for x in (out.get("placements") or {}).get("dropped") or []
+                                         if isinstance(x, dict) and x.get("ticker")})(gone_[:DROPPED_READS])
+        except Exception as e:
+            print("theme: left-out companies' descriptions not read:", type(e).__name__, str(e)[:100])
+        # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
+        out = theme_base.keep_confirmed(out, mi, previous_confirmed(region, theme, m))
+        about_ = _about_reader(region, _map_names(mi), 0)
+        out = theme_base.keep_published(out, pub, lambda s_: about_(s_), rename=theme_base.answer_renames(kept_ans))
+        out = theme_base.with_base(mi, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+        # e57 (RC6): a checked pick's industry peers above the theme's median market value considered, joining on their own stored words
+        try:
+            out = theme_identity.with_peers(out, _rows(region), kept_about(region), theme)
+        except Exception as e:
+            print("theme: industry peers not considered:", type(e).__name__, str(e)[:100])
+        out = theme_identity.one_listing(out)          # e57 (RC7): one member per company, whatever lines the index lists it under
+        keep_unplaced(key, out)                         # r572: what the placement read, so new words re-place it without the AI
         out = placed(region, theme, m, out, ask=_ask)
         claims = A.get("sector_claims", key)
         if claims is None:
@@ -697,30 +1253,43 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
     run (largest first), so a theme of hundreds fills in over a few views without a burst of reads."""
     reads = {"n": 0, "missed": 0}
     lock = threading.Lock()
+    notes: dict = {}          # r68e: the opening of a stored description read as another company's, by symbol (unchecked_why)
 
     def about_of(sym):
         k = f"theme:evidence:{region}:{sym}"
         hit = EVIDENCE_CACHE.get(k)
+        stale = None
         if hit is None:
             try:
                 got = db.json_value(db.get_setting(k), {})
             except Exception:
                 got = {}
-            if got.get("at") and not thin_about(got, region):
+            got, _ = own_got(region, sym, got, names.get(sym) or "")          # r66e: never another company's words
+            if got.get("other") and not got.get("about"):
+                notes[sym] = str(got["other"])
+            if got.get("at") and not thin_about(got, region, names.get(sym) or ""):
                 hit = got
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
+            elif got.get("at") and company_text(got.get("about")):
+                # d53 (R53, the owner's review of the live R52 Consumer retail deck: Suburban Propane, CDW, FirstCash and EZCORP, dropped as
+                # another business since R40, back in the theme, and Chewy moved to "Other"): gl52's ABOUT_V 5 marked every US description
+                # with no sentence of its own for a second read, and until that read was made (FILING_READS_PER_MINUTE across every theme)
+                # the placement read none at all, so a company's own words, by which it was out of the theme or in its layer, were gone.
+                # The stored words stand until the new read replaces them
+                stale = got["about"]
         if hit is None:
             with lock:
                 if reads["n"] >= limit:
                     reads["missed"] += 1
-                    return None
+                    return stale
                 reads["n"] += 1
             try:
-                return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about")
+                return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about") or stale
             except Exception:
-                return None
+                return stale
         return hit.get("about") or own_filings(region, sym) or None         # no description: the lines of its own filings
     about_of.reads = reads
+    about_of.other_of = lambda sym: notes.get(sym, "")
     return about_of
 
 
@@ -729,11 +1298,22 @@ def kept_about(region: str):
     looked up once a dive; the lines of its filings that stand in for a missing description are not its description."""
     read, seen = _about_reader(region, {}, 0), {}
 
+    raw: dict = {}
+
     def about(sym):
         if sym not in seen:
             got = read(sym) or ""
+            raw[sym] = got
             seen[sym] = None if not got or got.startswith("From its own filings:") else got
         return seen[sym]
+
+    def filed_only(sym) -> bool:
+        """r58: whether all the company has stored is its own filings' titles (a filer of its own reports, no description of its own)."""
+        about(sym)
+        return str(raw.get(sym) or "").startswith("From its own filings:")
+    about.filed_only = filed_only
+    # r68e: the opening of its stored description read as another company's, when that is why it has none ("" else)
+    about.other_of = lambda sym: (about(sym), "" if seen.get(sym) else read.other_of(sym))[1]
     return about
 
 
@@ -761,12 +1341,68 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
     if not fresh:
         hit = computed.get(theme_library.FACTS, [region, sym])
         if hit is not None and isinstance(hit.get("value"), dict):
-            return hit["value"], hit.get("at")
+            # ex49 (R48, the outside review of the live R48 Chemicals deck: 4 net margins above EBITDA left out "pending lines" while the
+            # company pages were being rebuilt to keep them, FACTS_VERSION 10): a piece kept from a page built before the current version is
+            # taken again once its stored page has been rebuilt, so a theme reads the year's profit before tax, tax and other income as
+            # soon as the page keeps them, with no Refresh
+            # r581 (the live R58 Regional banks deck: Fifth Third $80 m, a 3,152.5% net margin, from a piece kept before R58's sector
+            # schema, never taken again since FACTS_VERSION stayed 10): a bank's or insurer's piece whose net profit is above its revenue is
+            # taken again from its stored page once that page no longer is (rebuilt: stock_pages.financial_mismatch); until then the dive
+            # withholds that revenue (theme_data.company_row)
+            from ..stock_pages import financial_mismatch
+            if financial_mismatch(hit["value"]) and callable(R.public_facts):
+                page = R.public_facts(region, sym)
+                if page and not financial_mismatch(page) and (page.get("v") or 1) >= (hit["value"].get("v") or 1):
+                    kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+                    return page, (kept or {}).get("at")
+                return hit["value"], hit.get("at")
+            # r60b (R60): a US financial filer's piece kept before its page kept its revenue's lines (stock_pages.basis_missing) is taken
+            # again once the stored page keeps them, so the deck says its revenue basis; until then the deck says it is not stored
+            from ..stock_pages import basis_missing
+            if basis_missing(hit["value"]) and callable(R.public_facts):
+                page = R.public_facts(region, sym)
+                if page and not basis_missing(page) and (page.get("v") or 1) >= (hit["value"].get("v") or 1):
+                    kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+                    return page, (kept or {}).get("at")
+                return hit["value"], hit.get("at")
+            if (hit["value"].get("v") or 1) >= _facts_version() or not callable(R.public_facts):
+                return hit["value"], hit.get("at")
+            page = R.public_facts(region, sym)
+            if not page or (page.get("v") or 1) <= (hit["value"].get("v") or 1):
+                return hit["value"], hit.get("at")
+            kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+            return page, (kept or {}).get("at")
     f = R.public_facts(region, sym) if callable(R.public_facts) else None
     if not f:
         return None, None
     kept = computed.put(theme_library.FACTS, [region, sym], f, label=sym, region=region)
     return f, (kept or {}).get("at")
+
+
+def _facts_version() -> int:
+    from ..stock_pages import FACTS_VERSION
+    return FACTS_VERSION
+
+
+def pages_rebuilt(region: str, dive: dict) -> list[str]:
+    """ex49 (R48): the companies of a kept dive whose checked figure was reconciled on a stored page built before the year's lines were
+    kept (its record's bridge "unkept": profit before tax, tax rate) and whose stored page now keeps them (rebuilt at the current
+    FACTS_VERSION): the dive is worked out again for them (dive_of), so the reconciliation uses the lines. Only those few pages are read."""
+    R = _routes()
+    if not callable(R.public_facts):
+        return []
+    syms = sorted({x.get("symbol") for x in ((dive or {}).get("checks") or {}).get("states") or []
+                   if {"pbt", "tax_pct"} & set(((x.get("bridge") or {}).get("unkept")) or []) and x.get("symbol")})
+    out = []
+    for s_ in syms:
+        try:
+            f = R.public_facts(region, s_) or {}
+        except Exception:
+            continue
+        # rebuilt, and its years keep the lines (never a page whose rebuild still lacks them: the dive would be worked out on every read)
+        if (f.get("v") or 1) >= _facts_version() and any(isinstance(y, dict) and ("pbt" in y or "tax_pct" in y) for y in f.get("years") or []):
+            out.append(s_)
+    return out
 
 
 def pieces_moved(region: str, pieces: dict) -> bool:
@@ -867,9 +1503,17 @@ def sources(region: str, theme: str, fresh: bool = False):
         red_flags=red, card=card, history=history, segments=segments, peer_history=peer_history, cohort_history=cohort_history,
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
         metrics=sector_metrics.reader(region, fresh),           # R23: filed sector figures, read once and kept for everyone
-        about=kept_about(region))                               # R35: the stored descriptions only (nothing is read from a page)
+        about=kept_about(region),                               # R35: the stored descriptions only (nothing is read from a page)
+        passages=sector_ops.passages_reader(region, today=today))   # m53: sector operating measures from the stored filings index only
     src.pieces = pieces
     return src
+
+
+def removal_words(region: str) -> dict:
+    """r572: a company's stored words and official industry, for the change log's reason why a company the map no longer names left
+    (theme_changes.reasoned): stored only, nothing read from a page."""
+    facts = _facts_reader(region)
+    return {"words_of": kept_about(region), "industry_of": lambda s_: str((facts(s_) or {}).get("industry") or "").split(">")[-1].strip()}
 
 
 @router.get("/theme-dive")
@@ -884,9 +1528,10 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
         kept = computed.get(theme_library.DIVE, dive_key(r, theme, m), count=False)
         state = "go" if kept is None else computed.refresh_gate(profile, "theme:dive", kept.get("at"))
         if state != "go":
-            return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile))
+            return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile,
+                                             **removal_words(r)))
         by = computed.plan_word(profile)
-    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by), profile)
+    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by, behind=not refresh), profile, **removal_words(r))
     return R.ok({**out, "refresh_state": "done"} if refresh else out)
 
 
@@ -904,16 +1549,27 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
     r, theme, m, _ = R.theme_map(profile, region, q)
     hit = checked(r, theme, m)
     names = {c["ticker"]: c.get("name") for v in hit.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    # r572 (the live R57.1 inputs carried no words for the companies the map's check left out, which the placement reads to decide whether
+    # a layer's "no" removes them: theme_base.layer_answer_removals): those companies' stored words and facts too
+    for x in ((hit.get("placements") or {}).get("dropped") or []) + ((hit.get("placements") or {}).get("layer_no") or []):
+        if isinstance(x, dict) and x.get("ticker"):
+            names.setdefault(x["ticker"], x.get("name"))
     about = _about_reader(r, names, 0)                    # stored descriptions only, as placed() reads them
     kept, version = kept_placement(r, theme, m)
     # R45 (lane tx2): also the previous live layers the placement reads (theme_base.place_rest `previous`) and each company's stored facts
     # (its official industry path, segments, filings' titles and business read: the live Release 45 Utilities placement could not be
     # replayed exactly without them), so a replay feeds exactly what the placement read
-    facts = _facts_reader(r)
+    facts, figures = _facts_reader(r), _figures_reader(r)
     return R.ok({"region": r, "theme": theme, "rules": theme_base.RULES, "generated_at": m.get("generated_at"), "kept_version": version,
                  "kept": kept, "placements": hit.get("placements"), "value_chain": hit.get("value_chain") or [],
                  "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
-                 "facts": {s_: facts(s_) for s_ in sorted(names)}})
+                 "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
+                 "moved_before": moved_before(r, theme, m),    # c54: the moves the stored change log records
+                 "moved_out": moved_out(r, theme, m),          # t56: the moves of the re-check that removed each layer the snapshot lost
+                 "published": published_layers(r, theme, m),   # p57: every published member's layer (the placement contract)
+                 "facts": {s_: facts(s_) for s_ in sorted(names)},
+                 # v55: each company's latest stored revenue and EBITDA margin, as the placement reads its stage (theme_base.stage_moves)
+                 "figures": {s_: f for s_, f in ((s_, figures(s_)) for s_ in sorted(names)) if f}})
 
 
 def dive_key(r: str, theme: str, m: dict) -> list:
@@ -922,7 +1578,8 @@ def dive_key(r: str, theme: str, m: dict) -> list:
     fm = theme_base.for_figures(m)[0]
     said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
     return [r, m.get("_library") or theme_library.normalise(theme, r), int(float(m.get("generated_at") or 0)),
-            (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}", f"td{theme_data.DIVE_TEXT}"]
+            (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}", f"td{theme_data.DIVE_TEXT}"] \
+        + ([f"rp{(m.get('placements') or {})['replaced']}"] if (m.get("placements") or {}).get("replaced") else [])     # r572
 
 
 def requeue(r: str, dive: dict) -> None:
@@ -931,7 +1588,9 @@ def requeue(r: str, dive: dict) -> None:
     deck's 7 of 19). The queue skips one already queued or stored; nothing is queued with no source set up."""
     fams = dive.get("metrics_families") or {}
     for s_ in dive.get("metrics_pending") or []:
-        if fams.get(s_):
+        if fams.get(s_) and (p_ := sector_metrics.stored(r, s_)) is not None and not sector_metrics.current_piece(p_):
+            sector_metrics.queue(r, s_, fams[s_], again=True)          # r69e: one waiting for a re-read of its stored piece
+        elif fams.get(s_):
             sector_metrics.queue(r, s_, fams[s_])
 
 
@@ -976,22 +1635,152 @@ def _at_seconds(at) -> float:
             return 0.0
 
 
-def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
+def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | None, about, today) -> dict:
+    """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks: the companies
+    whose membership was checked were always the figures' window, every one the AI named and then the largest by market value, so the
+    check never moved on): the companies outside that window checked so far, earlier stored reads' (the snapshot's "ev") and this read's
+    next theme_data.membership_step, each with its evidence state; with how many are checked of the theme's companies after each stored
+    read ("history", the snapshot's "ev_hist" and this read's point). {"outside": {symbol: state}, "checked", "total", "history", "step",
+    "rechecked"}.
+    h56 (R56, the owner's review of the live R55 decks): every point of the history is the evidence tally's (theme_data.checked_tally, the
+    one the deck says the members by state from: Payments' "19 of 20 (95%)" sat beside "100% → 100%", the old point counting the window's
+    companies not checked), with its description-verified count; a point kept before, without the tally's counts, is left out. The step
+    grows with the companies not checked yet (theme_data.membership_step), and a company kept on a label is checked again once its own
+    description is stored (theme_data.membership_recheck)."""
+    before = before if isinstance(before, dict) else {}
+    every = {c["ticker"] for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    window = dive.get("evidence") or {}
+    kept = {s_: theme_changes.EV_STATE.get(x, x) for s_, x in (before.get("ev") or {}).items()
+            if s_ in every and s_ not in window and theme_changes.EV_STATE.get(x, x) in theme_data.EVIDENCE_STATES}
+    total = (m.get("placements") or {}).get("total") or (dive.get("coverage") or {}).get("placed") or len(every)
+    counts = theme_data.evidence_counts(window)
+    step = theme_data.membership_step(theme_data.checked_tally(counts, kept, total)["total"])
+    new, again = {}, {}
+    try:
+        words = theme_data.theme_words(fm, theme_data.theme_name(theme, fm))      # r68e: the map's own name, whatever search reached it
+        again = theme_data.membership_recheck(m, kept, words, about, step)
+        new = theme_data.membership_round(m, set(window) | set(kept), words, about, step)
+    except Exception as e:
+        print("theme: membership check not moved on:", type(e).__name__, str(e)[:100])
+    outside = {**kept, **again, **new}
+    t = theme_data.checked_tally(counts, outside, total)
+    hist = theme_data.tally_points(before.get("ev_hist"))
+    point = theme_data.tally_point(today.isoformat(), t)
+    if not hist or hist[-1][1:] != point[1:]:
+        hist = (hist + [point])[-theme_changes.KEEP:]
+    return {"outside": dict(sorted(outside.items())), "checked": t["checked"], "total": t["total"], "history": hist, "step": len(new),
+            "rechecked": sum(1 for s_, x in again.items() if x != kept.get(s_))}
+
+
+# LIVE10A-008: a kept dive behind a newer close or a rebuilt page was worked out again inside the page's request (Semiconductors 44 s,
+# Automotive 65 s, Private banks 67 s: the first visit after each close paid for the whole theme); the page now gets the kept dive at once,
+# marked "updating", and one worker reads the new one behind it, one theme at a time in the memory guard's turn
+_BEHIND = ThreadPoolExecutor(max_workers=1, thread_name_prefix="theme-dive-behind")
+_behind_keys: set = set()
+_behind_lock = threading.Lock()
+BEHIND_MAX = 8                    # themes waiting for the worker at once; past it the page works the dive out itself, as before
+# the test suite turns it off (a worker thread outliving its test would write into the next one's world); tests that want it set it
+BEHIND_ON = os.environ.get("READ_BEHIND", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def _rebuild_behind(r: str, theme: str, m: dict, key: list) -> bool:
+    """LIVE10A-008: the dive worked out again on the worker (once per key at a time); False when the queue is full."""
+    k = json.dumps(key, default=str)
+    with _behind_lock:
+        if k in _behind_keys:
+            return True
+        if len(_behind_keys) >= BEHIND_MAX:
+            return False
+        _behind_keys.add(k)
+
+    def run():
+        try:
+            from .. import memguard
+            with memguard.heavy("theme dive"):
+                dive_of(r, theme, m, rebuild=True)
+        except Exception as e:
+            print("theme dive: not read again behind the page:", theme, type(e).__name__, str(e)[:120])
+        finally:
+            with _behind_lock:
+                _behind_keys.discard(k)
+    _BEHIND.submit(run)
+    return True
+
+
+def latest_dive(r: str, name: str, label: str = "") -> dict | None:
+    """r66e (LIVE12A-002: Private banks ready in 57 s, its dive worked out inside the page's request after a dive text bump, as there was no
+    dive kept under today's versions to serve meanwhile): the newest dive kept for this theme under any versions ({"dive", "at"}), found by
+    the theme's library name kept with it, or (a dive kept before the name was) by its label in the same market; None when none is kept."""
+    best = None
+    for hk, e in (computed.index(theme_library.DIVE).get("entries") or {}).items():
+        if e.get("region") != r:
+            continue
+        q = (e.get("meta") or {}).get("q")
+        if not (q == name if q else (label and str(e.get("label") or "").lower() == label.lower())):
+            continue
+        if best is None or float(e.get("at") or 0) > best[0]:
+            best = (float(e.get("at") or 0), hk)
+    if best is None:
+        return None
+    got = computed.get_hk(theme_library.DIVE, best[1]) or {}
+    dive = (got.get("value") or {}).get("dive")
+    return {"dive": dive, "at": got.get("at")} if isinstance(dive, dict) else None
+
+
+def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None, behind: bool = False, rebuild: bool = False) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
     (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
-    pieces (no AI) when one of them was refreshed by another theme (pieces_moved)."""
+    pieces (no AI) when one of them was refreshed by another theme (pieces_moved). `behind` (the page's own request, LIVE10A-008): a kept
+    dive that is behind is served at once ("updating") and worked out again on the worker; `rebuild`: that worker's read."""
     fm, figures = theme_base.for_figures(m)
     key = dive_key(r, theme, m)
-    if not refresh:
+    if not refresh and not rebuild:
         kept = computed.get(theme_library.DIVE, key)
-        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}) \
-                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) and not prices_moved(r, kept):
-            requeue(r, kept["value"]["dive"])
-            return kept["value"]["dive"]
+        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict):
+            stale = pieces_moved(r, kept["value"].get("pieces") or {}) \
+                or sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) or prices_moved(r, kept) \
+                or bool(pages_rebuilt(r, kept["value"]["dive"]))          # ex49: a page rebuilt with the lines a checked figure waits for
+            if not stale:
+                requeue(r, kept["value"]["dive"])
+                return kept["value"]["dive"]
+            if behind and BEHIND_ON and _rebuild_behind(r, theme, m, key):
+                return {**kept["value"]["dive"], "updating": True}
+        elif kept is None and behind:
+            # r66e: no dive kept under today's versions (a rules or dive text bump, or a read stored under older rules): the newest kept one
+            # is served at once, marked "updating", and the new one worked out behind the page (the re-check job for an older read)
+            name = m.get("_library") or theme_library.normalise(theme, r)
+            old = latest_dive(r, name, m.get("sector") or "")
+            if old is not None:
+                if m.get("_older"):
+                    from . import theme_recheck
+                    theme_recheck.ask(r, name)
+                    return {**old["dive"], "updating": True}
+                if BEHIND_ON and _rebuild_behind(r, theme, m, key):
+                    return {**old["dive"], "updating": True}
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
+    hit["data_gaps"] = dive_gaps(r, m, src)     # e57 (RC7): members above the median market value with no words of their own or no figures
+    before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
+    # e54 (R54): the membership check moves on through the companies not checked yet, membership_step a stored read (membership_check)
+    hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
+                                               getattr(src, "today", None) or datetime.now(timezone.utc).date())
+    # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
+    # r65e: every member of the map with its layer, so a fall says why for the members past the figures' window too
+    now_all = {c["ticker"]: {"layer": v.get("layer") or "", "refit": c.get("refit"), "unread": c.get("unread")}
+               for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    # r69e (LIVE13A-002: Semiconductors "101 of 103: 93 · 8 · 2" in the app, "103 of 103: 94 · 9 · 0" in the deck, "101 companies ... 91 · 8 · 2"
+    # on the public page): the members' tally by evidence state worked out once, with the read it is of, and kept with the dive, so the app,
+    # the deck and the public page say the same counts of the same read
+    hit["tally"] = theme_data.checked_tally(hit.get("membership_evidence"), (hit.get("membership_check") or {}).get("outside"), len(now_all))
+    hit["tally_at"] = str(hit.get("as_of") or datetime.now(timezone.utc).date().isoformat())[:10]
+    ctl = theme_changes.coverage_control(hit["coverage"], before, hit, now_all)   # d53: layers lost too
+    pc = theme_changes.population_change(before, hit)      # r68e: each company that joined or left the core members, with why
+    if pc:
+        hit["population_change"] = pc
+    if ctl:
+        hit["coverage"] = {**hit["coverage"], "control": ctl}
     late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
     if late:                      # results filed since the stored page was built: the screens' sweep builds those pages first (R18)
         try:
@@ -999,12 +1788,26 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
             stock_pages.mark_due(r, late)
         except Exception as e:
             print("theme: pages behind a filing not marked:", type(e).__name__, str(e)[:100])
-    if (m.get("placements") or {}).get("checked"):
+    # r66e: a dive worked out from a read stored under older rules is never kept (its key is today's: it would stand for the read the re-check
+    # makes) nor logged as a change
+    if (m.get("placements") or {}).get("checked") and not m.get("_older"):
         pieces = getattr(src, "pieces", None) or {}
         computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
-                     region=r, by=by)
-        theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh)   # f4: "What changed"
-        auto_post(r, theme, hit)
+                     region=r, by=by, meta={"q": m.get("_library") or theme_library.normalise(theme, r), "rules": theme_base.RULES})
+        # p57: every member of the checked map with its layer, so a company leaving the figures is never said to leave the theme
+        everyone: dict = {}
+        for v in m.get("value_chain") or []:
+            for c in v.get("companies") or []:
+                if c.get("ticker"):
+                    rf = c.get("refit") if isinstance(c.get("refit"), dict) else {}
+                    everyone.setdefault(c["ticker"], [c.get("name") or c["ticker"], v.get("layer") or "",
+                                                      theme_changes.member_why(c, v.get("layer") or ""),       # r62: its reason
+                                                      rf.get("why") or c.get("sold_by") or ""])     # r67e: why it is in this layer
+        theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh,
+                             everyone=everyone)   # f4: "What changed"
+        theme_changes.flag(r, m.get("_library") or theme, hit.get("coverage"))          # cl48: the admins' alert (coverage_checks)
+        flag_gaps(r, m.get("_library") or theme, hit.get("data_gaps"))                  # e57: the admins' alert (data_gap_checks)
+        auto_post(r, theme, {**hit, "map_at": m.get("generated_at")})          # r64e (LIVE11A-020): the map's day, for the post
     return hit
 
 
@@ -1100,7 +1903,187 @@ def members_of(m: dict, dive: dict) -> list[dict]:
                         "industry": c.get("industry") or None, "what": theme_base.own_words(f.get("what") if f.get("what") else c.get("what"), c.get("name") or f.get("name") or "") or None,
                         # LIVE6-006: the dive's market value, on its one price date
                         "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
-                        "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c)})
+                        "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c),
+                        # r62 (LIVE10A-018): a margin beyond ±100% of revenue is not meaningful as a margin (theme_data.beyond_margin): named,
+                        # so every surface prints it n.m. as the deck does
+                        **({"nm": [k for k in ("ebitda", "net") if theme_data.beyond_margin(f.get(k))]}
+                           if any(theme_data.beyond_margin(f.get(k)) for k in ("ebitda", "net")) else {}),
+                        # r62: a company the placement kept or placed on its own words alone, outside the exchange's list and the AI's additions
+                        **({"source": "words"} if c.get("base") and c.get("basis") == "words" else {})})
+    return out
+
+
+def coverage_of(m: dict, dive: dict) -> dict | None:
+    """The map's coverage (map_coverage) with the coverage control the dive worked out against the previous live read (cl48), when the
+    dive counted the same companies."""
+    cov = map_coverage(m)
+    d = (dive or {}).get("coverage") or {}
+    if cov and d.get("control") and (d.get("informative"), d.get("placed")) == (cov.get("informative"), cov.get("placed")):
+        cov = {**cov, "control": d["control"]}
+    return cov
+
+
+def coverage_checks() -> list:
+    """cl48 (R47, the outside review's P1 taxonomy coverage control): one Admin check a theme flagged on its coverage (theme_changes.flag):
+    its problem the coverage control in words; listed under Needs your attention by the autofix sweep, never mailed (mail=False: the
+    owner sees it in Admin and on the deck's coverage page)."""
+    from .. import autofix
+    out = []
+    for k, x in sorted(theme_changes.flags().items()):
+        if not isinstance(x, dict):
+            continue
+        out.append(autofix.Check(id=f"theme-coverage:{k}", name=f"Theme coverage: {x.get('name') or k} ({x.get('region') or ''})",
+                                 problem=x.get("problem") or None, action="Open the theme's deck: its coverage page says how many "
+                                 "companies are in informative layers and which are in \"Other\".", to="/admin", mail=False))
+    return out
+
+
+GAPS_KEY = "theme:data_gaps"            # e57: {market:theme: {"name", "region", "gaps": [...], "at"}}, one per theme, FLAGS_KEEP at most
+
+
+def dive_gaps(r: str, m: dict, src) -> list[dict]:
+    """e57 (RC7, the audit of the live R56 decks: Alphabet, M&M, eBay and CyberArk with no stored description; SpiceJet, Jyothy, Kovai and
+    RailTel with no figures): the theme's members above its median market value with no description of their own stored or no stored
+    figures (theme_identity.data_gaps). Stored reads only."""
+    about = getattr(src, "about", None) or (lambda s_: None)
+    members = list({c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}.values())
+
+    def figures(s_):
+        try:
+            hit = computed.get(theme_library.FACTS, [r, s_])
+            return bool(hit and (hit.get("value") or {}).get("years"))
+        except Exception:
+            return True                     # unreadable: not said to be missing
+    try:
+        return theme_identity.data_gaps(members, lambda s_: bool(about(s_)), figures)
+    except Exception as e:
+        print("theme: data gaps not worked out:", type(e).__name__, str(e)[:100])
+        return []
+
+
+def flag_gaps(region: str, name: str, gaps) -> None:
+    """e57: keep a theme's data gaps for the admins' alert (data_gap_checks), cleared once it has none. Never raises."""
+    k = theme_changes.key_of(region, name)
+    gaps = [g for g in gaps or [] if isinstance(g, dict)][:20]
+
+    def put(cur):
+        got = db.json_value(cur, {})
+        got = got if isinstance(got, dict) else {}
+        if not gaps and k not in got:
+            return None
+        got[k] = {"name": name, "region": region, "gaps": gaps, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        if len(got) > theme_changes.FLAGS_KEEP:
+            for old in sorted(got, key=lambda x: str(got[x].get("at") or ""))[:len(got) - theme_changes.FLAGS_KEEP]:
+                del got[old]
+        return json.dumps(got, ensure_ascii=False, separators=(",", ":"))
+    try:
+        db.update_setting(GAPS_KEY, put)
+    except Exception as e:
+        print("theme: data gaps not kept:", type(e).__name__, str(e)[:100])
+
+
+def gap_line(x: dict) -> str | None:
+    """"3 members above the median market value lack data: Alphabet (description), SpiceJet (figures) and 1 more", or None."""
+    gaps = [g for g in x.get("gaps") or [] if isinstance(g, dict)]
+    if not gaps:
+        return None
+    named = ", ".join(f"{g.get('name') or g.get('ticker')} ({g.get('why') or ' and '.join(g.get('lacks') or [])})" for g in gaps[:3])
+    more = f" and {len(gaps) - 3} more" if len(gaps) > 3 else ""
+    return f"{len(gaps)} member{'s' if len(gaps) != 1 else ''} above the theme's median market value lack{'s' if len(gaps) == 1 else ''} data: {named}{more}."
+
+
+GAP_FIX_READS = 6              # r58: members of a theme's data gaps read again at most, a try (largest first)
+GAP_FIX_BUDGET = 60.0          # ...within this many seconds of description reads
+
+
+def fix_gaps(k: str, budget: float = GAP_FIX_BUDGET, reads: int = GAP_FIX_READS) -> dict:
+    """r58 (R58, the owner: Admin's "escalated" list was mostly "N members above the theme's median market value lack data", escalated with no
+    attempt, "tries 0"): one bounded try at a theme's data gaps (flag_gaps): each member lacking its description is read again from its own
+    pages (evidence_reader, asked again whatever was looked for lately), each lacking figures has its company page built (routes.build_page,
+    within the pages' per-minute ration), at most `reads` members within `budget` seconds. The gaps left are kept with why each still failed
+    ("why"), so only what a real attempt could not fill escalates, with its reason. {"tried", "filled", "left"}."""
+    try:
+        got = db.json_value(db.get_setting(GAPS_KEY), {})
+    except Exception:
+        got = {}
+    x = (got if isinstance(got, dict) else {}).get(k)
+    if not isinstance(x, dict):
+        return {"tried": 0, "filled": 0, "left": 0}
+    region = str(x.get("region") or "")
+    gaps = [g for g in x.get("gaps") or [] if isinstance(g, dict) and g.get("ticker")]
+    R = _routes()
+    tried, left, filled = 0, [], 0
+    end = time.monotonic() + budget
+    for g in gaps:
+        if tried >= reads or time.monotonic() > end:
+            left.append(g)
+            continue
+        tried += 1
+        s_, why = g["ticker"], []
+        if "description" in (g.get("lacks") or []):
+            try:
+                evidence_reader(region, {s_: g.get("name") or s_}, budget=max(5.0, end - time.monotonic()), again=(s_,))([s_])
+            except Exception as e:
+                why.append(f"description: its pages could not be read ({type(e).__name__})")
+            else:
+                if not _stored_evidence(region, s_).get("about"):
+                    why.append("description: read again, none found on its own pages or filings")
+        if "figures" in (g.get("lacks") or []):
+            build = getattr(R, "build_page", None)
+            try:
+                page = build(region, s_) if callable(build) else None
+            except Exception as e:
+                page, err = None, type(e).__name__
+                why.append("figures: its company page could not be built now (" + ("the pages' per-minute ration was taken" if err == "Busy"
+                                                                                     else err) + ")")
+            else:
+                if page and page.get("years"):
+                    try:
+                        computed.put(theme_library.FACTS, [region, s_], page, label=s_, region=region)
+                    except Exception:
+                        pass
+                elif callable(build):
+                    why.append("figures: its company page was built, and its sources have no annual figures for it")
+                else:
+                    why.append("figures: no page builder is set up here")
+        if why:
+            left.append({**g, "why": "; ".join(why)})
+        else:
+            filled += 1
+
+    def put(cur):
+        now_ = db.json_value(cur, {})
+        now_ = now_ if isinstance(now_, dict) else {}
+        if k not in now_:
+            return None
+        if left:
+            now_[k] = {**now_[k], "gaps": left, "tried_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        else:
+            del now_[k]
+        return json.dumps(now_, ensure_ascii=False, separators=(",", ":"))
+    try:
+        db.update_setting(GAPS_KEY, put)
+    except Exception as e:
+        print("theme: data gaps not updated:", type(e).__name__, str(e)[:100])
+    return {"tried": tried, "filled": filled, "left": len(left)}
+
+
+def data_gap_checks() -> list:
+    """e57 (RC7): one Admin check a theme with data gaps (flag_gaps): listed under Needs your attention by the autofix sweep, never mailed;
+    the background reads fill descriptions (describe_more) and the page builds figures, so it clears by itself as they land."""
+    from .. import autofix
+    try:
+        got = db.json_value(db.get_setting(GAPS_KEY), {})
+    except Exception:
+        got = {}
+    out = []
+    for k, x in sorted((got if isinstance(got, dict) else {}).items()):
+        if isinstance(x, dict):
+            out.append(autofix.Check(id=f"theme-gaps:{k}", name=f"Theme data gaps: {x.get('name') or k} ({x.get('region') or ''})",
+                                     problem=gap_line(x), fix=lambda k=k: fix_gaps(k),
+                                     fix_text="read their descriptions again and built their company pages",
+                                     action="Open the theme: each company listed was read again and its page built; it says why it still "
+                                     "lacks data.", to="/admin", mail=False))
     return out
 
 
@@ -1123,7 +2106,18 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "members": members_of(m, dive), "tailwinds": m.get("tailwinds") or [], "risks": m.get("risks") or [],
             "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
             "checks": dive.get("checks") or {}, "status": dive.get("status") or {}, "with_figures": dive.get("with_figures"),
-            "membership": dive.get("membership") or {}, "coverage": map_coverage(m),
+            "membership": dive.get("membership") or {}, "coverage": coverage_of(m, dive), "parents": dive.get("parents") or [],
+            # d53 (R53): one company under two symbols merged, the adjacent participants and the core members' kind, the companies spending
+            # ahead of their revenue counted apart from the margin medians
+            "duplicates": dive.get("duplicates") or [], "adjacent": dive.get("adjacent") or [], "core_kind": dive.get("core_kind") or "",
+            "developers": dive.get("developers") or 0,
+            # r68e (R68): the core-and-adjacent rules' version and each company that joined or left the core members, with why
+            "population_rule": dive.get("population_rule"), "population_change": dive.get("population_change"),
+            "distress": dive.get("distress") or [],          # y57 (R57): companies in distress, out of every median and range, with why
+            # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
+            "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
+            "membership_check": dive.get("membership_check") or {},
+            "tally": dive.get("tally"), "tally_at": dive.get("tally_at"),          # r69e (LIVE13A-002): the one count every surface says
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
@@ -1152,6 +2146,8 @@ def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
         from .. import biz_updates
         if biz_updates._allowed(profile):
             out["business"] = business_of(r, m)
+    # rv51 (R51, P2): the theme's change log, its latest entry the deck's cohort row since the previous version (deck.cohort_row)
+    out["changes"] = theme_changes.view(r, m.get("_library") or theme, True, **removal_words(r))
     return out
 
 
@@ -1160,8 +2156,15 @@ DECK_TTL = 6 * 3600
 REGION_WORD = {"IN": "India", "US": "US"}
 
 
+def market_day(r: str) -> date:
+    """r60b (LIVE9A-005): today in the theme's own market (New York for a US theme, India otherwise), as its deck dates itself."""
+    from .. import deck as _deck
+    return datetime.now(timezone.utc).astimezone(_deck.market_tz(r)).date()
+
+
 def deck_file_name(theme: str, r: str, fmt: str, day: date) -> str:
-    """The file's name as the page saves it (lib/deckName.ts): "StratLab - India Defence theme (India) - 7 Nov 2026.pdf", plain ASCII."""
+    """The file's name as the page saves it (lib/deckName.ts): "StratLab - India Defence theme (India) - 7 Nov 2026.pdf", plain ASCII.
+    r60b (LIVE9A-005): `day` is the theme's market's (market_day), the day its deck says."""
     import re
     import unicodedata
     clean = unicodedata.normalize("NFKD", f"{theme} theme ({REGION_WORD.get(r, r)})").encode("ascii", "ignore").decode()
@@ -1181,6 +2184,11 @@ def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT, p
     gets True and the route answers "preparing" instead of making a file without the map. A map or check that failed isn't waited for."""
     t0 = time.time()
     r, theme, m, _ = R.theme_map(profile, region, q)     # R19: the theme library's stored read when there is one (kept across deploys)
+    if m.get("_older") and pending is not None:
+        # r66e: a read stored under older rules is being checked again (theme_recheck, this theme first): no file is made from it, the page
+        # asks again
+        pending.append(True)
+        return r, theme, m
     # R26: a kept map due to be written again under a newer prompt (ai.map_due) is waited for as a missing one is: the live R25 decks of four
     # themes were made on the old map while the new one was being written, and the next pull differed. sector_map has started the rewrite.
     due = lambda m_: not m_.get("_library") and A.map_due(m_)          # noqa: E731
@@ -1232,17 +2240,19 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
         # R21: the AI map or its checks are still being written: no file without them, and nothing counted; the page asks again
         from fastapi.responses import JSONResponse
         return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
-                             "message": "Preparing the deck: the AI map is being written."}, status_code=202)
+                             "message": "Preparing the deck: the theme is being checked again under the current rules." if m.get("_older")
+                             else "Preparing the deck: the AI map is being written."}, status_code=202)
     today = datetime.now(R.IST).date()
     biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
     stamp = int(float(m.get("generated_at") or 0))
+    replaced_n = (m.get("placements") or {}).get("replaced")         # r572: a map placed again on new words is a new read of the theme
     seen = (NEWS_CACHE.get((r, theme.lower(), int(float(theme_base.for_figures(m)[0].get("generated_at") or 0)))) is not None,
             bool((IPO_CACHE.get((r, theme.lower(), stamp)) or {}).get("checked")))     # a part read since is in a new file
     # R29 (P0, the live R27 Banks deck: 7 of 19 banks' filed figures): the dive first, so the key says how many companies' filed figures it
     # still waits for; a deck made while they are read is kept under that count and made again from the fuller dive once they are in
     dive = dive_of(r, theme, m)
     waiting = figures_waiting(dive)
-    key = deck_key(r, theme, format, today, stamp, biz, seen, waiting)
+    key = deck_key(r, theme, format, today, f"{stamp}.{replaced_n}" if replaced_n else stamp, biz, seen, waiting)
     body = DECK_CACHE.get(key)
     if body is None:                           # R20: the file is kept in the shared store too, so a restart or a deploy doesn't rebuild it
         import base64
@@ -1267,7 +2277,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
         db.add_usage(profile["id"], mark)
     from fastapi.responses import Response
     return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, today)}"'})
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, market_day(r))}"'})
 
 
 @router.get("/theme-dive/workbook")
@@ -1287,13 +2297,13 @@ def theme_dive_workbook(q: str, region: str = "IN", profile=Depends(current_prof
                              "message": "Preparing the workbook: the AI map is being written."}, status_code=202)
     today = datetime.now(R.IST).date()
     dive = dive_of(r, theme, m)
-    body = theme_workbook.build(dive, r, m.get("sector") or theme, theme_changes.view(r, m.get("_library") or theme, True), today)
+    body = theme_workbook.build(dive, r, m.get("sector") or theme, theme_changes.view(r, m.get("_library") or theme, True, **removal_words(r)), today)
     if mark:
         db.add_usage(profile["id"], "deck")
         db.add_usage(profile["id"], mark)
     from fastapi.responses import Response
     return Response(body, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, "xlsx", today)}"'})
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, "xlsx", market_day(r))}"'})
 
 
 
@@ -1310,7 +2320,9 @@ def companies_csv(m: dict, dive: dict, r: str) -> bytes:
     w = csv.writer(buf)
     w.writerow(head)
     for x in members_of(m, dive):
-        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"), x.get("ebitda"), x.get("net"),
+        nm = x.get("nm") or []                # r62 (LIVE10A-018): n.m. as on the deck, never "−32423.1"
+        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"),
+               "n.m." if "ebitda" in nm else x.get("ebitda"), "n.m." if "net" in nm else x.get("net"),
                x.get("roce"), x.get("year"), x.get("by"), x.get("what")]
         w.writerow(["" if v is None else (f"'{v}" if isinstance(v, str) and v[:1] in "=+-@" else v) for v in row])
     return ("\ufeff" + buf.getvalue()).encode("utf-8")
@@ -1345,14 +2357,21 @@ def business_reader():
         reads = biz_updates.stored(sym)
         if not reads:
             return None
-        h = biz_updates.headline(biz_updates.series(reads))
+        ms = biz_updates.series(reads)
+        h = biz_updates.headline(ms)
         if not h:
             return None
         src = h["latest"]["source"]
         return {"metric": h["metric"], "unit": h["unit"], "span": h["span"], "step": h["step"], "period": h["latest"]["period"], "value": h["latest"]["value"],
                 "prev": h["prev"]["value"] if h.get("prev") else None, "year_ago": h["year_ago"]["value"] if h.get("year_ago") else None,
                 "change_prev": h["change_prev"], "change_year": h["change_year"], "filed": src["at"][:10], "url": src["url"], "page": src.get("page"),
-                "exchange": src.get("exchange"), "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]]}
+                "exchange": src.get("exchange"), "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]],
+                # m53: every measure's latest figure as read (the deck's sector operating measures: sector_ops.from_business)
+                "measures": [{"metric": x["metric"], "segment": x.get("segment"), "unit": x["unit"], "span": x.get("span"), "own": x.get("own"),
+                              "period": x["latest"]["period"], "value": x["latest"]["value"], "filed": (x["latest"].get("source") or {}).get("at", "")[:10],
+                              "quote": (x["latest"].get("source") or {}).get("quote"), "page": (x["latest"].get("source") or {}).get("page"),
+                              "url": (x["latest"].get("source") or {}).get("url")}
+                             for x in ms[:biz_updates.MAX_FIGURES]]}
     return read
 
 
@@ -1375,7 +2394,28 @@ def business_of(r: str, m: dict) -> dict:
     names = _map_names(m)
     blocks = [{"layer": v.get("layer") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("value_chain") or []]
     subs = [{"name": v.get("name") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("sub_themes") or []]
-    return {"allowed": True, **theme_data.business_section(blocks, subs, names, business_reader())}
+    return {"allowed": True, **one_unit_section(theme_data.business_section(blocks, subs, names, business_reader()))}
+
+
+def one_unit_section(sec: dict) -> dict:
+    """r66e (LIVE12A-006: the app's Private banks page still "₹33,275 billion", "₹1,702 billion" beside "₹ crore" figures; r63e's one-unit rule
+    held only for the deck's table): the page's operating figures in one money unit for the whole section, as the deck prints them
+    (deck.one_money_unit: rupees in crore, another currency in the scale most of its rows file)."""
+    from .. import deck
+    groups = [("layers", i, g) for i, g in enumerate(sec.get("layers") or [])] + [("subs", i, g) for i, g in enumerate(sec.get("subs") or [])]
+    flat = []
+    for kind, i, g in groups:
+        flat.append({"group": (kind, i)})
+        flat += list(g.get("rows") or [])
+    out, at = {}, None
+    for r in deck.one_money_unit(flat):
+        if isinstance(r, dict) and "group" in r:
+            at = r["group"]
+            out[at] = []
+        else:
+            out[at].append(r)
+    return {**sec, "layers": [{**g, "rows": out.get(("layers", i), [])} for _, i, g in groups if _ == "layers"],
+            "subs": [{**g, "rows": out.get(("subs", i), [])} for _, i, g in groups if _ == "subs"]}
 
 
 # ---------- new listings ----------
@@ -1539,6 +2579,48 @@ def bench_bars(region: str, bench) -> tuple[str | None, list]:
     return name, bars
 
 
+def price_behind(region: str, syms: list[str], load) -> int:
+    """Queue companies whose candles a request had no time for; one worker reads them at PRICE_READS_PER_MINUTE (bounded queue). The
+    number queued now."""
+    if not PRICE_BEHIND or not syms:
+        return 0
+    with _behind_lock:
+        for sym in syms:
+            k = f"{region}:{sym}"
+            if k not in _behind and len(_behind) < PRICE_BEHIND_MAX and PRICE_CACHE.get(k) is None:
+                _behind[k] = load
+        n, start = len(_behind), not _behind_running[0] and bool(_behind)
+        if start:
+            _behind_running[0] = True
+    if start:
+        threading.Thread(target=_price_worker, daemon=True, name="theme-prices-behind").start()
+    return n
+
+
+def _price_worker():
+    try:
+        while True:
+            with _behind_lock:
+                if not _behind:
+                    _behind_running[0] = False
+                    return
+                k = next(iter(_behind))
+                load = _behind.pop(k)
+            if PRICE_CACHE.get(k) is not None:
+                continue
+            while not price_reads.hit("all", PRICE_READS_PER_MINUTE):
+                time.sleep(3)
+            region, sym = k.split(":", 1)
+            try:
+                PRICE_CACHE.set(k, theme_prices.reduce_bars(load(sym)) or {}, _price_ttl(region))
+            except Exception as e:
+                print("theme prices behind: candles not read:", sym, type(e).__name__, str(e)[:100])
+    except Exception as e:                       # the next request starts it again
+        print("theme prices behind:", str(e)[:120])
+        with _behind_lock:
+            _behind_running[0] = False
+
+
 def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budget: float = PRICE_BUDGET, daily=None) -> dict:
     """The price section for the members, reading each company's candles that isn't already reduced and kept; a company whose read has
     to wait (the minute's allowance is used, or the time is up) is counted as pending and read on a later request, shown meanwhile from its
@@ -1569,6 +2651,8 @@ def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budg
                 PRICE_CACHE.set(f"{region}:{sym}", red or {}, _price_ttl(region))
                 reduced[sym] = red
     pending = sum(1 for s, _ in members if s not in reduced)
+    if pending and budget > 0:
+        price_behind(region, [s for s, _ in members if s not in reduced], load)
     stocks, day, _ = daily if daily is not None else ({}, None, {})
     for s, _ in members:
         if s not in reduced:
@@ -1592,7 +2676,7 @@ def theme_dive_prices(q: str, region: str = "IN", profile=Depends(current_profil
     members = sorted(placed.items())
     if not members:
         return R.ok({"companies": [], "pending": 0, "line": None, "returns": None, "median": {}, "benchmark": ""})
-    if not _price_gate.acquire(timeout=30):
+    if not _price_gate.acquire(timeout=PRICE_BUDGET + 3):
         err(503, "busy", "Prices are busy right now. Try again in a minute.")
     try:
         out = gather_prices(r, members, bars_loader(r), bench_loader(r), daily=daily_rows(r))
@@ -1676,3 +2760,75 @@ def theme_library_suggest(q: str = "", region: str = "IN", profile=Depends(curre
     search would be served from first, then names that start with or contain it; with nothing typed, the most searched."""
     R = _routes()
     return R.ok({"items": theme_library.suggest(R.region_of(region), q[:80])})
+
+
+# ---------- ex49 (R49, owner ask): an owner-only switch that has the AI pick a theme's industries again ----------
+REPICK_LOG = "theme:industries:repicked"       # the audit lines of every pick cleared: when, by whom, the market, the theme and the pick it held
+REPICK_KEEP = 50                               # audit lines kept, the newest last
+
+
+class RepickBody(BaseModel):
+    region: str
+    theme: str
+
+
+def repick_industries(region: str, theme: str, by: str = "") -> dict:
+    """ex49 (R49, the owner: production had no switch to have the AI pick a theme's official industries again; the advice was "delete the
+    stored setting"): clears the theme's stored industry pick (setting theme:industries:<REGION>:<slug>, theme_base.industries_for), so the
+    AI picks again on the next read, and drops the theme's checked maps kept under that pick (the shared store's "ai:sector_checked3"
+    entries of the theme, and this server's memory of them), so the next read checks the theme again on the new pick. One audit line
+    (REPICK_LOG and the server's log) says when, by whom, which theme and the pick it held. Nothing is asked of the AI here."""
+    r = str(region or "").strip().upper()
+    slug = theme_base._slug(theme)
+    if r not in ("IN", "US") or not slug:
+        err(400, "bad_theme", "Give the market (IN or US) and the theme's name.")
+    skey = f"theme:industries:{r}:{slug}"
+    try:
+        raw = db.get_setting(skey)
+    except Exception:
+        raw = None
+    was = db.json_value(raw, {}) if raw else None          # a stored value, damaged or not, is cleared
+    if raw:
+        db.delete_setting(skey)
+    dropped = 0
+    ix = computed.index("ai:sector_checked3")["entries"]
+    for hk, e in list(ix.items()):
+        parts = str((e or {}).get("label") or "").split(" · ")
+        if (e or {}).get("region") != r or theme_base._slug(parts[0]) != slug:
+            continue
+        if computed.remove("ai:sector_checked3", hk):
+            dropped += 1
+        try:                  # this server's memory of it (key: market, theme, the map's time, the rules: check_key)
+            A._cache.pop(A._key("sector_checked3", r, parts[0], int(parts[1]), int(parts[2])))
+        except (IndexError, ValueError):
+            pass
+    line = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "by": str(by or ""), "region": r, "theme": slug,
+            "cleared": was is not None, "industries": list((was or {}).get("industries") or []), "picked_at": (was or {}).get("at"),
+            "checked_maps_dropped": dropped}
+    try:
+        log = db.json_value(db.get_setting(REPICK_LOG), []) or []
+        db.set_setting(REPICK_LOG, json.dumps(([x for x in log if isinstance(x, dict)] + [line])[-REPICK_KEEP:], ensure_ascii=False))
+    except Exception as e:
+        print("theme: industry repick not logged:", type(e).__name__, str(e)[:100])
+    print("admin: theme industry pick cleared:", json.dumps(line, ensure_ascii=False))
+    return line
+
+
+@admin_router.post("/admin/themes/industries/repick")
+def admin_repick_industries(body: RepickBody, profile=Depends(admin_profile)):
+    """ex49 (R49): the owner's switch (repick_industries): the theme's stored industry pick cleared, the AI picks again on the next read."""
+    line = repick_industries(body.region, body.theme, profile.get("email") or profile.get("id") or "")
+    msg = (f"The stored industry pick of {line['theme']} ({line['region']}) is cleared: the AI picks its industries again on the next read."
+           if line["cleared"] else f"No industry pick is stored for {line['theme']} ({line['region']}); the next read picks one.")
+    return {"ok": True, "message": msg, **line}
+
+
+def _coverage_source() -> None:
+    from .. import autofix
+    if not any(getattr(f, "__name__", "") == "coverage_checks" for f in autofix._sources):        # once, however often this is imported
+        autofix.source(coverage_checks)          # cl48: the theme coverage control, in the self-healing sweep's Needs your attention
+    if not any(getattr(f, "__name__", "") == "data_gap_checks" for f in autofix._sources):
+        autofix.source(data_gap_checks)          # e57: members above the median with no description or figures
+
+
+_coverage_source()

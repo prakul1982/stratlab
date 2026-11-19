@@ -67,9 +67,11 @@ test("/tour opens the tour on Home (it was Page not found)", async ({ page }, in
   expect(errors).toEqual([]);
 });
 
-test("/tour signed out asks to sign in to see the tour, not Page not found", async ({ page }) => {
+// (updated on purpose, LIVE9B-029: a visitor's /tour is the landing page's three spaces and "How it works", not a wall asking to sign in)
+test("/tour signed out shows how StratLab works, not Page not found or a sign-in wall", async ({ page }) => {
   await page.goto("/tour");
-  await expect(page.getByText(/Sign in to see the tour/i).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "How it works" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Sign in to see the tour/i)).toHaveCount(0);
   await expect(page.getByText("Page not found")).toHaveCount(0);
 });
 

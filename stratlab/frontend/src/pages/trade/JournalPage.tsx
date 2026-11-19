@@ -29,6 +29,8 @@ type Trade = {
   id: string; symbol: string; u: string; segment: string; segment_label: string; currency: string; side: "long" | "short" | null; entry_t: string; exit_t: string;
   qty: number; entry: number; exit: number; gross: number; charges: number; net: number; r: number | null; hold_s: number | null; hold_days: number;
   fills: number; src: "tradebook" | "pnl" | "manual" | "practice"; expired: boolean; charges_from: string; note: Note;
+  /** a delivery trade whose file's charges are less than its STT alone: the file left STT out (LIVE10B-039) */
+  no_stt?: boolean;
 };
 type Row = { key: string; label?: string; n: number; win_rate: number; net: number; avg: number; gross: number; charges: number };
 type Check = { id: string; title: string; status: CheckStatus; detail: string; data: any };
@@ -51,6 +53,8 @@ type Journal = {
   practice_count: number; real_count: number; show: Show;
   market: string; markets: { id: string; label: string; currency: string; symbol: string; n: number }[]; currency: string; segment: string;
   segment_counts: Record<string, number>; tax_totals: TaxTotal[];
+  /** tax report trade lines not in the journal yet (LIVE10B-011): the newer ones are offered only while there are some */
+  tax_new?: number;
   links: Record<string, string>; paper: { id: string; name: string; status: string; symbol?: string }[]; tags: string[];
   emotions: string[]; mistakes: string[]; segments: Record<string, string>; assumptions: string; plan_name: string;
 };
@@ -86,7 +90,7 @@ function holdText(t: Trade) {
     if (m < 60) return `${Math.max(1, Math.round(m))} min`;
     if (t.hold_days === 0) return `${(m / 60).toFixed(1)} h`;
   }
-  return t.hold_days === 0 ? "Same day" : `${t.hold_days} day${t.hold_days === 1 ? "" : "s"}`;
+  return t.hold_days === 0 ? "Same day" : `${t.hold_days.toLocaleString("en-IN")} day${t.hold_days === 1 ? "" : "s"}`;      // "2,744 days" (LIVE9B-024)
 }
 
 const VIEWS: [string, string][] = [["weekday", "Day of week (entry day)"], ["hour", "Time of day"], ["tag", "Setup"], ["instrument", "Instrument"], ["hold", "Holding time"],
@@ -272,7 +276,9 @@ export function JournalPage() {
         )}
         {/* the tax report has trades past the journal's newest (R81-020: "Trades up to 27 Jun 2025" here, "trades up to
             16 Mar 2026" on Money, and nothing said why): the newer ones are one press away; ones already here are skipped */}
-        {has && (!market || market === "in") && taxLast && newestReal && taxLast.slice(0, 10) > newestReal && (
+        {/* LIVE10B-011: only while bringing them in would add something (a report whose newest line is a buy, or F&O the journal
+            doesn't take line by line, kept the offer up after the press, and the press changed nothing) */}
+        {has && (!market || market === "in") && taxLast && newestReal && taxLast.slice(0, 10) > newestReal && (j.tax_new ?? 1) > 0 && (
           <p className="banner" data-testid="j-tax-newer">
             Your tax report has trades up to {fmtDate(taxLast, { tz: "Asia/Kolkata" })}; this journal's go up to {fmtDate(newestReal, { tz: "Asia/Kolkata" })}.{" "}
             <button type="button" className="btn sm" disabled={busy} onClick={() => { if (!busy) void fromTax(); }}>{busy ? "Bringing them in…" : "Bring in the newer ones"}</button>
@@ -351,12 +357,13 @@ function Stats({ s }: { s: Summary }) {
       <StatRow label="Stats">
         <Stat item label="P&L after charges" value={signed(s.net)} tone={tone(s.net)} />
         <Stat item label="Win rate" value={s.win_rate == null ? "–" : `${s.win_rate}%`} note={`${s.wins}W · ${s.losses}L`} />
-        <Stat item label="Average win" value={m(s.avg_win)} tone="up" />
-        <Stat item label="Average loss" value={m(s.avg_loss)} tone="down" />
+        {/* a missing average (no wins, no losses) and a fall of nothing are neutral, not red (LIVE10B-009) */}
+        <Stat item label="Average win" value={m(s.avg_win)} tone={s.avg_win ? "up" : undefined} />
+        <Stat item label="Average loss" value={m(s.avg_loss)} tone={s.avg_loss ? "down" : undefined} />
         <Stat item label={k("Expectancy", "The average result per trade after charges: the total P&L divided by the number of trades.")} value={signed(s.expectancy)} tone={tone(s.expectancy)} />
         <Stat item label={k("Profit factor", "Money made on winning trades divided by money lost on losing ones. Above 1 means the wins added up to more than the losses.")} value={s.profit_factor ?? (s.wins ? "No losses" : "–")} />
         <Stat item label={k("Deepest fall", "The biggest drop of the running P&L from a high, after charges. As a % of your capital plus the P&L at that high, when you've entered your capital.")}
-          value={m(-s.max_dd)} tone="down" note={s.max_dd_pct != null ? `${s.max_dd_pct}% of capital` : undefined} />
+          value={m(-s.max_dd)} tone={s.max_dd ? "down" : undefined} note={s.max_dd_pct != null ? `${s.max_dd_pct}% of capital` : undefined} />
         <Stat item label="Longest streaks" value={`${st.longest_win}W · ${st.longest_loss}L`}
           note={st.current.kind ? `now ${st.current.n} ${st.current.kind === "win" ? "win" : "loss"}${st.current.n === 1 ? "" : st.current.kind === "win" ? "s" : "es"}` : undefined} />
         <Stat item label={k("Charges", "STT/CTT, exchange and SEBI fees, stamp duty, GST and brokerage in India, as a share of the P&L before charges. For US stocks and crypto, the charges you entered.")}
@@ -433,7 +440,10 @@ function CheckCard({ c }: { c: Check }) {
         {c.id === "sample" && d && <div className="j-big">{d.trades}</div>}
         {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
         {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
-        {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>}
+        {/* LIVE13B-013: with few losses the 95% line and the worst are one figure (all the losses in a row): said once */}
+        {c.id === "shuffle" && d && d.unit === "rupees" && (m(-d.p95) === m(-d.worst)
+          ? <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · worst reshuffle <span className="nowrap">{m(-d.worst)}</span>, which is also the level 95% of reshuffles stay at or above</p>
+          : <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles at or above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>)}
         {c.id === "costs" && d && <p className="k-small">Gross <span className="nowrap"><Signed value={d.gross}>{signed(d.gross)}</Signed></span> · charges <span className="nowrap">{m(d.charges)}</span> · doubled <span className="nowrap"><Signed value={d.doubled}>{signed(d.doubled)}</Signed></span></p>}
         <p className="k-small k-muted">{c.detail}</p>
         {c.id === "shuffle" && d?.unit === "rupees" && <span className="k-note">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}
@@ -562,7 +572,8 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
           <b>{t.symbol}</b>
           <button type="button" className="btn quiet sm" onClick={() => onEdit(t)} aria-label={`Journal: ${t.symbol} ${when(t.exit_t)}`}><Pencil size={15} />{Object.keys(t.note).length ? "Edit" : "Note"}</button>
         </div>
-        <span className="k-note">{t.side === "long" ? "Long" : t.side === "short" ? "Short" : "Long or short: not in the file"} · {t.segment_label}</span>
+        {/* a side the file doesn't give is said once over the table, not on every row (LIVE9B-024: the same "not in the file" on all nine rows) */}
+        <span className="k-note">{t.side === "long" ? "Long · " : t.side === "short" ? "Short · " : ""}{t.segment_label}</span>
         {(t.note.tag || t.src === "practice") && <div className="k-row">
           {t.src === "practice" && <Badge dot={false}>Chart replay</Badge>}
           {t.note.tag && <Badge tone="ok" dot={false}>{t.note.tag}</Badge>}</div>}
@@ -574,13 +585,16 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
     { key: "qty", header: "Qty", numeric: true, cell: (t) => qtyText(t.qty) },
     { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → ${t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` },
     { key: "ch", header: "Charges", numeric: true, cell: (t) => (
-      <span title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "mixed" ? "As your broker listed them where the file had them, else worked out at the published rates" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "none" ? "None entered" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{m(t.charges, 2)}</span>) },
+      <span title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "mixed" ? "As your broker listed them where the file had them, else worked out at the published rates" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "none" ? "None entered" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{m(t.charges, 2)}{t.no_stt && <sup aria-label="leaves STT out">*</sup>}</span>) },
   ];
+  const noStt = rows.filter((t) => t.no_stt).length;
   return (
     <Card label="Trades">
       <CardHead title="Trades" actions={
         <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>} />
+      {rows.some((t) => t.side !== "long" && t.side !== "short") && <p className="k-note" data-testid="j-no-side">{rows.every((t) => t.side !== "long" && t.side !== "short") ? "Your files don't say whether these trades were long or short" : "Trades with no Long or Short under them: your file doesn't say which they were"}. Add it with Note on a trade.</p>}
       <DataTable csv={{ name: "journal trades", rows }} stack label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
+      {noStt > 0 && <p className="k-note" data-testid="j-no-stt">* {noStt === 1 ? "1 delivery trade has" : `${noStt.toLocaleString("en-IN")} delivery trades have`} charges, as your broker's file listed them, below the STT alone (0.1% of the purchase and of the sale): the file leaves STT out, so {noStt === 1 ? "its charges are" : "their charges are"} understated here and in the charges check.</p>}
       {(rows.length > shown || (shown > 50 && rows.length > 50)) && <div className="k-center">
         {rows.length > shown && <button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button>}
         {shown > 50 && rows.length > 50 && <ShowLess onLess={() => setShown(50)} />}</div>}
@@ -692,7 +706,7 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
       </div>
       {asking && (
         <ConfirmDialog title={own ? "Delete this trade?" : "Leave this trade out of the journal?"} confirmLabel={own ? "Delete trade" : "Remove trade"} onConfirm={del} onClose={() => setAsking(false)}>
-          {own ? "The trade is deleted from your journal." : "You can show removed trades again at the foot of the page."}
+          {own ? "Its journal entry goes with it. This can't be undone." : "You can show removed trades again at the foot of the page."}
         </ConfirmDialog>
       )}
     </Modal>
@@ -723,13 +737,17 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
   // times are the exchange's own clock: India's for the Indian segments, New York's for US stocks
   const zone = f.segment === "us" ? tzLabel(ET) : f.segment === "crypto" ? undefined : tzLabel(IST);
   // what's missing is said under its own box, not only in a toast (R5O-029)
-  const [bad, setBad] = useState<Partial<Record<"symbol" | "qty" | "entry_price" | "exit_price", string>>>({});
+  const [bad, setBad] = useState<Partial<Record<"symbol" | "qty" | "entry_price" | "exit_price" | "entry_date" | "exit_date", string>>>({});
   const save = async () => {
     const n = (v: string) => Number(v.replace(/,/g, ""));
     const price = (v: string) => (!v.trim() ? "Enter the price." : !(Number.isFinite(n(v)) && n(v) > 0) ? "Enter a price above 0." : undefined);
     const problems = { symbol: f.symbol.trim() ? undefined : "Enter the symbol.", qty: n(f.qty) > 0 ? undefined : "Enter a quantity above 0.",
-      entry_price: price(f.entry_price), exit_price: price(f.exit_price) };
+      entry_price: price(f.entry_price), exit_price: price(f.exit_price),
+      // a day ahead of today, or an entry after the exit, is said under its box (LIVE10B-008: an entry on 20 Nov, after a 17 Nov exit, said nothing)
+      entry_date: f.entry_date > today ? "This day hasn't come yet." : f.entry_date > f.exit_date ? "The entry is after the exit." : undefined,
+      exit_date: f.exit_date > today ? "This day hasn't come yet." : undefined };
     setBad(problems);
+    if (problems.entry_date || problems.exit_date) { notify("Check the dates."); return; }
     if (Object.values(problems).some(Boolean)) { notify("Fill in the symbol, quantity and both prices."); return; }
     setBusy(true);
     try {
@@ -748,10 +766,10 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
           <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF(moveSegment(f, v))} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" error={bad.qty} inputMode="decimal" value={f.qty} onChange={set("qty")} />
-          <DateField label="Entry date" value={f.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
+          <DateField label="Entry date" value={f.entry_date} max={today} error={bad.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
           <Field label="Entry time" optional>{(id) => <TimeInput id={id} label="Entry time" zone={zone} value={f.entry_time} onChange={(v) => setF({ ...f, entry_time: v })} allowEmpty />}</Field>
           <Field label="Entry price" error={bad.entry_price} inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
-          <DateField label="Exit date" value={f.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
+          <DateField label="Exit date" value={f.exit_date} max={today} error={bad.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
           <Field label="Exit time" optional>{(id) => <TimeInput id={id} label="Exit time" zone={zone} value={f.exit_time} onChange={(v) => setF({ ...f, exit_time: v })} allowEmpty />}</Field>
           <Field label="Exit price" error={bad.exit_price} inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
           <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}

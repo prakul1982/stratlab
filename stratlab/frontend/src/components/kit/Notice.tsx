@@ -5,7 +5,7 @@ import { useLockSlot } from "../../lib/lockSlot";
 import type { StateAction } from "./States";
 import { CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { unlockHint } from "../../lib/offer";
+import { canBuy, unlockHint } from "../../lib/offer";
 import { usePlanPrice } from "../../lib/currency";
 import { PlanActions } from "../PlanInterest";
 import { Lock } from "../Icons";
@@ -56,5 +56,19 @@ export function PlanNote({ children, plan }: { children: ReactNode;
   const price = usePlanPrice(plan ?? named);
   // one lock wording everywhere (DP2-022, DP1-018): the line icon, what is locked and on which plan (and when a monthly count
   // starts again), the price, then the button; never the emoji, never "see plans" in words beside the button
-  return <Notice className="plan-note" actions={<PlanActions source="lock" />}><span className="plan-lock" aria-hidden="true"><Lock /></span><span ref={words}>{children}</span> {unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined, price)}</Notice>;
+  // the price line's place is held, unseen, while the prices are read: the note no longer grows a line and pushes the page down when they
+  // arrive (LIVE9B-013: /alerts moved 0.20 when "…Pro is ₹… a month" filled in under the plan's limit)
+  const waiting = !!(plan ?? named) && price === null && canBuy(me?.offer);
+  // the plan's price once a page (LIVE12B-010: "Basic is ₹699 a month (US price $8) or ₹6,999 a year" three times on the funds page): a
+  // later plan note with the same price leaves it to the first one on the page
+  const priced = useRef<HTMLSpanElement>(null);
+  const [again, setAgain] = useState(false);
+  useLayoutEffect(() => {
+    const first = price ? Array.from(document.querySelectorAll<HTMLElement>("[data-plan-price]")).find((e) => e.dataset.planPrice === price) : null;
+    const now = !!first && first !== priced.current;
+    if (now !== again) setAgain(now);
+  });
+  return <Notice className="plan-note" actions={<PlanActions source="lock" />}><span className="plan-lock" aria-hidden="true"><Lock /></span><span ref={words}>{children}</span>{" "}
+    <span ref={priced} data-plan-price={price ?? undefined}>{unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined, again ? null : price)}</span>
+    {waiting && <span className="k-meta-wait" aria-hidden="true" data-price-wait>Basic is ₹000 a month (about $0) or ₹0,000 a year (about $00).</span>}</Notice>;
 }

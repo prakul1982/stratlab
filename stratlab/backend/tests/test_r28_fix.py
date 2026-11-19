@@ -142,10 +142,14 @@ def test_the_companies_to_place_get_their_descriptions_read_once_largest_first_a
     assert got == asked and len(got) == TR.PLACE_READS                                    # at most PLACE_READS a theme check
     assert got[:3] == ["SM003", "SM004", "SM005"]                                          # largest first; kept and placed ones skipped
     assert not {"SM000", "SM001", "SM002"} & set(got)
-    assert TR.describe_unplaced("IN", {"value_chain": out["value_chain"][1:]}, {}, None) == []        # no layer of the map's own: nothing to place
+    # (updated on purpose, h56: with nothing to place, the map's companies still without a description are read, largest first, so each
+    # is checked by its own words rather than its industry label; those already kept are never read again)
+    none_to_place = TR.describe_unplaced("IN", {"value_chain": out["value_chain"][1:]}, {}, None)
+    assert none_to_place[:3] == ["SM001", "SM003", "SM004"] and not {"SM000", "SM002"} & set(none_to_place)
     every = {"assign": {c["ticker"]: {"layer": "", "by": "words"} for c in out["value_chain"][1]["companies"]}}
     asked.clear()
-    assert TR.describe_unplaced("IN", out, {}, every) == [] and asked == []               # a placement already kept: nothing read
+    kept_all = TR.describe_unplaced("IN", out, {}, every)
+    assert kept_all == asked and kept_all[:2] == ["AI0", "SM001"] and not {"SM000", "SM002"} & set(kept_all)     # a placement kept: by its labels' words
 
 
 def test_a_description_looked_for_lately_and_not_found_is_not_read_again(monkeypatch):
@@ -169,7 +173,8 @@ def test_a_request_never_reads_descriptions_to_place_only_the_background_check_d
     calls = []
     monkeypatch.setattr(TR, "describe_unplaced", lambda *a, **k: calls.append(a) or [])
     # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None: (out, {}))
+    # p57 (R56, updated on purpose): place_rest also takes the published memory (`published`, every live placement)
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None, published=None, figures_of=None: (out, {}))  # r59 (updated on purpose): `figures_of` too, the placement always gets the stored-figures reader (theme_base.listed_out)
     m = {"sector": "IT services", "generated_at": 1.0}
     TR.placed("IN", "IT services", m, _place_map(), ask=None)
     assert calls == []

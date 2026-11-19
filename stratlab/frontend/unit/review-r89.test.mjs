@@ -75,7 +75,7 @@ test("R89-002: the US prints count as settling for 50 minutes after a traded clo
 });
 
 test("R89-003: the tile's long 'closing prints settling' words wrap inside the tile; 'on 16 Oct' stays together", () => {
-  assert.match(read("src/pages/MineHome.tsx"), /className=\{w\.includes\("settling"\) \? "k-note" : "k-note nowrap"\} data-testid="mine-mkt-when"/);
+  assert.match(read("src/pages/MineHome.tsx"), /className=\{`mine-mkt-when \$\{w\.includes\("settling"\) \? "k-note" : "k-note nowrap"\}`\} data-testid="mine-mkt-when"/);
 });
 
 test("R89-005: the previous close shows after the close and while prints settle, not only while the market trades", () => {
@@ -111,7 +111,9 @@ test("R90-005: the watchlist's price column says last session whenever the tab's
 
 test("R90-008/010/012: a US company's move says its day after the close; Pulse and the money calendar say what their dates are", () => {
   assert.match(read("src/components/Research.tsx"), /closed && \(q\.change_day \|\| quoteDay\) \? `on \$\{fmtDate\(\(q\.change_day \|\| quoteDay\)!, \{ year: false \}\)\}` : since/);
-  assert.match(read("src/pages/Research.tsx"), /title=\{pulseClosedDay\(data\?\.indices\) \? "How the market felt at the last close" : "How the market feels today"\}/);
+  // (updated on purpose, LIVE9A-031: one fixed title; live or last close is said in the line under it, pulseLede)
+  assert.match(read("src/pages/Research.tsx"), /title=\{PULSE_TITLE\}/);
+  assert.match(read("src/lib/researchFormat.ts"), /closedDay \? `Last close, \$\{closedDay\}: index levels` : "Live index levels"/);
   assert.match(read("src/pages/money/MoneyCalendarPage.tsx"), /asOfLabel="As of"/);
 });
 
@@ -273,19 +275,21 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
   assert.equal(list("PORTFOLIO") % 2, 0);                // Money's cards in pairs
   for (const t of ["IPOs", "Business updates", "Named holders", "Closing auction", "Market events", "Chart replay", "Forward test", "Test a SIP", "Rates after tax"])
     assert.match(login, new RegExp(`\\["${t}",`), t);
-  assert.match(login, /"Trade · Invest · Money"/);                              // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
+  // (updated on purpose, NAV3: the hero's eyebrow says who it is for, not the three spaces)
+  assert.match(login, /"For traders and investors in India and the US"/);       // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
   assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
-  // docs/UI_CHECKER.md names every rule the checker has, R1 to R27 (VR7 added R26, LIVE5 R27)
+  // docs/UI_CHECKER.md names every rule the checker has, R1 to R28 (VR7 added R26, LIVE5 R27, the owner's alignment sweep of 18 Nov R28)
   const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
   const doc = readFileSync(new URL("../../../docs/UI_CHECKER.md", import.meta.url), "utf8");
-  assert.equal(rules.length, 27);
+  assert.equal(rules.length, 28);     // (updated on purpose, owner 18 Nov: R28 off-centre)
   for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
 });
 
 // ---------- PUB-1: the public pages look like one product ----------
 test("PUB-1: the policies use the public frame (header with the site's links, footer with the explore links), not a header of their own", () => {
   const page = read("src/pages/LegalPage.tsx"), css = read("src/styles.css");
-  assert.match(page, /<PublicFrame className="legal">/);
+  // (updated on purpose, LIVE8A-017: the footer waits for the page's words, so it never moves down when they come)
+  assert.match(page, /<PublicFrame className="legal" foot=\{ready\}>/);
   assert.doesNotMatch(page, /legal-head|<Logo|SkipLink/);                                           // the frame brings the logo, the skip link and the header
   assert.match(page, /<nav className="legal-tabs" aria-label="Policy pages">/);                        // the other policies stay one tap away
   assert.match(css, /\.pub-main\.legal \{ max-width: 800px; \}/);

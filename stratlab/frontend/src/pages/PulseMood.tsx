@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useLiveRefresh } from "../lib/liveRefresh";
-import { fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
+import { changeDir, fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
 import { keepMood, keptMood, moodStale } from "../lib/moodCache";
-import { companyRows, crore, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
+import { companyRows, crore, fromHighText, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
 import { Card, CardHead, DataTable, Delta, EmptyState, Signed, Skeleton, Working, type Column } from "../components/kit";
 import { sparseNotes } from "../components/kit/DataTable";
 
@@ -57,13 +57,16 @@ export function MoodCard({ m, region, updating = false, behindNote }: { m: Pulse
   const readDay = m.read_at ? new Date(m.read_at).toLocaleDateString("en-CA", { timeZone: tz }) : null;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
   const readAt = m.read_at ? `${readDay !== today ? `${fmtDate(readDay!, { weekday: true, year: false })}, ` : ""}${fmtTime(m.read_at, { tz: marketTz(region), zone: true })}` : "";
+  // LIVE9A-001/002: a read of an earlier session than the index levels above is never shown as the current one: its card is titled with its
+  // session and its headline starts with that day, and the line saying the new session's read is under way comes first
+  const behind = !!behindNote && !!m.session;
   return (
     <Card testId="pulse-mood-card">
-      <CardHead title="The mood" info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
-        actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
-      {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
-      {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
+      <CardHead title={behind ? `The mood · ${day(m.session)} session` : "The mood"} info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
+        actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{m.during ? ", during the session" : ""}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
       {behindNote && <p className="k-note" data-testid="pulse-mood-behind">{behindNote}</p>}
+      {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{behind ? `On ${day(m.session)}: ${m.headline}` : m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
+      {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
     </Card>
   );
 }
@@ -82,15 +85,16 @@ export function BreadthTable({ b: given, open = true, behind = false }: { b: Non
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
     // live, the 52-week highs and lows are counted at the close: their cell says so rather than standing empty (owner, 5 Nov)
     // the live count's own quarter-hour in its header, so Mood's count and Breadth's are each labelled with their round (LIVE4-005)
-    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
+    { key: "now", header: b.live ? (b.at_close ? "Today, at the close" : b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
-    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
+    // LIVE10A-024: more stocks falling or at 52-week lows is no good news: those rows' changes in the plain chip ("New 52-week lows ▲+1" was green)
+    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta badRise={r.key === "dec" || r.key === "lows"} value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];
   return (
     <Card testId="pulse-breadth">
       <CardHead title={`How many stocks took part · ${b.group}`} info={`The stocks of ${b.group} counted ${when}${b.live ? (open ? " (a count every quarter hour from live prices, the 52-week highs and lows among them)" : " (the last quarter hour's count from live prices; the evening's count from the exchange's price file replaces it)") : ""}. Every stock counts once, whatever its size.`} />
       <DataTable stack compact label={`Breadth of ${b.group}`} columns={cols} rows={b.rows} rowKey={(r) => r.key} />
-      {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks{b.live && b.at ? `, in the ${b.at} IST count` : ""}.</p>}
+      {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks{b.live && b.at_close ? ", in the count at the closing prices" : b.live && b.at ? `, in the ${b.at} IST count${open ? "" : ", before the closing prices"}` : ""}.</p>}
     </Card>
   );
 }
@@ -150,12 +154,22 @@ export function FlowsTable({ f, source }: { f: NonNullable<PulseMood["flows"]>; 
   );
 }
 
+/** A change's text with its ▲/▼ before it (none when it rounds to nothing), for coloured text in a table that has no pills. */
+function arrowed(value: number, text: string): ReactNode {
+  const dir = changeDir(value, text);
+  return dir === "flat" ? text : <><span aria-hidden="true">{dir === "up" ? "▲" : "▼"}</span>{text}</>;
+}
+
 export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
   const cols: Column<(typeof r.rows)[number]>[] = [
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
     { key: "p", header: "Level", numeric: true, brief: true, cell: (x) => riskLevel(x) },
     // a yield's move in basis points, the rest in percent (LIVE7A-023)
-    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => { const mv = quoteMove(x); return <Signed value={mv.value}>{mv.text}</Signed>; } },
+    // LIVE9A-002 asked for ▲/▼ like the other tables; R15 #16 (owner, 7 Nov) keeps this card and FII/DII beside it in coloured text, no
+    // pills: the arrow is in the coloured text (ci60)
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => { const mv = quoteMove(x); return mv.value == null ? mv.text : <Signed value={mv.value}>{arrowed(mv.value, mv.text)}</Signed>; } },
+    // LIVE9A-002: each level's own session, so a level from an earlier day is never read as today's (it had no date at all)
+    { key: "s", header: "As of", cell: (x) => sessionWord(x.day, "", day) },
   ];
   return (
     <Card testId="pulse-risk">
@@ -172,7 +186,7 @@ export function GlobalTable({ g, region, today }: { g: NonNullable<PulseMood["gl
     { key: "n", header: "Market", rowHeader: true, cell: (x) => x.label },
     { key: "a", header: "Area", cell: (x) => x.tag },
     { key: "c", header: "Move", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
-    { key: "s", header: "Session", cell: (x) => (today ? sessionWord(x.day, today, day) : x.same_day === false && x.day ? `on ${day(x.day)}` : "today") },
+    { key: "s", header: "Session", cell: (x) => sessionWord(x.day, today ?? "", day) },
   ];
   return (
     <Card testId="pulse-global">
@@ -182,18 +196,22 @@ export function GlobalTable({ g, region, today }: { g: NonNullable<PulseMood["gl
   );
 }
 
-export function CalendarTable({ c }: { c: NonNullable<PulseMood["calendar"]> }) {
+export function CalendarTable({ c, today, region = "IN" }: { c: NonNullable<PulseMood["calendar"]>; region?: Region;
+  /** the market's date now: a result or event dated before it is over, never "coming up" (LIVE9A-002: "13 Nov Results" on 16 Nov) */
+  today?: string | null }) {
   type Row = { key: string; when: string; kind: string; what: ReactNode };
+  const ahead = <T,>(xs: T[], at: (x: T) => string | null | undefined) => xs.filter((x) => { const d = at(x); return !today || !d || d.slice(0, 10) >= today; });
   const rows: Row[] = [
-    ...c.results.map((r) => ({ key: `r-${r.symbol}-${r.date}`, when: day(r.date), kind: "Results", what: <>{r.name}{r.purpose ? <span className="k-sub-line">{r.purpose}</span> : null}</> })),
-    ...c.ipos.map((i) => ({ key: `i-${i.name}`, when: i.close ? `closes ${day(i.close)}` : "open", kind: "IPO open", what: <>{i.name}{i.low != null && i.high != null ? <span className="k-sub-line">Price band {i.low}–{i.high}</span> : null}</> })),
-    ...c.events.map((e) => ({ key: `e-${e.date}-${e.title}`, when: `${day(e.date)}${e.time ? `, ${e.time}` : ""}`, kind: "Event", what: e.title })),
+    ...ahead(c.results, (r) => r.date).map((r) => ({ key: `r-${r.symbol}-${r.date}`, when: day(r.date), kind: "Results", what: <>{r.name}{r.purpose ? <span className="k-sub-line">{r.purpose}</span> : null}</> })),
+    ...c.ipos.map((i) => ({ key: `i-${i.name}`, when: i.close ? `closes ${day(i.close)}` : "open", kind: "IPO open", what: <>{i.name}{i.low != null && i.high != null ? <span className="k-sub-line">Price band {region === "US" ? "$" : "₹"}{i.low}–{i.high}</span> : null}</> })),
+    ...ahead(c.events, (e) => e.date).map((e) => ({ key: `e-${e.date}-${e.title}`, when: `${day(e.date)}${e.time ? `, ${e.time}` : ""}`, kind: "Event", what: e.title })),
   ];
   const cols: Column<Row>[] = [
     { key: "w", header: "When", rowHeader: true, cell: (r) => r.when },
     { key: "k", header: "Type", brief: true, cell: (r) => r.kind },
     { key: "d", header: "Details", wrap: true, cell: (r) => r.what },
   ];
+  if (!rows.length) return null;
   return (
     <Card testId="pulse-calendar">
       <CardHead title="Coming up" info="Results due from the largest companies in the next seven days, IPOs open now, and the economic events on the app's calendar." />
@@ -218,8 +236,9 @@ export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { n
     { key: "n", header: "Index", rowHeader: true, cell: (i) => i.name },
     { key: "l", header: "Level", numeric: true, brief: true, cell: level },
     { key: "c", header: "Change", numeric: true, brief: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
-    { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : i.from_high_pct > -0.5 ? "near its high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below`) },
-    { key: "w", header: "As of", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
+    // LIVE9A-027: the brief's own rule, so the two never differ ("near its high" here, "0.3% below" in the brief, for one level)
+    { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : fromHighText(i.from_high_pct)) },
+    { key: "w", header: "When", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
   ];
   void dayText;
   return (

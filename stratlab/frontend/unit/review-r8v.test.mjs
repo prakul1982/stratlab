@@ -16,7 +16,8 @@ const { pageFiles, libraryFiles, libraryEntries, apiBase } = await import("../sc
 const { publicReads } = await import("../src/lib/entry.ts");
 
 const template = read("index.html");
-const h1s = (html) => [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)].map((m) => m[1]);
+// (updated on purpose, LIVE13B-001: the home page's start-up h1 is the landing's own, its "skill" in <em>: the heading's words, tags left out)
+const h1s = (html) => [...html.matchAll(/<h1[^>]*>((?:[^<]|<\/?em>)*)<\/h1>/g)].map((m) => m[1].replace(/<\/?em>/g, ""));
 const tag = (html, re) => (html.match(re) ?? [])[1];
 
 // the public library's entry for one strategy, as GET /public/library gives it (the fields the build reads)
@@ -52,7 +53,7 @@ test("a library strategy's raw HTML leads with its result: title, description, o
     factHeadline: supertrend.verdict.fact_headline, headline: supertrend.verdict.headline, reason: null }), desc);
   // a strategy the server didn't give (unreachable at build time): its own words, as before
   const plain = files["library/seed-golden-cross-in/index.html"];
-  assert.match(plain, /<title>Golden cross · NIFTY 50 stocks: rules and verdict · StratLab<\/title>/);
+  assert.match(plain, /<title>Golden cross: rules and verdict · StratLab<\/title>/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab"): the short name, one part
   assert.deepEqual(h1s(plain), ["Golden cross · NIFTY 50 stocks"]);
   for (const html of Object.values(files)) assert.doesNotMatch(html, /recommend|buy now|should buy|Yahoo|Finnhub|Screener/i);
 });
@@ -82,12 +83,13 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
   const files = Object.fromEntries(pageFiles(template));
   // the home page (and /upgrade, /features, which are index.html; /plans has its page since DK-006): the tagline the landing page draws
   assert.equal(seo.pageMeta("/").heading, seo.TAGLINE);
-  assert.deepEqual(h1s(files["index.html"]), ["Test it, research it, track it."]);
-  assert.deepEqual(h1s(template), ["Test it, research it, track it."]);
+  // (updated on purpose, NAV3, CX-1: one promise in the hero, "Is your trading idea skill or luck?", not three jobs)
+  assert.deepEqual(h1s(files["index.html"]), ["Is your trading idea skill or luck?"]);
+  assert.deepEqual(h1s(template), ["Is your trading idea skill or luck?"]);
   for (const p of ["/upgrade", "/features", "/"]) assert.equal(seo.landingHeading(p), undefined, p);
   assert.equal(seo.landingHeading("/plans"), "Plans and prices");
   assert.deepEqual(h1s(files["plans/index.html"]), ["Plans and prices"]);
-  assert.match(files["plans/index.html"], /<title>Plans and prices · StratLab<\/title>/);
+  assert.match(files["plans/index.html"], /<title>Plans · StratLab<\/title>/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
   // an address with a page of its own: that page's heading, which the landing page then draws as its h1
   const own = { "/pricing": "Plans and prices", "/faq": "Questions", "/about": "About StratLab", "/help": "Help",
     "/login": "Sign in to StratLab", "/signup": "Sign up for StratLab" };
@@ -99,7 +101,7 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
   const login = read("src/pages/Login.tsx");
   // the address's own heading is the hero's h1, the tagline above it (DI-033: it was drawn as the eyebrow)
   assert.match(login, /\? <h1 className="serif lp-h1 lp-own-h1">\{heading\}<\/h1>/);
-  assert.match(login, /<span className="eyebrow">\{heading \? <><em>Test<\/em> it, research it, track it\.<\/> :/);
+  assert.match(login, /<span className="eyebrow">\{heading \? <>Is your trading idea <em>skill<\/em> or luck\?<\/> :/);
   // (updated on purpose, LIVE7B-008: no sign-in dialog, so no panel prop)
   assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} heading=\{landingHeading\(pathname\)\} intro=\{landingIntro\(pathname\)\} plansOnly=\{isPlansPath\(pathname\)\} slim=\{slimOf\(pathname\) \?\? undefined\} \/>/);
   assert.match(read("src/styles.css"), /h1\.eyebrow \{ font-weight: 400; \}/);

@@ -170,11 +170,13 @@ test("corporate actions: a table a day with the price now, the payment's yield a
   // narrowed by the kind of action, by sector, and the count says how many
   if (phone) await page.getByRole("button", { name: /^Filters/ }).click();
   const filters = page.getByRole("region", { name: "Filters" });
+  // (updated on purpose, fix15 LIVE12A-008: with no filter on, a size no company has is not offered; once the table is narrowed every
+  // size is, and picking one with none says so)
+  await expect(filters.getByRole("button", { name: /^Micro 0$/ })).toHaveCount(0);
   await filters.getByLabel("Kind of action").selectOption("split");
   await expect(page.getByRole("row", { name: /VEDL/ }).first()).toBeVisible();
   await expect(page.getByRole("row", { name: /ICICIBANK/ })).toHaveCount(0);
   await expect(count).toContainText("shown");
-  await filters.getByLabel("Kind of action").selectOption("");
   await filters.getByRole("button", { name: /^Micro/ }).click();
   await expect(page.getByText("No action matches these filters")).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).first().click();
@@ -203,7 +205,10 @@ test.describe("with the market shut", () => {
     expect(await page.evaluate(() => new Date().toISOString().slice(0, 10))).toBe(E2E_NOW_CLOSED.slice(0, 10));
     const filters = page.getByRole("region", { name: "Filters" });
     if (phone && (await page.getByRole("button", { name: /^Filters/ }).getAttribute("aria-expanded")) !== "true") await page.getByRole("button", { name: /^Filters/ }).click();
-    await filters.getByLabel("Day", { exact: true }).selectOption(cal.first);        // the first session's four
+    // (updated on purpose, rel1 LIVE9A-014: the day after today is the "Tomorrow" chip only, never again by its date, so the first
+    // session on the day after a Sunday is picked as "tomorrow")
+    const tomorrow = new Date(Date.parse(`${cal.today}T12:00:00Z`) + 86400_000).toISOString().slice(0, 10);
+    await filters.getByLabel("Day", { exact: true }).selectOption(cal.first === tomorrow ? "tomorrow" : cal.first);        // the first session's four
     await expect(count).toHaveText("20 companies · 4 shown");
     await sane(page, errors);
     errors = await open(page, "/research/corporate-actions?region=IN&scope=all", "Dividends, bonuses and splits");

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useApp } from "../lib/app";
-import { INDIA_FEED, reconnectAt, type DataNote } from "../lib/dataBack";
+import { INDIA_FEED, reconnectAt, searchableNow, type DataNote } from "../lib/dataBack";
 import { defaultExit, opSay, READ_MARK, readAs, refName, statedIn } from "../lib/rules";
 import type { Instrument, Market, Strategy } from "../lib/types";
 import { InstrumentSearch } from "./InstrumentSearch";
@@ -35,10 +35,12 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
   const sell = s.side === "short";                 // a short idea sells first: its questions say sell, never buy (DA-006)
   if (!hasInstrument) {
     // India's data is offline (the banner says so): an Indian name is known, just not searchable until the login, at the time the banner gives (DA-004)
-    const india = !!gaps.instName && !!dataNote && (INDIA_FEED.has(gaps.instMarket ?? "") || /\b(nifty|sensex)\b/i.test(gaps.instName));
+    // (with stored daily closes, LIVE11B-013, the Indian name is searched now, for a daily test on them)
+    const india = !!gaps.instName && !!dataNote && (INDIA_FEED.has(gaps.instMarket ?? "") || /\b(nifty|sensex)\b/i.test(gaps.instName))
+      && !searchableNow(markets.find((x) => x.id === (gaps.instMarket || "IN")));
     const back = reconnectAt(dataNote);
     // nothing is guessed: the rules wait for a pick, searched right here in the market the idea points to (57.1)
-    const where = markets.find((x) => x.id === (gaps.instMarket || "IN") && x.status === "live") ?? markets.find((x) => x.status === "live");
+    const where = markets.find((x) => x.id === (gaps.instMarket || "IN") && searchableNow(x)) ?? markets.find((x) => x.status === "live");
     qs.push({ id: "inst", short: "Instrument", title: "Which stock or index?", search: india ? undefined : where,
       why: india ? `"${gaps.instName}" is an Indian listing, and Indian price data is offline right now, so it can't be looked up yet. ${back ? `It reconnects on ${back}.` : "It reconnects with the next daily data login."} Pick another market now, or come back then.`
         : gaps.instName ? `We couldn't find "${gaps.instName}". Pick one, or search every market.` : "Your idea doesn't name one, so none was picked for you. The same rules can behave very differently on different markets.",

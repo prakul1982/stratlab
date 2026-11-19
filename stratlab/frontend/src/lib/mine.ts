@@ -35,7 +35,10 @@ export const goldInr10g = (usdPerOz: number, inrPerUsd: number) => (usdPerOz * i
 
 /** `day`: the session of the last close (its calendar day in the market's zone), so a move that isn't today's says its day.
  * `at`: when the candles were read (ms), the time the card says its prices are from (LIVE-1). */
-export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null; day?: string | null; at?: number }
+export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null; day?: string | null; at?: number;
+  /** a level kept in this browser from an earlier visit that is no longer the latest (read mid-session, or a newer close has
+   * passed since): drawn faded with the time it was read until the fresh read replaces it (LIVE11B-010) */
+  stale?: boolean }
 
 /** The markets whose prices the strip shows: India and the US for their indices, and the dollar and gold, which trade round
  * the clock from Sunday evening to Friday evening. The strip reads again each minute while one of them trades. */
@@ -96,6 +99,60 @@ const seriesCache = new Map<string, { at: number; p: Promise<Series | null> }>()
 export const SERIES_KEEP_MS = 5 * 60_000;
 export const SERIES_LIVE_KEEP_MS = 45_000;
 
+/* The tiles' last levels, kept in this browser: a cold load paints each tile at once with the level and the day it was of (a tile says
+ * its day, so an earlier session's level reads as that day's), then the fresh read replaces it (rel1, LIVE9B-010: the India tiles were
+ * still grey 8 s after the home page opened on a closed day). Market levels only, nothing of the account's. */
+const STRIP_KEY = "stratlab.strip.v1";
+const STRIP_MAX_AGE_MS = 4 * 86400_000;
+
+/** When each tile's market's close is final (its close plus the settle step), in the market's own clock: a kept level read before
+ * it on its own day was an intraday level, not the day's close. */
+const TILE_FINAL: Record<string, string> = { IN: "15:45", US: "16:50" };
+const KEPT_FRESH_MS = SERIES_KEEP_MS;
+
+function wall(at: number, tz: string): { day: string; hm: string } {
+  const d = new Date(at);
+  return { day: d.toLocaleDateString("en-CA", { timeZone: tz }), hm: d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }) };
+}
+const nextWeekday = (day: string) => { let d = addDaysIso(day, 1); while ([0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) d = addDaysIso(d, 1); return d; };
+
+/** Whether a level kept from an earlier visit can't be shown as the latest (LIVE11B-010: the first open of the day showed yesterday's
+ * 14:38 IST NIFTY 25,448 +0.62% "on 17 Nov" against the real close 25,387 +0.38%, and the S&P 500's 16 Nov close after its 17 Nov
+ * one). An index's level is stale when it was read during its own session more than a few minutes ago, or when a later session of its
+ * market has closed since; the dollar and gold, which trade round the clock, once a few minutes old. */
+export function keptStale(id: string, x: Pick<Series, "day" | "at">, now = Date.now()): boolean {
+  const t = MARKET_TILES.find((m) => m.id === id);
+  const at = x.at ?? 0;
+  if (!t || !x.day) return true;
+  const region = "research" in t.from ? t.from.research[0] : null;
+  const tz = region ? TILE_TZ[region] : null, final = region ? TILE_FINAL[region] : null;
+  if (!tz || !final) return now - at > KEPT_FRESH_MS;
+  const read = wall(at, tz), here = wall(now, tz);
+  const midSession = read.day === x.day && read.hm < final;
+  const next = nextWeekday(x.day);
+  const newerClose = here.day > next || (here.day === next && here.hm >= final);
+  return newerClose || (midSession && now - at > KEPT_FRESH_MS);
+}
+
+export function keptStrip(now = Date.now(), store: Pick<Storage, "getItem"> | null = (() => { try { return localStorage; } catch { return null; } })()): Record<string, Series> {
+  try {
+    const got = JSON.parse(store?.getItem(STRIP_KEY) ?? "null") as Record<string, Series> | null;
+    const out: Record<string, Series> = {};
+    for (const [id, x] of Object.entries(got ?? {})) {
+      if (x && Array.isArray(x.values) && x.values.length && typeof x.last === "number" && typeof x.day === "string" && now - (x.at ?? 0) < STRIP_MAX_AGE_MS) out[id] = { ...x, stale: keptStale(id, x, now) };
+    }
+    return out;
+  } catch { return {}; }
+}
+
+export function keepStripTile(id: string, x: Series, store: Pick<Storage, "getItem" | "setItem"> | null = (() => { try { return localStorage; } catch { return null; } })()): void {
+  try {
+    const all = JSON.parse(store?.getItem(STRIP_KEY) ?? "null") ?? {};
+    all[id] = { ...x, values: x.values.slice(-23), stale: undefined };
+    store?.setItem(STRIP_KEY, JSON.stringify(all));
+  } catch { /* storage full or off */ }
+}
+
 function loadSeries(t: MarketTile, keep = SERIES_KEEP_MS): Promise<Series | null> {
   const hit = seriesCache.get(t.id);
   if (hit && Date.now() - hit.at < keep) return hit.p;
@@ -108,7 +165,9 @@ function loadSeries(t: MarketTile, keep = SERIES_KEEP_MS): Promise<Series | null
     const values = rows.map((c) => c.c);
     if (!values.length) return null;
     const last = values[values.length - 1], prev = values.length > 1 ? values[values.length - 2] : null;
-    return { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null, day: candleDay(rows[rows.length - 1].t, tz), at: Date.now() };
+    const x = { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null, day: candleDay(rows[rows.length - 1].t, tz), at: Date.now() };
+    keepStripTile(t.id, x);
+    return x;
   }).catch(() => { seriesCache.delete(t.id); return null; });
   seriesCache.set(t.id, { at: Date.now(), p });
   return p;
@@ -119,14 +178,15 @@ function loadSeries(t: MarketTile, keep = SERIES_KEEP_MS): Promise<Series | null
  * was until its new one comes (a read that fails changes nothing). The newest candle is today's, still forming: the
  * server brings it to the market's live price (research chart's `forming`, the candle reads' short keep). */
 export function useMarketStrip(enabled = true, live = false): Record<string, Series | null | undefined> {
-  const [out, setOut] = useState<Record<string, Series | null | undefined>>({});
+  const [out, setOut] = useState<Record<string, Series | null | undefined>>(() => keptStrip());
   const on = useRef(false);
   const liveNow = useRef(live);
   liveNow.current = live;
   useEffect(() => {
     if (!enabled) return;
     on.current = true;
-    MARKET_TILES.forEach((t) => loadSeries(t, liveNow.current ? SERIES_LIVE_KEEP_MS : SERIES_KEEP_MS).then((s) => { if (on.current) setOut((o) => ({ ...o, [t.id]: s })); }));
+    // a read that fails keeps the tile's kept level (with its day) rather than greying it
+    MARKET_TILES.forEach((t) => loadSeries(t, liveNow.current ? SERIES_LIVE_KEEP_MS : SERIES_KEEP_MS).then((s) => { if (on.current) setOut((o) => ({ ...o, [t.id]: s ?? o[t.id] ?? null })); }));
     return () => { on.current = false; };
   }, [enabled]);
   useLiveRefresh(enabled && live, () => {
@@ -136,6 +196,17 @@ export function useMarketStrip(enabled = true, live = false): Record<string, Ser
 }
 
 /* ---------- coming up ---------- */
+/** A row's line under its title, unless it only says the title again (LIVE12B-007: "India GDP: Quarterly Estimates of GDP for Q2,
+ * FY 2026-27" over "Quarterly Estimates of GDP for Q2, FY 2026-27."): "" then. */
+export function detailBeyond(title: string, detail: string): string {
+  const core = (s: string) => s.toLowerCase().replace(/[.\s]+$/, "").replace(/\s+/g, " ").trim();
+  const t = core(title), d = core(detail);
+  if (!d || t.includes(d)) return d ? "" : detail;
+  // LIVE13B-005: a sentence of the detail that only repeats the title goes; the rest stays ("Press release at 4:00 pm.")
+  const kept = detail.split(/(?<=\.)\s+/).filter((p) => { const c = core(p); return !c || !t.includes(c); });
+  return kept.join(" ");
+}
+
 export interface Up { key: string; date: string; title: string; detail: string; to?: string; tag: string; tone: "warn" | "plain" }
 type MoneyEv = { id: string; date: string; title: string; cat: string; kind: string; detail: string; amount: number | null; symbol: string | null; url: string | null };
 type MoneyView = { events: MoneyEv[]; today: string; market_on?: boolean };
@@ -187,6 +258,7 @@ export function useComingUpAll(enabled = true): Up[] | null {
           to: `/research/${r.region}/${encodeURIComponent(r.symbol)}`, tag: "Results", tone: "plain" });
       }
       const seen = new Set<string>();
+      for (const u of out) u.detail = detailBeyond(u.title, u.detail);
       setRows(out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)).filter((u) => (seen.has(u.key) ? false : (seen.add(u.key), true))));
     });
     return () => { live = false; };

@@ -59,25 +59,46 @@ async function start() {
   const path = location.pathname;
   if (!(await readConfig()) && !isPublicForAll(path)) { window.__stratlabShowLoadError?.(); return; }
   const account = !isPublicForAll(path) && wantsAccount({ supabaseUrl: window.STRATLAB_CONFIG?.SUPABASE_URL, search: location.search, hash: location.hash, storage: localStorage });
+  if (!account) holdStartup(root);    // the page's own words, drawn again until its code is here (R10V-006); not for a saved sign-in (R29B-019)
   const appCode = account ? import("./main") : null;      // the app's code downloads beside the small helpers below, not after them
   appCode?.catch(() => undefined);
+  // LIVE11B-004: whether Indian data is offline, asked now beside the app's code and the sign-in check, so the first page frame carries the line
+  // LIVE13B-004: and the account itself (/me), with the saved sign-in's token, not after the app's ~90 files (lib/accountEarly.ts)
+  if (account) import("./lib/accountEarly").then((m) => m.startAccountReads()).catch(() => undefined);
+  // LIVE12A-013: a visitor's page questions, its page code and the visitor half are asked for now, beside the two small helpers below,
+  // not after them: the landing's chunks waited a round trip for the helpers first (LCP 3.7 s desktop, 3.2 s phone)
+  if (!account) {
+    const reads = publicReads(path);
+    if (reads.length) import("./lib/http").then((m) => reads.forEach((r) => m.prefetchPublic(r))).catch(() => undefined);
+  }
+  const early = account ? null : publicPage(path).catch(() => undefined);
+  // R71: a visitor's page draws once its fonts are here (asked for now, beside its code; at most 1.5 s), not in the fallback fonts
+  // and then again in its own: the swap moved /library's chips and cards sideways (0.106) whenever its list arrived first
+  const fonts = account ? null : Promise.race([new Promise((ok) => window.setTimeout(ok, 1500)),
+    Promise.all(["300 1em Montserrat", "800 1em Montserrat", "1em Fraunces", "600 1em Fraunces", "1em IBM Plex Sans", "500 1em IBM Plex Sans", "600 1em IBM Plex Sans"]
+      .map((f) => document.fonts.load(f)))]).catch(() => undefined);
+  const visitorCode = account ? null : import("./visitor/visitorMain");
+  visitorCode?.catch(() => undefined);
   const [{ captureRef }, { startErrorReports }] = await Promise.all([import("./lib/share"), import("./lib/sentry")]);
-  if (!account) holdStartup(root);    // the page's own words, drawn again until its code is here (R10V-006); not for a saved sign-in (R29B-019)
   captureRef();                       // a friend's invite link: kept until sign-in
   startErrorReports({ lazy: !account });   // a visitor's page downloads the error reporter only if something breaks
   if (account) {
     const app = await appCode!;
     app.startApp(root);
   } else {
-    // the page's questions to the server first (lib/http is in the start-up file already), then its code, alongside the half itself
-    const reads = publicReads(path);
-    if (reads.length) import("./lib/http").then((m) => reads.forEach((r) => m.prefetchPublic(r))).catch(() => undefined);
-    const early = publicPage(path).catch(() => undefined);
-    const visitor = await import("./visitor/visitorMain");
+    const visitor = await visitorCode!;
+    await fonts;
     visitor.startVisitor(root);
     void early;
   }
-  if (import.meta.env.PROD) import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
+  // Release 71: a visitor's page downloads the install and offline helper only after it has loaded (it registered later anyway, and
+  // an install offer that comes first is kept by the start-up script), so the landing's first download stays under its budget
+  const pwa = () => import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
+  if (import.meta.env.PROD) {
+    if (account) pwa();
+    else if (document.readyState === "complete") window.setTimeout(pwa, 4000);
+    else window.addEventListener("load", () => window.setTimeout(pwa, 4000), { once: true });
+  }
 }
 
 /* A failed download of the app's own chunk on the first load (a dropped connection; seen once on Safari as an "Unhandled Promise

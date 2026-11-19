@@ -96,6 +96,10 @@ export interface SectorAI {
   /** `official`: one official industry's companies that the AI didn't place in a layer of its own */
   value_chain: { layer: string; description: string; companies: Co[]; official?: boolean; basis?: "industry" | "list" }[];
   tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number; refresh_state?: RefreshState;
+  /** r66e (LIVE12A-002): the read stored under an earlier version of the checks, served at once; `rechecking` while it is checked again */
+  older?: { at: string | null; rechecking: boolean } | null;
+  /** r69e (LIVE13A-003): when the stored read was checked (its map's own date is `generated_at`) */
+  checked_at?: string | null;
   /** the placement check: `checked` false while some companies' descriptions are still being read (they are not shown until checked) */
   placements?: {
     checked: boolean; pending: number; left_out: number; placed: number;
@@ -203,6 +207,8 @@ export interface PulseAI {
   story?: { label: string; n: number; of: number; indices: number[]; headlines: string[] } | null;
   /** Where the FII/DII figures the read quotes come from, when it quotes them (DD-001). */
   flows_source?: string;
+  /** fix12: the session's latest read, shown while a newer one is written in the background; the page asks again for it. */
+  updating?: boolean;
 }
 /** The Market pulse's tables (intel/mood.py): each part is null when its figures can't be read, and the page leaves it out. */
 export interface MoodMover { symbol: string; name?: string; change_pct: number; points?: number }
@@ -215,6 +221,10 @@ export interface PulseMood {
   pending?: boolean; region: Region; is_open: boolean; today: string; levels_at: string | null; read_at?: string | null;
   /** a copy from before the open or close, answered while the fresh read goes on (LIVE4-024) */
   refreshing?: boolean;
+  /** a copy read while the market traded, served after the close while the closing read is written (LIVE10A-001) */
+  during?: boolean;
+  /** the closed session's final read (sectors, that session's breadth count and, for India, its flows all in): not read again (LIVE11A-001) */
+  final?: boolean;
   /** the session the figures are of (the index's own day), and, on a copy behind the levels, the newer session being read (LIVE7A-001) */
   session?: string | null; behind?: string | null;
   headline: string; lines: string[];
@@ -222,7 +232,9 @@ export interface PulseMood {
   breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
     stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[];
     /** the live count's quarter-hour, "12:15" IST (LIVE4-005) */
-    at?: string | null } | null;
+    at?: string | null;
+    /** LIVE13A-030: the day's last count is the one at the closing prices (absent from older reads) */
+    at_close?: boolean } | null;
   sectors: { rows: MoodSectorRow[]; up: number; down: number; unchanged: number; of: number; leader: string; laggard: string } | null;
   /** One table for each index of the market (NIFTY 50 and SENSEX; the S&P 500); `est_total` and `actual` (India) say what the companies add up to and what the index moved. */
   movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string; est_total?: number | null; actual?: number | null }[] | null;
@@ -461,3 +473,15 @@ export const STARTER_TICKERS: Record<Region, string[]> = {
   IN: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "BHARTIARTL", "LT"],
   US: ["NVDA", "AAPL", "MSFT", "VRT", "CEG", "ASML"],
 };
+
+/** Key numbers' numbered notes: each note a figure points to, once. Two figures with the same label and the same note (Sales growth's and
+ * Profit growth's "Latest YoY: Sep 2026 vs Sep 2025") share one number; a note no figure points to never stands in the list
+ * (LIVE12B-016: notes 2 and 3 said the same and nothing pointed to 3). `foots(m)`: whether a figure's note is a numbered one. */
+export function metricFoots<M extends { label: string; note?: string | null }>(items: M[], foots: (m: M) => boolean): { n: number; label: string; text: string }[] {
+  const out: { n: number; label: string; text: string }[] = [];
+  for (const m of items) {
+    if (!m.note || !foots(m) || out.some((f) => f.label === m.label && f.text === m.note)) continue;
+    out.push({ n: out.length + 1, label: m.label, text: m.note });
+  }
+  return out;
+}

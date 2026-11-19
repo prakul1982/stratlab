@@ -1,6 +1,7 @@
 """Release 17 fixes: the business-update reader's year-ago column (a group's filing listing two companies' volumes; a table whose other
 column is the month before), demergers from corporate-action filings, and the theme deck's layout and wording on synthetic themes."""
 from app import biz_updates as B
+from tests.gl50_read import read_args
 
 
 # ---------- R17-005 (a): the year-ago figure is the year-ago column's ----------
@@ -126,7 +127,7 @@ def test_a_layer_whose_companies_are_all_not_confirmed_gets_no_slide_and_the_lay
     assert not any("Machinery" in t for t in titles if t.startswith("Layer"))
     assert any(t.startswith("Layer 1 · Film") for t in titles) and any(t.startswith("Layer 2 · Converters") for t in titles)
     assert not any(t.startswith("Layer 3") for t in titles)
-    assert "No slide for Machinery: none of its companies is confirmed by its own description." in texts(slides)
+    assert "No slide for Machinery: none of its companies is in the theme (each one's own words describe other work)." in texts(slides)  # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose)
     _, b = deck_of(*theme_b())
     # changed on purpose (R18): one layer is nothing to set side by side, so no layer slide and no value chain
     assert not [t.title for t in b if t.title.startswith("Layer")] and "The value chain by layer" not in [t.title for t in b]
@@ -139,14 +140,19 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     assert v["status"]["MACH1"] == "unverified" and v["status"]["MACH2"] == "unverified"
     words = D.theme_words({"value_chain": [{"layer": "Heavy vehicles", "description": "Trucks and buses for haulage."}]}, "Any theme")
     assert D.membership({**LIST, "what": "The company manufactures trucks and buses"}, words) == "core"      # the layer's description, not its name
+    # (updated on purpose, e54: the checked companies by what their place rests on, never all "confirmed by their own description")
     assert v["membership"] == {"placed": 20, "confirmed": 18, "not_confirmed": 2}
+    assert v["membership_evidence"] == {"description_verified": 3, "industry_code_supported": 15, "list_supported": 0, "not_confirmed": 2,
+                                        "membership_unverified": 0}
     t = texts(slides)
-    assert "20 in the exchange's industry list; 18 confirmed by their own description, 2 not yet" in t       # p2 and data confidence
+    assert ("20 in the exchange's industry list; description-verified 3 of 20 (15%); membership checked 20 of 20: 3 description-verified, "
+            "15 industry-supported, 2 own words describe other work, 0 not checked") in t       # h56 (R56): the description-verified share first (updated on purpose)       # p2 and data confidence; l55 (R55): by state names (updated on purpose)
     cover = dict((it[0], it[2] if len(it) > 2 else None) for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"])
-    assert cover["Companies"] == "in the exchange's industries; 2 not confirmed"          # R20: the universe's one wording, with what isn't confirmed
+    assert cover["Companies"] == "in the exchange's industries; 2 own words: other work"          # l55 (R55): by the state (updated on purpose)          # R20: the universe's one wording, with what isn't confirmed
     # US, most companies with no stored figures: the counts are of every company checked, with figures or not
     vb, sb = deck_of(*theme_b())
-    assert vb["membership"]["placed"] == 10 and "10 in the exchange's industry list; 10 confirmed by their own description, 0 not yet" in texts(sb)
+    assert vb["membership"]["placed"] == 10 and ("10 in the exchange's industry list; description-verified 10 of 10 (100%); membership checked 10 of 10: 10 description-verified, "
+                                                 "0 industry-supported, 0 not checked") in texts(sb)          # l55 (R55): by state names (updated on purpose)
 
 
 def test_whole_points_print_whole_and_a_layers_half_stays():
@@ -166,15 +172,18 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
     # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
     # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
-    v, slides = deck_of(*theme_a())
+    # gl50 (R50, updated on purpose): with no way of earning read for the layers' companies, none is ranked and the line says why
+    bare, _ = deck_of(*theme_a())
+    assert (bare["chain"]["highest"], bare["chain"]["lowest"]) == (None, None) and bare["chain"]["line"].endswith(D.UNREAD_SAID)
+    v, slides = deck_of(*read_args(theme_a()))
     chain = v["chain"]
     assert (chain["highest"], chain["lowest"]) == ("Film", "Converters") and chain["gap"] == 7.0
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     where = next(c for c in cards if c["title"] == "Where the margin sits")["lines"][0]
     # R18: whole figures print whole; R22: a highest or lowest median on 4 companies or fewer says its count
     # changed on purpose (m2): the headline says in its own sentence which layers it ranks
-    assert where.startswith("Among the ") and where.endswith(" layers with at least 3 companies with the figure, median EBITDA margin is highest in Film "
-                                                              "(19%, 4 companies) and lowest in Converters (12%), a gap of 7 points.")
+    assert where.startswith("Median EBITDA margin is highest in Film (19%, 4 companies) and lowest in Converters (12%), a gap of 7 points, among the ") \
+        and where.endswith(" layers with at least 3 companies with the figure.")  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert "stands apart" not in texts(slides)
     _, sb = deck_of(*theme_b())                 # one layer: nothing claimed and (R18, changed on purpose) nothing said about it
     assert "Fewer than two layers" not in texts(sb) and not any(c["title"] == "Where the margin sits" for s in sb if s.title == "Key findings"
@@ -215,7 +224,7 @@ def test_industry_economics_is_computed_and_traceable(monkeypatch):
     # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
     # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
-    v, slides = deck_of(*theme_a())
+    v, slides = deck_of(*read_args(theme_a()))           # gl50 (R50, updated on purpose): the layers' way of earning read, else none is ranked
     md = v["sections"]["margin_drivers"]
     assert md and abs(sum(x["part"] for x in md["layers"]) - md["change"]) < 0.1             # the parts add up to the change
     titles = [s.title for s in slides]
@@ -225,7 +234,7 @@ def test_industry_economics_is_computed_and_traceable(monkeypatch):
     # the questions sit under a table of the part when they fit, so no page is half empty
     q = next(it for s in slides for b in s.blocks if b["kind"] == "cards" for it in b["items"] if it.get("title") == "Questions the figures raise")["lines"]
     assert any("on the quarter to Jun 2025" in x for x in q)                                    # the base quarter is stated
-    assert any("with at least 3 companies with the figure, Film has the highest median EBITDA margin" in x for x in q)      # m2 (on purpose): its scope said
+    assert any(x.startswith("Film has the highest median EBITDA margin") and "with at least 3 companies with the figure. " in x for x in q)      # m2 (on purpose): its scope said; r69e (LIVE13A-009, updated on purpose): the finding first
     t = texts([s for s in slides if s.eyebrow and "Industry economics" in s.eyebrow]).lower()
     for word in ("buy", "sell", "avoid", "attractive", "undervalued", "overvalued", "recommend", "target price"):
         assert not _re.search(rf"\b{word}\b", t), word

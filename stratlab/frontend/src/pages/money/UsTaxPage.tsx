@@ -201,7 +201,7 @@ export function UsTaxPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · Tax" title="US stocks in Indian tax" asOf={v?.as_of} asOfLabel="Rates up to"
+      <PageHeader eyebrow="Money · Tax" title="US stocks in Indian tax" asOf={v?.as_of} asOfLabel="Rates up to" asOfPending={!v && !error}
         lede="Your US share sales in rupees, long or short term under the 24-month rule, US dividends with the foreign tax credit, and the Schedule FA table."
         info="Sales are converted the way the Income-tax Rules say; the calendar-year Schedule FA table is for the return. Only you can see these figures." infoLabel="What this page covers" />
       <Notice label="Estimate only"><b>Estimate only.</b> Arithmetic on your own trades, not tax advice, for a resident individual. Check it with a chartered accountant (CA) before you file.</Notice>

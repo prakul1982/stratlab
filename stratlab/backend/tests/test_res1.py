@@ -82,7 +82,9 @@ def test_filter_by_size_uses_the_screeners_bands_and_says_how_many_have_no_value
     assert set(symbols(small)) == {"SMALLCO", "TINYCO"}
     assert small["unknown_size"] == 1                                    # NOINDEX has no market value: left out by the size, and counted
     assert set(symbols(view(size=["mid"]))) == {"ZOMATO"} and set(symbols(view(size=["small"]))) == {"SMALLCO"} and set(symbols(view(size=["micro"]))) == {"TINYCO"}
-    assert view()["unknown_size"] == 0 and view(size=["huge"])["matching"] == 8     # a size that does not exist is no filter
+    # (updated on purpose, fix11 CX2: the count of companies no size places is given with no size picked too, so "8 companies" over sizes
+    # adding to 7 says why)
+    assert view()["unknown_size"] == 1 and view(size=["huge"])["matching"] == 8     # a size that does not exist is no filter
 
 
 def test_filter_by_sector_index_fo_and_purpose(w):
@@ -124,7 +126,8 @@ def test_a_day_shows_its_first_rows_only_with_the_count(w):
     many = [meeting(f"CO{i}", TODAY) for i in range(1, 60)]
     R.save("IN", many)
     v = view(on="today", limit=25)
-    assert len(symbols(v)) == 25 and v["weeks"][0]["days"][0] == {"date": TODAY.isoformat(), "count": 59, "shown": 25}
+    # (updated on purpose, LIVE10A-020: each day also says whether it is a session of the market)
+    assert len(symbols(v)) == 25 and v["weeks"][0]["days"][0] == {"date": TODAY.isoformat(), "count": 59, "shown": 25, "session": True}
     assert v["matching"] == 59 and v["more"] == 34
     assert len(symbols(view(on="today", limit=25, day=TODAY.isoformat()))) == 59
 

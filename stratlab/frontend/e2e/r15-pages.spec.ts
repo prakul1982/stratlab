@@ -46,7 +46,9 @@ test("R15 #3: Where you stand is the headline figure beside a small own / owe / 
   const head = card.getByTestId("nw-headline");
   await expect(head.getByTestId("nw-figure")).toHaveText(/^₹[\d,]+$/);
   const table = card.getByRole("table", { name: "Where you stand" });
-  for (const r of ["What you own", "What you owe", "Net worth"]) await expect(table.getByRole("row").filter({ hasText: r })).toHaveCount(1);
+  for (const r of ["What you own", "What you owe"]) await expect(table.getByRole("row").filter({ hasText: r })).toHaveCount(1);
+  // (updated on purpose, LIVE9B-012: the net worth is the headline beside the table, not a third row repeating it)
+  await expect(table.getByRole("row").filter({ hasText: "Net worth" })).toHaveCount(0);
   if (info.project.name === "desktop") {
     // balanced edge to edge: the figure on the left half, the table on the right
     const [c, f, t] = [await card.boundingBox(), await head.getByTestId("nw-figure").boundingBox(), await table.boundingBox()];
@@ -81,7 +83,14 @@ test("R15 #12: the breadth table is in the kit's colours on the Invest home and 
   await sane(page, errors);
   errors = await open(page, "/invest/breadth", "Above 50-day average");
   const row = page.getByRole("row").filter({ hasText: "Above 50-day average" }).first();
-  await expect(row.locator(".k-up, .k-down").first()).toBeVisible({ timeout: 30_000 });
+  // (updated on purpose (R61, owner: "share above the 50-day average coloured on both pages"): the share itself is green above half and red
+  // below on the Breadth page too, by the home card's rule; fix9 had drawn it plain)
+  const pageShare = row.locator("td .k-up, td .k-down").first();
+  await expect(pageShare).toBeVisible({ timeout: 30_000 });
+  const pv = parseFloat((await pageShare.innerText()).replace(/[^\d.]/g, ""));
+  await expect(pageShare).toHaveClass(pv > 50 ? /k-up/ : /k-down/);
+  // the 20- and 200-day shares stay plain levels (fix9, LIVE9A-016)
+  await expect(page.getByRole("row").filter({ hasText: "Above 200-day average" }).first().locator("td > span > span.k-up, td > span > span.k-down")).toHaveCount(0);
   await expect(page.getByRole("row").filter({ hasText: "Rose / fell" }).first().locator(".k-up").first()).toBeVisible();
   await sane(page, errors);
 });

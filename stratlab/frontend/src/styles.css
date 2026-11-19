@@ -70,7 +70,7 @@ svg { display: block; }
 .mono { font-family: var(--mono); }
 .muted { color: var(--muted); }
 .small { font-size: 13.5px; }
-.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); text-wrap: balance; }   /* LIVE13A-018: no last word alone on a phone's second line */
 h1.eyebrow { font-weight: 400; }
 .lp-own-h1 { font-size: clamp(40px, 6vw, 64px); }   /* an address's own heading in the hero (DI-033) */     /* a landing address's own heading (/pricing: "Plans and prices"), drawn as the eyebrow */
 .ruled { background-image: linear-gradient(var(--rule) 1px, transparent 1px); background-size: 100% 34px; }
@@ -234,10 +234,11 @@ a.link { margin-inline: -2px; }
 .side-groups[data-fade="bottom"] { -webkit-mask-image: linear-gradient(#000 calc(100% - 32px), transparent); mask-image: linear-gradient(#000 calc(100% - 32px), transparent); }
 .side-groups[data-fade="top"] { -webkit-mask-image: linear-gradient(transparent, #000 24px); mask-image: linear-gradient(transparent, #000 24px); }
 .side-groups[data-fade="both"] { -webkit-mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); }
-/* "More below": the faded edge's words, just above the menu's foot (R5O-038) */
-.side-more { flex: none; align-self: center; display: inline-flex; align-items: center; gap: 4px; margin: 2px 0; padding: 2px 10px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font: 500 12px var(--sans); cursor: pointer;
-  position: relative; z-index: 1; }
+/* "More below": the faded edge's words, just above the menu's foot (R5O-038), in a row of its own under the menu's edge line, so it
+   never sits over a menu item (owner, 18 Nov) */
+.side-more-row { flex: none; display: flex; justify-content: center; padding: 2px 0; border-top: 1px solid var(--line-2); }
+.side-more { flex: none; display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 2px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font: 500 12px var(--sans); cursor: pointer; }
 .side-more svg { transform: rotate(90deg); }
 .side-more:hover { color: var(--ink); }
 .side-group { display: flex; flex-direction: column; gap: 2px; }
@@ -275,18 +276,11 @@ a.link { margin-inline: -2px; }
 .side-list a.active { background: var(--side-on); box-shadow: var(--side-on-ring); color: var(--ink); font-weight: 600; }
 .side-list a.active > svg { color: var(--ink); }
 .side-list a:focus-visible, .side-toggle:focus-visible { outline-offset: -2px; }
-/* R16: Themes, highlighted beside the space's home on the menu's first row: an accent edge and tint, the icon in the accent */
+/* the space's home on the menu's first row; Themes is Invest's first entry below it (owner, 18 Nov), no pill beside the home link */
 .side-home { flex-direction: row; align-items: center; gap: 6px; }
-/* the home link stays on one line beside Themes (owner, 7 Nov: "Invest home" broke onto two lines in its 32px row) */
+/* the home link stays on one line (owner, 7 Nov: "Invest home" broke onto two lines in its 32px row) */
 .side-home > a:first-child { flex: 1; gap: 8px; white-space: nowrap; }
 .side-home-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.side-list a.side-feature { flex: none; gap: 6px; padding: 0 9px 0 7px; white-space: nowrap; border: 1px solid var(--line-2); border-left: 3px solid var(--orange);
-  background: var(--orange-soft); color: var(--ink); font-weight: 600; }
-.side-list a.side-feature > svg { color: var(--orange-ink); }
-.side-list a.side-feature:hover { border-color: var(--orange); background: var(--orange-soft); }
-/* LIVE6-016: on the Themes page the menu's own Themes entry is the one selected item; the pill is a plain outlined link there */
-.side-list a.side-feature.here { border-color: var(--line-2); background: none; font-weight: 500; color: var(--ink-2); }
-.side-list a.side-feature.here > svg { color: var(--ink-2); }
 .nb-dot { width: 16px; display: grid; place-items: center; flex: none; }
 .nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }   /* its hidden verdict words stay inside it (a long name put them 84px past the menu's edge) */
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
@@ -347,6 +341,7 @@ a.link { margin-inline: -2px; }
   .side-title { height: 32px; }
   .side-note { height: 32px; }
   .mkt-btn { height: 32px; }
+  .side-more-row { padding: 0; }
   .side-more { min-height: 32px; margin: 0; }   /* IA-2: a menu with a section open can run past a phone's height, and this shows then */
   /* when it shows, it takes its own row (R34-013): the foot gives back 12px so a long menu still keeps most of a phone's height
      (CI #323: a 390x844 drawer in India's market hours had 499px of menu, under the 504 the sidebar test asks for) */
@@ -387,10 +382,10 @@ a.link { margin-inline: -2px; }
 }
 @media (max-width: 900px) {
   /* a short page's spare height goes to the page, not the top bar; the analytics question, while it is asked, is the row between them */
-  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; }
   .shell > .topbar { grid-row: 1; }
-  .shell > .consent { grid-row: 2; width: auto; justify-self: stretch; margin: 12px 16px -8px; }
-  .shell > .main { grid-row: 3; }
+  .shell > .main { grid-row: 2; }
+  .shell > .consent { grid-row: 3; width: auto; max-width: none; justify-self: stretch; margin: 0 16px 24px; }
   /* the drawer: shut, it's out of the Tab order too (visibility goes after the slide) */
   .sidebar { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); height: auto; z-index: 40; transform: translateX(-102%); visibility: hidden; transition: transform .2s, visibility 0s .2s; box-shadow: var(--shadow); }
   .sidebar.open { visibility: visible; transition: transform .2s; }
@@ -457,7 +452,12 @@ a.link { margin-inline: -2px; }
   .ln-btn { position: fixed; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; min-height: 0; min-width: 40px; padding: 16px 0; gap: 8px;
     border-radius: 12px 0 0 12px; border: 1px solid var(--line-2); border-right: 0; box-shadow: -4px 0 14px rgba(0, 0, 0, .14); }
   .ln-btn[aria-expanded="true"] { border-color: var(--ink); }
-  .ln-panel { position: fixed; right: 52px; bottom: 16px; }
+  /* LIVE10A-002: the tab and the open notes sit left of a docked Markets panel (they were under it: only "Lal" showed), the notes clear of the
+     round Markets button below them, and the page column makes room for the open notes so they never lie over a card (they covered the rules'
+     "Edit in words"); closed, the page is centred as before */
+  .ln-btn { right: var(--mw-dock, 0px); }
+  .ln-panel { position: fixed; right: calc(var(--mw-dock, 0px) + 52px); bottom: 76px; max-height: calc(100vh - 96px); }
+  body:has(.ln-panel:not([hidden])) .shell > .main { padding-right: 448px; }
 }
 
 /* ---------- verdict ---------- */
@@ -506,6 +506,7 @@ td.num, .num { font-family: var(--sans); }
 /* the offline line: one thin line, not a block above every page (DD-006, DC-002); the phone gets its short form */
 .banner.data-banner { padding: 6px 14px; font-size: 13.5px; margin-bottom: 14px; flex-wrap: nowrap; }
 .banner.data-banner > span { min-width: 0; }
+.banner.data-banner.calm { background: var(--chip); color: var(--muted); }    /* LIVE11A-028: a normal overnight state, not an alarm */
 .data-banner .banner-short { display: none; }
 @media (max-width: 720px) { .data-banner .banner-full { display: none; } .data-banner .banner-short { display: inline; } }
 .results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); max-height: 360px; overflow-y: auto; }
@@ -652,7 +653,8 @@ td.num, .num { font-family: var(--sans); }
 /* AI read */
 .ai-read { border-color: var(--ink); }
 
-.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
+/* owner (18 Nov, "center align everything properly"): each cell vertically centred in its row */
+.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: middle; max-width: none; }
 .ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
 .ai-table .k-table .k-list { margin: 0; }
 /* the area names its row: the header row is for screen readers only (LIVE7B-004: "The numbers / The figures" read as a stray row) */
@@ -679,6 +681,9 @@ td.num, .num { font-family: var(--sans); }
 .lp-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(32px, 4vw, 56px); border-bottom: 1px solid var(--line); }
 .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
 .lp-hero-solo { grid-template-columns: minmax(0, 1fr); }   /* an address of its own with no demo beside the heading (RC2B-032) */
+/* /login and /signup: the sign-in in one centred 640px column, as the gated pages show it (.gate), the heading at the app's size (LIVE9B-012) */
+.lp-hero-login { max-width: 640px; }
+.lp-hero-login .lp-own-h1 { font-size: var(--t-h1); max-width: none; line-height: 1.1; }
 .lp-h1 { font-size: clamp(44px, 6.2vw, 80px); line-height: 1; font-weight: 400; letter-spacing: -.035em; max-width: 12ch; }
 .lp-h1 em { color: var(--orange); }
 .lp-lede { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--ink-2); max-width: 38ch; }
@@ -814,7 +819,8 @@ td.num, .num { font-family: var(--sans); }
 .lp-markets .lp-sym { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; }
 /* LIVE4-020: the landing page on a phone was 14,902px: one example verdict (the link under it opens all of them), and the markets as small chips */
 @media (max-width: 640px) {
-  .lp-examples > .lp-example:nth-child(n+2), .lp-examples-skel > .lp-skel-card:nth-child(n+2) { display: none; }
+  /* NAV3: two, one that passed its checks and one that failed (the page's own fold holds them, so its length is unchanged) */
+  .lp-examples > .lp-example:nth-child(n+3), .lp-examples-skel > .lp-skel-card:nth-child(n+3) { display: none; }
   .lp-markets .lp-market { padding: 4px 12px 4px 4px; gap: 8px; font-size: 14px; }
   .lp-markets .lp-sym { width: 26px; height: 26px; font-size: 12px; }
 }
@@ -932,24 +938,31 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .ad-ask { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; max-width: 520px; font-size: var(--t-label); line-height: 1.5; color: var(--ink-2); }
 .ad-ask p { margin: 0; }
 .ad-btns { display: flex; flex-wrap: wrap; gap: 10px; }
-/* ADS-1: the one question for ads and analytics, until it is answered. LIVE7B-006: it is a band in the page's own flow, above the page,
-   so it covers nothing: no tile, card, chart or panel sits under it (as a bar along the window's foot it stood over the Markets tiles at
-   1440 and the P&L card on a phone). Signed in, it is in the page column only (the side menu never moves, LIVE6-014); a visitor's is at
-   the top of the page. It is drawn with the page's first frame, so the page never shifts under it; answering it takes it away. */
-.consent { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin: 12px 16px 0; padding: 10px 18px;
-  border-radius: var(--r-card); background: var(--card); border: 1px solid var(--line-2); font-size: var(--t-label); line-height: 1.5; }
+/* ADS-1: the one question for ads and analytics, until it is answered. LIVE7B-006: it is a band in the page's own flow, so it covers
+   nothing: no tile, card, chart or panel sits under it (as a bar along the window's foot it stood over the Markets tiles at 1440 and the
+   P&L card on a phone). LIVE8B-004 / LIVE8A-017: it comes after the page, not above it: above, its arrival after the first paint pushed
+   the whole page down (CLS 0.19 each time, 0.435 on /about at 390), and "Skip to content" landed on it. Signed in, it is in the page
+   column only (the side menu never moves, LIVE6-014); a visitor's is at the end of the page. Answering it takes it away, moving nothing. */
+.consent { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin: 16px auto 24px; padding: 10px 18px;
+  border-radius: var(--r-card); background: var(--card); border: 1px solid var(--line-2); font-size: var(--t-label); line-height: 1.5;
+  box-sizing: border-box; width: calc(100% - 32px); max-width: 640px; }
+/* owner, 18 Nov: one small card, and it can be closed ("Not now": no answer saved, not shown again this visit) */
+.consent-x { float: right; margin: -6px -10px 0 8px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0;
+  border-radius: 8px; background: none; color: var(--muted); font: 400 20px/1 var(--sans); cursor: pointer; }
+.consent-x:hover { color: var(--ink); background: var(--side-hover); }
 .consent p { margin: 0; color: var(--ink-2); flex: 1 1 320px; }
 .consent-title { font-size: var(--t-body); flex: none; }
 .consent-btns { display: flex; flex: none; flex-wrap: nowrap; gap: 10px; }
 /* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
 .consent-btns .btn { min-width: 104px; justify-content: center; }
-/* in the app: the first row of the page column (and first for the keyboard, A11Y-2: it comes before the menu in the page's order), lined
-   up with the page below it; the side menu spans both rows, so it starts at the top of the window as always */
+/* in the app: the last row of the page column, after the page, lined up with it (the page's own foot padding is above it); the side menu
+   spans both rows, so it starts at the top of the window as always */
 @media (min-width: 901px) {
-  .shell { grid-template-rows: auto 1fr; }
+  .shell { grid-template-rows: 1fr auto; }
   .shell > .sidebar { grid-column: 1; grid-row: 1 / -1; }
-  .shell > .main { grid-column: -2 / -1; grid-row: 2; }
-  .shell > .consent { grid-column: -2 / -1; grid-row: 1; box-sizing: border-box; justify-self: center; width: min(1320px, 100% - 2 * clamp(24px, 4vw, 56px)); margin: 16px 0 -16px; }
+  .shell > .main { grid-column: -2 / -1; grid-row: 1; }
+  .shell > .consent { grid-column: -2 / -1; grid-row: 2; box-sizing: border-box; justify-self: start; width: min(640px, 100% - 2 * clamp(24px, 4vw, 56px));
+    margin: 0 0 32px max(clamp(24px, 4vw, 56px), (100% - 1320px) / 2); }      /* a small card lined up with the page's left edge */
 }
 /* LIVE1B-045: while the tour's note is up the question waits (a phone showed both at once); it is there again when the tour closes */
 body:has(.k-coach) .consent { visibility: hidden; }
@@ -964,6 +977,9 @@ body:has(.k-coach) .consent { visibility: hidden; }
   .consent-btns { flex: 1 1 100%; gap: 8px; align-items: center; }
   .consent-more { display: inline; margin-right: auto; white-space: nowrap; }
   .consent-btns .btn { flex: 0 0 96px; min-width: 0; }
+  /* on a phone it takes no more than its own small box from the first line (the bar keeps its two lines); its tap area is wider */
+  .consent-x { position: relative; width: 20px; height: 18px; margin: 0 -6px 0 2px; font-size: 18px; border-radius: 4px; }
+  .consent-x::after { content: ""; position: absolute; inset: -11px -10px; }
 }
 
 /* search: one box for everything */
@@ -1046,7 +1062,7 @@ body:has(.k-coach) .consent { visibility: hidden; }
 
 /* company deep dive */
 
-@media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: top; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
+@media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: middle; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
 [data-testid="scan-custom"] .add-rule { align-self: flex-start; }
 .ts-words { align-items: flex-start; } .ts-words .k-input { flex: 1 1 260px; width: auto; }
 .ca-type { font-weight: 600; font-size: var(--t-label); }
@@ -1057,7 +1073,8 @@ body:has(.k-coach) .consent { visibility: hidden; }
 .rc-target, .rc-said, .rc-result { display: flex; flex-direction: column; gap: 4px; }
 .rc-said { align-items: flex-end; } .rc-result { align-items: flex-start; }
 .rc-quote { max-width: 70ch; }
-.dd-share { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; min-width: 90px; } .dd-share .k-meter { width: 100%; }
+/* LIVE9B-020: the share beside its bar on the row's line, not above it (the column's figures sat higher than the row's) */
+.dd-share { display: flex; flex-direction: row-reverse; gap: 8px; align-items: center; justify-content: flex-start; min-width: 120px; } .dd-share .k-meter { width: 56px; flex: none; }
 /* TABLE-SWEEP: a fund's tax kind, its own field under the table of what is held */
 .mf-kind { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s3); }
 .mf-kind .k-input { width: auto; min-width: 12rem; }
@@ -1162,7 +1179,9 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 .screens-ranges .k-table :is(th, td):first-child { width: auto; }
 .screens-ranges .k-input-unit { --unit-w: 30px; }
 .screens-ranges .k-input { height: 38px; padding: 0 var(--unit-w, 30px) 0 10px; font-size: 14px; }
-.screens-fname { display: inline-flex; flex-wrap: wrap; gap: 2px 4px; align-items: center; font-size: 14px; }
+/* LIVE9B-012: the (i) follows the label's last word, never wrapping under it on a line of its own (6 of 9 rows were taller for it) */
+.screens-fname { display: block; font-size: 14px; }
+.screens-fname > :last-child { display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .screens-filters .k-chipset { gap: 6px; }
 @media (max-width: 420px) { .screens-ranges .k-table :is(th, td):nth-child(n+2) { width: 88px; } .screens-ranges .k-input { padding-left: 8px; } }
 
@@ -1201,7 +1220,7 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 /* Trade home's market figures (DC-001): laid out as the tool strip, but its own class (the strip is the tools' row) */
 .trade-market { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .trade-market b.num { font-size: 1.15rem; line-height: 1.3; }
-.trade-market .space-card-line { min-height: 0; }   /* VR1-020: the two-line room left the tile with no caption half blank */
+.trade-market .space-card-line { min-height: 1.4em; }   /* VR1-020: not two lines of room; R73: one line held, so a note arriving late (VIX "reading…", then its day) never grows the tile */
 .space-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; color: var(--ink); text-decoration: none; }
 .space-card:hover { border-color: var(--ink-2); color: var(--ink); }
 .space-card-lead { border-color: var(--blue); background: var(--blue-soft); }
@@ -1269,6 +1288,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-evs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .mc-ev { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; }
 .mc-ev.past { opacity: .6; }
+.mc-ev.untagged { grid-template-columns: minmax(0, 1fr); }
 .mc-ev-title { font-weight: 500; overflow-wrap: anywhere; }
 /* an earnings call's line ends with the webcast address from its filing, one long word: it breaks rather than push a phone's page sideways (ui-lint R10) */
 .mc-ev-body > .k-note { overflow-wrap: anywhere; }
@@ -1433,7 +1453,7 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 /* a short symbol ("IEX") is still a 32 px target for a thumb (R95-003: 29 px wide) */
 .fo-row .link { display: inline-flex; justify-content: center; min-width: 32px; }
 
-.surv-badge.fo-badge { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }   /* one line: in a narrow tile the badge moves to a line of its own as a whole (the row wraps) and only a badge wider than the whole tile is cut, with the full text in its tooltip; a pill on two lines was R19 */
+.surv-badge.fo-badge { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); }   /* LIVE10B-047: a sentence ("Lot 225→250 from Jan 2027") in the page's letters, like the header's other chips; the exchange's short codes stay in mono */   /* one line: in a narrow tile the badge moves to a line of its own as a whole (the row wraps) and only a badge wider than the whole tile is cut, with the full text in its tooltip; a pill on two lines was R19 */
 /* market events (/trade/events): neutral tags, figures in ink, the index table scrolling inside its card */
 
 .ev-figure { font-variant-numeric: tabular-nums; }
@@ -1545,10 +1565,22 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--blue-ink); cursor: pointer; text-align: left; }
 .link-btn:hover, .link-btn.on, .link-btn[aria-pressed="true"] { text-decoration: underline; }
 
-.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.biz-filings li { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-/* the titles start at one x: "1 Oct 2026" and "1 May 2026" are not the same width, so each row's title sat a few pixels off its neighbours' (VR4-005) */
-.biz-day { display: inline-block; min-width: 6.5em; font-variant-numeric: tabular-nums; }
+/* date | subject | link (owner, 18 Nov: the link dropped to its own line under a long subject): one grid for every row, so the dates, the
+   subjects and the links each start at one x; a subject is two lines at most (its whole text in its title) */
+.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; column-gap: var(--s3); }
+.biz-filings li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; border-bottom: 1px solid var(--line); padding: 8px 0; }
+.biz-filings li:first-child { padding-top: 0; }
+/* the titles start at one x: "1 Oct 2026" and "1 May 2026" are not the same width (VR4-005); tabular figures keep the dates even */
+.biz-day { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.biz-subject { min-width: 0; }
+.biz-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.biz-link { white-space: nowrap; justify-self: end; }
+/* a phone: the day and the link on the row's first line, the subject the whole width under them */
+@media (max-width: 560px) {
+  .biz-filings { grid-template-columns: minmax(0, 1fr) max-content; }
+  .biz-filings li { grid-template-areas: "day link" "subject subject"; row-gap: 2px; }
+  .biz-day { grid-area: day; } .biz-link { grid-area: link; } .biz-subject { grid-area: subject; }
+}
 
 .holder-names label { align-items: center; }
 
@@ -1591,6 +1623,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-page-head:not(:has(> .k-eyebrow)) { padding-top: 26px; }   /* VR1-160: a page with no kicker line (Account, Settings, Plans) keeps its title where the others have it, one line down */
 .k-h1 { font-family: var(--serif); font-size: var(--t-h1); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
 .k-lede { font-size: var(--t-lede); color: var(--ink-2); max-width: 64ch; }
+/* a long intro's "More" (owner, 18 Nov): a quiet text button on the intro's line, its tap area 32px tall without making the line taller */
+.k-lede-more { display: inline-block; font: inherit; font-size: var(--t-label); font-weight: 600; line-height: 18px; border: 0; background: none; padding: 7px 4px; margin: -7px -2px; color: var(--blue-ink); cursor: pointer; white-space: nowrap; }
+.k-lede-more:hover { text-decoration: underline; }
 .k-meta { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; min-height: 25px; }   /* a badge's height: the "Data up to" badge that lands later doesn't move the page */
 /* VR1-051: the notebook's "Saving / Saved" text is the only thing in its header's last row, which held a 25px band of nothing under the question line:
    it sits at the header's top right instead, so the row is not there. */
@@ -1604,10 +1639,24 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-card-title { display: inline-flex; align-items: center; gap: var(--s2); font-family: var(--serif); font-size: var(--t-card); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 /* a title with its (i): the button sits after the heading element, on the same line */
 .k-card-titlerow { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
+/* LIVE13A-019 (LIVE12A-016): on a phone a title that wraps keeps its (i) after its last word, not floating at the right edge of the title's
+   box; a card whose only control is its CSV button keeps it on the title's line, not alone on a row under it */
+@media (max-width: 640px) {
+  .k-card-titlerow { display: block; }
+  .k-card-titlerow > .k-card-title { display: inline; }
+  .k-card-titlerow > .info { margin-left: var(--s2); }
+  .k-card-head:has(> .k-card-actions > [data-csv]:only-child) { flex-wrap: nowrap; align-items: flex-start; }
+  .k-card-head:has(> .k-card-actions > [data-csv]:only-child) > .k-card-actions { flex: none; height: calc(var(--t-card) * 1.5); }
+}
 /* VR1-110: a chart whose only control is "Table" keeps it top-right beside a long title (the title wraps, the button doesn't drop below it) */
 .k-chart-plain > .k-card-head { flex-wrap: nowrap; align-items: flex-start; }
 .k-chart-plain > .k-card-head > .k-card-actions { flex: none; }
 .k-card-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; min-width: 0; max-width: 100%; }
+/* owner (18 Nov, "center align everything properly"): a head that keeps its one control at the top beside a title that may wrap centres
+   that control on the title's first line (a box the line's height, the control centred in it), not 2-7px above or below it */
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) > .k-card-actions,
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) > .k-card-actions,
+.k-chart-plain > .k-card-head > .k-card-actions { height: calc(var(--t-card) * 1.5); }
 .k-card-actions > .k-chipwrap { max-width: 100%; }
 .k-card-actions .btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-card.compact { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s4); padding-block: var(--s3); }
@@ -1633,7 +1682,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* VR2-020: the funds' cost and behaviour card holds seven figures: four across (4 + 3), not five (5 + 2, a second row of two) */
 .mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* never 3 across: seven made 3 + 3 + 1 at 1280 (UI checker R9) */
 @media (min-width: 1000px) { .mf-stats .k-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
+/* each figure, its label and its note centred in its column (owner, 18 Nov: "center align everything properly", after Holdings' totals) */
+.k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; text-align: center; }
 .k-stats > .k-stat > * + * { margin-top: 2px; }
 .k-stats > .k-stat > .k-stat-k { align-self: end; }
 .k-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -1679,6 +1729,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chipbar::-webkit-scrollbar { display: none; }
 .k-chip { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink-2); font-size: var(--t-label); font-weight: 500; cursor: pointer; white-space: nowrap; }
 .k-chip:hover { border-color: var(--ink); }
+a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
+/* LIVE10A-028: the market chips' row and the search box, held while the markets are read */
+.k-where-wait { display: grid; gap: 12px; }
+.k-where-wait .lp-skel { display: block; height: 36px; border-radius: 10px; }
+.k-where-wait .lp-skel + .lp-skel { height: 44px; }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
 /* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
@@ -1736,6 +1791,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
+.k-card > .k-field.wide { max-width: none; }   /* a row of chips (the notebook's test period) takes the card's width (LIVE10B-005) */
 .k-card > .k-field.wide { max-width: none; }   /* a row that should fill the card (a document upload) */
 .k-card > .k-field:has(.k-picker) { max-width: none; }   /* R15 #13 (owner, 7 Nov): a company or instrument search spans its card, its chips under it */
 .k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 22px; }
@@ -1880,6 +1936,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
    (R5O-017: hundreds of targets under 32px on ETF vs NAV, Market events and the screener) */
 @media (max-width: 640px) {
   .k-table td a, .k-table th a, .k-table td .btn.sm, .k-table td button, .k-cal-ev a, .k-cal-evs button { min-height: 32px; display: inline-flex; align-items: center; }
+  /* LIVE12A-005: a flex box drops the space between a link's parts, so a symbol ran into its name ("FIXComfort Systems"): the gap stands for it */
+  .k-table td a, .k-table th a, .k-cal-ev a { column-gap: 0.3em; }
   .k-table td .info-btn { display: grid; min-height: 40px; }   /* VR1-163: an (i) in a row's name keeps its own 40px box and circle, not the 32px inline-flex of other table buttons */
   .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { min-width: 24px; min-height: 24px; margin: 4px; }
   /* R6O-024: the screener's sort headers, the chart's icon buttons, a card's small header links and the reminder ticks
@@ -1993,7 +2051,27 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .stored-stamp { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s1) var(--s2); }
 @media (max-width: 640px) { .stored-stamp { justify-content: flex-start; } }
 .stored-note { margin: 0 0 var(--s2); }
-.theme-already { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+/* the Themes box (owner, 18 Nov: "fix ui dude"): the market switch, the box and "Map it" on one row (the switch on its own row on a phone);
+   the shared library as equal chips, at most two rows; the ideas one row, or folded under "More ideas" */
+.theme-box { display: flex; flex-direction: column; gap: var(--s3); }
+.theme-map { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.theme-map > .k-seg { flex: none; align-self: center; }
+.theme-field { flex: 1 1 320px; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.theme-field > .k-input { flex: 1; min-width: 0; }
+.theme-field > .btn { flex: none; }
+.theme-already { display: flex; flex-direction: column; gap: var(--s1); }
+.theme-ready { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s2); }
+.theme-ready > .btn { width: 100%; min-width: 0; justify-content: center; padding-inline: 8px; }
+.theme-ready > .btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-ready > .theme-ready-all { font-weight: 600; }
+.theme-already > [data-show-less] { align-self: flex-start; }
+.theme-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }   /* LIVE10A-021 */
+.theme-more .k-disclosure-body { padding-left: 0; }
+@media (max-width: 560px) {
+  .theme-ready { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* R72 (ui-lint R18): on a phone the ideas wrap as chips, none cut by the edge of a sideways row */
+  .theme-ideas { row-gap: var(--s2); }
+}
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
 .k-list { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-label); }
@@ -2018,6 +2096,12 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-notice { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--paper-2); font-size: var(--t-label); }
 .k-notice.warn { border-color: var(--orange); background: var(--orange-soft); color: var(--orange-ink); }
 .k-notice > span { min-width: 0; }
+/* LIVE8B-006: the Free plan's change on Account: its heading with "Got it" on one line, then a table of the limits that change */
+.k-notice.free-change { display: block; }
+.k-notice.free-change > * + * { margin-top: var(--s2); }
+.free-change-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.k-notice.free-change p { margin-bottom: 0; }
+.k-notice.free-change .k-table { background: var(--card); color: var(--ink); }
 .k-viewas-banner { margin-bottom: var(--s4); font-weight: 500; }
 select.k-input { -webkit-appearance: none; appearance: none; padding-right: 36px; cursor: pointer;
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
@@ -2058,6 +2142,14 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-disclosure[open] > summary::before { transform: rotate(45deg); }
 .k-disclosure-body { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s1) 0 0 var(--s4); }
 .k-disclosure-body:has(> .k-tbl-wrap) { padding-left: 0; }   /* VR1-122: a table in a fold lines up with the cards around it, not 16px in */
+/* a card's notes behind one fold (kit/CardNote, owner 18 Nov): the summary in the notes' small muted type, the notes as they were inside */
+.k-cardnote > summary { font-size: var(--t-note); font-weight: 500; color: var(--muted); }
+.k-cardnote > summary:hover { color: var(--ink-2); }
+.k-cardnote .k-disclosure-body { padding-left: var(--s4); }
+.k-cardnote-body { display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-note); color: var(--muted); }
+.k-cardnote-body > p { margin: 0; }
+/* NAV3: the plans' full comparison is one fold of several tables, each under its heading: they line up with the glance table above */
+.k-compare .k-disclosure-body { padding-left: 0; }
 /* FoldCard (owner, 5 Nov: "make it like a dropdown everywhere"): a card that is one row until opened; the title is the button and the
    whole row its target (the button's ::after covers it), the (i) above that layer; on the right what is inside and a chevron */
 .k-foldcard { gap: 0; padding-block: var(--s3); }
@@ -2076,6 +2168,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-foldcard-body { display: flex; flex-direction: column; gap: var(--s4); padding-top: var(--s4); min-width: 0; }
 .k-foldcard-body[hidden] { display: none; }
 @media (max-width: 640px) { .k-foldcard-btn::after { inset: calc(-1 * var(--s3)) calc(-1 * var(--s4)); } .k-foldcard-meta { gap: var(--s2); } }
+/* a fold card's title never shrinks to a word a line when its count and actions sit beside it on a phone: the head wraps instead (ui-lint R4: "Your schemes" ran on 5 lines in a 40px button) */
+@media (max-width: 640px) { .k-foldcard-head { flex-wrap: wrap; } .k-foldcard-head .k-card-titlerow { flex: 1 1 auto; } .k-foldcard-btn { white-space: nowrap; } }
 @media (prefers-reduced-motion: reduce) { .k-foldcard-chev { transition: none; } }
 /* Every page section closes to its header row and moves up or down, remembered (owner, 7 Nov; kit/Section.tsx): two quiet buttons at the
    right end of the header, the "⋯" menu and the chevron. The header keeps their room, so its own controls never run under them. */
@@ -2117,6 +2211,18 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-tap input { width: 18px; height: 18px; accent-color: var(--blue); cursor: pointer; }
 .k-table tfoot th, .k-table tfoot td { font-weight: 600; border-top: 1px solid var(--line-2); border-bottom: 0; padding: 11px 14px; font-size: 14px; text-align: left; background: var(--paper-2); }
 .k-table tfoot td.k-num { text-align: right; }
+/* LIVE8B-003: a period grid read across (statements, shareholding: data-grid) wider than its card opens on the latest periods with the
+   row names in view: its row-name column stays put at every width while the periods scroll under it */
+.k-tbl-wrap[data-grid]:not(.stack) .k-table tbody th[scope="row"]:first-child,
+.k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table :is(thead, tfoot) th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: 1px 0 0 var(--line); }
+.k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table thead th:first-child { background: var(--paper-2); z-index: 2; }
+.k-tbl-wrap[data-grid]:not(.stack) .k-table tbody tr:hover th[scope="row"]:first-child { background: var(--paper-2); }
+/* LIVE9B-015: the period half under the row names fades out beside them, instead of half-cut figures ("·7,966") read as whole ones */
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack) .k-table tbody th[scope="row"]:first-child::after,
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table :is(thead, tfoot) th:first-child::after {
+  content: ""; position: absolute; top: 0; bottom: 0; right: -28px; width: 28px; pointer-events: none;
+  background: linear-gradient(to right, var(--card), color-mix(in srgb, var(--card) 0%, transparent)); }
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table thead th:first-child::after { background: linear-gradient(to right, var(--paper-2), color-mix(in srgb, var(--paper-2) 0%, transparent)); }
 /* the totals line's long label wraps instead of widening the Symbol column; on a phone the first column stays put while the figures scroll (R18-003) */
 .k-table tfoot th { white-space: normal; min-width: 0; }
 @media (max-width: 640px) {
@@ -2354,6 +2460,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-slot .k-card-head:has(> .k-card-actions > a:only-child) { flex-wrap: nowrap; align-items: flex-start; }
 .mine-slot .k-card-head:has(> .k-card-actions > a:only-child) > .k-card-actions { flex: none; }
 .mine-slot .k-card-head:has(> .k-card-actions > a:only-child) .k-card-title { min-width: 0; }
+/* LIVE12B-007: a card head with no button (Paper sessions) has its title at the top too, level with its neighbours' titles beside "Open" */
+.mine-slot .k-card-head:not(:has(> .k-card-actions)) { align-items: flex-start; }
 /* the lines sit on one level across a row, whatever text a tile has above its line (DI-010: Gold's note pushed its line down) */
 .mine-mkt .k-spark { margin-top: auto; }
 /* two lists side by side keep their own height: stretched to the longer one, the shorter left a big blank box (R5O-036) */
@@ -2366,13 +2474,24 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 /* the six markets in rows that divide evenly (6, 3 or 2 across): auto-fit left five in a row and Gold alone and squeezed
    below it on an iPad in landscape (R57-010) */
 .mine-markets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
-@media (min-width: 1360px) { .mine-markets { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+/* LIVE10A-026: six across only when the card itself is wide enough for each name on one line ("NIFTY BANK" wrapped and its value sat ~20px
+   below the other five's): the card's own width decides, not the window's; a name never wraps, and the paper card's title stays on one line */
+[data-testid="mine-markets"] { container-type: inline-size; }
+@container (min-width: 720px) { .mine-markets { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.mine-mkt > .k-stat-k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-testid="mine-paper"] .k-card-title { white-space: nowrap; }
 @media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
+.mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; text-align: center; }
+/* each market tile's name, level, change and day centred in the tile (owner, 18 Nov: "center align everything properly": a row of figures) */
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+.mine-mkt-when { display: block; }   /* LIVE12B-007: the day on its own line under the change in every tile ("today" sat beside USD/INR's) */
 /* LIVE7B-012: a tile still being read is as tall as a read one: the value's line (a bar in it), the change line's space, the month line's space */
 .mine-mkt-hold { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; min-height: 30px; }
+/* LIVE11B-010: a level kept from an earlier visit that is no longer the latest: faded, the same shape as a fresh tile */
+.mine-mkt-old { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.mine-mkt-old .mine-mkt-v { color: var(--muted); font-weight: 500; }
+.mine-mkt-old .k-spark { opacity: .45; }
+.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; justify-content: center; min-height: 30px; }
 .mine-hold-ghost .k-note { display: block; }   /* the day under the change, as it wraps in a tile a sixth of the card wide */
 .mine-hold-ghost { visibility: hidden; }
 .mine-spark-hold { display: block; height: 36px; margin-top: auto; }
@@ -2387,10 +2506,18 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-tl-i .body .k-stat-d { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 760px) { .mine-tl-i .body .k-stat-d { -webkit-line-clamp: 2; } }
 .mine-tl-i .body a { color: inherit; text-decoration: none; }
+/* LIVE11B: the whole row is the link's target (at least 44px tall), not its 23px title line */
+.mine-tl-i { position: relative; min-height: 44px; }
+.mine-tl-i .body a::after { content: ""; position: absolute; inset: 0; }
+.mine-tl-i:has(.body a):hover { background: var(--paper-2); }
 .mine-tl-i .body a:hover { text-decoration: underline; }
 .mine-movers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mine-movers li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s3); align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .mine-movers li:last-child { border-bottom: 0; }
+/* LIVE9B-012: the watchlist and Coming up share a row; the shorter list's rows share out the card's height, so neither ends with a block of
+   nothing under its last row (the watchlist sat ~110px short of Coming up) */
+.mine-slot[data-card="watch"] .mine-movers, .mine-slot[data-card="coming"] .mine-tl { flex: 1 0 auto; }
+.mine-movers li, .mine-tl-i { flex: 1 0 auto; }
 .mine-movers a { display: flex; flex-direction: column; min-width: 0; color: inherit; text-decoration: none; }
 .mine-movers a .k-stat-d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mine-movers .px { font-weight: 500; }
@@ -2518,7 +2645,15 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-card-title a:hover { text-decoration: underline; }
 .k-toolbar > select.k-input { width: auto; min-width: 170px; flex: 0 1 220px; }
 .breadth-bar > .k-chipwrap { flex: 1 1 320px; min-width: 0; }             /* the group and the range on one row, the chips taking the rest (MOOD-1) */
+/* LIVE13A-019 (LIVE12A-011): on a phone the range chips and "+ Custom" are two even rows of four, never "+ Custom" alone on a line */
+@media (max-width: 640px) {
+  .breadth-bar .k-chiprow.wrap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  /* a remembered custom chip keeps its own width beside its × (a full-width chip covered the ×) */
+  .breadth-bar .k-chiprow.wrap > .k-chipbar > .k-chip, .breadth-bar .k-chiprow.wrap > .k-chip.add { width: 100%; padding-inline: 6px; }
+  .breadth-bar .k-chiprow.wrap > .k-chipbar > .k-chip-mine { grid-column: span 2; }
+}
 .k-alert-row { margin-top: 4px; }
+.k-keep { white-space: nowrap; }   /* a label's last word and its (i) never part (LIVE9A-016) */
 /* the rotation table: "was → now" on one line with its mark under it, and a name with its "Stocks →" beside it, so a row is not three lines tall (MOOD-1) */
 /* LIVE4-011: the quadrant now, where it was a trail ago under it, and the "Entered Leading" badge, in one cell */
 .rot-quad { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -2627,6 +2762,36 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .gate-path { font-family: var(--mono); font-size: var(--t-note); overflow-wrap: anywhere; }
 .gate-actions .lp-cta svg { background: #fff; border-radius: 50%; padding: 2px; width: 22px; height: 22px; }
 
+/* sign-in by email under Continue with Google (components/EmailSignIn.tsx), on the sign-in page and the sign-in gate */
+.email-signin { display: flex; flex-direction: column; gap: var(--s3); max-width: 460px; width: 100%; }
+.email-signin-or { display: flex; align-items: center; gap: var(--s3); color: var(--muted); font-size: var(--t-note); margin: 0; }
+.email-signin-or::before, .email-signin-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.email-signin-form { display: flex; flex-direction: column; gap: var(--s2); }
+.email-signin-label { font-weight: 600; }
+.email-signin-row { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.email-signin-row .k-input { flex: 1 1 220px; min-height: 44px; font-size: 16px; }   /* 16px: a phone doesn't zoom into the box */
+.email-signin-row .btn { min-height: 44px; }
+/* LIVE10B-042: on a phone "Email me a code" is as wide as the Google button above it, and the footer's links sit in two columns, never one
+   link alone on a row with a wide gap */
+@media (max-width: 640px) {
+  .email-signin-row .btn { flex: 1 1 100%; justify-content: center; }
+  .legal-links[aria-label="Policies"], .legal-links[aria-label="Explore"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
+  /* LIVE13A-018: the company directories two to a row under their label ("S&P 500" was left alone on a line) */
+  .legal-links[aria-label="Browse companies"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
+  .legal-links[aria-label="Browse companies"] > span:first-child { grid-column: 1 / -1; }
+}
+/* LIVE12B-008: /login's form loads after the page's first frame; its place is held at the form's own height (134 and 186 px), so nothing under it moves */
+.email-slot { display: block; min-height: 134px; max-width: 460px; width: 100%; }
+@media (max-width: 640px) { .email-slot { min-height: 186px; } }
+/* LIVE12B-004 (owner pattern 13): beside the email form, the Google button is the form's width, on /login and the sign-in gate alike */
+.lp-hero-login .lp-hero-copy:has(.email-slot, .email-signin) .lp-cta { width: 100%; max-width: 460px; justify-content: center; }
+/* LIVE13A-018: beside the email form the Google button is the form button's height (54 px beside 44 px) */
+.lp-hero-login .lp-hero-copy:has(.email-slot, .email-signin) .lp-cta { min-height: 44px; }
+.email-signin-code { letter-spacing: .2em; font-family: var(--mono); max-width: 220px; }
+.email-signin .banner { margin-bottom: 0; }
+/* the plans' currency switch (components/CurrencySwitch.tsx) */
+.cur-switch { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+
 /* PageNav: the jump links at the top of a long page */
 .k-pagenav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .k-pagenav-k { font-size: var(--t-eyebrow); font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: var(--s1); }
@@ -2663,13 +2828,13 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (prefers-reduced-motion: reduce) { .lp-skel { animation: none; } }
 .lp-head-skel { gap: 12px; }
 .lp-skel-h { height: calc(clamp(32px, 4vw, 50px) * 2.1); width: min(20ch, 100%); max-width: 520px; }
-.lp-skel-p { height: calc(17px * 1.6 * 2); width: min(56ch, 100%); }
+.lp-skel-p { height: calc(17px * 1.6 * 3); width: min(56ch, 100%); }   /* the landing's Plans lede is three lines on a laptop (ci60: the FAQ moved 48-68px when the prices came) */
 .lp-skel-p.lp-skel-p-one, .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }   /* LIVE2-031: the Plans page's one-line lede: a two-line (four on a phone) placeholder moved the cards up 27 to 81px when the prices arrived */
 .lp-period { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
 .lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
-.lp-skel-fine { height: calc(13.5px * 1.5 * 3); width: min(80ch, 100%); }
+.lp-skel-fine { height: calc(13.5px * 1.5 * 4); width: min(80ch, 100%); }   /* su1's US dollar note makes the fine print four lines (ci60) */
 /* a phone wraps the lede to four lines and the fine print to six, and its switch is a touch-sized 50px: the placeholders keep
    that room so the page below doesn't jump when the prices arrive (the FAQ moved 122px on a 412px phone) */
 @media (max-width: 640px) {
@@ -2699,7 +2864,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 600px) {
   .lp-hero .lp-demo { display: flex; }
   .lp-hero { padding-top: 28px; }
-  .lp-demo-rule, .lp-cta-2 { display: none; }
+  /* NAV3: the hero's second button opens a real result without signing in, so a phone keeps it (it was "See how it works", hidden here) */
+  .lp-demo-rule { display: none; }
   .lp-demo-tabs { align-self: stretch; }
   /* one line each, sized to its words and sharing what is left (RC2B-033: "NIFTY 50" wrapped to two lines on an iPhone) */
   .lp-demo-tabs button { flex: 1 1 auto; white-space: nowrap; padding: 0 10px; }
@@ -2737,6 +2903,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .feat-list li > a, .feat-group-title a, .nav-page .k-card-title a { display: inline-flex; align-items: center; min-height: 32px; min-width: 32px; }
 }
 /* net worth: the history's snapshots, each removable on its own */
+.nw-hist-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s3); }
+.nw-hist-foot > .nw-snaps { flex: 1 1 100%; } .nw-hist-foot > .nw-snaps:not([open]) { flex: 0 1 auto; }
 .nw-snaps summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
 .nw-snaps li { justify-content: flex-start; flex-wrap: wrap; gap: var(--s2); }   /* CK-2 (R20): the remove icon follows the snapshot's text, not 550px away at the card's edge */
@@ -2868,9 +3036,19 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .space-panels.even { align-items: stretch; }
 .space-panels > :only-child { grid-column: 1 / -1; }      /* the other card is not there (no market events): this one takes the row */
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
-/* LIVE7B-027: the one line of first steps is as wide as its words and its button, not a full-width card with half of it empty */
-.fs-compact { width: fit-content; max-width: 100%; }
-.fs-wait { visibility: hidden; }   /* LIVE7B-012: the line's place kept while it is read, nothing shown in it */
+/* LIVE11B-009: the one line of first steps is a slim row across the page: the steps done as a bar fills the middle (LIVE7B-027's card as
+   wide as its words left the rest of the row empty), the whole list opens under it on a click */
+.fs-line { display: grid; grid-template-columns: auto minmax(80px, 1fr) auto auto; align-items: center; gap: 8px 14px; }
+.fs-compact > .fs-line { flex: 1 1 100%; min-width: 0; }   /* LIVE12B-006: the row fills its card, the bar the middle and the buttons at the right edge */
+.fs-line .fs-bar { min-width: 80px; }
+.fs-wait .fs-line:has(> .fs-hold) { grid-template-columns: auto minmax(80px, 1fr) auto; }
+@media (max-width: 640px) { .fs-line { display: flex; flex-wrap: wrap; } .fs-line .fs-bar { flex: 1 1 120px; } }
+.fs-compact .fs-list { margin-top: 8px; }
+.fs-wait, .fc-wait { visibility: hidden; }
+/* LIVE12B-019 (owner pattern 4): the brokers' Connect buttons one width, whatever the broker's name (157, 148 and 135 px before) */
+.broker-connect { min-width: 10.5rem; justify-content: center; }
+/* LIVE11B-014: on a phone the VIX tile's day takes a line of its own, with no "·" left hanging at the end of the line above */
+@media (max-width: 640px) { .vix-sep { display: none; } .vix-day { display: block; } }   /* LIVE7B-012: the line's place kept while it is read, nothing shown in it */
 
 /* the Help page's explanations, one line each until opened (DI-014) */
 .help-topics { display: flex; flex-direction: column; }
@@ -2901,6 +3079,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 420px) { .h-filing { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s3); } .h-filing > :first-child { min-width: 7.5em; } .h-filing > :nth-child(3) { flex: 1 1 100%; } }
 
 .watch-add .k-field, .watch-add .k-field > * { max-width: none; width: 100%; }
+/* LIVE10A-014: the Markets panel's other lists, one line each */
+.watch-lists { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 
 /* RC2B-043: the add-a-trade form's six boxes in one row where the page is wide (they wrapped 4 + 2, or 5 + 1 with "Fees" alone),
    three and three on a tablet, two on a phone */
@@ -3029,6 +3209,12 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 }
 
 /* ---- themes: the deep dive (THEME-1) ---- */
+/* LIVE12A-007: a company's own words are the widest column of its layer's table, never squeezed narrower than its labels beside it */
+@media (min-width: 901px) { #theme-members .k-table td.k-lead { min-width: 18rem; } }
+/* r69e (LIVE13A-013: Arteris's quote a ~165 px column 290 px tall, the 18rem not reaching the layer tables, which hold the words under the
+   name): in a layer's table the company cell, which carries its own words, keeps a reading width beside the figures */
+/* (R75: only the cell that carries the company's words; the layer's other tables, operating figures of 9 columns, keep their own widths, R27) */
+@media (min-width: 901px) { [id^="layer-"] .k-tbl-wrap .k-table tbody th.k-wrap:has(.k-words) { min-width: 18rem; } }
 .k-section-title { font-family: var(--serif); font-size: var(--t-card); font-weight: 600; margin: var(--s5) 0 0; }
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
@@ -3038,7 +3224,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
  * a link in the public footers and on the Help page. */
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
-.legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
+/* LIVE9B-029: the same colour as the links beside it (.linklike's colour: inherit, later in the file, undid .muted) */
+.legal-links .legal-feedback { color: var(--muted); }
+.legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: underline; }   /* the same tap size as the links beside it (A11Y-2), underlined like them (LIVE8B-029) */
 /* the phone top bar's logo link is a full tap target and never squeezed by the buttons beside it (R7O-010) */
 .topbar .brand { min-width: 44px; justify-content: center; flex: none; }
 .topbar .icon-btn { flex: none; }
@@ -3141,3 +3329,33 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 @media print { .k-report { display: none; } }
 /* f4: the workbook's plan note on its own line under the theme's download buttons (components/ThemeChanges.tsx) */
 .theme-wb-lock { flex-basis: 100%; order: 1; }
+/* LIVE9B-012: Holdings' "Where your stocks stand": the four totals as a compact table with the notes beside it on a wide screen */
+.h-sum { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); align-items: start; }
+.h-sum-notes { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+@media (min-width: 900px) { .h-sum { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); } }
+/* LIVE9B-013: the deep dive's tools row holds a small button's height before the dive arrives */
+.dd-tools { min-height: 32px; }
+/* R61: "or sign in with email" beside a visitor's Continue with Google button (components/EmailWay.tsx), only while email sign-in is on */
+/* R64 (owner: "make it proper"): a real outlined button, the Google button's height, its mail mark the Google mark's size */
+.email-way { display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; white-space: nowrap; }
+.email-way > svg { flex: none; }
+.email-way.sm { gap: 8px; }
+.lp-plan-ways { display: flex; flex-direction: column; gap: 8px; }        /* LIVE11B-001: one subgrid row holding both ways in */
+.lp-plan-ways > .btn { width: 100%; }
+.lp-final-ways { justify-content: center; }
+/* LIVE11A-011: the theme's member tables share one column grid, so "Market value" and the quote sit at the same x in every layer's table
+   (each sized its own columns: x 1075 in one, 1205 in the next); a phone reads them as cards */
+@media (min-width: 641px) {
+  #theme-members table.k-table { table-layout: fixed; width: 100%; }
+  #theme-members table.k-table th[scope="col"]:first-child { width: 26%; }
+  #theme-members table.k-table th[scope="col"].k-num { width: 15%; }
+}
+/* Owner (18 Nov): Holdings' totals on a laptop are one row across the card (each amount under its heading, its change under it), the notes under */
+@media (min-width: 900px) { .h-sum.wide { grid-template-columns: minmax(0, 1fr); } }
+.h-sum.wide .k-table td { vertical-align: top; }
+.h-total { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Owner (18 Nov, "center align everything properly"): each total, its heading and its change centred in its column */
+.h-sum.wide .k-table th, .h-sum.wide .k-table td { text-align: center; }
+.h-sum.wide .k-table td .k-sub-line { display: flex; justify-content: center; margin-top: 4px; }
+.k-phone-fold > summary { list-style: none; display: inline-flex; margin: 8px 0; cursor: pointer; }   /* r69e: a layer's tables a press away on a phone */
+.k-phone-fold > summary::-webkit-details-marker { display: none; }

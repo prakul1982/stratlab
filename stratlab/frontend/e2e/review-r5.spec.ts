@@ -47,14 +47,14 @@ test.describe("a page that is never blank (R5V-001)", () => {
     await page.route("**/config.js*", (r) => { if (first) { first = false; return r.abort(); } return r.fallback(); });
     await page.goto("/");
     // the landing page's own heading (R8V-008: the start-up block's h1 now has the same words, so it is told apart by .lp)
-    await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toContainText("Test it, research it, track it", { timeout: 30_000 });
+    await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toContainText("Is your trading idea skill or luck", { timeout: 30_000 }); // (updated on purpose, NAV3: the hero's one promise, CX-1)
   });
 
   test("config.js comes back as a plain-text 502 twice: the retries get it, and the page opens", async ({ page }) => {
     let bad = 2;
     await page.route("**/config.js*", (r) => (bad-- > 0 ? r.fulfill({ status: 502, contentType: "text/plain", body: "upstream request failed" }) : r.fallback()));
     await page.goto("/");
-    await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toContainText("Test it, research it, track it", { timeout: 30_000 });
+    await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toContainText("Is your trading idea skill or luck", { timeout: 30_000 }); // (updated on purpose, NAV3: the hero's one promise, CX-1)
   });
 
   test("a signed-in person whose config.js fails is never shown as signed out", async ({ page }) => {
@@ -117,10 +117,11 @@ test.describe("plans: the right currency at once, the charged amount on the card
     await expect(sec).not.toContainText("₹");
     const before = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     release();
-    // DK-001, item 34: every card shows the rupee price it is charged as its main price, the dollars only as "about" beside it
-    await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699");
-    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹1,999");
-    await expect(sec.getByTestId("about-basic")).toHaveText(/^about \$\d+$/);
+    // DK-001, item 34: a card charged in rupees says the rupee charge; (updated on purpose: owner 16 Nov, a US visitor sees the US
+    // dollar price on the "Prices in" switch, with the rupee amount the card is charged beside it while checkout is in rupees)
+    await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("$8");
+    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("$20");
+    await expect(sec.getByTestId("about-basic")).toHaveText("Charged as ₹699 in rupees");
     const after = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     // (the heading and the lines under the cards wrap differently on a narrow screen, and a touch screen's switch is 44px
     // tall (R13S-011), so a phone gets more room than a laptop)
@@ -131,8 +132,8 @@ test.describe("plans: the right currency at once, the charged amount on the card
     expect(size, "the charged amount is in readable type").toBeGreaterThanOrEqual(13);
     // the yearly choice says "about" and each card states its exact saving
     await sec.getByRole("radio", { name: "Yearly · about 2 months free" }).click();
-    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹19,999");
-    await expect(sec.getByTestId("about-pro")).toHaveText(/^about \$\d+$/);
+    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("$200");
+    await expect(sec.getByTestId("about-pro")).toHaveText("Charged as ₹19,999 in rupees");          // (updated on purpose: owner 16 Nov, as above)
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-save')).toContainText("Saves");
     await expect(sec.locator('.lp-price[data-plan="free"] .lp-save')).toHaveCount(0);
     await expect(sec.locator('.lp-price[data-plan="basic"] button')).toHaveText("Continue with Google to get Basic");
@@ -295,7 +296,7 @@ test.describe("gate and not-found pages (R5V-013, R5V-014)", () => {
     await expect(h1(page)).toHaveText("Page not found", { timeout: 30_000 });
     await open(page, "/holdings");
     await expect(h1(page)).toHaveText("Sign in to see Holdings", { timeout: 30_000 });
-    await expect(page).toHaveTitle("Sign in · Holdings · StratLab");
+    await expect(page).toHaveTitle("Sign in: Holdings · StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
     // changed on purpose in R10V-005: a sign-in gate is kept out of search results, so it names no canonical address
     await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
   });
@@ -313,7 +314,9 @@ test.describe("gate and not-found pages (R5V-013, R5V-014)", () => {
 test.describe("keyboard, landmarks and small targets (R5V-016, R5V-017)", () => {
   test("a skip link is the first stop; the policies sit in a main landmark", async ({ page }) => {
     await open(page);
-    await expect(page.locator(".lp-nav")).toBeVisible({ timeout: 30_000 });         // the page itself, not the plain start-up text it replaces
+    // (updated on purpose, LIVE13B-001: the start-up frame wears the landing's own header now, so the page itself is the frame gone)
+    await expect(page.locator(".lp-nav")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("[data-boot]")).toHaveCount(0, { timeout: 30_000 });
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
     await page.keyboard.press("Enter");

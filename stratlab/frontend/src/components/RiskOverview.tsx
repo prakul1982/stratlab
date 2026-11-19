@@ -23,6 +23,16 @@ const day = (d: string) => fmtDate(d, { year: false });
 const dayLabel = (c: Pick<Cur, "session" | "session_pnl">) => (c.session && c.session_pnl != null ? `Last session (${fmtDate(c.session, { weekday: true, year: false })})` : "Today");
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
 
+/** LIVE10B-029: the line under Open value: its share of the capital with a decimal under 1% (not "0%" beside ₹4,420), and for sold positions
+ * (a minus) what the figure is. */
+function openNote(open: number, capital: number, fmt: (v: number) => string): string {
+  if (!open) return "No open positions";
+  if (!capital) return open < 0 ? "sold positions: what buying them back would cost now" : "";
+  const p = Math.abs(open / capital) * 100;
+  const share = `${p < 1 ? p.toFixed(1) : Math.round(p)}% of ${fmt(capital)}`;
+  return open < 0 ? `${share}: sold positions, what buying them back would cost now` : share;
+}
+
 /** Every running paper session together: what's at stake now, today, overall, the worst day and the deepest fall. */
 export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) => void }) {
   const [data, setData] = useState<{ currencies: Cur[]; sessions: Row[] } | null>(null);
@@ -42,21 +52,22 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
           { key: "name", header: "Session", rowHeader: true, cell: (r) => <button type="button" className="link" onClick={() => onOpen(r.id, r.kind)}>{r.name}</button> },
           { key: "kind", header: "Kind", cell: (r) => KIND[r.kind] ?? r.kind },
           { key: "open", header: "Open value", numeric: true, cell: (r) => money(r.open_value, r.currency) },
-          { key: "share", header: "Share", numeric: true, cell: (r) => (c.open_value ? `${Math.round((r.open_value / c.open_value) * 100)}%` : "–") },
+          { key: "share", header: "Share", numeric: true, cell: (r) => { const all = rows.reduce((a, x) => a + Math.abs(x.open_value), 0); return all ? `${Math.round((Math.abs(r.open_value) / all) * 100)}%` : "–"; } },
           { key: "today", header: dayLabel(c), numeric: true, cell: (r) => { const v = c.session_pnl != null ? r.session_pnl ?? 0 : r.today; return <span className={upDown(v)}>{money(v, r.currency)}</span>; } },
           { key: "pnl", header: "Since the start", numeric: true, cell: (r) => <span className={upDown(r.pnl)}>{money(r.pnl, r.currency)}</span> },
         ];
         return (
           <Card key={c.currency} label={`All running sessions in ${c.currency}`}>
             <CardHead title={ci === 0 ? "All running sessions" : `All running sessions (${c.currency})`}
-              info="Every running paper session added up, per currency (rupees and dollars are never mixed). Open value is what the open positions are worth now at the latest prices. The worst day and the deepest fall are for all of them together, which is what you'd feel if this were one account." infoLabel="About all running sessions" />
+              info="Every running paper session added up, per currency (rupees and dollars are never mixed). Open value is what the open positions are worth now at the latest prices; a sold option or a short position counts as minus, what buying it back would cost. The worst day and the deepest fall are for all of them together, which is what you'd feel if this were one account." infoLabel="About all running sessions" />
             <StatRow label={`Totals in ${c.currency}`}>
               {/* a figure in the figure's style, the words beside it (DB-023: "No open positions" in the big type) */}
-              <Stat item label="Open value" value={money(c.open_value, c.currency)} note={c.open_value && c.capital ? `${Math.round((c.open_value / c.capital) * 100)}% of ${money(c.capital, c.currency)}` : "No open positions"} />
+              <Stat item label="Open value" value={money(c.open_value, c.currency)} note={openNote(c.open_value, c.capital, (v) => money(v, c.currency))} />
               <Stat item label={dayLabel(c)} value={money(c.session_pnl ?? c.today, c.currency)} tone={tone(c.session_pnl ?? c.today)} />
               <Stat item label="Since the start" value={money(c.pnl, c.currency)} tone={tone(c.pnl)} note={`${c.sessions} session${c.sessions === 1 ? "" : "s"}`} />
               <Stat item label="Worst day" value={c.worst_day ? money(c.worst_day.pnl, c.currency) : "–"} tone={tone(c.worst_day?.pnl ?? null)} note={c.worst_day ? day(c.worst_day.date) : "None yet"} />
-              <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, 1)}%`}
+              {/* a fall under a tenth of a percent keeps its digits (LIVE10A-013 / LIVE10B-029: "0.0%" beside "−₹392 at the lowest point") */}
+              <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, c.max_drawdown_pct && Math.abs(c.max_drawdown_pct) < 0.1 ? 2 : 1)}%`}
                 note={c.deepest_fall ? (c.deepest_fall.intraday && (c.deepest_fall.held ?? c.deepest_fall.day_close === c.deepest_fall.pnl)
                   // the low held to the close: one figure, not "-3,94,147 ... the day closed at -3,94,147" (R77-007)
                   ? `${money(c.deepest_fall.pnl, c.currency)} on ${day(c.deepest_fall.date)}${c.deepest_fall.at ? `, reached at ${c.deepest_fall.at} IST` : ""} and held to the close`

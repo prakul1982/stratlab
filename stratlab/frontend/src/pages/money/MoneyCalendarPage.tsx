@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { inr, fmtDate } from "../../lib/format";
+import { inr, fmtDate, safeHref } from "../../lib/format";
 import { Copy, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Earlier } from "../../components/Earlier";
@@ -13,7 +13,7 @@ import { Card, CardHead, CheckField, ChipSet, ConfirmDialog, DateField, EmptySta
 
 type Cat = "tax" | "holdings" | "money" | "custom" | "market";
 type Ev = { id: string; date: string; title: string; cat: Cat; kind: string; detail: string; amount: number | null; symbol: string | null;
-  url: string | null; event_id?: string; repeat?: Repeat };
+  url: string | null; event_id?: string; repeat?: Repeat; /** the filing it was read from */ link?: string };
 type Repeat = "none" | "monthly" | "yearly";
 type Own = { id: string; date: string; title: string; note: string; amount: number | null; repeat: Repeat };
 type Feed = { path: string; amounts: boolean; created_at: string | null };
@@ -41,20 +41,23 @@ function feedUrl(path: string): string {
   return window.location.origin.replace(/\/$/, "") + path;
 }
 
-function EventRow({ e, past }: { e: Ev; past: boolean }) {
+function EventRow({ e, past, tag }: { e: Ev; past: boolean; tag: boolean }) {
   return (
-    <li className={`mc-ev${past ? " past" : ""}`}>
-      <span className={`badge mc-cat mc-${e.cat}`}>{CAT_LABEL[e.cat]}</span>
+    <li className={`mc-ev${past ? " past" : ""}${tag ? "" : " untagged"}`}>
+      {tag && <span className={`badge mc-cat mc-${e.cat}`}>{CAT_LABEL[e.cat]}</span>}
       <div className="mc-ev-body">
         <div className="mc-ev-title">{e.url ? <Link className="link" to={e.url}>{e.title}</Link> : e.title}
           {e.amount != null && !e.title.includes(inr(e.amount)) && <span className="mc-amount"> {inr(e.amount)}</span>}      {/* not again when the title names it ("tax still unpaid: ₹5,000": UI-FIX-1, R8) */}</div>
-        {e.detail && <div className="k-note">{e.detail}</div>}
+        {/* the filing as a link beside the detail, never its address written out (LIVE9B-008) */}
+        {(e.detail || e.link) && <div className="k-note">{e.detail}{e.link && <>{e.detail ? " " : ""}<a className="link" href={safeHref(e.link)} target="_blank" rel="noopener noreferrer">Filing ↗</a></>}</div>}
       </div>
     </li>
   );
 }
 
 function DayList({ events, today, label = "Money dates" }: { events: Ev[]; today: string; label?: string }) {
+  // one kind of date only (every one from your holdings): no tag on every row saying so (LIVE9B-008)
+  const tag = new Set(events.map((e) => e.cat)).size > 1;
   const days = useMemo(() => {
     const by = new Map<string, Ev[]>();
     for (const e of events) by.set(e.date, [...(by.get(e.date) ?? []), e]);
@@ -66,7 +69,7 @@ function DayList({ events, today, label = "Money dates" }: { events: Ev[]; today
       {days.map(([d, evs]) => (
         <li key={d} className="mc-day">
           <div className={`mc-date${d === today ? " today" : ""}`}><b>{longDay(d)}</b>{d === today && <span className="k-note"> · today</span>}</div>
-          <ul className="mc-evs">{evs.map((e) => <EventRow key={e.id} e={e} past={d < today} />)}</ul>
+          <ul className="mc-evs">{evs.map((e) => <EventRow key={e.id} e={e} past={d < today} tag={tag} />)}</ul>
         </li>
       ))}
     </ol>
@@ -239,7 +242,7 @@ export function MoneyCalendarPage() {
   useEffect(() => { if (view?.feed) setAmounts(view.feed.amounts); }, [view?.feed]);
 
   const head = (
-    <PageHeader eyebrow="Money · Calendar" title="Money calendar" asOf={view?.as_of} asOfLabel="As of"
+    <PageHeader eyebrow="Money · Calendar" title="Money calendar" asOf={view?.as_of} asOfLabel="As of" asOfPending={!view && !error}
       lede="Tax due dates, results and dividends for your holdings and watchlist, plus your own dates. Subscribe from any calendar app with a private link." />
   );
   if (!view) {

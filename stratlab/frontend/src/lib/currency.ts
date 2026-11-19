@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { CFG } from "./config";
+import { configOn } from "./flags";
+import { homeRegion } from "./homeMarket";
 import { publicGet } from "./http";
+import { pickPriceCur, savePriceCur, savedPriceCur, type PriceCur } from "./priceCurrency";
 import type { Offer } from "./types";
 import { usdRate } from "./usdAbout";
 
@@ -41,6 +45,20 @@ export function usePricing() {
   return { pricing: p, currency: "INR" as const, status, rate: usdRate(p) };
 }
 
+/** Dollar checkout is switched on in /config.js (USD_CHECKOUT): only then is a dollar price charged in dollars, and only for a period
+ * the server has USD Razorpay plans for (lib/priceCurrency chargedInUsd). Off: dollars are shown and rupees charged. */
+export const usdCheckoutOn = (): boolean => configOn(CFG.USD_CHECKOUT);
+
+const local = (): Storage | null => { try { return window.localStorage; } catch { return null; } };
+
+/** The currency the plans are shown in (owner, 16 Nov): the visitor's choice on the "Prices in" switch, kept on this device, else
+ * dollars for the US region (lib/homeMarket) and rupees elsewhere. `auto` while no choice is made, so the page says why. */
+export function usePriceCur() {
+  const [s, setS] = useState(() => pickPriceCur(savedPriceCur(local()), homeRegion()));
+  const choose = useCallback((cur: PriceCur) => { savePriceCur(local(), cur); setS({ cur, auto: false }); }, []);
+  return { ...s, choose };
+}
+
 let shared: Promise<Pricing> | null = null;
 
 /** A paid plan's price in the visitor's currency, for a lock's note: "Basic is ₹699 a month or ₹6,999 a year." (the
@@ -55,13 +73,16 @@ export function usePlanPrice(plan: "basic" | "pro" | null | undefined): string |
     return () => { live = false; };
   }, [plan]);
   if (!plan || !p) return null;
-  return planPriceLine(plan, p);
+  return planPriceLine(plan, p, shownCur(), usdCheckoutOn());
 }
+
+/** The currency the plans are shown in on this device, outside a component (the visitor's choice, else the region's). */
+const shownCur = (): PriceCur => pickPriceCur(savedPriceCur(local()), homeRegion()).cur;
 
 /** The same line outside a component (a 402's toast, DP2-022): from the one shared read of /pricing, null when it can't be read. */
 export function planPriceFor(plan: "basic" | "pro"): Promise<string | null> {
   shared ??= publicGet<Pricing>("/pricing").catch((e) => { shared = null; throw e; });
-  return shared.then((r) => planPriceLine(plan, r)).catch(() => null);
+  return shared.then((r) => planPriceLine(plan, r, shownCur(), usdCheckoutOn())).catch(() => null);
 }
 
 export { money, planPriceLine } from "./planPrice";

@@ -79,6 +79,7 @@
 .hm-map a.hm-tile:hover, .hm-map a.hm-tile:focus-visible { color: var(--heat-ink); text-decoration: none; }
 .hm-map a.hm-tile:is(.hm-d3, .hm-u3, .hm-v4, .hm-v5):hover, .hm-map a.hm-tile:is(.hm-d3, .hm-u3, .hm-v4, .hm-v5):focus-visible { color: var(--heat-on); }
 .hm-tile.sm { font-size: 10px; }
+.hm-tile.xs { font-size: 9px; }           /* LIVE11A-023: a mid-size tile's long symbol */
 .hm-tile.lg { font-size: 15px; gap: 4px; }
 .hm-sym { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; letter-spacing: .01em; }
 .hm-fig { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .92em; }
@@ -102,3 +103,9 @@
   font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; border-radius: 2px; }
 .hm-legend-step.hm-na { margin-left: var(--s2); }
 @media (max-width: 640px) { .hm-legend-step { min-width: 44px; padding: 0 5px; font-size: 11px; } }
+
+/* LIVE10A-012: a tall, narrow tile names its symbol down its length */
+/* LIVE12A-010: a long symbol over two lines in a mid-size tile, broken only where the tile's words put a break (one word still when copied) */
+.hm-sym.two { white-space: normal; width: min-content; line-height: 1.15; text-align: center; }
+.hm-tile.vert { justify-content: center; align-items: center; }
+.hm-tile.vert .hm-sym { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }

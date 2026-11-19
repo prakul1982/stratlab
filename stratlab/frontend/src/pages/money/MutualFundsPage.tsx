@@ -8,11 +8,12 @@ import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
 import { CsvButton, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FoldCard, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, ShareTable, Signed, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem, Notes } from "../../components/kit";
-import { CostCell, CostDetail, CostHow, CostNotes, costFigures, costStatsShown, costsShown, useFundCosts } from "./FundCosts";
-import { BehaviourDetail, BehaviourHow, BehaviourNotes, behaviourFigures, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
+import { lockLines } from "../../lib/lockLines";
+import { CostCell, CostDetail, CostHow, CostNotes, costFigures, costLock, costStatsShown, costsShown, useFundCosts } from "./FundCosts";
+import { BehaviourDetail, BehaviourHow, BehaviourNotes, behaviourFigures, behaviourLock, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
 import { movedYearNote, openFy } from "../../lib/fy";
-import { importLine } from "../../lib/mfImport";
+import { importLine, mfLockLine } from "../../lib/mfImport";
 import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
 import { InboxNote } from "../../components/InboxNote";
@@ -285,7 +286,8 @@ export function MutualFundsPage() {
             ]} />
             {/* the mix said once, in the card of the totals (it was a card of its own) */}
             <ShareTable label="Funds by category" head="Category" countHead="Schemes" detailHead="Official categories" footnote="Share of the current value, by each scheme's official category."
-              rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, count: a.schemes, detail: a.subs.map((s) => s.sub).join(", "), value: inr(a.value), pct: a.pct }))} />
+              // (LIVE13B-007: a class with no sub-category in its funds' records says so with a dash, not a blank cell)
+              rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, count: a.schemes, detail: a.subs.map((s) => s.sub).join(", ") || "–", value: inr(a.value), pct: a.pct }))} />
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{schemes.length} of {view.limit} free schemes used. Basic keeps every scheme, with capital gains by year.</p>}
           </Card>}
@@ -295,8 +297,10 @@ export function MutualFundsPage() {
               <CardHead title="What your funds cost, and how you invested" info="Each fund's total expense ratio (TER) as published and what it comes to in rupees a year, then your return against each fund's own, your SIPs and your redemptions. Each scheme's own figures are under it in the list below." />
               {/* TABLE-SWEEP: the totals over every fund as one table; they were seven tiles in two uneven rows */}
               {(costStatsShown(costs) || behaviourStatsShown(habits)) && <FigureTable label="What your funds cost, and how you invested" header="Total" valueHeader="Figure" rows={[...costFigures(costs), ...behaviourFigures(habits)]} />}
-              <CostNotes q={costs} />
-              <BehaviourNotes q={habits} />
+              {/* LIVE13B-007: what the plan keeps back of both, in one note with one button (it was two notes, two "See plans", one under the other) */}
+              <CostNotes q={costs} lock={false} />
+              <BehaviourNotes q={habits} lock={false} />
+              <CardLock locks={[costLock(costs), behaviourLock(habits)]} />
               <Disclosure summary="How this is worked out"><CostHow q={costs} /><BehaviourHow q={habits} /></Disclosure>
             </Card>
           )}
@@ -317,7 +321,8 @@ export function MutualFundsPage() {
           </FoldCard>
 
           {/* the limit it lifts is named, as on Plans (DP2-012: the lock didn't say Free keeps 5 funds) */}
-          {!view.gains_allowed && <PlanNote>Capital gains for each financial year, and every scheme you hold (Free keeps {LIMITS.free.mf_schemes}), are on the {view.gains_plan} plan.</PlanNote>}
+          {/* LIVE11B-008: the schemes clause names what the plan lifts, never "every scheme you hold" to someone whose schemes are all shown */}
+          {!view.gains_allowed && <PlanNote>{mfLockLine(held.length, LIMITS.free.mf_schemes, view.gains_plan)}</PlanNote>}
           {view.gains && (
             <Card label="Capital gains">
               <CardHead title="Capital gains by financial year" actions={view.gains.years.length > 0 ? (
@@ -444,4 +449,8 @@ function SchemeSales({ sales, name }: { sales: SaleIn[]; name: string }) {
       <DataTable label={`Redemptions matched to purchases, ${name}`} stack phonePage={10} columns={cols} rows={sales.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
     </section>
   );
+}
+
+function CardLock({ locks }: { locks: ({ what: string; plan: string } | null)[] }) {
+  return <>{lockLines(locks).map((line) => <PlanNote key={line}>{line}</PlanNote>)}</>;
 }

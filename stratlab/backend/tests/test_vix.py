@@ -206,3 +206,57 @@ def test_a_close_that_never_came_isnt_reported_as_fine(w, monkeypatch):
     monkeypatch.setattr(V, "fetch", lambda *a, **k: {"2026-10-06": 15.2})
     job.tick(datetime(2026, 10, 6, 21, 30, tzinfo=IST).astimezone(timezone.utc))       # Tuesday, the close is there
     assert job.status["last_error"] is None
+
+
+# ---------- the final close once the session is over (LIVE8B-001) ----------
+def _list_at(last, prev, stamp):
+    return {"timestamp": stamp, "data": [{"index": "INDIA VIX", "last": last, "previousClose": prev, "variation": round(last - prev, 2),
+                                          "percentChange": round((last / prev - 1) * 100, 2), "high": 16.875, "low": 15.3025}]}
+
+
+class ListAt(Nse):
+    def __init__(self, answer):
+        super().__init__()
+        self.answer = answer
+
+    def _get(self, path, params, referer=None, circuit="main"):
+        if path == "/api/allIndices":
+            return self.answer
+        return super()._get(path, params, referer, circuit)
+
+
+def test_a_closed_session_shows_the_end_of_day_close_not_the_lists_last_reading(w):
+    # Friday 13 Nov: the index list's last reading 15.78 (stamped 15:30); the exchange's end-of-day close 15.50 from 16.62
+    V.store({"2026-11-12": [16.0, 16.9, 15.9, 16.62]})
+    nse = ListAt(_list_at(15.78, 16.62, "13-Nov-2026 15:30:00"))
+    sat = datetime(2026, 11, 14, 8, 6, tzinfo=IST)
+    before = V.panel(None, now=sat, feed=nse)
+    assert before["value"] == 15.78                      # nothing final stored yet: the list's reading stands
+    V.forget()
+    db.set_setting("closes:INIDX:2026-11-13", json.dumps({"INDIA VIX": 15.5, "NIFTY 50": 25144.3}))
+    from app import official_close
+    official_close._mem.clear()
+    p = V.panel(None, now=sat, feed=nse)
+    q = p["quote"]
+    assert p["value"] == 15.5 and q["value"] == 15.5 and q["prev_close"] == 16.62
+    assert q["change"] == -1.12 and q["change_pct"] == -6.74 and q["final"] is True
+    assert q["low"] == 15.3025 and q["high"] == 16.875
+    # during Friday's session the list's value is the reading of the moment
+    V.forget()
+    live = ListAt(_list_at(15.9, 16.62, "13-Nov-2026 11:00:00"))
+    assert V.panel(None, now=datetime(2026, 11, 13, 11, 0, tzinfo=IST), feed=live)["value"] == 15.9
+
+
+def test_the_stored_history_row_is_the_final_close_when_the_file_isnt_kept(w):
+    V.store({"2026-11-12": [16.0, 16.9, 15.9, 16.62], "2026-11-13": [16.6, 16.88, 15.30, 15.5]})
+    p = V.panel(None, now=datetime(2026, 11, 14, 8, 6, tzinfo=IST), feed=ListAt(_list_at(15.78, 16.62, "13-Nov-2026 15:30:00")))
+    assert p["value"] == 15.5 and p["quote"]["change"] == -1.12
+    # its percentile is among the days before 13 Nov, not 13 Nov itself
+    assert p["percentile"]["days"] == 1
+
+
+def test_the_close_stand_in_takes_the_end_of_day_file(w, monkeypatch):
+    from app import official_close
+    monkeypatch.setattr(official_close, "index_close", lambda name, day, fetch=False, now=None: 15.5 if name == "INDIA VIX" else None)
+    row = V.last_quote_row(date(2026, 11, 13), ListAt(_list_at(15.78, 16.62, "13-Nov-2026 15:30:00")))
+    assert row == {"2026-11-13": [None, 16.875, 15.3025, 15.5]}

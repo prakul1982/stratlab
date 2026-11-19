@@ -277,6 +277,29 @@ def _add_part(base: dict, r: dict) -> dict:
     return out
 
 
+def tag(items: list[dict], source: str | None, at: str | None) -> list[dict]:
+    """Each holding with where and when it was imported (`from`, `from_at`), kept where it has them already: a file added to
+    holdings from another keeps each part's own source and day (LIVE10B-026)."""
+    if not source:
+        return items
+    return [i if i.get("from") else {**i, "from": source, "from_at": at} for i in items]
+
+
+def sources(h: dict) -> list[dict]:
+    """[{source, at, count}]: how many holdings came from each source and when (the oldest import of that source), oldest
+    first; holdings saved before sources were kept count under the list's own source and day."""
+    out: dict[str, dict] = {}
+    for i in h.get("items") or []:
+        src, at = i.get("from") or h.get("source"), i.get("from_at") or h.get("updated_at")
+        if not src:
+            continue
+        g = out.setdefault(src, {"source": src, "at": at, "count": 0})
+        g["count"] += 1
+        if at and (not g["at"] or at < g["at"]):
+            g["at"] = at
+    return sorted(out.values(), key=lambda g: g["at"] or "")
+
+
 def merge(rows: list[dict]) -> list[dict]:
     """One holding per company: lines for the same stock (on NSE and on BSE, or split by the broker) add up, and the
     average price is weighted by quantity (none if any line has none). A line from a file or typed in that adds to a
@@ -571,7 +594,13 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
         if rate(r) is not None:
             sectors[r["sector"]] = sectors.get(r["sector"], 0) + (r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r)
     ordered = sorted(sectors.items(), key=lambda kv: (kv[0] == UNCLASSIFIED, -kv[1]))      # "Not classified" last, whatever its size
-    pcts = pct_split([v for _, v in ordered]) if value and ordered else [None] * len(ordered)
+    # a sector's share is the sum of its positions' weights (in tenths), so a one-stock sector shows its stock's weight and the two
+    # tables never round one holding two ways (LIVE8B-020: WIPRO 7.1% in Positions, IT 7.0% in By sector, 7.04% of the total)
+    tenths: dict[str, int] = {}
+    for r in shown:
+        if r.get("weight") is not None:
+            tenths[r["sector"]] = tenths.get(r["sector"], 0) + round(r["weight"] * 10)
+    pcts = [tenths.get(s, 0) / 10 for s, _ in ordered] if value and ordered else [None] * len(ordered)
     allocation = [{"sector": s, "value": _r(v), "pct": p, "count": sum(1 for r in rows if r["sector"] == s and rate(r) is not None)}
                   for (s, v), p in zip(ordered, pcts)]
     us = [r for r in rows if r["market"] == "US"]

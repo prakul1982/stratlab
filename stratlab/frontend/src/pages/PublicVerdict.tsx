@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { withBrand } from "../content/seo";
 import { publicGet, type ApiError } from "../lib/http";
 import { asDate, money, monthShort, pct, TF_NAME } from "../lib/format";
 import { upDown, checkTone, readablePoints } from "../lib/tradeUi";
@@ -51,7 +52,7 @@ export function PublicVerdict({ token }: { token: string }) {
       // a link turned off (or never made) goes to the shared address itself, which answers with a real 404 (DA-035: this page
       // said "isn't available" with a 200); once per link, so a stale copy of that address can never send it round in a loop
       if (e.status === 404 && goneOnce(token)) { location.replace(`/v/${encodeURIComponent(token)}`); return; }
-      setGone(e.message); document.title = "Verdict not available · StratLab";
+      setGone(e.message); document.title = withBrand("Verdict not available");
     });
   }, [token]);
 
@@ -59,7 +60,7 @@ export function PublicVerdict({ token }: { token: string }) {
   const cur = snap?.instrument.currency || (snap?.instrument.market === "IN" ? "INR" : "");
   useEffect(() => {
     if (!snap) return;
-    document.title = `${snap.verdict.headline} ${snap.name} · StratLab`;
+    document.title = withBrand(`${snap.verdict.headline} ${snap.name}`);
     // the address bar shows the shared address, whose preview is this verdict's own card: a copy of /verdict/… previewed as the
     // site's generic picture (DA-034). The page names the card as its picture too, for a reader that runs the page.
     const shared = `/v/${encodeURIComponent(token)}`;

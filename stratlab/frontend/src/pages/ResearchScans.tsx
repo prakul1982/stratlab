@@ -26,7 +26,7 @@ import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 import {
-  Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg,
+  Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, ConfirmDialog, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg,
   Pager, Range, Select, Skeleton, Stat, StatRow,
 } from "../components/kit";
 
@@ -129,6 +129,7 @@ export function ScanPage() {
   const [mine, setMine] = useState<SavedCustom[]>([]);
   const [mineName, setMineName] = useState("");
   const [mineId, setMineId] = useState<string | null>(null);
+  const [dropping, setDropping] = useState<SavedCustom | null>(null);      // a kept scan's delete, asked first as a screen's is (LIVE10B-021)
   useEffect(() => {
     if (!custom || !pro) return;
     api<{ items: SavedCustom[] }>("/research/scan/custom").then((r) => setMine(r.items)).catch(() => undefined);
@@ -276,7 +277,7 @@ export function ScanPage() {
                   columns={[{ key: "n", header: "Your scans", rowHeader: true, cell: (m) => <button type="button" className="link link-btn" aria-pressed={mineId === m.id} onClick={() => loadMine(m.id)}>{m.name}</button> },
                     { key: "r", header: "Rules", cell: (m) => `${m.rules.length} rule${m.rules.length === 1 ? "" : "s"}, ${m.within === 1 ? "latest candle" : `last ${m.within} candles`}` },
                     { key: "m", header: "Market", cell: (m) => (m.region === "US" ? "US" : "India") },
-                    { key: "x", header: "", action: true, cell: (m) => <button type="button" className="btn quiet sm" aria-label={`Delete ${m.name}`} onClick={() => void dropMine(m.id)}>Delete</button> }]} />
+                    { key: "x", header: "", action: true, cell: (m) => <button type="button" className="btn quiet sm" aria-label={`Delete ${m.name}`} onClick={() => setDropping(m)}>Delete</button> }]} />
               )}
             </div>
           )}
@@ -378,6 +379,10 @@ export function ScanPage() {
         {scan.id === "st_s2" ? "A rising average is one whose 20-day slope is up. " : ""}
         Past signals don't predict future returns, and nothing here is investment advice.
       </p>
+      {dropping && <ConfirmDialog title={`Delete "${dropping.name}"?`} confirmLabel="Delete scan" onClose={() => setDropping(null)}
+        onConfirm={() => { const id = dropping.id; setDropping(null); void dropMine(id); }}>
+        Its rules go with it. This can't be undone.
+      </ConfirmDialog>}
     </div>
   );
 }
@@ -387,7 +392,13 @@ interface RotationOut {
   rows: RotationRow[]; skipped: string[]; as_of: string | null; parent: { symbol: string; name: string } | null;
   /** the last answer, kept while the market's data is offline (nights and weekends) */
   kept?: boolean;
+  /** an older copy served while the chart is worked out again to the latest close (LIVE12A-003): the page reads it again shortly */
+  updating?: boolean;
 }
+
+/** How soon, and how many times, a chart served while it is being brought to the latest close is read again (LIVE12A-003). */
+export const ROTATION_RECHECK_MS = 8000;
+export const ROTATION_RECHECKS = 6;
 
 /** The four quadrants, said once behind the table's (i) (they were four run-on sentences above the chart). */
 export const QUADRANT_INFO = "Leading: stronger than the benchmark and still gaining. Improving: weaker, but picking up. Weakening: stronger, but losing pace. Lagging: weaker and still slipping. Most move clockwise through the four.";
@@ -443,6 +454,19 @@ export function RotationPage() {
       .finally(() => { window.clearTimeout(late); if (live) { setBusy(false); setSlow(false); } });
     return () => { live = false; window.clearTimeout(late); };
   }, [region, setId, interval, askTail, tries]);
+
+  // LIVE12A-003: an older copy came while the chart is brought to the latest close: read it again quietly until the new one is in
+  const [rechecks, setRechecks] = useState(0);
+  useEffect(() => { setRechecks(0); }, [region, setId, interval, askTail, tries]);
+  useEffect(() => {
+    if (!out?.updating || rechecks >= ROTATION_RECHECKS) return;
+    let live = true;
+    const t = window.setTimeout(() => {
+      api<RotationOut>(`/research/rotation?region=${region}&set=${encodeURIComponent(setId)}&interval=${interval}&tail=${askTail}`)
+        .then((r) => { if (live) { setOut(r); setRechecks((n) => n + 1); } }).catch(() => { if (live) setRechecks(ROTATION_RECHECKS); });
+    }, ROTATION_RECHECK_MS);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [out, rechecks, region, setId, interval, askTail]);
 
   useEffect(() => { setPicked(null); setFocus(null); setQuad("all"); }, [region, setId]);
   useEffect(() => {
@@ -535,7 +559,7 @@ export function RotationPage() {
           actions={rows.length > 0 ? undefined : <div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
           footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one. The ticks in the table choose what is drawn.</p> : undefined}>
           <div className="k-stack">
-            <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
+            <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}{out.updating && !out.kept ? " · being brought to the latest close" : ""}</span>
             {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table below to draw them." : "It fills in as more closes are stored."}</EmptyState>
               : <RotationChart rows={rows} benchmark={out.benchmark} step={step} focus={focus} onFocus={setFocus} />}
             {picked === null && mainRows.length > 6 && rows.length > 0 && <p className="k-note" data-testid="rot-default-note">Drawn: the {rows.length} furthest from the centre of {mainRows.length} main {isIndex ? "indices" : "stocks"}. Tick more in the table below.</p>}

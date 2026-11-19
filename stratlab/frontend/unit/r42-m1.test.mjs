@@ -25,7 +25,8 @@ test("LIVE7A-001: Mood's tables carry their own session's date when the read is 
   assert.equal(moodDay(null, "2026-11-11"), "2026-11-11");
   // another market's row says "today" only when its session is today's now, not when the read was made
   assert.equal(sessionWord("2026-11-11", "2026-11-12", dayText), "on 11 Nov");
-  assert.equal(sessionWord("2026-11-12", "2026-11-12", dayText), "today");
+  // (updated on purpose, LIVE8A-015: the session's date on every row, never "today", an overseas market's day not being the reader's)
+  assert.equal(sessionWord("2026-11-12", "2026-11-12", dayText), "on 12 Nov");
   const page = read("src/pages/Research.tsx");
   assert.match(page, /closedDay=\{moodDay\(mood, pulseClosedDay\(data\?\.indices\)\)\}/);
   assert.match(page, /behindNote=\{moodBehindNote\(/);

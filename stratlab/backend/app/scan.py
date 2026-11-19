@@ -200,6 +200,29 @@ def _why(e: Exception) -> str:
     return "not enough daily prices yet" if not text or "history" in text.lower() or isinstance(e, (IndexError, TypeError)) else text
 
 
+BUSY_RETRIES, BUSY_PAUSE = 2, 3.0   # rounds of asking again for the stocks a busy price source turned away, and the pause before each
+
+
+def _busy(e: Exception) -> bool:
+    """The price source turned the read away for now (our own rate limit, a busy or unreachable source), not a real answer."""
+    return bool(getattr(e, "busy", False))
+
+
+def _again(done: list, one, busy: set, sleep=time.sleep) -> list:
+    """The stocks the price source turned away as busy, asked for again after a pause (twice at most), each answer put in its place
+    (LIVE11B-011: "7 skipped: the market data source is busy (our rate limit). Try again in a minute." on a first NIFTY 50 scan with the
+    market shut, the headline counted over the 43 read). Only the busy ones are asked again; a stock with too few prices is not."""
+    for _ in range(BUSY_RETRIES):
+        if not busy:
+            break
+        ids = list(busy)
+        busy.clear()
+        sleep(BUSY_PAUSE)
+        redo = {r[0]: r for r in _pool.map(one, ids)}
+        done = [redo.get(r[0], r) for r in done]
+    return done
+
+
 def session_day(market: str, now: datetime | None = None) -> str | None:
     """The market's latest settled trading day (ISO), what a stock's last candle is measured against; None without a calendar."""
     try:
@@ -218,6 +241,7 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
     over = [str(m.get("symbol") or m.get("id") or "") for m in members[MAX:]]
     prov = registry.provider(market)
     names = {}
+    busy: set = set()
 
     def one(iid):
         try:
@@ -232,11 +256,13 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
                 res["_name"] = company_name(market, inst, iid)
             return iid, res, None
         except Exception as e:     # one member's data problem mustn't sink the rest
+            if _busy(e):
+                busy.add(iid)
             return iid, None, f"{_label(prov, iid)}: {_why(e)}"
 
     rows, problems, late = [], [], []
     if budget is None:
-        done = list(_pool.map(one, ids))
+        done = _again(list(_pool.map(one, ids)), one, busy)
     else:
         jobs = {iid: _pool.submit(one, iid) for iid in ids}
         wait(jobs.values(), timeout=max(0.0, budget - (time.monotonic() - t0)))
@@ -285,17 +311,20 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
     ids, missing = universes.resolve(registry, market, members[:MAX])
     over = [str(m.get("symbol") or m.get("id") or "") for m in members[MAX:]]
     prov = registry.provider(market)
+    busy: set = set()
 
     def one(iid):
         try:
-            res = scan_presets.evaluate(_bars(registry, iid), through=through, only=[preset], live=not whole_day, custom=custom)
+            res = scan_presets.evaluate(_bars(registry, iid), through=through, only=[preset], live=not whole_day, custom=custom, market=market)
             inst = (prov.instrument(iid.split(":", 1)[1]) if prov else None) or {}
             return iid, res, inst, None
         except Exception as e:     # one member's data problem mustn't sink the rest
+            if _busy(e):
+                busy.add(iid)
             return iid, None, {}, f"{_label(prov, iid)}: {_why(e)}"
 
     rows, problems, checked, days, hits = [], [], 0, [], []
-    done = list(_pool.map(one, ids))
+    done = _again(list(_pool.map(one, ids)), one, busy)
     newest = max([res["as_of"] for _, res, _, _ in done if res] + [session or ""], default=None) or None
     for iid, res, inst, problem in done:
         if res is None:

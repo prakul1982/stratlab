@@ -17,7 +17,13 @@ export interface CalFilters { size: string[]; sector: string; index: string; fo:
 export const NO_CAL: CalFilters = { size: [], sector: "", index: "", fo: false, on: "", sort: "" };
 export const SIZE_NAME: Record<string, string> = { large: "Large", mid: "Mid", small: "Small", micro: "Micro" };
 
+/** The index choices worth offering: those with a company in these days, and the one already picked (LIVE11A-019). */
+export const indexChoices = (indices: Facets["indices"], picked: string) => indices.filter((i) => i.count > 0 || i.id === picked);
+
 /** How many of the shared choices are set (`sort` counts when it is not the page's first). */
+/** The size chips worth offering: with no filter on, a size with companies (LIVE12A-008: "Large 0 · Mid 0 · Small 0" beside "Micro 10");
+ *  once the table is narrowed, every size (its count is of the narrowed table, and picking one with none says so). */
+export const sizeChoices = (sizes: Facets["sizes"], picked: string[], narrowed = false) => sizes.filter((s) => narrowed || s.count > 0 || picked.includes(s.id));
 export const calCount = (f: CalFilters, firstSort: string) => f.size.length + (f.sector ? 1 : 0) + (f.index ? 1 : 0) + (f.fo ? 1 : 0) + (f.on ? 1 : 0) + (f.sort && f.sort !== firstSort ? 1 : 0);
 
 /** The filters kept on this device (a per-viewer convenience: storage can be off, then they start clear). */
@@ -51,26 +57,32 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
           <div className="k-field wide">
             <div className="k-label-row"><span className="k-lbl">Company size</span>
               <Info label="About company size">{region === "IN" ? "By rank in market value among the listed companies the app keeps, as for the screener: large is the 100 largest, mid the 101st to 250th, small the 251st to 500th, micro the rest." : "By market value: large $10 billion and up, mid $2 to 10 billion, small $300 million to 2 billion, micro under $300 million."}</Info></div>
-            <ChipSet label="Company size" options={facets.sizes.map((s) => ({ value: s.id, label: `${SIZE_NAME[s.id]} ${s.count}` }))} on={filters.size}
+            <ChipSet label="Company size" options={sizeChoices(facets.sizes, filters.size, active > 0).map((s) => ({ value: s.id, label: `${SIZE_NAME[s.id]} ${s.count}` }))} on={filters.size}
               onToggle={(v) => set({ size: filters.size.includes(v) ? filters.size.filter((x) => x !== v) : [...filters.size, v] })} />
-            {filters.size.length > 0 && unknownSize > 0 && <span className="k-note k-muted">{unknownSize} {unknownSize === 1 ? "company has" : "companies have"} no market value kept yet, so a size can't place {unknownSize === 1 ? "it" : "them"}.</span>}
+            {/* said whenever the size counts fall short of the total, not only once a size is picked (CX2 / LIVE10A-020: "10 companies" over
+                sizes adding to 9) */}
+            {unknownSize > 0 && <span className="k-note k-muted" data-testid="cal-unsized">{unknownSize} {unknownSize === 1 ? "company has" : "companies have"} no market value kept yet, so a size can't place {unknownSize === 1 ? "it" : "them"}.</span>}
           </div>
           <Field label={region === "IN" ? "Sector" : "Industry division"}>
             {(id) => <Select id={id} value={filters.sector} onChange={(v) => set({ sector: v })}
               options={[{ value: "", label: "All" }, ...facets.sectors.map((s) => ({ value: s.name, label: `${s.name} (${s.count})` })),
                 ...(filters.sector && !facets.sectors.some((s) => s.name === filters.sector) ? [{ value: filters.sector, label: filters.sector }] : [])]} />}
           </Field>
-          <Field label="Index">
-            {(id) => <Select id={id} value={filters.index} onChange={(v) => set({ index: v })} options={[{ value: "", label: "Any" }, ...facets.indices.map((i) => ({ value: i.id, label: `${i.name} (${i.count})` }))]} />}
-          </Field>
+          {/* LIVE11A-019: an index no company of these days is in is no choice ("NIFTY 50 (0)" six times over); the one picked stays */}
+          {indexChoices(facets.indices, filters.index).length > 0 && <Field label="Index">
+            {(id) => <Select id={id} value={filters.index} onChange={(v) => set({ index: v })} options={[{ value: "", label: "Any" }, ...indexChoices(facets.indices, filters.index).map((i) => ({ value: i.id, label: `${i.name} (${i.count})` }))]} />}
+          </Field>}
           <Field label="Day">
             {(id) => <Select id={id} value={filters.on} onChange={(v) => set({ on: v })} options={days} />}
           </Field>
           {children}
-          <Field label="Sort by">
-            {(id) => <Select id={id} value={filters.sort || firstSort} onChange={(v) => set({ sort: v })} options={Object.entries(sorts).map(([value, label]) => ({ value, label }))} />}
-          </Field>
-          {region === "IN" && facets.fo != null && (
+          {/* LIVE13A-005: two of the grid's columns on a wide screen, so its longest choice is never cut ("Market value, largest f" at 1280) */}
+          <div className="res-sort">
+            <Field label="Sort by">
+              {(id) => <Select id={id} value={filters.sort || firstSort} onChange={(v) => set({ sort: v })} options={Object.entries(sorts).map(([value, label]) => ({ value, label }))} />}
+            </Field>
+          </div>
+          {region === "IN" && facets.fo != null && (facets.fo > 0 || filters.fo) && (
             <CheckField checked={filters.fo} onChange={(on) => set({ fo: on })} label={<>F&amp;O stocks only ({facets.fo})
               <Info label="About F&O stocks">The stocks the exchange trades futures and options in, from its lot-size file.</Info></>} />
           )}

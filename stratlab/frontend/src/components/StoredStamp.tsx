@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { writtenAt } from "../lib/format";
-import { refreshesLeft, refreshNotOnPlan, REFRESH_ON_BASIC, resetsWord, usageChanged, usedWord, useUsage, type RefreshState, type UsageRow } from "../lib/usage";
+import { leftWord, refreshesLeft, refreshNotOnPlan, REFRESH_ON_BASIC, resetsWord, usageChanged, usedWord, useUsage, type RefreshState, type UsageRow } from "../lib/usage";
 import { DataTable, Skeleton, Working } from "./kit";
 
 /* One way every stored shared read says how old it is and lets a person read it again (R19, owner 7 Nov: "tell the user exactly like
@@ -15,18 +15,18 @@ export const NO_REFRESH_LEFT = "No fresh AI reads left today, back at midnight I
 /** "Last updated 6 Nov, 14:05 IST", the Refresh button and "4 left today", for a card's head. The count is the person's fresh AI reads,
  * the one Plans and Account state (LIVE7B-002); `counted` false: a read shared by everyone that no one's count holds (the market's
  * headlines read, LIVE7A-016), so no count is shown beside it. */
-export function StoredStamp({ at, tz, busy, onRefresh, counted = true }: { at: number | null | undefined; tz?: string; busy: boolean; onRefresh: () => void; counted?: boolean }) {
+export function StoredStamp({ at, tz, busy, onRefresh, counted = true, label }: { at: number | null | undefined; tz?: string; busy: boolean; onRefresh: () => void; counted?: boolean; label?: string | null }) {
   const { usage } = useUsage();
   const left = counted ? refreshesLeft(usage) : null;
   const none = left === 0;
   const off = refreshNotOnPlan(usage);           // FREE-TIER: none on the plan at all
   return (
     <span className="stored-stamp" data-testid="stored-stamp">
-      {at ? <span className="k-note" data-testid="stored-at">Last updated {writtenAt(at, tz)}</span> : null}
+      {at ? <span className="k-note" data-testid="stored-at">{label ?? `Last updated ${writtenAt(at, tz)}`}</span> : null}
       <button type="button" className="btn quiet sm" disabled={busy || none} title={off ? REFRESH_ON_BASIC : none ? NO_REFRESH_LEFT : undefined} onClick={onRefresh}>
         {busy ? "Refreshing…" : "Refresh"}
       </button>
-      {(left != null || off) && <span className="k-note" data-testid="refresh-left">{off ? "On Basic" : none ? "None left today" : `${left} left today`}</span>}
+      {(left != null || off) && <span className="k-note" data-testid="refresh-left">{off ? "On Basic" : leftWord(left ?? 0, usage)}</span>}
     </span>
   );
 }

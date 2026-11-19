@@ -171,7 +171,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     at = next(i for i, s in enumerate(slides) if s.title.startswith("Every company's figures"))
     # changed on purpose (R35): where a layer's page left names off, "Who is in each layer's calculations" follows it, a table too
     # changed on purpose (R46): each checked figure's source record follows them, a table too
-    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE)) and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"]
+    # changed on purpose (R48): and each comparison's basis (its metric, rule and each layer's companies), a table too
+    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.COMPARE_TITLE)) and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"]
                for s in slides[at:])
     # R21: a theme with layers of its own has no exchange-industry layer beside them; a chart plots no layer median under 3
     lays = v.get("layers") or []
@@ -226,7 +227,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     # the counts agree: the universe and the figures in one wording on the cover, the findings and data confidence; the quarter's counts
     cov = deck.coverage(v)
     cover = {it[0]: it for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"]}
-    assert cover["With figures"][1] == f"{cov['n']:,}" and cov["line"] in t
+    # y57 (R57, PAY-9): with adjacent participants, the cover's count is said to be of the core members (updated on purpose)
+    assert cover["Core with figures" if cov.get("adjacent") else "With figures"][1] == f"{cov['n']:,}" and cov["line"] in t
     counts = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
     # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
     assert counts.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, cov))}.") and cov["line"] in counts
@@ -291,9 +293,10 @@ def test_a_lender_theme_keeps_the_maps_layers_when_the_check_empties_them():
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
     # lane d1 (updated on purpose): the "Other" group of two confirmed companies is rows of the "Smaller layers" page, not a page of its own
+    # gl50 (R50, updated on purpose): those two banks' own words state their way of earning (lending, R37 with no answered model), so they
+    # join the largest lenders' layer, which holds their industry; the map's two layers stay
     assert [s.title for s in slides if s.title.startswith("Layer ")] == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
-    small = next(s for s in slides if s.title.startswith(deck.SMALL_TITLE))
-    assert "Other private bank companies" in [r[0] for b in small.blocks if b["kind"] == "table" for r in b["rows"]]   # R21; R22: "bank", as an adjective reads
+    assert "Other private bank companies" not in [x["layer"] for x in v["layers"]]
 
 
 def test_a_map_layer_without_a_name_is_never_drawn():

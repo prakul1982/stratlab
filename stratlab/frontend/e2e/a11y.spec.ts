@@ -343,7 +343,7 @@ test("phone: the drawing sheet is a clean list of drawings under properly ordere
   expect(await sheet.locator("h2").count()).toBeGreaterThan(0);
 });
 
-test("the cookie banner is named and described, comes first for the keyboard, and what has focus is never hidden under it", async ({ page }) => {
+test("the cookie banner is named and described, comes after the page for the keyboard, and what has focus is never hidden under it", async ({ page }) => {
   test.setTimeout(240_000);
   // a Free account on a company page with ads switched on (a fake config): the question is asked, and a StratLab card holds the place of the ad
   await page.route(/googlesyndication/, (r) => r.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
@@ -359,11 +359,15 @@ test("the cookie banner is named and described, comes first for the keyboard, an
   await expect(banner).toHaveAccessibleName(/on StratLab$/);
   expect(await banner.getAttribute("aria-describedby")).toBeTruthy();
   await expect(page.locator(`[id="${await banner.getAttribute("aria-describedby")}"]`)).toContainText("Google ads");
-  // the question comes before the page for the keyboard: the answers are among the first few Tab stops, not the last
+  // (updated on purpose, LIVE8B-004: before the page, "Skip to content" landed on the banner and its arrival pushed the page down) the page
+  // comes first for the keyboard; the banner, after the page, is a few Shift+Tab stops back from the start
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.scrollTo(0, 0); });
+  for (let i = 1; i <= 6; i++) { await page.keyboard.press("Tab"); expect(await focusIn(page, "[data-testid=consent]"), "the page's first stops are the page's").toBe(false); }
   await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.scrollTo(0, 0); });
   let at = 0;
-  for (let i = 1; i <= 6 && !at; i++) { await page.keyboard.press("Tab"); if (await focusIn(page, "[data-testid=consent]")) at = i; }
-  expect(at, "the banner is among the first six Tab stops").toBeGreaterThan(0);
+  for (let i = 1; i <= 8 && !at; i++) { await page.keyboard.press("Shift+Tab"); if (await focusIn(page, "[data-testid=consent]")) at = i; }
+  expect(at, "the banner is among the last stops of the page").toBeGreaterThan(0);
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.scrollTo(0, 0); });
   // and it does not hold focus: Tab walks on through the page, and no stop sits under the banner
   const under: string[] = [];
   for (let i = 0; i < 70; i++) {

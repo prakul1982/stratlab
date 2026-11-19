@@ -38,13 +38,47 @@ export function Tracking() {
   // the welcome question and the tour come first: on a phone the two cards stood over each other and this one hid the
   // welcome choices (CI, 28 Oct), so the question waits until the guide is answered or closed
   const guiding = useGuideOpen();
+  const settled = useSettled();
+  const [later, setLater] = useState(laterNow);
   if (!askNow({ cfg: CONFIG, choice, path: pathname, adsOnly, declined, dnt: doNotTrack() })) return null;
-  if (guiding) return null;
-  return <ConsentCard adsOnly={adsOnly} />;
+  if (guiding || !settled || later) return null;
+  return <ConsentCard adsOnly={adsOnly} onLater={() => { askLater(); setLater(true); }} />;
 }
 
-/** The question itself: a band in the page's own flow, above the page, so nothing is ever under it (LIVE7B-006). */
-function ConsentCard({ adsOnly }: { adsOnly: boolean }) {
+/** "Not now" (owner, 18 Nov: the card can be closed): no answer is saved, so nothing loads, and the card is not shown again on any
+ * page for the rest of this visit; the next visit asks again. */
+const LATER_KEY = "stratlab.consent.later";
+let laterMem = false;
+export function laterNow(): boolean {
+  try { return laterMem || sessionStorage.getItem(LATER_KEY) === "1"; } catch { return laterMem; }
+}
+function askLater() {
+  laterMem = true;
+  try { sessionStorage.setItem(LATER_KEY, "1"); } catch { /* storage off: kept for this page view */ }
+}
+
+/** Ms after the window's load before the question is drawn: by then the page has drawn its own content, so the question, after it,
+ * is never pushed down by a page still filling in (LIVE8B-004). */
+export const ASK_AFTER_LOAD_MS = 1200;
+
+/** True once the page has loaded and had a moment to draw (or at once when it already had: a page opened later in the visit). */
+function useSettled(): boolean {
+  const [on, setOn] = useState(() => settledOnce);
+  useEffect(() => {
+    if (on) return;
+    let t = 0;
+    const go = () => { t = window.setTimeout(() => { settledOnce = true; setOn(true); }, ASK_AFTER_LOAD_MS); };
+    if (document.readyState === "complete") go(); else window.addEventListener("load", go, { once: true });
+    return () => { window.removeEventListener("load", go); window.clearTimeout(t); };
+  }, [on]);
+  return on;
+}
+let settledOnce = false;
+
+/** The question itself: one small card in the page's own flow, after the page, so nothing is ever under it (LIVE7B-006) and its arrival
+ * never moves the page (LIVE8B-004: above the page it pushed everything down after the first paint, CLS 0.19 each time). Answered, it is
+ * gone on every page (the answer is kept on this device); closed, it is gone for this visit (owner, 18 Nov). */
+function ConsentCard({ adsOnly, onLater }: { adsOnly: boolean; onLater: () => void }) {
   const text = useId();
   const { title, text: words, short } = consentWords(CONFIG, adsOnly);
   // on a phone the slim bar shows the one-sentence question with "What this means" beside the answers (LIVE3-010); the card's
@@ -52,7 +86,10 @@ function ConsentCard({ adsOnly }: { adsOnly: boolean }) {
   return (
     <div className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} aria-describedby={text} data-testid="consent">
       <b className="consent-title">{title}</b>
-      <p id={text}><span className="consent-long">{words} <Link className="link" to="/privacy">What this means</Link></span><span className="consent-short">{short}</span></p>
+      <p id={text}>
+        {/* closing it: floated at the top right of the words, so only their first line makes room for it */}
+        <button type="button" className="consent-x" aria-label="Not now" title="Not now: ask me next visit" onClick={onLater}>×</button>
+        <span className="consent-long">{words} <Link className="link" to="/privacy">What this means</Link></span><span className="consent-short">{short}</span></p>
       <div className="consent-btns">
         <Link className="link consent-more" to="/privacy">What this means</Link>
         <button type="button" className="btn sm" onClick={() => writeChoice("yes")}>Allow</button>

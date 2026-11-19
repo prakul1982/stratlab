@@ -63,3 +63,32 @@ export function pnlLabel(base: string, partial: { priced: number; lines: number 
 export function dayLabel(session: string | null | undefined, today: string, fmt: (iso: string) => string): string {
   return session && session < today ? `Last session (${fmt(session)})` : "Today";
 }
+
+/** One source of saved holdings: how many came from it and when (holdings.sources on the server). */
+export type HoldingSource = { source: string; at: string | null; count: number };
+
+/** LIVE10B-026: the line under "Where your stocks stand": each source once, with its own one date ("imported from your Zerodha Kite file
+ * on 28 Oct"; two sources: "4 from your Zerodha Kite file on 28 Oct · 2 from your ICICI Direct file on 17 Nov"), never a date and then a
+ * second date in brackets ("on 28 Oct (29 Oct 2026)"). `day` writes a date, `words` names a source. */
+export function importedLine(sources: HoldingSource[] | undefined, fallback: { source: string | null; at: string | null },
+  day: (iso: string) => string, words: (s: string) => string, recent: (iso: string) => string | null): string {
+  const list = sources?.length ? sources : fallback.source || fallback.at ? [{ source: fallback.source ?? "", at: fallback.at, count: 0 }] : [];
+  const when = (at: string | null) => (at ? ` on ${day(at)}${recent(at) ? ` (${recent(at)})` : ""}` : "");
+  if (list.length === 1) {
+    const s = list[0];
+    return s.source ? ` · imported from ${words(s.source)}${when(s.at)}` : s.at ? ` · imported${when(s.at)}` : "";
+  }
+  return " · " + list.map((s, k) => `${s.count} ${k === 0 ? "imported " : ""}from ${words(s.source)}${when(s.at)}`).join(" · ");
+}
+
+/** The age note's subject: the oldest source's holdings, said with how many they are when other sources are newer (LIVE10B-026: the
+ * 19-day note went once an ICICI file was added, though 4 of the 6 holdings were still from 28 Oct). Null when none is `oldDays` old. */
+export function oldPart(sources: HoldingSource[] | undefined, fallbackAt: string | null, total: number, age: (iso: string | null) => number | null,
+  oldDays: number): { days: number; words: string } | null {
+  const list = sources?.length ? sources : [{ source: "", at: fallbackAt, count: total }];
+  const old = list.filter((s) => (age(s.at) ?? 0) >= oldDays);
+  if (!old.length) return null;
+  const days = Math.max(...old.map((s) => age(s.at) ?? 0));
+  const n = old.reduce((a, s) => a + s.count, 0);
+  return { days, words: old.length === list.length ? "These holdings are" : `${n} of these ${total} holdings are` };
+}

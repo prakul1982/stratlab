@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from . import admin, ads, blog, blog_research, stock_pages as sp
 from .config import settings
 from .responses import err, ok
+from .titles import page_title
 
 router = APIRouter(tags=["blog"], include_in_schema=False)
 admin_router = APIRouter(tags=["admin"])
@@ -37,13 +38,13 @@ FEED_CACHE = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
 LIST_CACHE = "public, max-age=60, s-maxage=600, stale-while-revalidate=600"
 FACTS = "Facts, not advice. Data and method for research and education; not investment advice or a recommendation about any security."
 KIND_NAME = {"brief": "Market brief", "research": "Research"}
-TITLES = {None: ("StratLab blog: daily market briefs and research from market data",
+TITLES = {None: ("Blog: daily market briefs and research from market data",       # the page's name; page_title adds the brand
                  "Daily India and US market briefs and research built from StratLab's own data: index closes, sector rotation, strategy tests, IPO "
                  "listings and SIPs. Facts and method, not advice."),
-          "brief": ("Daily market briefs for India and the US · StratLab",
+          "brief": ("Daily market briefs for India and the US",
                     "Each trading day's India and US market brief: index closes, sector rotation and stocks newly matching a price rule, built after "
                     "the close from market data. Facts, not advice."),
-          "research": ("Research from StratLab's own data · StratLab",
+          "research": ("Research from StratLab's own data",
                        "Research posts built from StratLab's own data: classic strategies across markets after costs, IPO listing days and SIP against "
                        "lump sum, each with its data, period, method and limits.")}
 PATHS = {None: "/blog", "brief": "/blog/briefs", "research": "/blog/research"}
@@ -82,6 +83,7 @@ article .kpis small{font-size:12.5px;line-height:1.35;color:var(--muted)}
 .hb .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}.hb .n.none{font-weight:400;color:var(--muted)}
 .hb .hb-note{margin:8px 0 0;font-size:13px;color:var(--muted)}
 .btbl.wrap td,.btbl.wrap th{white-space:normal;text-align:left;line-height:1.45}.btbl.wrap th[scope=row]{white-space:normal;min-width:9em}
+.btbl.nw th[scope=row]{white-space:normal;min-width:11em;line-height:1.35}
 article details.how{margin:22px 0 8px}article details.how ul{margin:4px 0 8px}
 /* VR5-007: on a phone the four columns of a results table fit the screen (the rule set's name wraps, the figures are a size down and
    closer): at 390px the 140px name column pushed "Difference" and its figures past the edge, cut off */
@@ -97,7 +99,7 @@ article details.how{margin:22px 0 8px}article details.how ul{margin:4px 0 8px}
 @media (max-width:640px){.btbl:not(.wide) thead th,.btbl:not(.wide) tbody th,.btbl caption{white-space:normal}.btbl:not(.wide) thead th{vertical-align:bottom}
 .btbl.wide.w4 tr{grid-template-columns:repeat(4,minmax(0,1fr))}
 /* VR6-019: in a card, a figure sits at the foot of its cell, so a label that wraps to three lines does not leave the figure beside it higher than the others */
-.btbl.wide td{display:flex;flex-direction:column;justify-content:flex-end}.kpis li:last-child:nth-child(odd){grid-column:1/-1}}
+.btbl.wide td{display:flex;flex-direction:column;justify-content:flex-end}.btbl.wide.top td{justify-content:flex-start}.kpis li:last-child:nth-child(odd){grid-column:1/-1}}
 /* VR7-002: a market's section is a fold. A window over 640px draws it open, as the plain heading and table it was (a browser without ::details-content
    draws it closed and a tap opens it); a phone shows the ten markets as ten lines, one opens at a time, and every figure stays in the page */
 @media (min-width:641px){details.mk::details-content{content-visibility:visible}details.mk>summary{display:block;pointer-events:none;cursor:default;list-style:none}details.mk>summary::-webkit-details-marker{display:none}details.mk>summary .n{display:none}}
@@ -161,13 +163,13 @@ def _html(body: str, status: int = 200, headers: dict | None = None) -> HTMLResp
 
 def _unavailable() -> HTMLResponse:
     """The posts can't be read right now: a page a visitor can read, never cached, and 503 so a crawler tries again."""
-    body = sp._page(sp._head("The blog is busy · StratLab", "The blog can't be read right now.", _site() + "/blog", robots="noindex,follow"), None,
+    body = sp._page(sp._head(page_title("The blog is busy"), "The blog can't be read right now.", _site() + "/blog", robots="noindex,follow"), None,
                     '<h1>The blog is busy</h1><p class="muted">Please try again in a minute.</p>')
     return HTMLResponse(body, status_code=503, headers={"Retry-After": "120", "Cache-Control": "no-store"})
 
 
 def _not_found(what: str = "post") -> HTMLResponse:
-    body = sp._page(sp._head("Page not found · StratLab", "That blog page doesn't exist.", _site() + "/blog", f"<style>{STYLE}</style>", robots="noindex,follow"), None,
+    body = sp._page(sp._head(page_title("Page not found"), "That blog page doesn't exist.", _site() + "/blog", f"<style>{STYLE}</style>", robots="noindex,follow"), None,
                     f'<h1>That {e(what)} isn\'t here</h1><p class="muted">It may have been moved or taken down.</p>'
                     '<div class="ctas"><a class="btn" href="/blog">All blog posts</a><a class="btn ghost" href="/blog/briefs">Market briefs</a></div>')
     return HTMLResponse(body, status_code=404, headers={"Cache-Control": "public, max-age=60, s-maxage=60"})
@@ -204,9 +206,8 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
     if page > pages or (page > 1 and not rows):
         return _not_found("page")
     canonical = site + path + (f"?page={page}" if page > 1 else "")
-    title, desc = TITLES[kind]
-    if page > 1:
-        title, desc = title.replace(" · StratLab", "") + f" (page {page}) · StratLab", desc
+    name, desc = TITLES[kind]
+    title = page_title(f"{name} (page {page})" if page > 1 else name)
     cards = "".join(
         f'<li><a class="post" href="/blog/{e(r["slug"])}"><span class="kind">{e(_kind_line(r))} · {e(_when(r["published_at"]))}</span>'
         f'<h2>{e(r["title"])}</h2><p>{e(_shorten(_card_text(r), 220))}</p></a></li>' for r in rows)
@@ -222,7 +223,7 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
         + (f'<link rel="next" href="{site}{path}?page={page + 1}">\n' if page < pages else "")
     ld = sp._ld([{"@context": "https://schema.org", "@type": "Blog", "name": "StratLab blog", "url": site + "/blog", "inLanguage": "en",
                   "publisher": {"@type": "Organization", "name": "StratLab", "url": site + "/"}},
-                 _crumbs(("Blog", site + "/blog"), *([(TITLES[kind][0].split(" · ")[0], site + path)] if kind else []))])
+                 _crumbs(("Blog", site + "/blog"), *([(TITLES[kind][0], site + path)] if kind else []))])
     intro = {None: "Daily market briefs and research built from StratLab's own data. Every post gives its data, its period and its method.",
              "brief": "Each trading day's India and US market brief, written after the close from market data.",
              "research": "Research built from StratLab's own data, each with its data source, period, method and limits."}[kind]
@@ -246,7 +247,7 @@ def post_page(slug: str) -> HTMLResponse:
     indexable = bool(post.get("indexable"))
     before, after = blog.neighbours(post) if indexable else (None, None)
     published, modified = str(post["published_at"]), str(post["updated_at"])
-    title = f"{post['title']} · StratLab"
+    title = page_title(post["title"])
     desc = _shorten(post["summary"])
     blocks = (post.get("body") or {}).get("blocks") or []
     art = {"@context": "https://schema.org", "@type": "Article", "headline": post["title"][:110], "description": desc,
@@ -407,7 +408,7 @@ def admin_blog_theme(req: ThemeDraft, profile=Depends(admin.admin_profile)):
     m = theme_routes.checked(r, theme, m, wait=True)
     from .intel import theme_data
     dive = theme_data.build(r, theme, m, theme_routes.sources(r, theme))
-    return ok(blog_research.draft_theme_post(dive, theme, r, notable_only=False))
+    return ok(blog_research.draft_theme_post({**dive, "map_at": m.get("generated_at")}, theme, r, notable_only=False))
 
 
 class Note(BaseModel):

@@ -182,13 +182,16 @@ def test_public_theme_page_lists_checked_members_with_reported_figures_only(w, m
         assert name in t
     assert "Unchecked Ltd" not in t and "Only unchecked" not in t
     assert '<a href="/stocks/in/RELIANCE">Reliance Industries Ltd</a>' in t                 # members link to their public pages
-    assert "Market value ₹19.00 lakh crore" in t and "Market value ₹12,345 crore" in t
+    # (updated on purpose, LIVE9A-011, owner 29 Oct "wherever you can, just make a table": each layer is a table with a Market value column)
+    # (updated on purpose, LIVE10A-007: each cell carries its column's name for the phone's stacked rows)
+    assert '<th scope="col">Market value</th>' in t and '<td data-label="Market value">₹19.00 lakh crore</td>' in t and '<td data-label="Market value">₹12,345 crore</td>' in t
     layers = "".join(re.findall(r"<section class=\"card\" data-layer>.*?</section>", t, re.S))
     assert layers and not DERIVED.search(layers)                                             # no figure StratLab works out
     assert "median" not in t.lower()
     assert "See the full theme on StratLab" in t and "/research/themes?q=defence&amp;region=IN" in t
     assert "Companies that design and build defence equipment." in t and not ADVICE.search(t.split("<body>")[1])
-    assert not PROVIDERS.search(t) and "How this page is made" in t and "Download" not in t and "<table" not in t
+    assert not PROVIDERS.search(t) and "How this page is made" in t and "Download" not in t
+    assert t.count("<table") == len(re.findall(r"data-layer>", t))                         # (updated on purpose, LIVE9A-011) one table a layer, no other
     assert c.head("/themes/in/defence").status_code == 200
 
 
@@ -221,7 +224,8 @@ def test_thin_themes_are_noindex_and_only_rich_ones_are_in_the_sitemap(w):
     assert re.search(r"<loc>https://stratlab.studio/themes/in/defence</loc><lastmod>\d{4}-\d\d-\d\d</lastmod>", xml)
     assert "/themes/in/rail" not in xml and "<loc>https://stratlab.studio/themes</loc>" in xml
     directory = c.get("/themes/in").text
-    assert '<a href="/themes/in/defence">Defence</a>' in directory and '<a href="/themes/in/rail">Rail</a>' in directory
+    # (updated on purpose, LIVE10A-006: the card's name has its own line inside the link)
+    assert '<a href="/themes/in/defence"><span class="nm">Defence</span>' in directory and '<a href="/themes/in/rail"><span class="nm">Rail</span>' in directory
 
 
 def test_one_page_per_theme_an_alias_answers_301_and_unknowns_404(w):
@@ -298,3 +302,18 @@ def test_embeds_carry_source_date_and_backlink_and_no_vendor(w):
     assert "<polyline" in p and "Source: exchange closing prices" in p and "As of " in p and "https://stratlab.studio/stocks/in/RELIANCE" in p
     assert not PROVIDERS.search(p)
     assert c.get("/embed/price/in/NOPE").status_code == 404 and c.get("/embed/theme/in/nope").status_code == 404
+
+
+def test_a_rules_bump_keeps_a_public_theme_page_until_the_theme_is_read_again(w, monkeypatch):
+    """LIVE8A-001: a rules bump took 15 of 21 public theme pages to 404 until each theme was read again; the newest stored entry stands meanwhile."""
+    from app.intel import theme_base
+    c = w["client"]
+    keep("IN", "defence")
+    monkeypatch.setattr(theme_base, "RULES", theme_base.RULES + 1)      # a release with new rules; the theme not read again yet
+    assert c.get("/themes/in/defence", follow_redirects=False).status_code == 200
+    assert "/themes/in/defence" in c.get("/themes/in").text
+    assert [e["slug"] for e in public_themes.entries("IN")] == ["defence"]                 # one page per theme, not one per rules
+    keep("IN", "defence")                                                                  # read again under the new rules
+    entries = public_themes.entries("IN")
+    meta = computed.index(theme_library.KIND)["entries"][entries[0]["hk"]]["meta"]
+    assert len(entries) == 1 and meta["rules"] == theme_base.RULES                         # the new entry wins

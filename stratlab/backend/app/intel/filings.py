@@ -62,7 +62,10 @@ RULES: list[tuple[str, str, str, list[str]]] = [
     ("preferential", "Preferential issue (fund raise)", "red", [r"preferential (issue|allotment|basis)"]),
     ("rights", "Rights issue (fund raise)", "red", [r"rights issue", r"issue .{0,20}on rights basis"]),
     ("warrants", "Warrants issued (fund raise)", "red", [r"convertible warrants", r"issue of warrants", r"allotment of warrants"]),
-    ("fund_raise", "Fund raise approved or planned", "red", [r"fund[- ]?rais", r"raising of funds", r"raise funds"]),
+    # money raised by NCDs, bonds or commercial paper is a debt raise (the "ncd" rule below), not a share issue (CX2: a routine board
+    # meeting on "raising of funds through NCDs" was flagged red as a fund raise and counted as a red flag)
+    ("fund_raise", "Fund raise approved or planned", "red", [
+        r"^(?![\s\S]*\b(?:ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b)[\s\S]*(?:fund[- ]?rais|raising of funds|raise funds)"]),
     ("pledge", "Promoter pledge or encumbrance", "red", [r"\bpledge", r"encumbrance", r"regulation 31\b(?!\s*\(4\))"]),
     ("regulator", "Regulator or tax action", "red", [r"\bsebi\b.{0,40}(order|penalt|show cause|adjudicat)", r"show[- ]cause", r"search (and|&) seizure",
                                                    r"income tax (search|survey)", r"enforcement directorate", r"\bpenalty\b"]),
@@ -81,6 +84,9 @@ RULES: list[tuple[str, str, str, list[str]]] = [
     ("ncd", "Debt raise (NCDs or bonds)", "amber", [
         r"\b(issu\w*|rais\w*|approv\w*|offer\w*|placement|borrow\w*)\b.{0,80}\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b",
         r"\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b.{0,60}\b(issu(e|ed|ance)|rais(e|ed|ing)|approved|offer(ed)?|placement)\b"]),
+    # the exchange's own "Analysts/Institutional Investor Meet/Con. Call Updates" subject says what the filing is, before a mention of the
+    # results it discusses (CX2: listed as "Financial results: Analysts/Institutional Investor Meet/Con. Call Updates")
+    ("investor_meet", "Analyst or investor meeting", "info", [r"analysts?/institutional investor meet", r"investor meet", r"analysts? meet"]),
     ("results", "Financial results", "info", [r"financial results", r"outcome of board meeting.{0,60}results", r"\bresults\b"]),
     # a shareholders' meeting's own transcript, recording or deck is neither an earnings call nor an analyst meeting
     ("agm", "Shareholder meeting", "info", [r"(?:transcript|recording|audio|proceedings|presentation|minutes)\b.{0,100}\b(?:annual|extra[- ]?ordinary|general) (?:general )?meeting",
@@ -88,7 +94,6 @@ RULES: list[tuple[str, str, str, list[str]]] = [
                                              r"\b[ae]gm\b.{0,60}\b(?:transcript|recording|audio)", r"\b(?:transcript|recording|audio)\b.{0,60}\b[ae]gm\b",
                                              r"presentation .{0,60}(?:shareholders|postal ballot)"]),
     ("concall", "Earnings call", "info", [r"transcript", r"earnings call", r"conference call"]),
-    ("investor_meet", "Analyst or investor meeting", "info", [r"analysts?/institutional investor meet", r"investor meet", r"analysts? meet"]),
     ("presentation", "Investor presentation", "info", [r"investor presentation", r"presentation"]),
     ("dividend", "Dividend", "info", [r"dividend"]),
     ("buyback", "Buyback", "info", [r"buy[- ]?back"]),
@@ -107,7 +112,7 @@ LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update", "offi
 EXTRA_FLAGS = [("resign_unnamed", "amber")]
 # raised when the rules change, so the stored whole-market list is read again (5: "NCLT" alone is no longer insolvency,
 # tribunal-convened meetings and news clarifications are routine, R8O-003)
-RULES_VERSION = 6        # 6: credit rating revisions, news verifications and monitoring agency reports (DE-033, DE-034)
+RULES_VERSION = 7        # 6: credit rating revisions, news verifications and monitoring agency reports (DE-033, DE-034); 7: a raise by NCDs is debt, an investor meet before results (CX2)
 
 # R6O-002: the filing's subject says what it is about. A routine certificate is routine whatever its body names
 # (ICICIBANK's "Certificate under SEBI (Depositories and Participants) Regulations, 2018" read as a debt raise).
@@ -1901,14 +1906,19 @@ class IndiaFilings:
 
 
 def without_repeats(items: list[dict]) -> list[dict]:
-    """The rows with an exact repeat dropped: the same day, rule and words and the same link (or none), as the exchange lists
-    a general update twice (R26-009). A row with its own link or detail stays."""
-    seen, out = set(), []
+    """The rows with a repeat dropped: the same day, rule and words, as the exchange lists a general update twice (R26-009).
+    A filing sent again with its document attached anew (a new link: CX2, a company's 30 Oct results listed twice) is one
+    row, the first listed (the newest), with `copies`; a row with detail of its own, or a link beside a bare row, stays."""
+    first: dict[tuple, dict] = {}
+    out = []
     for i in items:
-        k = (_same_filing_key(i), i.get("url"))
-        if k not in seen:
-            seen.add(k)
-            out.append(i)
+        k = (_same_filing_key(i), bool(i.get("url")))
+        have = first.get(k)
+        if have is None:
+            first[k] = row = {**i}
+            out.append(row)
+        else:
+            have["copies"] = have.get("copies", 1) + 1
     return out
 
 

@@ -62,8 +62,20 @@ export const signedPoints = (v: number | null | undefined): string => (v == null
  * shares") is not one, and pinning it on one symbol says more than the headline did (LIVE4-006: "Indian IT stocks → INFY"). */
 export const groupPhrase = (name: string): boolean =>
   /\b(stocks|shares|sectors?|companies|firms|names|counters|banks|lenders|majors|makers|pack|index|indices|space)\s*$/i.test(name.trim());
-export function companyRows<T extends { name: string }>(hot: T[]): T[] {
-  return hot.filter((h) => !groupPhrase(h.name));
+export function companyRows<T extends { name: string; ticker?: string | null }>(hot: T[]): T[] {
+  // LIVE13A-007: one row per company: "Titan Company" and "Titan Company (consumer durables)" are one company (a bracketed note is
+  // dropped, and a second row of the same ticker or name is left out)
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const h of hot) {
+    if (groupPhrase(h.name)) continue;
+    const name = h.name.replace(/\s*\([^)]*\)\s*$/, "").trim() || h.name;
+    const keys = [(h.ticker ?? "").trim().toUpperCase(), name.toLowerCase()].filter(Boolean);
+    if (keys.some((k) => seen.has(k))) continue;
+    keys.forEach((k) => seen.add(k));
+    out.push(name === h.name ? h : { ...h, name });
+  }
+  return out;
 }
 
 /** The column over the day's figures: "Today" while the market's session is today's, else that session's day (LIVE4-007: a
@@ -79,11 +91,13 @@ export function moodDay(m: Pick<PulseMood, "session" | "behind"> | null | undefi
 }
 
 /** The line that says a read is of an earlier session than the index levels above it, or null. */
-export function moodBehindNote(m: Pick<PulseMood, "session" | "behind"> | null | undefined, closedDay: string | null, dayText: (iso: string) => string): string | null {
+export function moodBehindNote(m: (Pick<PulseMood, "session" | "behind"> & { is_open?: boolean }) | null | undefined, closedDay: string | null, dayText: (iso: string) => string): string | null {
   const own = moodDay(m, closedDay);
   if (!m?.session || own !== m.session || own === closedDay) return null;
   const newer = m.behind ?? closedDay;
-  return `These figures are of the ${dayText(m.session)} session${newer ? `; the ${dayText(newer)} session's are being read` : ""}.`;
+  // LIVE10A-010: while the newer session still trades, what is read is its figures so far, never its (not yet existing) closing read
+  const what = m.is_open ? `the ${newer ? dayText(newer) : ""} session's figures so far are being read` : `the ${newer ? dayText(newer) : ""} session's are being read`;
+  return `These figures are of the ${dayText(m.session)} session${newer ? `; ${what}` : ""}.`;
 }
 
 /** A row's move: a yield's in basis points ("+12 bp"), every other one in percent (LIVE7A-023: "4.98% +2.45%" was a 12 bp rise). */
@@ -91,5 +105,28 @@ export const quoteMove = (r: Pick<MoodQuoteRow, "change_pct" | "change_bp">): { 
   r.change_bp != null ? { value: r.change_bp, text: `${r.change_bp > 0 ? "+" : r.change_bp < 0 ? "−" : ""}${Math.abs(r.change_bp)} bp` }
     : { value: r.change_pct, text: r.change_pct == null ? "–" : `${r.change_pct > 0 ? "+" : r.change_pct < 0 ? "−" : ""}${Math.abs(r.change_pct).toFixed(2)}%` };
 
-/** "today", or the session's day when a market's latest session isn't today's (worked out now, not when the read was made). */
-export const sessionWord = (day: string | null | undefined, today: string, dayText: (iso: string) => string): string => (day && day !== today ? `on ${dayText(day)}` : "today");
+/** A row's session: its date (worked out now, not when the read was made). */
+/* LIVE8A-015: every row names its session's date ("on 13 Nov"), never "today": an overseas market's day is not the reader's (at 21:45 ET
+ * on Friday the Nikkei's "today" was a session that ended in Tokyo on what was by then Saturday morning there) */
+export const sessionWord = (day: string | null | undefined, _today: string, dayText: (iso: string) => string): string => (day ? `on ${dayText(day)}` : "–");
+
+/** LIVE9A-008: the server's answer while another visit is writing the market's headlines read (intel/routes.ai_call, wait_for_other): the
+ * page asks again every PULSE_AI_RETRY_MS, PULSE_AI_TRIES times, instead of a request held open behind it ("Still loading…" for 20 min). */
+export const pulseBeingWritten = (message: string | null | undefined): boolean => /being written now/i.test(message ?? "");
+export const PULSE_AI_RETRY_MS = 15_000;
+export const PULSE_AI_TRIES = 8;
+
+/** fix12 (LIVE10A-010): whether to ask again for the headlines read: while another visit writes it ("being written now"), or while the
+ * read shown is the session's earlier one and a newer one is being written (`updating`); never past PULSE_AI_TRIES. */
+export const pulseAskAgain = (tries: number, got: { updating?: boolean } | null, message?: string | null): boolean =>
+  tries < PULSE_AI_TRIES && (!!got?.updating || pulseBeingWritten(message));
+
+/** The line under a read that is the session's earlier one while a newer one is written (fix12). */
+export const PULSE_UPDATING_NOTE = "A newer read of the headlines is being written; this one is from earlier in the session.";
+
+/** LIVE9A-031: one page title for both markets and every hour ("How the market feels today" on the US beside "…felt at the last close" on
+ * India); whether the levels are live or the last close is said once, in the line under it (pulseLede) and the "Prices as of" stamp. */
+export const PULSE_TITLE = "Market mood";
+
+/** LIVE9A-027: how far an index is under its 52-week high, as the briefs write it (newsletter/tables._from_high): "0.3% below", "At the high". */
+export const fromHighText = (v: number): string => (v < -0.05 ? `${Math.abs(v).toFixed(1)}% below` : "At the high");

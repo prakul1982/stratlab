@@ -38,6 +38,7 @@ from . import blog, db, instrument_kinds, memguard, sector_members, site_pages, 
 from .branding import public_text
 from .config import settings
 from .intel.net import TTLCache
+from .titles import page_title
 
 REGIONS = {"in": "IN", "us": "US"}
 FRESH = 24 * 3600              # the longest a stored page is kept, whatever the market did (the reported numbers change quarterly)
@@ -97,8 +98,11 @@ US_INDICES = {"SPX", "GSPC", "^GSPC", "NDX", "IXIC", "^IXIC", "DJI", "^DJI", "DJ
 IN_INDEX = re.compile(r"^(NIFTY|SENSEX|BANKNIFTY|FINNIFTY|MIDCPNIFTY|BANKEX|INDIAVIX|CNX)[A-Z0-9 &-]*$")
 # a market value above this (in the page's unit: $ million, ₹ crore) is a data error: no company is worth $8 trillion
 CAP_CEILING = {"US": 8_000_000.0, "IN": 10_000_000.0}
-IN_SHARES_MAX = 30e9        # an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001)
-IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)
+# an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001); LIVE9A-024: 30 billion
+# left YES Bank (about 31 billion shares) without a value, and Vodafone Idea has over 100 billion
+IN_SHARES_MAX = 150e9
+IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)...
+IN_PE_BACKED = 150          # ...unless its latest year's profit bears it out (LIVE9A-024: a holding company, Bajaj Holdings, earns little revenue)
 # an exchange operator that is not itself a listed company, which an instrument list can carry under its own code (R26-001)
 UNLISTED_NAMES = re.compile(r"^\s*national stock exchange of india\b", re.I)
 PE_MAX = 1000.0                # a P/E above this says the market value or the profit is off, not the company: n/a
@@ -472,6 +476,12 @@ def html_ttl(region: str | None, now: datetime | None = None) -> int:
 def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime]:
     """(day, when) of the market's latest settled close: the latest trading day whose close was at least settle(region)
     ago. Before then, today's candle is still a session in progress (or not yet the official close), not a close."""
+    return last_session(region, now, settle(region))
+
+
+def last_session(region: str, now: datetime | None = None, after: int = 0) -> tuple[date, datetime]:
+    """(day, when) of the latest trading day whose close was at least `after` seconds ago (LIVE11A-007: a reader that takes the day's
+    last candle before the official close is out)."""
     from .data.calendar import is_trading_day
     from .data.markets import BY_ID
     m = BY_ID.get(region) or {}
@@ -481,7 +491,7 @@ def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime
     for _ in range(15):
         hh, mm = (close_of(region, d) or "23:59").split(":")
         at = datetime.combine(d, dtime(int(hh), int(mm)), tz)
-        if is_trading_day(region, d) and at + timedelta(seconds=settle(region)) <= local:
+        if is_trading_day(region, d) and at + timedelta(seconds=after) <= local:
             return d, at
         d -= timedelta(days=1)
     hh, mm = (close_of(region, d) or "23:59").split(":")
@@ -700,14 +710,17 @@ def as_traded(bars: list[dict], dividends, reference=None) -> list[dict]:
     return out
 
 
-def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list[dict]:
+def fit_to_exchange_range(bars: list[dict], row, report_day: str | None, through: str | None = None) -> list[dict]:
     """Daily candles held to the exchange's own 52-week high and low for the stock (`row`: [high, its day, low, its day],
     from the report of `report_day`; official_close.ranges). A candle's extreme beyond the exchange's, within the report's
     year, is a stray print the exchange doesn't count (R10V-003: ULTRACEMCO's 10,118.00 low matched no bar of the
     exchange's or any price history, whose lowest was 10,325.00 on 23 Mar 2026): it is brought back to the exchange's
     figure. A candle short of the exchange's high or low on the day the report names is brought out to it (INFY's
     1,728.00 of 3 Feb 2026, which the broker's candle clipped at 1,691.40). A figure further than RANGE_SLACK off is another
-    basis (unadjusted), and left alone. The candles given are not changed."""
+    basis (unadjusted), and left alone. The candles given are not changed. `through`: the newest session the report's own
+    figures cover (official_close.report_through); a candle after it is never brought back, since the report can't know its
+    prints (LIVE12B-015: the report of 17 Nov still ended on 16 Nov, so ETERNAL's 378.00 high of 17 Nov was cut to its own
+    close, 375.05, and "vs 52-week high" read 0.0% instead of -0.8%)."""
     if not bars or not row or not report_day or len(row) < 4:
         return bars
     hi, hi_day, lo, lo_day = row[:4]
@@ -715,11 +728,13 @@ def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list
         start = (date.fromisoformat(report_day) - timedelta(days=RANGE_DAYS + 1)).isoformat()
     except ValueError:
         return bars
+    covered = min(report_day, str(through)[:10]) if through else report_day
     out = None
     for i, b in enumerate(bars):
         d = str(b.get("t") or "")[:10]
         if not d or d > report_day:
             continue
+        stray_ok = d <= covered           # a print beyond the report's figures is called stray only on a session the report covers
         h, l, c = _num(b.get("h")), _num(b.get("l")), _num(b.get("c"))
         # (a candle's extremes are never brought inside its own close: the exchange's figure leaves out a closing auction's print, and
         # a page whose "Last close" is beyond its own 1-year range is wrong, RC4-011)
@@ -729,12 +744,12 @@ def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list
         if hi and h is not None:
             if d == hi_day and h < hi <= h * RANGE_SLACK:
                 nb = {**b, "h": top(hi)}
-            elif d >= start and h > hi and h <= hi * RANGE_SLACK:
+            elif stray_ok and d >= start and h > hi and h <= hi * RANGE_SLACK:
                 nb = {**b, "h": top(hi)}
         if lo and l is not None:
             if d == lo_day and l > lo >= l / RANGE_SLACK:
                 nb = {**(nb or b), "l": bottom(lo)}
-            elif d >= start and l < lo and l >= lo / RANGE_SLACK:
+            elif stray_ok and d >= start and l < lo and l >= lo / RANGE_SLACK:
                 nb = {**(nb or b), "l": bottom(lo)}
         if nb:
             out = out or list(bars)
@@ -817,12 +832,16 @@ def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
     return out
 
 
-def with_official_close(f: dict, close) -> dict:
+def with_official_close(f: dict, close, day_range: tuple | None = None) -> dict:
     """A page's facts with the exchange's official close of the same day in place of the candle's last trade
-    (R7O-004): the market value and P/E move with it, the dividend yield against it, the year's range takes it in."""
+    (R7O-004): the market value and P/E move with it, the dividend yield against it, the year's range takes it in, and the
+    session's own high and low from the same file when given (LIVE11B-012: a high made that day was left out of the range, so
+    "vs 52-week high" read 0.0% for ETERNAL at 375.05 under its 378.00 high of the day)."""
     old, new = _num(f.get("price")), _num(close)
     if not new or new <= 0:
         return f
+    if day_range:
+        f = with_day_range(f, new, *day_range)
     out = {**f, "price_official": True, "price_basis": "close"}
     if not old or old <= 0 or old == new:
         return out
@@ -838,6 +857,18 @@ def with_official_close(f: dict, close) -> dict:
         out["high52"] = new
     if _num(f.get("low52")) is not None and new < _num(f["low52"]):
         out["low52"] = new
+    return out
+
+
+def with_day_range(f: dict, close: float, high, low) -> dict:
+    """The year's range widened by one session's high and low (never narrowed), each a print of that session: a high at or above
+    the close and a low at or below it, within RANGE_SLACK of the page's range (a figure beyond it is another basis)."""
+    hi, lo, cur_hi, cur_lo = _num(high), _num(low), _num(f.get("high52")), _num(f.get("low52"))
+    out = dict(f)
+    if hi is not None and hi >= close and cur_hi is not None and cur_hi < hi <= cur_hi * RANGE_SLACK:
+        out["high52"] = hi
+    if lo is not None and 0 < lo <= close and cur_lo is not None and cur_lo / RANGE_SLACK <= lo < cur_lo:
+        out["low52"] = lo
     return out
 
 
@@ -908,6 +939,16 @@ def _latest_sales(f: dict):
     return vals[-1] if vals else None
 
 
+def _latest_profit(f: dict):
+    """The latest year's profit from the page's own table, when it is in the market value's unit (LIVE9A-024)."""
+    unit, cap_unit = str(f.get("unit") or ""), str(f.get("market_cap_unit") or "")
+    if not unit or unit != cap_unit:
+        return None
+    vals = [_num(y.get("profit")) for y in f.get("years") or [] if str(y.get("year") or "").strip().upper() != "TTM"]
+    vals = [v for v in vals if v is not None]
+    return vals[-1] if vals else None
+
+
 def cap_problem(f: dict | None) -> str | None:
     """Why a page's market value can't be right, or None when it passes every check (or there is none). Checked:
     - depositary shares whose ratio to ordinary shares couldn't be read (the value counts ordinary shares at the ADS price);
@@ -947,7 +988,9 @@ def cap_problem(f: dict | None) -> str | None:
         if price and price > 0 and cap * 1e7 / price > IN_SHARES_MAX:
             return "implied share count out of range"
         if sales is not None and sales > 0 and cap / sales > IN_PS_MAX:
-            return "out of line with revenue"
+            profit = _latest_profit(f)
+            if not (profit is not None and profit > 0 and cap / profit <= IN_PE_BACKED):
+                return "out of line with revenue"
     if region == "US":
         profit, pe = _num(f.get("profit_usd")), _num(f.get("pe"))
         if profit is None and str(f.get("unit") or "$").startswith("$"):
@@ -1120,6 +1163,39 @@ def filing_due(filed: str | None, ts: float | None, now: float | None = None) ->
 
 BEHIND_RETRY = 7 * 86400       # a page still behind after a build that came after its report was filed: swept again weekly
 SEC_DATA_LAG = 4 * 86400       # how long after a filing the SEC's data has it
+
+
+# r581 (the live R58 Regional banks deck: Fifth Third $80 m of revenue and a 3,152.5% net margin, Huntington, M&T, UMB and others, from
+# pages stored before R58's sector accounting schema (intel.sec.sector_revenue) and not opened since, so never built again): a bank's or
+# insurer's page whose newest year's net profit is above its revenue holds a revenue line that is not its total revenue; it is built again
+_FINANCIAL = re.compile(r"\bbanks?\b|savings institution|\binsur|financial institution|\bnbfc\b|non[- ]?banking", re.I)
+
+
+def financial_mismatch(f: dict | None) -> bool:
+    """Whether a stored page is a bank's, lender's or insurer's (its industry path, or its page's bank flag) whose newest reported year has a
+    net profit above its revenue (a revenue line read from the wrong source field)."""
+    if not isinstance(f, dict) or not f:
+        return False
+    if not (f.get("bank") or any(_FINANCIAL.search(str(x)) for x in f.get("industry") or [])):
+        return False
+    years = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM"]
+    if not years:
+        return False
+    y = years[-1]
+    try:
+        sales, profit = float(y.get("sales")), float(y.get("profit"))
+    except (TypeError, ValueError):
+        return False
+    return sales > 0 and profit > sales
+
+
+def basis_missing(f: dict | None) -> bool:
+    """r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue beside its annual report's, the basis of neither said):
+    whether a stored US page of a bank, lender or insurer with reported years was built before its revenue's lines were kept
+    (sec.revenue_parts): it is built again once, so a theme can say each financial filer's revenue basis."""
+    if not isinstance(f, dict) or f.get("region") != "US" or not f.get("bank") or f.get("no_numbers") or f.get("not_company"):
+        return False
+    return "revenue_basis" not in f and any(isinstance(y, dict) and y.get("sales") is not None for y in f.get("years") or [])
 
 
 def behind_due(f: dict | None, ts: float | None, now: float | None = None) -> bool:
@@ -1366,7 +1442,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
@@ -1497,7 +1573,7 @@ def unique_filings(rows: list[dict]) -> list[dict]:
     return out
 
 
-_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2}|NEW)\s*/?\s*$")
+_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2,3}|NEW)\s*/?\s*$")      # "/DE/", "/MD/", "/CAN/" (any case), "/NEW"
 
 
 def strip_registration(name: str | None) -> str | None:
@@ -1534,6 +1610,8 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False
     if (stored["facts"].get("v") or 1) < FACTS_VERSION:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
+    if financial_mismatch(stored["facts"]) and now - ts >= UNREAD_FRESH:
+        return False                     # r581: a financial filer's revenue below its net profit: built again (at most hourly)
     if (stored["facts"].get("annual_unread") or stored["facts"].get("type_unread") or annual_behind(stored["facts"])) \
             and now - ts >= UNREAD_FRESH:
         return False                     # built without its latest annual report, which couldn't be read then (R8V-003, R10V-002)
@@ -1543,6 +1621,42 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
 
 
 BUILT_KEY = "stocks:built:"          # stocks:built:<region> = {"at", "pages": every stored page, "shown": those with something to show}
+# how far the stored pages are rebuilt to the facts a page shows now (owner, 13 Nov: "show how far the company-page rebuild has got"):
+# stocks:rebuild:<region> = {"at", "version", "current": pages with facts at FACTS_VERSION, "of": pages with facts, "pages": every stored
+# page}, counted while the screens' index gathers every stored page (no read of its own), and read by Admin, kept REBUILD_MEMORY
+REBUILD_KEY = "stocks:rebuild:"
+REBUILD_MEMORY = 300
+_rebuild_mem: dict = {"at": 0.0, "value": None}
+
+
+def rebuild_counts(facts_list) -> dict:
+    """Of the stored pages' facts, those with something to show (`of`) and among them those built at FACTS_VERSION (`current`)."""
+    current = of = 0
+    for f in facts_list:
+        if has_content(f):
+            of += 1
+            current += (f.get("v") or 1) >= FACTS_VERSION
+    return {"version": FACTS_VERSION, "current": current, "of": of}
+
+
+def rebuild_progress(now: float | None = None, regions=("IN", "US")) -> dict:
+    """Admin's line on the rebuild: per market, the stored pages at the current facts version N of M and when they were counted.
+    A count kept at an earlier version (a new version deployed, the index not gathered since) is not this version's: `counted` False."""
+    now = now if now is not None else time.time()
+    hit = _rebuild_mem.get("value")
+    if hit is not None and now - _rebuild_mem["at"] < REBUILD_MEMORY:
+        return hit
+    markets = []
+    for region in regions:
+        got = _setting(REBUILD_KEY + region) or {}
+        if got.get("version") == FACTS_VERSION and isinstance(got.get("of"), int):
+            markets.append({"region": region, "counted": True, "current": int(got.get("current") or 0), "of": got["of"],
+                            "pages": got.get("pages"), "at": got.get("at")})
+        else:
+            markets.append({"region": region, "counted": False, "at": got.get("at")})
+    value = {"version": FACTS_VERSION, "markets": markets}
+    _rebuild_mem.update(at=now, value=value)
+    return value
 FOREIGN_OTC = re.compile(r"^[A-Z]{4}[FY]$")      # a foreign company's US over-the-counter line: it rarely files results here
 
 
@@ -1607,6 +1721,7 @@ class Pages:
         # `older(region, symbol, facts)`: a stored page from before FACTS_VERSION, served while it can't be rebuilt,
         # brought in line where that's cheap (see main.stock_page_older_facts)
         self.gather, self.per_minute, self.older = gather, per_minute, older
+        self.limit = None              # () -> builds a minute now, when it moves with the hour (main: more in India's night and at the weekend)
         self.on_built = None           # (region, symbol, facts) after a page is built and stored: screens.note_page
         self.on_priced = None          # (region, symbol, facts) after a stored page is moved to a newer close: screens.note_price (LIVE3-003)
         self.mem = TTLCache(max_items=3000)
@@ -1624,7 +1739,7 @@ class Pages:
             now = time.time()
             while self.recent and now - self.recent[0] > 60:
                 self.recent.popleft()
-            if len(self.recent) >= self.per_minute:
+            if len(self.recent) >= (self.limit() if self.limit else self.per_minute):
                 return False
             self.recent.append(now)
             return True
@@ -1710,7 +1825,7 @@ class Pages:
             return got
 
     def refresh_prices(self, region: str, bars_of, analyse=None, limit: int = 200, gap: float = 1.0, sleep=time.sleep,
-                       now: datetime | None = None, official=None, official_ready=None) -> dict:
+                       now: datetime | None = None, official=None, official_ready=None, official_range=None) -> dict:
         """After a market's close: re-read the price of stored pages whose last close is older than the market's, the
         largest companies first, at most `limit` a run with `gap` seconds between reads (so people's pages and
         backtests keep the price sources' room). `bars_of(region, symbol)` gives a company's daily candles, read after
@@ -1749,8 +1864,10 @@ class Pages:
                 if f and official and str(f.get("price_at") or "") == day.isoformat() and not f.get("price_official"):
                     c = official(symbol, day.isoformat())
                     if c is not None:
-                        _put(key, {**stored, "facts": with_official_close(f, c)})
-                        self._priced(region, symbol, with_official_close(f, c))
+                        # the day's high and low from the same file (LIVE11B-012)
+                        moved = with_official_close(f, c, official_range(symbol, day.isoformat()) if official_range else None)
+                        _put(key, {**stored, "facts": moved})
+                        self._priced(region, symbol, moved)
                         self.mem.pop(key)
                         self.mem.pop(f"html:{region}:{symbol}")
                         swapped += 1
@@ -1884,6 +2001,17 @@ PEER_MIN_SHARE = 0.01                               # a large company's industry
 # an industry named like a catch-all (SIC "...NEC", "Miscellaneous...", business services): its members are not close peers
 BROAD_INDUSTRY = re.compile(r"\bnec\b|not elsewhere classified|business services|miscellaneous|blank check|holding", re.I)
 PEER_STALE_DAYS = 7                               # a peer whose last price is older than this (before the newest) is left out
+
+
+def sector_first(region: str, symbol: str, parts: list[str]) -> list[str]:
+    """A US company's line under its name with its sector as the page's "Same sector" list names it (the S&P 500's), in
+    place of the SEC's broad division before the industry (CX2: Apple read "Manufacturing · Electronic computers" at the
+    top and "Information Technology" under Same sector). Any other page's parts as they are."""
+    sector = _sp500_sectors().get(symbol) if region == "US" else None
+    if not sector or not parts:
+        return parts
+    rest = parts[1:] if len(parts) > 1 else parts
+    return [sector] + [x for x in rest if x.lower() != sector.lower()]
 
 
 def _sp500_sectors() -> dict[str, str]:
@@ -2329,12 +2457,18 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 
 .card>h2:first-child{margin-top:0}.surv{margin:2px 0}.surv summary{cursor:pointer;min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:2px 10px}.surv p{margin:0 0 8px}
 .badge{display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+/* LIVE9A-011: a public theme layer's companies as a table: names and tickers left, figures right, the name wrapping, sideways scroll on a phone */
+.cotbl{overflow-x:auto}.cotbl th.l,.cotbl td.l{text-align:left}.cotbl td:first-child{white-space:normal;min-width:150px;position:static}
+.cotbl th:first-child{position:static}
+@media (max-width:640px){.cotbl[data-stack]{overflow:visible}.cotbl[data-stack] table,.cotbl[data-stack] tbody{display:block;min-width:0;width:100%}.cotbl[data-stack] thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.cotbl[data-stack] tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}.cotbl[data-stack] td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 0;border:0;white-space:normal;text-align:right}.cotbl[data-stack] td:first-child{display:block;min-width:0;font-weight:600;padding:0 0 4px;text-align:left}.cotbl[data-stack] td[data-label]::before{content:attr(data-label);flex:none;color:var(--muted);font-size:13px;font-weight:400;text-align:left}}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}
 ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+ul.dir li:has(a+.muted){flex-wrap:wrap;row-gap:0}
 ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
+ul.dir[data-cards] li{padding:0;align-items:stretch}ul.dir[data-cards] a{flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:10px 14px;min-height:64px;overflow-wrap:anywhere}ul.dir[data-cards] .nm{font-weight:600}ul.dir[data-cards] .muted{color:var(--muted)}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
 .links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:44px;min-height:44px;justify-content:center;padding:4px 10px}
 /* VR6-022: A to Z in two rows of thirteen on a wide screen, not nineteen and an orphan row of seven (44 px taps, A11Y-2) */
@@ -2454,7 +2588,9 @@ def _links(region: str, rows: list[tuple[str, str]]) -> str:
     return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{tidy(n)} ({s})")}</a>' for s, n in rows) + "</div>"
 
 
-PUBLIC_MENU = (("/", "Home"), ("/library", "Library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"),
+# NAV3 (LIVE9A-019): the same list as the landing page's header and the app's public frame (PublicFrame.tsx PUBLIC_MENU) and index.html's
+# menu; the logo is the way home
+PUBLIC_MENU = (("/library", "Library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"),
                ("/pricing", "Plans"), ("/about", "About"), ("/contact", "Contact"))
 # the app's own addresses, which ask a signed-out visitor to sign in (frontend vercel.json sends them to the app): a link to one from a
 # public page says so and carries rel="nofollow", so neither a reader nor a crawler is led to a sign-in wall unawares (AS1)
@@ -2489,7 +2625,7 @@ def _top(sign_in: str | None = None) -> str:
     site = settings.PUBLIC_SITE_URL
     sign_in = sign_in or f"{site}/mine"
     # AS1: the site's public pages, the same on every page the server draws and in the app's public frame (PublicFrame.tsx
-    # PUBLIC_MENU): Home, the strategy library beside Companies (DK-008), Themes, Blog, Plans, About and Contact. Nothing in it
+    # PUBLIC_MENU): the strategy library beside Companies (DK-008), Themes, Blog, Plans, About and Contact. Nothing in it
     # leads to a page that asks for sign-in; Sign in says so itself
     menu = "".join(f'<a href="{h}">{t}</a>' for h, t in PUBLIC_MENU)
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
@@ -2533,6 +2669,18 @@ def _find_form(region: str | None, q: str = "") -> str:
             '<button class="btn" type="submit">Find</button></form>')
 
 
+# a filing's legal endings as a name in its own case writes them
+_ENDINGS = {"INC": "Inc", "CORP": "Corp", "CO": "Co", "LTD": "Ltd", "PLC": "plc", "HOLDINGS": "Holdings", "GROUP": "Group", "COMPANY": "Company",
+            "CORPORATION": "Corporation", "INCORPORATED": "Incorporated", "LIMITED": "Limited"}
+# three-letter words a company name spells as a word, not as letters
+_WORDS3 = {"THE", "AND", "FOR", "OIL", "GAS", "NEW", "ONE", "TWO", "SUN", "AIR", "ALL", "BIG", "BOX", "CAR", "TOP", "WEB", "NET", "ART", "BAY",
+           "SEA", "SKY", "RED", "OAK", "ICE", "HUB", "KEY", "LAB", "MAN", "MAX", "PAY", "PET", "POP", "RAY", "RUN", "SEE", "SIX", "TEN", "TEX",
+           "TIN", "WAY", "WIN", "ZOO", "AGE", "BIO", "CAN", "CAP", "DOT", "EYE", "FIT", "FOX", "FUN", "GEO", "GOLD", "HOT", "JET", "LAW", "LOW",
+           "MED", "MIX", "NOW", "OPT", "OUR", "OWN", "PRO", "SAN", "SOL", "TEA", "TOY", "USE", "VAN", "VET", "WAR", "WET", "YES", "ARM", "ACE",
+           "AMP", "ARC", "ASH", "AVE", "BEE", "BET", "BUS", "COM", "DAY", "DEN", "DIG", "DRY", "EGG", "ELF", "END", "ERA", "FAN", "FAR", "FEW",
+           "GEM", "GUY", "HAT", "HIT", "INK", "INN", "ION", "JOY", "LEE", "LEG", "LID", "LOT", "MAP", "MET", "NUT", "ODD", "OLD", "ORE", "PAN",
+           "PEN", "PIE", "PIN", "RIM", "ROW", "RUB", "SAT", "SET", "SON", "TAP", "TIE", "TIP", "TOW", "TUB", "URN", "VIA", "WAX", "ZEN", "ACT",
+           "ADD", "ANT", "ASK", "ILL", "OFF", "SPA", "TRY", "FLY", "FRY", "SHY", "STY", "DRY", "CRY", "SLY", "SPY", "PLY", "GYM", "MRS", "INT"}
 _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "US", "UK", "LLC", "LP", "NV", "SA", "AG", "SE", "ETF",
                "REIT", "ADR", "II", "III", "IV", "NVIDIA", "ASML", "HSBC", "UBS", "BHP", "SAP", "TSMC", "KLA", "CSX", "AT&T"}
 # words title case gets wrong, as the companies write them
@@ -2552,7 +2700,20 @@ def proper_name(name: str | None) -> str | None:
     dropped. A capitals name with a mixed-case ending ("ELI LILLY & Co") counts as capitals."""
     if name:
         name = strip_registration(name) or name
+        # an index list's "Home Depot (The)" is "The Home Depot"
+        name = re.sub(r"^(.+?),?\s*\(The\)$", r"The \1", name.strip(), flags=re.I)
     core = re.sub(r"\s+(?:Co|Inc|Corp|Ltd)\.?$", "", name or "")
+    if name and core != core.upper() and re.search(r"[a-z]", core):
+        # a name in its own case with the filing's legal ending in capitals ("TransDigm Group INC", "TFS Financial CORP") or a joining
+        # word in title case ("Bank Of Montreal"): only those words change (rel1, LIVE9A-011)
+        words = name.split(" ")
+        for i, w in enumerate(words):
+            bare = re.sub(r"[^A-Za-z]", "", w)
+            if bare in _ENDINGS and (i == len(words) - 1 or i >= len(words) - 2):
+                words[i] = w.replace(bare, _ENDINGS[bare])
+            elif i and bare in ("Of", "And", "The", "For") and w == bare:
+                words[i] = w.lower()
+        return " ".join(words)
     if not name or core != core.upper() or not re.search(r"[A-Z]{2}", core):
         return name
 
@@ -2564,6 +2725,10 @@ def proper_name(name: str | None) -> str | None:
             return w[:1] + w[1:].lower()
         if core in _KEEP_UPPER or (len(core) <= 4 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w):
             return w
+        if len(core) == 3 and core.isalpha() and core not in _WORDS3 and re.search(r"[^AEIOUY]{2}", core):
+            return w                                  # three letters with two consonants together that aren't a word are letters: "UFJ", "GSI" (rel1, LIVE9A-011)
+        if core in ("OF", "AND", "THE", "FOR") and w != name.split(" ")[0]:
+            return w.lower()
         return "-".join(x[:1] + x[1:].lower() for x in w.split("-"))
     return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 
@@ -2703,7 +2868,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     deep = app + "/deep"
     test = f"{site}/new?market={market}&symbol={quote(symbol, safe='')}"
     country = "US" if region == "US" else "India"
-    title = f"{name} ({symbol}) share price, financials and filings · StratLab"
+    title = page_title(f"{name} ({symbol}) share price, financials and filings")
     if not f:
         desc = f"{name} ({symbol}), listed in {country}. Test a trading idea on it or read its numbers on StratLab."
         body = f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
@@ -2719,7 +2884,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
               {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
                   {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
                   {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
-    ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
+    ind = " · ".join(sector_first(region, symbol, shown_industry(f.get("industry"), plain=region == "US")))
     notes = _notes(f)
     # PUB-2: the name, one quiet line, the price; then the chart; then the key figures; the explanations come last
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
@@ -2800,7 +2965,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     if owners is not None:
         # the table's profit includes minority shareholders' share of subsidiaries, which P/E leaves out: both are shown,
         # each named, so the profit line and the P/E agree (DK-021: RELIANCE's 88,167 beside a P/E on 74,727)
-        out += [(f"Profit to shareholders, last 12 months ({unit})", _amount(f, owners, digits)),
+        out += [(f"Profit to shareholders, last 12 months ({unit})", "about " + _amount(f, about(owners), digits)),
                 (f"Net profit incl. minority interests, last 12 months ({unit})", _amount(f, ttm, digits))]
     else:
         out.append((f"Net profit, last 12 months ({unit})", _amount(f, ttm, digits)))
@@ -2869,7 +3034,7 @@ def _tiles(f: dict) -> list[dict]:
             if f.get("basis") == "consolidated":
                 line += ", consolidated"           # LIVE2-016: the basis is on the tile, as the sites people compare with differ on it
         elif label.startswith("Profit to shareholders"):
-            short, line, val = "Profit, last 12 months", "to shareholders", _short_amount(unit, val)
+            short, line, val = "Profit, last 12 months", "to shareholders", ("about " if val.startswith("about ") else "") + _short_amount(unit, val.removeprefix("about "))
         elif label.startswith("Net profit incl."):
             short, line, val = "Profit incl. minorities", "last 12 months", _short_amount(unit, val)
         elif label.startswith("Net profit"):
@@ -2938,6 +3103,16 @@ def pe_profit_gap(f: dict):
         return None
     implied = cap / profit
     return (pe, implied, profit) if abs(implied - pe) > 0.1 * pe else None
+
+
+def about(v: float | None) -> float | None:
+    """A figure worked out from a ratio given to one decimal, to three significant figures: market cap over a P/E of 22.2
+    can be a quarter of a percent off the profit itself (CX2: a company's ₹82,011 cr here beside ₹82,228 cr in its deep dive)."""
+    if v is None or v == 0:
+        return v
+    from math import floor, log10
+    step = 10 ** (floor(log10(abs(v))) - 2)
+    return round(v / step) * step
 
 
 def owners_profit(f: dict):
@@ -3021,7 +3196,8 @@ def _notes(f: dict) -> list[str]:
     if gap:
         pe, implied, profit = gap
         out.append(f'<p class="note" data-pe-basis>P/E {pe:,.1f} is the close over earnings per share, the profit that belongs to the '
-                   f'company\'s shareholders (market cap divided by P/E: {_amount(f, owners_profit(f))} crore for the last 12 months, shown above). '
+                   f'company\'s shareholders (market cap divided by P/E: about {_amount(f, about(owners_profit(f)))} crore for the last 12 months, shown above; '
+                   'about, as the P/E it is worked out from is given to one decimal). '
                    f'The net profit including the share owned by minority shareholders of subsidiaries is {_amount(f, profit)} crore; '
                    f'market cap divided by that gives {implied:,.1f}. '
                    "The last 12 months are the four latest reported quarters, so their profit can differ from the newest year's in "
@@ -3379,7 +3555,7 @@ def not_found(region: str | None, symbol: str) -> str:
     if kind:
         return _not_company_page(region, s, kind)
     site = settings.PUBLIC_SITE_URL
-    title = "Company not found · StratLab"
+    title = page_title("Company not found")
     body = (f"<h1>No company page for {e(s)}</h1>" + (other_market(region, s) or "")
             + '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region, s))
     return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), None, body)
@@ -3396,7 +3572,7 @@ def busy_page(region: str | None, symbol: str, name: str | None = None) -> str:
     s = (symbol or "")[:40].upper()
     who = f"{e(name)} ({e(s)})" if name else e(s)
     path = f"/stocks/{(region or 'IN').lower()}/{quote(s, safe='')}"
-    head = _head(f"{s}: being prepared · StratLab", "This company's page is being prepared.", site + path,
+    head = _head(page_title(f"{s}: being prepared"), "This company's page is being prepared.", site + path,
                  extra=f'<meta http-equiv="refresh" content="{BUSY_REFRESH}">', robots="noindex,follow")
     body = (f"<h1>{who}: this page is being prepared</h1>"
             f'<p class="muted">StratLab is gathering this company\'s reported numbers and prices. The page loads by itself '
@@ -3411,7 +3587,7 @@ def _not_company_page(region: str | None, symbol: str, kind: str) -> str:
     s = symbol.upper()
     market = "US" if region == "US" else "IN"
     app = f"{site}/research/{market}/{quote(s, safe='')}"
-    title = f"{s} is {kind} · StratLab"
+    title = page_title(f"{s} is {kind}")
     body = (f"<h1>{e(s)} is {e(kind)}</h1>"
             f'<p>Public pages here cover listed companies, with their reported results. {e(s)} isn\'t a company, so it '
             f"has no page of its own. Inside StratLab you can chart it and test a trading idea on its prices.</p>"
@@ -3464,7 +3640,7 @@ def index_page(region: str | None, q: str = "") -> str:
                 body.append(f"<h2>{head}</h2>{cap}{_links(r.lower(), big)}")
             body.append(az_nav(r))                    # SEO-1: every company a click or two from here
     canonical = site + (f"/stocks/{region.lower()}" if region else "/stocks")
-    return _page(_head({"IN": "Company pages: India · StratLab", "US": "Company pages: US · StratLab"}.get(region or "", "Company pages: India and US · StratLab"),
+    return _page(_head({"IN": page_title("Company pages: India"), "US": page_title("Company pages: US")}.get(region or "", page_title("Company pages: India and US")),
                        f"Find any company listed in {where.replace(' (NSE and BSE)', '').replace('India and the US', 'India or the US')}: price, results, "
                        "margins, debt and filings, from reported data.", canonical, ld, robots="noindex,follow" if q else "index,follow"),
                  None, "".join(body))
@@ -3667,7 +3843,7 @@ def letter_page(region: str, letter: str, page: int = 1) -> str | None:
     pages = pages_of(n)
     of = f", page {page} of {pages}" if pages > 1 else ""
     what = "starting with a digit or a symbol" if letter == OTHER else f"starting with {letter}"
-    title = f"{where} listed companies {what}{of} · StratLab"
+    title = page_title(f"{where} listed companies {what}{of}")
     desc = (f"{n:,} companies listed in {place} {what}{of}, {_span_text(region, syms)}. Each links to its price, "
             "results and filings.")
     if len(desc) > DESCRIPTION_MAX:
@@ -3711,7 +3887,7 @@ def index_page_of_list(region: str, slug: str, page: int = 1) -> str | None:
     of = f", page {page} of {pages}" if pages > 1 else ""
     when = f" The list is as of {as_of}." if as_of else ""
     shown = syms[(page - 1) * DIR_PAGE:page * DIR_PAGE]
-    title = f"{name} companies: all {len(syms):,} members{of} · StratLab"
+    title = page_title(f"{name} companies: all {len(syms):,} members{of}")
     desc = f"The {len(syms):,} companies in the {name} that have a StratLab page{of}, A to Z, each with its price, results and filings."
     canonical = site + index_path(region, slug, page)
     crumbs, ld = _crumbs([("Companies", "/stocks"), (where, f"/stocks/{region.lower()}"), (name, index_path(region, slug, page))])
@@ -3729,7 +3905,7 @@ def dir_not_found(region: str | None) -> str:
     site = settings.PUBLIC_SITE_URL
     body = ('<h1>No such list</h1><p class="muted">There is no list of companies at this address. Find the company by its name, '
             f'or <a href="/stocks{"/" + region.lower() if region else ""}">browse the companies</a>.</p>' + _find_form(region))
-    return _page(_head("List not found · StratLab", "No such list of companies.", site + "/stocks", robots="noindex,follow"), None, body)
+    return _page(_head(page_title("List not found"), "No such list of companies.", site + "/stocks", robots="noindex,follow"), None, body)
 
 
 def indexes_of(region: str, symbol: str) -> list[tuple[str, str]]:

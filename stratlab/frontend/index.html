@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>StratLab: backtest trading ideas, research stocks, track money</title>
+<title>StratLab</title>
 <meta name="description" content="Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.">
 <meta name="robots" content="index, follow">
 <meta name="google-adsense-account" content="ca-pub-8125241692814953">
@@ -19,9 +19,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="StratLab">
-<meta property="og:title" content="StratLab: backtest trading ideas, research stocks, track money">
+<meta property="og:title" content="StratLab">
 <meta property="og:description" content="Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.">
-<meta name="twitter:title" content="StratLab: backtest trading ideas, research stocks, track money">
+<meta name="twitter:title" content="StratLab">
 <meta name="twitter:description" content="Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.">
 <meta property="og:url" content="https://stratlab.studio/">
 <meta property="og:image" content="https://stratlab.studio/og-image.png">
@@ -39,8 +39,26 @@
 :root[data-theme="dark"] { --b-paper: #141311; --b-card: #1F1D1A; --b-ink: #EFE9DC; --b-muted: #B3AC9C; --b-line: #34312A; --b-on-ink: #141311; color-scheme: dark; }
 html, body { margin: 0; background: var(--b-paper); }
 .boot-head { max-width: 720px; margin: 0 auto; padding: 14px 16px; font: 600 18px/1 system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-wrap: wrap; align-items: center; column-gap: 20px; }
+/* LIVE13B-001: the home page while its code downloads is the landing's own header and hero (scripts/seoPages.mjs heroFrame), drawn
+ * with the app's stylesheet, which the head links before the page draws: the same classes, so the same column, wrap and place, and
+ * nothing moves when the app draws. Its lede and buttons are for a browser that runs scripts; the page's own paragraphs and links are
+ * for one that doesn't (and for crawlers, which read every word). Only on the home address: another address served this file (a
+ * visitor's /trade, before its sign-in panel) shows the header and the heading, not the landing's lede and buttons (boot.js sets data-home). */
+.boot-demo { display: none; }
+@media (scripting: none) { .boot-hero .boot-js { display: none; } }
+@media (scripting: enabled) {
+  .boot-hero .boot-text, .boot-hero ul.boot-links.boot-text { display: none; }
+  html:not([data-home]) .boot-hero .boot-js, html:not([data-home]) .boot-demo { display: none; }
+  /* the example card beside the heading on a wide screen, its usual height held, so the heading sits where the card centres it */
+  @media (min-width: 1001px) { .boot-demo { display: block; min-height: 689px; } }
+}
+/* scripts off: the page's links as one row of buttons under the words */
+.boot-hero ul.boot-links { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.boot-hero ul.boot-links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border: 1px solid var(--line-2, currentColor); border-radius: 10px; color: inherit; text-decoration: none; font-weight: 600; }
+.boot-hero .boot-foot { color: var(--muted, inherit); }
+.boot-hero .boot-foot a { color: inherit; }
 /* the site's public pages, for a reader or a crawler that runs no script (AS1): the same list as the pages the server draws */
-.boot-nav { display: flex; flex-wrap: wrap; column-gap: 14px; font: 500 15px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.boot-head .boot-nav { display: flex; flex-wrap: wrap; column-gap: 14px; font: 500 15px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .boot-head .boot-nav a { gap: 0; color: var(--b-muted); }
 .boot-head a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--b-ink); text-decoration: none; }
 .boot-head img { width: 28px; height: 28px; }
@@ -52,6 +70,8 @@ html, body { margin: 0; background: var(--b-paper); }
 /* the notice itself (couldn't load, taking longer): a card on the paper with the logo, the way the app's own messages look */
 .boot.boot-now { box-sizing: border-box; max-width: min(520px, calc(100% - 32px)); margin: 18vh auto 0; padding: 24px; background: var(--b-card); border: 1px solid var(--b-line); border-radius: 14px; }
 .boot.boot-now.boot-above { margin-top: 16px; }
+/* scripts off: why nothing works, said first, above the page's words (LIVE13B-002: it came last, after six paragraphs) */
+.boot[data-js-off] { box-sizing: border-box; max-width: min(720px, calc(100% - 32px)); margin: 16px auto; padding: 16px 20px; gap: 8px; background: var(--b-card); border: 1px solid var(--b-line); border-radius: 14px; }
 .boot-now .boot-brand { display: inline-flex; align-items: center; gap: 10px; font: 600 17px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--b-muted); }
 .boot-now .boot-brand img { width: 24px; height: 24px; }
 .boot-now p { color: var(--b-muted); }
@@ -76,23 +96,23 @@ html[data-saved] [data-boot]::before { content: "Opening StratLab…"; font: 600
 <script src="/config.js"></script>
 </head>
 <body>
-<div id="root">
-<header class="boot-head"><a href="/" aria-label="StratLab home"><img src="/favicon.svg" alt="" width="28" height="28"><span>StratLab</span></a><nav class="boot-nav" aria-label="Site"><a href="/library">Library</a><a href="/stocks">Companies</a><a href="/themes">Themes</a><a href="/blog">Blog</a><a href="/pricing">Plans</a><a href="/about">About</a><a href="/contact">Contact</a></nav></header>
-<main>
-<div class="boot boot-wait" data-boot>
-<h1>Test it, research it, track it.</h1>
-<p>Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.</p>
-<p class="boot-foot"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a> · <a href="/about">About</a></p>
-</div>
-</main>
-</div>
 <noscript>
-<div class="boot" style="margin-top: 24px">
+<div class="boot" data-js-off>
 <p><b>StratLab needs JavaScript.</b></p>
 <p>StratLab runs in your browser, and JavaScript is turned off here. Turn it on for this site and reload to test ideas, research companies and track your money.</p>
 <p>Questions: <a href="mailto:support@stratlab.studio">support@stratlab.studio</a></p>
 </div>
 </noscript>
+<div id="root">
+<header class="boot-head"><a href="/" aria-label="StratLab home"><img src="/favicon.svg" alt="" width="28" height="28"><span>StratLab</span></a><nav class="boot-nav" aria-label="Site"><a href="/library">Library</a><a href="/stocks">Companies</a><a href="/themes">Themes</a><a href="/blog">Blog</a><a href="/pricing">Plans</a><a href="/about">About</a><a href="/contact">Contact</a></nav></header>
+<main>
+<div class="boot boot-wait boot-hero" data-boot>
+<h1>Is your trading idea skill or luck?</h1>
+<p>Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.</p>
+<p class="boot-foot"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a> · <a href="/about">About</a></p>
+</div>
+</main>
+</div>
 <script type="module" src="/src/entry.tsx"></script>
 </body>
 </html>

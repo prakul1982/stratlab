@@ -179,7 +179,9 @@ test("LIVE1C-060: the calendar keeps its two level columns (the layout checker f
 
 test("LIVE1C-070: the VIX tile says it is slow after a few seconds instead of a grey bar that never ends", () => {
   const src = read("src/pages/SpaceHomes.tsx");
-  assert.match(src, /window\.setTimeout\(\(\) => setVix\(\(v\) => \(v === null \? "slow" : v\)\), 6000\)/);
+  // (updated on purpose, LIVE13B-012: it says "reading…" at 2.5 s, then that it is taking longer at 6 s)
+  assert.match(src, /window\.setTimeout\(\(\) => setVix\(\(v\) => \(v === null \|\| v === "reading" \? "slow" : v\)\), 6000\)/);
+  assert.match(src, /window\.setTimeout\(\(\) => setVix\(\(v\) => \(v === null \? "reading" : v\)\), 2500\)/);
   assert.match(src, /"taking longer than usual"/);
 });
 

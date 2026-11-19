@@ -114,7 +114,8 @@ export function CorpActionsPage() {
     { key: "yld", header: "Yield of this payment", numeric: true, info: "A dividend's amount over the price now (the last close when no live price is in): what this one payment is, as a share of the price. It is not the year's dividend yield. Only dividends have one.", cell: (r) => {
       const x = quotes[r.symbol]?.price ?? r.last;
       const y = r.kind === "dividend" && r.amount && x ? (r.amount / x) * 100 : null;
-      return y == null ? <span className="k-muted">–</span> : <>{pctPlain(y, 2)}</>;
+      // a payment under 0.005% of the price is "<0.01%", not a yield of "0.00%" (LIVE10B-045: MRF's ₹3 on ₹1,28,750)
+      return y == null ? <span className="k-muted">–</span> : <>{y > 0 && y < 0.005 ? "<0.01%" : pctPlain(y, 2)}</>;
     } },
     { key: "cap", header: "Market value", numeric: true, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
   ];
@@ -132,7 +133,7 @@ export function CorpActionsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfLabel="Updated" asOfTz={marketTz(region)}
+      <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfPending={!data && !error} asOfLabel="Updated" asOfTz={marketTz(region)}
         lede={region === "IN"
           ? "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, as companies announced them to the exchange."
           : "Dividends and splits of the S&P 500 and the US companies you follow, by ex-date: dividends companies have declared for the next four weeks, and those that have gone ex."}
@@ -153,6 +154,8 @@ export function CorpActionsPage() {
               {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder={region === "IN" ? "Like TCS or Infosys" : "Like AAPL or Apple"} />}
             </Field>
           )}
+          {/* the alerts line's place is held until the calendar arrives: it no longer drops the filters card's foot by a line (LIVE9B-013: 0.50) */}
+          {!data && !error && <span className="k-meta-wait" aria-hidden="true"><CheckField checked={false} onChange={() => undefined} label="Message me when my stocks announce a corporate action, and the evening before an ex-date" /></span>}
           {data && (
             <CheckField checked={data.alerts} onChange={toggleAlerts}
               label={<>Message me when my stocks announce a corporate action, and the evening before an ex-date

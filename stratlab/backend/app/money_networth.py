@@ -778,6 +778,15 @@ def data_day(rows: list[dict], at: date) -> date:
     return min(max(days), at, cap) if days else cap
 
 
+def _short_day(iso: str) -> str:
+    """"16 Nov" for 2026-11-16."""
+    try:
+        d = date.fromisoformat(str(iso)[:10])
+    except ValueError:
+        return str(iso)
+    return f"{d.day} {d:%b}"
+
+
 def rate_day(at: str | None, now: datetime | None = None) -> str:
     """" (the rate of 9 Oct 2026)" for a dollar rate read more than a day ago (an old rate kept while a day's read
     failed), else ""."""
@@ -881,6 +890,7 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),
                        "as_of": mf.get("as_of"), "basis": "market price", "rule": "From your mutual fund statement, at the latest NAV"
+                       + (f" (NAVs of {_short_day(mf['as_of_from'])} to {_short_day(mf['as_of'])}, as the Mutual funds page says)" if mf.get("as_of_from") and mf.get("as_of") else "")
                        + (f"; {mf['stmt_nav']} {'fund' if mf['stmt_nav'] == 1 else 'funds'} at the statement's NAV" if mf.get("stmt_nav") else "")
                        + (f"; {mf['at_cost']} {'fund' if mf['at_cost'] == 1 else 'funds'} without a NAV at cost" if mf.get("at_cost") else ""),
                        "facts": {}, "linked": mf.get("link")})
@@ -1003,7 +1013,8 @@ def mf_value(uid: str) -> dict:
     if isinstance(got, dict):
         v = got.get("value")
         return {"value": float(v) if isinstance(v, (int, float)) and math.isfinite(v) else 0, "as_of": got.get("as_of"),
-                "link": got.get("link") or "/money/mutual-funds", "at_cost": got.get("at_cost") or 0, "stmt_nav": got.get("stmt_nav") or 0, "missing": got.get("missing") or 0}
+                "link": got.get("link") or "/money/mutual-funds", "at_cost": got.get("at_cost") or 0, "stmt_nav": got.get("stmt_nav") or 0, "missing": got.get("missing") or 0,
+                **({"as_of_from": got["as_of_from"]} if got.get("as_of_from") else {})}
     return {"value": float(got) if isinstance(got, (int, float)) and math.isfinite(got) else 0, "as_of": None, "link": "/money/mutual-funds"}
 
 

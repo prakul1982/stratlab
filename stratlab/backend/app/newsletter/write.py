@@ -73,6 +73,47 @@ def _pct(x) -> str:
     return "" if x is None else kit.pct(x)          # +0.62%, −0.34% (a real minus, as in the tiles)
 
 
+_FIRST_SENTENCE = re.compile(r"^\s*(.*?)\.(?:\s+|$)", re.S)
+_SPAN_TAIL = re.compile(r"\s+(?:today|over the week|on [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2})$")
+_MOVE = re.compile(r"^(.+?) ([+\u2212-]\d[\d,]*(?:\.\d+)?%)$")
+
+
+def other_fact(sections: list[dict] | None) -> str | None:
+    """LIVE13A-016: a brief's first fact beyond its index moves, from its own sections: how many sectors moved quadrant, how many stocks newly
+    matched a scan, else its first headline. None when it has nothing else."""
+    by = {str(x.get("title") or ""): x.get("items") or [] for x in sections or [] if isinstance(x, dict)}
+    rot = len(by.get("Sector rotation") or [])
+    if rot:
+        return f"{rot} sector{'s' if rot != 1 else ''} moved to another quadrant on the rotation chart."
+    for title, items in by.items():
+        if title.startswith(("Newly matched Stage 2", "Newly in Stage 2")) and items:
+            group = re.search(r"\(([^)]+)\)\s*$", title)
+            rule = "the Stage 2 + Supertrend rule" if title.startswith("Newly matched") else "Stage 2"
+            return f"{len(items)} stock{'s' if len(items) != 1 else ''}{f' from the {group.group(1)}' if group else ''} newly matched {rule}."
+    heads = [str(i.get("text") or "").strip() for i in by.get("Headlines") or [] if isinstance(i, dict) and str(i.get("text") or "").strip()]
+    return f"In the headlines: {heads[0].rstrip('.')}." if heads else None
+
+
+def without_moves(text: str | None, indices: list[dict] | None, sections: list[dict] | None = None) -> str | None:
+    """The summary without its opening sentence of index moves ("NIFTY 50 +0.38%; SENSEX +0.31%; NIFTY BANK −0.12% today.") when
+    every move it names is the brief's own, as its Indices table and title already show them (LIVE11B-015: one figure four times on
+    one screen: the list's title, its preview, the brief's first line and the table). Anything else in that sentence keeps it."""
+    if not text:
+        return text
+    m = _FIRST_SENTENCE.match(text)
+    moves = {str(i.get("name")): _pct(i.get("change_pct")) for i in indices or [] if isinstance(i, dict) and i.get("change_pct") is not None}
+    if not m or not moves:
+        return text
+    parts = [p.strip() for p in re.split(r";\s*|,\s*(?:and\s+)?|\s+and\s+", _SPAN_TAIL.sub("", m.group(1).strip()))]
+    for p in parts:
+        got = _MOVE.match(p)
+        if not got or moves.get(got.group(1)) != got.group(2).replace("-", "\u2212"):
+            return text
+    # a summary that is only the moves keeps them: the list's line is never empty under one day while every other day has one (LIVE12B-025);
+    # LIVE13A-016: with the brief's sections at hand, its next fact instead, so the line adds something to the title
+    return text[m.end():].strip() or other_fact(sections) or text
+
+
 def _num(x) -> str:
     return "" if x is None else kit.num(x)          # 1,23,456.75: Indian digit grouping
 

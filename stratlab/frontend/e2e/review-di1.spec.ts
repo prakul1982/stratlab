@@ -142,13 +142,14 @@ test("DI-014, DI-022: Help is in the account menu and lists the explanations; Se
 
 test("DI-005, DI-006: My space keeps the chosen order, and the layout is kept on the account", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
-  // its own account for each project and repeat (the order is kept on the account: a repeat on the same one, or a second run
-  // against a server left running, started with Markets already moved and its "Move up" button off)
-  const n = (info.repeatEachIndex % 12) * 2 + (phone ? 1 : 0);
-  const u: Who = { token: `di1-${n}`, id: `u-di1-${n}`, email: `di1${n}@example.com` };
+  // its own account per project and repeat, starting from the default layout: the order this test saves is kept on the account, so a
+  // second run against a server kept running (a local run) or a repeat beside it started from Markets already moved up, and the
+  // second "Move Markets up" found the button disabled at the top (ops49: 2 of 3 local runs failed, CI passed on a fresh server)
+  const i = 2 * Math.min(info.repeatEachIndex, 19) + (phone ? 1 : 0);
+  const u = { token: `ops49-${i}`, id: `u-ops49-${i}`, email: `ops49${i}@example.com` };
   await answer(request, u, "money");
-  // and from the default order, whatever an earlier run left on it
-  await request.put(`${API}/me/prefs`, { headers: auth(u), data: { mine: { order: ["networth", "pnl", "paper", "markets", "coming", "watch", "saved"], hidden: [] } } });
+  expect((await request.put(`${API}/me/prefs`, { headers: auth(u), data: { mine: { order: [], hidden: [] } } })).ok()).toBe(true);
+  expect((await prefs(request, u)).mine?.order ?? []).toEqual([]);
   const errors = await signIn(page, u, "/mine");
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Customise", exact: true }).click();
@@ -179,8 +180,12 @@ test("DI-023: on a phone the tour opens the menu for the steps about it, and clo
   await answer(request, u, "money", "money");
   const errors = await signIn(page, u, "/money");
   await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent("stratlab:tour", { detail: { tour: "mine" } })));
   const tour = page.getByRole("dialog", { name: "Tour: Getting around" });
+  // R73: asked again until the tour shows (as e2e/intro.spec.ts's openTour): a page still drawing its first frame may not be listening yet
+  await expect(async () => {
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("stratlab:tour", { detail: { tour: "mine" } })));
+    await expect(tour).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 30_000 });
   await expect(tour).toContainText("My space is yours", { timeout: 30_000 });
   await expect(page).toHaveURL(/\/mine$/);
   await tour.getByRole("button", { name: "Next" }).click();

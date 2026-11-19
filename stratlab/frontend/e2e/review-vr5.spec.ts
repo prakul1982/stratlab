@@ -89,7 +89,9 @@ test("VR5-004: a long chip or badge wraps at 360px instead of pushing the page s
 
 test("VR5-011: the Free column's trial note in the plan table stays two lines at 390px", async ({ page }) => {
   await open(page, "/plans", ADMIN, 390);
-  // (R11: the comparison tables are open under the cards)
+  // (R11: the comparison tables are open under the cards; updated on purpose (nav3): the row is in the full comparison, one fold below
+  // the 12 rows at a glance)
+  await page.locator("#compare summary", { hasText: "The full comparison, row by row" }).click();
   const row = page.getByRole("row", { name: /Paper trading sessions at a time/ });
   await expect(row).toContainText("1 (5-market-day trial)", { timeout: 30_000 });
   const h = await row.locator(".k-sub-line").first().evaluate((e) => e.getBoundingClientRect().height);
@@ -106,7 +108,8 @@ test("VR5-013: the cookie question takes under a quarter of a 360x800 phone scre
   await expect(ask).toBeVisible({ timeout: 30_000 });
   const box = await ask.boundingBox();
   expect(box!.height, "the question's height").toBeLessThan(200);
-  const w = await ask.getByRole("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
+  // (updated on purpose, R75: the card's own "Not now" close button is not one of the two answers)
+  const w = await ask.locator(".consent-btns").getByRole("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
   expect(new Set(w).size, `answer widths ${w}`).toBe(1);
 });
 
@@ -174,4 +177,24 @@ test("VR5-owner-1: a list of six or fewer has no See all", async ({ page, reques
   } finally {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: before.items ?? [] } });
   }
+});
+
+// Owner (18 Nov, "what ui is this"): on a laptop Holdings' four totals are one row across the card (each amount under its heading,
+// its change under it), not a half-width table of four rows with an empty half beside it
+test("Holdings' totals on a laptop are one row across the card, nothing empty beside them", async ({ page }) => {
+  await open(page, "/holdings", ADMIN, 1280);
+  const totals = page.locator("#h-summary").getByRole("table", { name: "Where your stocks stand" });
+  await expect(totals).toBeVisible({ timeout: 30_000 });
+  await expect(totals.locator("tbody tr")).toHaveCount(1);
+  await expect(totals.locator("thead th")).toHaveText([/Current value/, /Invested/, /Unrealised P&L/, /Today|Last session|session/i]);
+  const [t, c] = await Promise.all([totals.boundingBox(), page.locator("#h-summary").boundingBox()]);
+  expect(t!.width / c!.width, "the totals fill the card's width").toBeGreaterThan(0.85);
+  // owner: each total, its heading and its change centred in its column
+  const off = await totals.evaluate((tb) => [...tb.querySelectorAll("tbody td")].map((td, i) => {
+    const th = tb.querySelectorAll("thead th")[i] as HTMLElement; const c = (e: Element) => { const r = e.getBoundingClientRect(); return r.left + r.width / 2; };
+    const v = td.querySelector(".h-total")!; const head = document.createRange(); head.selectNodeContents(th);
+    return Math.max(Math.abs(c(v) - c(td)), Math.abs(c(head) - c(th)));
+  }));
+  expect(Math.max(...off), "a total or its heading off its column's centre").toBeLessThan(3);
+  await page.locator("#h-summary").screenshot({ path: "test-results/holdings-totals.png" });
 });

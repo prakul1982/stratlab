@@ -20,6 +20,10 @@
 	@slash path_regexp slash ^(.+)/$
 	redir @slash {re.slash.1} 308
 
+	# LIVE8A-013: /sitemap answered 404 (the sitemap is /sitemap.xml), and /index.html was a second copy of the home page
+	redir /sitemap /sitemap.xml 301
+	redir /index.html / 301
+
 	header -Server
 	# like Vercel: a header the API sets on its own pages (their own, stricter policy) is kept; these fill what it leaves out
 
@@ -53,9 +57,9 @@
 	header @bootjs Cache-Control "public, max-age=300, must-revalidate"
 	@sw path /sw.js
 	header @sw Cache-Control "no-cache"
-	@pages path_regexp pages ^/((index\.html)?|(mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|start|pricing|faq|terms|privacy|refunds|contact)(/.*)?)$
+	@pages path_regexp pages ^/((index\.html)?|(mine|all|home|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|start|pricing|faq|terms|privacy|refunds|contact)(/.*)?)$
 	header @pages Cache-Control "no-cache"
-	@noindex path_regexp noindex ^/(mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|verdict|calendar|v|c|r|embed)(/.*)?$
+	@noindex path_regexp noindex ^/(mine|all|home|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|verdict|calendar|v|c|r|embed)(/.*)?$
 	header @noindex X-Robots-Tag "noindex, follow"
 
 	# Vercel's default for a file without a cache header of its own
@@ -77,7 +81,7 @@
 		root * /srv
 		# the app's own routes are answered by index.html unless a pre-built page exists for them (vercel.json's /index.html rewrite)
 		@app {
-			path_regexp app ^/((mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar)(/.*)?|start|pricing|faq|terms|privacy|refunds|contact)$
+			path_regexp app ^/((mine|all|home|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar)(/.*)?|start|pricing|faq|terms|privacy|refunds|contact)$
 			not file {path} {path}/index.html
 		}
 		rewrite @app /index.html

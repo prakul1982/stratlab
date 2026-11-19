@@ -27,9 +27,14 @@ export function inrWithUsd(inr: number, rate: number, per?: "month" | "year"): s
   return inr > 0 ? `${own} (${aboutUsd(inr, rate)})` : own;
 }
 
-/** The one line under the plans on what the dollar figures are: "Every price is charged in rupees. The dollar figures beside them
- * are rounded, at ₹95.21 to the dollar (today's rate); a card from abroad is converted by its bank, which may add a fee." */
-export function usdNote(rate: number, fallback = false): string {
+/** The one line under the plans on what the dollar figures are: "Prices in ₹ are charged in rupees. The dollar figures beside them
+ * are rounded, at ₹95.21 to the dollar (today's rate); a card from abroad is converted by its bank, which may add a fee." With US
+ * prices of its own (`us`), they are named, so "about $21" beside ₹1,999 doesn't read as the $20 a US visitor sees (LIVE10B-001);
+ * and only the rupee prices are said to be charged in rupees, since dollar prices may be charged in dollars. */
+export function usdNote(rate: number, fallback = false, us?: { basic: number; pro: number } | null): string {
   const r = `₹${rate.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-  return `Every price is charged in rupees. The dollar figures beside them are rounded, at ${fallback ? `about ${r}` : r} to the dollar${fallback ? "" : " (today's rate)"}; a card from abroad is converted by its bank, which may add a fee.`;
+  const usd = (v: number) => `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  // with US prices of its own, the cards show those beside the rupees (LIVE11B); the rate is for the other dollar figures (a year's saving)
+  if (us) return `Prices in ₹ are charged in rupees. The US price beside each is StratLab's own price in dollars (Basic ${usd(us.basic)} and Pro ${usd(us.pro)} a month); other dollar figures are rounded, at ${fallback ? `about ${r}` : r} to the dollar${fallback ? "" : " (today's rate)"}; a card from abroad is converted by its bank, which may add a fee.`;
+  return `Prices in ₹ are charged in rupees. The dollar figures beside them are rounded, at ${fallback ? `about ${r}` : r} to the dollar${fallback ? "" : " (today's rate)"}; a card from abroad is converted by its bank, which may add a fee.`;
 }

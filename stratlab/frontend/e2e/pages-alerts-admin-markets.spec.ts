@@ -303,8 +303,17 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await expect(today.locator(".k-delta").first()).toContainText(/[▲▼]/);
   const charts = page.getByTestId("breadth-charts");
   await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
-  for (const name of ["Above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
-    "Sectors: share above the 50-day average", "Breadth thrust measure", "TRIN"]) await expect(charts.getByRole("heading", { name })).toBeVisible();
+  // (updated on purpose, Release 66 LIVE10A-027: on a phone the later measures, the sectors table and the last 20 days fold under their
+  // headings, so the page is 6,572 px, not 17,486; opened here, the same charts and tables are all there)
+  if (info.project.name === "phone") {
+    for (const id of ["breadth-more", "breadth-sectors-fold", "breadth-recent-fold"]) {
+      const btn = page.getByTestId(id).locator(".k-foldcard-btn").first();
+      if ((await btn.getAttribute("aria-expanded")) !== "true") await btn.click();
+    }
+  }
+  for (const name of ["Share above averages" /* (updated on purpose, LIVE9A-016) */, "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
+    // (a phone's sectors fold is titled on one line: "Sectors above the 50-day average", with its count)
+    info.project.name === "phone" ? /^Sectors above the 50-day average/ : "Sectors: share above the 50-day average", "Breadth thrust measure", "TRIN"]) await expect(charts.getByRole("heading", { name })).toBeVisible();
   // the index is its own small chart: no chart has a second scale
   await expect(charts.getByRole("heading", { name: /^NIFTY 500/ })).toBeVisible();
   expect(await charts.locator("svg[role=img]").count()).toBeGreaterThanOrEqual(9);

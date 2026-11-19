@@ -182,11 +182,12 @@ test("a signed-in visitor of a shared library page sees 'Open StratLab', not a s
   mem.set("sb-abc-auth-token", "{}");
   assert.equal(signedInHere(), true);
   const frame = read("src/components/PublicFrame.tsx");
-  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void signIn\(\); \}\}>Sign in<\/a>\)\}/);
+  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void startSignIn\(\); \}\}>Sign in<\/a>\)\}/);   // (updated on purpose: owner 16 Nov, startSignIn is Google's sign-in as before unless email sign-in is on, then the sign-in page with both)
   assert.match(frame, /<a className=\{className\} href="\/">Open StratLab<\/a>/);            // a whole page load: the app starts, not the visitor's landing page
   const lib = read("src/pages/PublicLibrary.tsx");
   // (PUB-1: the header's button is the small one, like the landing page's, the card's the full-size one)
-  assert.match(lib, /signedInHere\(\) \? <OpenApp className=\{small \? "btn sm" : "btn"\} \/> : <button type="button" className=\{small \? "btn sm" : "btn"\} onClick=\{\(\) => void signIn\("\/library"\)\}/);
+  // (updated on purpose, R61 owner 17 Nov: with email sign-in on, the small header button is "Sign in" to the page with both ways in)
+  assert.match(lib, /signedInHere\(\) \? <OpenApp className=\{small \? "btn sm" : "btn"\} \/>\n\s*: small && emailSignInOn\(\) \? <button type="button" className="btn sm" onClick=\{\(\) => void startSignIn\("\/library"\)\}>Sign in<\/button>\n\s*: <><button type="button" className=\{small \? "btn sm" : "btn"\} onClick=\{\(\) => void signIn\("\/library"\)\}/);
   assert.equal([...lib.matchAll(/<GoogleCopy label="Continue with Google" small \/>/g)].length, 2);
   assert.equal([...lib.matchAll(/<GoogleCopy/g)].length, 3);                                   // the two headers and the "Test it yourself" card all go through it
 });

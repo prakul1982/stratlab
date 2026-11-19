@@ -18,7 +18,8 @@ const { libraryTitle, libraryDescription } = await import("../src/lib/libraryTex
 
 const template = read("index.html");
 const files = Object.fromEntries([...pageFiles(template), ...libraryFiles(template)]);
-const h1s = (html) => [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)].map((m) => m[1]);
+// (updated on purpose, LIVE13B-001: the home page's start-up h1 is the landing's own, its "skill" in <em>: the heading's words, tags left out)
+const h1s = (html) => [...html.matchAll(/<h1[^>]*>((?:[^<]|<\/?em>)*)<\/h1>/g)].map((m) => m[1].replace(/<\/?em>/g, ""));
 const ld = (html) => [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/gs)].flatMap((m) => JSON.parse(m[1]));
 
 test("a library strategy's tab title leads with the result, and its description names the universe once (R7V-006)", () => {

@@ -175,7 +175,7 @@ def broad_of(category: str, kind: str) -> tuple[str, str]:
     """(broad class, sub-category) for the allocation, from the official category."""
     c = category or ""
     m = re.match(r"\s*(.+?)\s*-\s*(.+)$", c)
-    head, sub = (m.group(1), m.group(2)) if m else (c, "")
+    head, sub = (m.group(1), m.group(2)) if m else (c, c.strip())
     sub = re.sub(r"(\S)-\s+(?=\S)", r"\1 ", sub)      # AMFI writes "ELSS- Tax Saver Fund": the stray hyphen is dropped (LIVE1B-064)
     h = head.lower()
     if h.startswith("equity"):
@@ -199,7 +199,9 @@ def broad_of(category: str, kind: str) -> tuple[str, str]:
         return "Debt", head
     if h in ("growth", "elss"):
         return "Equity", head
-    return {"equity": "Equity", "debt": "Debt", "hybrid": "Hybrid"}.get(kind, "Other"), ""
+    # a category with no " - " part (an older or shorter name): the category as published, so the allocation names it (LIVE13B-007: the
+    # Debt row's "Official categories" cell was blank)
+    return {"equity": "Equity", "debt": "Debt", "hybrid": "Hybrid"}.get(kind, "Other"), c.strip()
 
 
 def is_elss(category: str, name: str) -> bool:
@@ -948,7 +950,8 @@ def net_worth_value(uid: str) -> dict:
     no_nav = [r for r in held if r["value"] is None]
     value = sum(r["value"] for r in held if r["value"] is not None) + sum(r["invested"] or 0 for r in no_nav)
     dates = sorted(r["nav_date"] for r in held if r["value"] is not None and r.get("nav_date"))
-    return {"value": float(value), "as_of": dates[0] if dates else None,
+    # LIVE11B-008: the newest NAV date, as the funds page's "NAVs up to" says it; the oldest beside it when the schemes' dates differ
+    return {"value": float(value), "as_of": dates[-1] if dates else None, **({"as_of_from": dates[0]} if dates and dates[0] != dates[-1] else {}),
             "stmt_nav": sum(1 for r in held if r["value"] is not None and r.get("nav_source") == "statement"),
             "at_cost": sum(1 for r in no_nav if r["invested"] is not None),
             "missing": sum(1 for r in no_nav if r["invested"] is None)}

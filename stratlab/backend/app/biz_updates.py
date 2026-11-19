@@ -458,7 +458,8 @@ def clean_figures(d: dict, pages: list[str], filed: str, own: bool = True, produ
         basis = str(f.get("basis") or span).lower().strip()
         basis = "period end" if basis.startswith("period") or "end" in basis else "quarter" if basis.startswith("q") else \
             "month" if basis.startswith("m") else None
-        if not name or value is None or not quote or basis is None or re.search(r"year[- ]to[- ]date|\bytd\b|cumulative", name, re.I):
+        if not name or value is None or not quote or basis is None or re.search(r"year[- ]to[- ]date|\bytd\b|cumulative", name, re.I) \
+                or ONE_OFF.search(name):
             continue
         page = next((n for n, t in enumerate(pages, 1) if docs.quote_found(quote, t)), None)
         if page is None or not number_in(value, quote):
@@ -719,7 +720,30 @@ def fy_period(f: dict, period: str) -> str:
     return end if shift(period, -36) <= end <= period else period
 
 
+OTHER_COLUMN = 3.0                  # a stated year-ago figure this many times every own reading of the measure is another column's
 YOY_UP, YOY_DOWN = 75.0, -50.0      # a year-on-year change beyond these is shown only once the filing itself confirms the year-ago figure
+
+
+# a one-off disclosure, not a figure of the business month by month: an investment in, or a stake bought in, another company (LIVE9B-007:
+# APARINDS's "Total investment in Clean Max Rudra Private Limited ₹11.38 crore" as its latest business figure)
+ONE_OFF = re.compile(r"\binvestment\s+in\b|\binvested\s+in\b|\bstake\s+in\b|\bacquisition\s+of\b|\bshares?\s+(?:acquired|allotted)\b"
+                     r"|\b(?:private|pvt\.?)\s+(?:limited|ltd)\b", re.I)
+
+
+def to_date_prior(f: dict) -> float | None:
+    """The year-ago figure of a row laid out month, year to date, the month a year ago, year to date a year ago ("Power weeder 1004 6076
+    1001 4970"): the third number, when the reader kept the second (the year to date) or none (LIVE9B-004: VST's "On the year" was "–" on
+    every row, the year-to-date figure read as the year-ago month and then set aside as another column's). Rows of any other shape keep
+    the figure the reader kept."""
+    prior = f.get("prior")
+    nums = [n for n, _, _ in _plain_numbers(str(f.get("quote") or ""))]
+    if len(nums) != 4 or not isinstance(f.get("value"), (int, float)) or abs(nums[0] - f["value"]) > 1e-9:
+        return prior
+    month, to_date, ago, ago_to_date = nums
+    cumulative = to_date >= 1.5 * month > 0 and ago_to_date >= 1.5 * ago > 0
+    if cumulative and (prior is None or abs(prior - to_date) < 1e-9):
+        return ago
+    return prior
 
 
 def year_confirmed(value: float, prior: float | None, year_value: float) -> bool:
@@ -738,6 +762,8 @@ def series(reads: dict) -> list[dict]:
         if not p:
             continue
         for f in r.get("figures") or []:
+            if ONE_OFF.search(str(f.get("metric") or "")):
+                continue
             f = tidy_figure(as_read_now(r, f))
             k = metric_key(f["metric"], f.get("segment"), f["unit"], f["basis"])
             m = metrics.setdefault(k, {"key": k, "metric": f["metric"], "segment": f.get("segment"), "unit": f["unit"],
@@ -746,17 +772,31 @@ def series(reads: dict) -> list[dict]:
             m["own"] = f.get("own") is not False
             src = {"at": r["at"], "url": r["url"], "page": f.get("page"), "quote": f.get("quote"), "exchange": r.get("exchange") or "NSE"}
             fp = fy_period(f, p)
-            m["points"][fp] = {"period": fp, "value": f["value"], "filed_later": False, "source": src, "prior": f.get("prior")}
-            if f.get("prior") is not None:
+            prior = to_date_prior(f)
+            m["points"][fp] = {"period": fp, "value": f["value"], "filed_later": False, "source": src, "prior": prior}
+            if prior is not None:
                 py = shift(fp, -12)
                 if py not in m["points"] or m["points"][py]["filed_later"]:
-                    m["points"][py] = {"period": py, "value": f["prior"], "filed_later": True, "source": src}
+                    m["points"][py] = {"period": py, "value": prior, "filed_later": True, "source": src}
     newest = max((r for r in reads.values() if r.get("period") and r.get("figures")), key=lambda r: r.get("at") or "", default=None)
     if newest:
         order = [metric_key(g["metric"], g.get("segment"), g["unit"], g["basis"]) for g in (tidy_figure(as_read_now(newest, f)) for f in newest.get("figures") or [])]
+    # LIVE10B-040: a company that files month by month (two of its filings a month apart, whatever they hold) has no "previous
+    # quarter" for a figure some months leave out: VST's power weeder, read in Jun and Sep, was "+0.3% vs Jun 2026"
+    filed = sorted({r["period"] for r in reads.values() if r.get("period") and (r.get("span") or "month") == "month"})
+    monthly_filer = any(shift(a, 1) == b for a, b in zip(filed, filed[1:]))
     out = []
     for k, m in metrics.items():
         pts = sorted(m["points"].values(), key=lambda x: x["period"])
+        # a year-ago figure a filing states that is several times every reading of the measure's own is another column's (a
+        # year-to-date or cumulative figure copied as the year-ago month, LIVE8B-002: VST's "3519 33103 4664 32069" read 33,103
+        # as Oct 2025's and said "down 89.4%"; reads made before the reader knew the column wait for the job to read them again):
+        # it is neither drawn nor used for a change
+        own_values = [x["value"] for x in pts if not x["filed_later"] and isinstance(x["value"], (int, float)) and x["value"] > 0]
+        if own_values and "%" not in m["unit"]:
+            top = max(own_values)
+            pts = [x for x in pts if not (x["filed_later"] and isinstance(x["value"], (int, float)) and x["value"] > OTHER_COLUMN * top)]
+            m["points"] = {x["period"]: x for x in pts}
         last = [x for x in pts if not x["filed_later"]] or pts
         latest = last[-1]
         before = [x for x in pts if x["period"] < latest["period"]]
@@ -765,7 +805,7 @@ def series(reads: dict) -> list[dict]:
         # a figure filed month by month (two of its own points a month apart) has no "previous quarter": a three-month gap there is months
         # not read, not a quarter (LIVE7B-001: a monthly count's "+0.3% vs Jun 2026" on the previous)
         own_months = [x["period"] for x in pts if not x["filed_later"]]
-        monthly = any(shift(a, 1) == b for a, b in zip(own_months, own_months[1:]))
+        monthly = monthly_filer or any(shift(a, 1) == b for a, b in zip(own_months, own_months[1:]))
         step = "quarter" if m["span"] == "quarter" or (prev and shift(prev["period"], 3) == latest["period"] and not monthly) else "month"
         # "the previous" is the period just before (last month, or last quarter for a quarterly figure). A point further back, such as
         # the year-ago figure a filing states, is not it: with no previous period there is no change on it
@@ -788,6 +828,9 @@ def series(reads: dict) -> list[dict]:
     newest_period = settled(n.get("period"), n.get("at") or "", n.get("span")) or ""
     out.sort(key=lambda m: (not m["headline"] or m["key"] not in rank, rank.get(m["key"], 999), m["latest"]["period"] < newest_period,
                             m["metric"].lower()))
+    for m in out:                 # a figure the newest filing doesn't hold: its month is said as an earlier one (LIVE10B-040)
+        if newest_period and m["latest"]["period"] < newest_period:
+            m["older"] = True
     return out[:MAX_FIGURES * 2]
 
 
@@ -1009,6 +1052,15 @@ def my_view(uid: str) -> dict:
     names = {sym: name for v in SECTORS.values() for sym, name in v["symbols"]}
     rows, without = [], []
     mine = my_symbols(uid)
+    # a stock outside the sector lists is named as the stock screens name it, never by its symbol beside named rows (LIVE9B-007: "Bank of
+    # Baroda" above "BHARATCOAL")
+    if any(sym not in names for sym, _ in mine):
+        try:
+            from . import screens
+            listed = {r["symbol"]: r.get("name") for r in screens.load_index("IN").get("rows") or [] if r.get("name")}
+        except Exception:
+            listed = {}
+        names = {**{sym: listed[sym] for sym, _ in mine if listed.get(sym)}, **names}
     prime(sym for sym, _ in mine)
     for sym, kind in mine:
         reads = stored(sym)
@@ -1228,6 +1280,16 @@ def user_symbols() -> list[str]:
     return [s for s, _ in sorted(count.items(), key=lambda kv: (-kv[1], kv[0]))[:USER_STOCKS]]
 
 
+def rotated(symbols: list[str], day: date) -> list[str]:
+    """The day's order of the companies: the alphabetical list started at a different place each day, so when the day's AI
+    budget runs out part-way (a new reader re-reading every stored filing), the same end of the alphabet doesn't wait every
+    day (LIVE8B-002: VSTTILLERS' filings kept the old reader's year-ago figures while the budget went on A to T)."""
+    if not symbols:
+        return symbols
+    k = int(day.toordinal() * 0.618034 * len(symbols)) % len(symbols)     # a golden-ratio step: the starts spread over the list
+    return symbols[k:] + symbols[:k]
+
+
 class Job:
     """Once a day in the evening: for every company on the sector lists and every stock with a business-update alert,
     read the updates filed in the last few weeks that aren't read yet, then fire the alerts on the new ones."""
@@ -1265,6 +1327,7 @@ class Job:
         since = (now.astimezone(IST) - timedelta(days=JOB_DAYS)).date().isoformat()
         symbols = sorted({s for v in SECTORS.values() for s, _ in v["symbols"]} | set(self.alert_symbols())
                          | set(user_symbols()) | set(index_symbols()))      # and the NIFTY 100, so none of it stays "not looked at" (LO1-3)
+        symbols = rotated(symbols, now.astimezone(IST).date())
         rows, read, problems = [], 0, []
         for sym in symbols:
             try:

@@ -78,7 +78,10 @@ test("trade journal: import a tax P&L, the checks, a hand-added trade, a journal
   // the headline states what the checks found (R11C-009: it was "Mixed evidence.")
   await expect(verdict.getByText(/^\d of 4 checks run · \d passed\.$/)).toBeVisible();
   await expect(page.locator("[data-check=luck]").getByText(/With 15 trades, a 67% win rate could easily be luck/)).toBeVisible();
-  await expect(page.locator("[data-check=costs]").getByText("Passed")).toBeVisible();
+  // (updated on purpose, LIVE11B / LIVE10B-039: this file's delivery trades list charges below the STT alone, so the charges check is a
+  // warning that says so, never "Passed" on understated charges)
+  await expect(page.locator("[data-check=costs]").getByText("Warning")).toBeVisible();
+  await expect(page.locator("[data-check=costs]")).toContainText("charges below the STT alone");
   await expect(page.getByRole("img", { name: /Running P&L after charges over 15 trades/ })).toBeVisible();
 
   await page.getByLabel("Break the P&L down by").selectOption("segment");

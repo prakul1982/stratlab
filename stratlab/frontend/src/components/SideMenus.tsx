@@ -66,6 +66,9 @@ function when(m: Market, now: number) {
   return { st, text: st.closedFor === "holiday" ? `Holiday · ${opens.toLowerCase()}` : opens };
 }
 
+/** "Crypto open" when one market is open, else "3/10 markets open". */
+export const marketsOpenText = (open: string[], total: number): string => (open.length === 1 ? `${open[0]} open` : `${open.length}/${total} markets open`);
+
 /** "● 1 of 10 markets open": one line that opens the list of markets. */
 export function MarketsNow({ markets }: { markets: Market[] }) {
   const { open, setOpen, btn, panel } = usePop();
@@ -81,7 +84,8 @@ export function MarketsNow({ markets }: { markets: Market[] }) {
     <div className="side-pop-wrap">
       <button ref={btn} className="mkt-btn" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
         <span className={`mkt-dot${(india ? india.st.open : openCount) ? " on" : ""}`} aria-hidden="true" />
-        <span>{india ? `India ${india.st.open ? "open" : "closed"} · ` : ""}{openCount}/{live.length} markets open</span>
+        {/* one market open (crypto on a weekend) is named, not counted (LIVE8B-027: "1/10 markets open" on a Saturday with no stock market open) */}
+        <span>{india ? `India ${india.st.open ? "open" : "closed"} · ` : ""}{marketsOpenText(rows.filter((r) => r.st.open).map((r) => SHORT[r.m.id] ?? r.m.name), live.length)}</span>
       </button>
       {open && <>
         <div className="side-pop-back" aria-hidden="true" />

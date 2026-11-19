@@ -7,6 +7,9 @@ import type { WatchQuote } from "./watch";
 export const QUOTES_KEY = "stratlab.mw.quotes";
 export const KEEP_QUOTES = 200;                 // instruments kept, the latest seen first
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000;        // older than a week: not shown
+/** LIVE13A-006: while a market trades, a price kept from more than this long ago is not drawn (the panel opened at 14:32 IST on the
+ *  09:58 prices for about 2 s, a rising stock shown falling); its row waits for the read */
+export const SESSION_KEEP_MS = 15 * 60 * 1000;
 
 type Kept = Record<string, WatchQuote & { seen: number }>;
 
@@ -15,13 +18,26 @@ const isQuote = (q: unknown): q is WatchQuote & { seen: number } => {
   return !!x && typeof x === "object" && (x.price === null || (typeof x.price === "number" && Number.isFinite(x.price))) && typeof x.seen === "number";
 };
 
-/** The prices kept, as the panel's quotes ({key: quote}); empty when nothing is kept or storage can't be read. */
-export function keptQuotes(who: string, now = Date.now(), store: Pick<Storage, "getItem"> | null = safeStore()): Record<string, WatchQuote> {
+/** The prices kept, as the panel's quotes ({key: quote}); empty when nothing is kept or storage can't be read. `since`: the day (ISO) a
+ * key's market last traded; a price kept from before it is left out, so a row never paints an older session's price under the newer
+ * session's date (LIVE8A-007: 12 Nov's prices under "Closed · last close Fri 13 Nov" until the reads came). */
+export function keptQuotes(who: string, now = Date.now(), store: Pick<Storage, "getItem"> | null = safeStore(), since?: (key: string) => string | null,
+  /** LIVE11A-029: a price read during a session that has closed since is left out (the close comes with the first read) */
+  midSession?: (key: string, at: string | null | undefined) => boolean,
+  /** LIVE13A-006: whether a key's market is trading now; its kept price is drawn only if read under SESSION_KEEP_MS ago */
+  openNow?: (key: string) => boolean): Record<string, WatchQuote> {
   try {
     const raw = JSON.parse(store?.getItem(`${QUOTES_KEY}.${who}`) ?? "{}") as Kept;
     const out: Record<string, WatchQuote> = {};
     for (const [k, q] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
       if (!isQuote(q) || q.price == null || now - q.seen > MAX_AGE_MS) continue;
+      const day = since?.(k);
+      if (day && (!q.at || String(q.at).slice(0, 10) < day)) continue;
+      if (midSession?.(k, q.at)) continue;
+      if (openNow?.(k)) {
+        const t = q.at ? Date.parse(String(q.at)) : NaN;
+        if (!Number.isFinite(t) || now - t > SESSION_KEEP_MS) continue;
+      }
       const { seen: _seen, ...quote } = q;
       out[k] = quote;
     }

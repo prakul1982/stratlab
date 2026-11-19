@@ -72,7 +72,7 @@ export function LegalPage() {
   // the same frame as every other public page (header with the site's links and Sign in, the policies and the explore links at the
   // bottom), not a header of its own with four small links (PUB-1: the policies were the one public page with no way to the rest)
   return (
-    <PublicFrame className="legal">
+    <PublicFrame className="legal" foot={ready}>
       <article className="legal-body stack">
         {/* not "Policies": the footer's row of the same links has that name, and two landmarks with one name can't be told apart (A11Y-2) */}
         <nav className="legal-tabs" aria-label="Policy pages">

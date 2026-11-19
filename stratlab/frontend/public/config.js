@@ -9,4 +9,6 @@ window.STRATLAB_CONFIG = {
   CONTACT_EMAIL: "support@stratlab.studio",
   BILLING_EMAIL: "billing@stratlab.studio",
   PRIVACY_EMAIL: "privacy@stratlab.studio",
+  EMAIL_SIGNIN: "on",
+  USD_CHECKOUT: "on",
 };

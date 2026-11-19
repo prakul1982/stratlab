@@ -14,10 +14,10 @@ test("every page has its own tab title (R1-010)", () => {
   assert.equal(titleFor("/research/IN/reliance"), "RELIANCE · StratLab");
   assert.equal(titleFor("/research/US/AAPL/deep"), "AAPL deep dive · StratLab");
   assert.equal(titleFor("/n/abc/e/2"), "Notebooks · StratLab");
-  assert.equal(titleFor("/trade/g/practise"), "Practise · Trade · StratLab");
-  assert.equal(titleFor("/admin/users"), "Admin · Users and growth · StratLab");
-  assert.equal(titleFor("/admin"), "Admin · Overview · StratLab");
-  assert.equal(titleFor("/admin/emails"), "Admin · Email previews · StratLab");
+  assert.equal(titleFor("/trade/g/practise"), "Practise · StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
+  assert.equal(titleFor("/admin/users"), "Admin: Users and growth · StratLab");
+  assert.equal(titleFor("/admin"), "Admin: Overview · StratLab");
+  assert.equal(titleFor("/admin/emails"), "Admin: Email previews · StratLab");
   assert.equal(titleFor("/settings"), "Settings · StratLab");
   assert.equal(titleFor("/nowhere"), DEFAULT_TITLE);
   assert.equal(withBrand("RELIANCE ₹1,408"), "RELIANCE ₹1,408 · StratLab");
@@ -106,8 +106,8 @@ test("the menu follows the address, not the last space used (R1-011)", () => {
   assert.equal(menuView("/research/IN/TCS", "money"), "invest");
   assert.equal(menuView("/admin", "money"), "mine");              // its breadcrumb says Mine › Admin
   assert.equal(menuView("/settings", "trade"), "mine");
-  assert.equal(menuView("/holdings", "mine", true), "mine");      // a page pinned to Mine keeps Mine's menu
-  assert.equal(menuView("/holdings", "mine", false), "money");
+  // (updated on purpose, NAV3: one menu for every page; My space's own menu, which kept a pinned page in it, is gone)
+  assert.equal(menuView("/holdings", "mine"), "money");
   assert.equal(menuView("/", "invest"), "invest");               // the front door goes on to the space showing
 });
 

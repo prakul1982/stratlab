@@ -85,28 +85,31 @@ function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | 
     { key: "out", header: "Coming out", wrap: true, cell: (s) => names(s.out) },
   ];
   const card = (c: IndexChange, n: number) => (
-    <Card key={c.id} testId="ev-index-change">
+    <div key={c.id} className="ev-idx-item" data-testid="ev-index-change">
       <CardHead level={3} title={c.effective ? `From ${evDay(c.effective, true)}` : c.title}
         actions={<span className="k-note">Announced {asOf(c.announced)} · <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></span>} />
       {/* each table names its own announcement: two changes on one date gave two landmarks with one name (R5O-030) */}
       <DataTable csv="index changes" label={`Index changes ${c.effective ? `from ${evDay(c.effective, true)}` : c.title}, announcement ${n + 1} of ${Math.min(4, shown.length)}`} columns={cols} rows={c.sections} rowKey={(s) => s.index} stack />
-    </Card>
+    </div>
   );
+  // one card with its heading, not a heading floating between cards (LIVE9B-032)
   return (
+    <Card label="Index changes">
     <section className="k-stack" aria-labelledby="ev-idx-h">
-      <h2 id="ev-idx-h" className="k-sub">Index changes</h2>
+      <CardHead level={2} title={<span id="ev-idx-h">Index changes</span>} />
       {failed && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failed}</p>}
       {unread.length > 0 && (
-        <Card testId="ev-index-unread" label="Index notices not read into stocks">
-          <CardHead level={3} title={`Notices not read into stocks here (${unread.length})`} />
+        <div className="ev-idx-item" data-testid="ev-index-unread" role="group" aria-label="Index notices not read into stocks">
+          <CardHead level={3} title={`Index changes in the press release (${unread.length})`} />
           <ul className="k-list plain">
             {unread.slice(0, 8).map((c) => (
               <li key={c.id} className="k-small">{c.effective ? `From ${evDay(c.effective, true)}: ` : ""}{c.title} · announced {asOf(c.announced)} ·{" "}
                 <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></li>
             ))}
           </ul>
-          <p className="k-note">The press release has the stocks going in and out; they couldn't be read from it here.</p>
-        </Card>
+          {/* LIVE10A-039: what the link holds, without an excuse */}
+          <p className="k-note">Each press release lists the stocks going in and out of the index.</p>
+        </div>
       )}
       {shown.slice(0, 1).map((c) => card(c, 0))}
       {/* the newest announcement open; the earlier ones folded, so the page isn't three full tables long on a phone
@@ -118,6 +121,7 @@ function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | 
       )}
       <p className="k-note">The provider's list of stocks going in and out of its main indices. No estimate of any flows.</p>
     </section>
+    </Card>
   );
 }
 
@@ -216,15 +220,16 @@ export function EventsPage() {
             <Card label="The next seven days">
               <CardHead level={2} title="The next seven days" />
               <div className="ev-weekgrid">
+                {/* TABLES EVERYWHERE (LIVE9B-032): the week's events as one table (day, event, figure), not three uneven columns of lines */}
                 {week.length ? (
-                  <ul className="k-list plain ev-week" data-testid="ev-week">
-                    {week.slice(0, 10).map((e) => (
-                      <li key={e.id} data-kind={e.kind}>
-                        <span className="k-note">{evWhen(e)}{e.time ? ` · ${e.time} IST` : ""}</span>{" "}
-                        <span className="k-small"><b>{e.title}</b>{e.figure ? ` · ${e.figure}` : ""}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="ev-week" data-testid="ev-week">
+                    <DataTable label="The next seven days" rows={week.slice(0, 10)} rowKey={(e) => e.id} rowAttrs={(e) => ({ "data-kind": e.kind })}
+                      columns={[
+                        { key: "d", header: "Day", cell: (e) => <span className="nowrap">{evWhen(e)}{e.time ? ` · ${e.time} IST` : ""}</span> },
+                        { key: "t", header: "Event", rowHeader: true, wrap: true, cell: (e) => <b>{e.title}</b> },
+                        ...(week.slice(0, 10).some((e) => e.figure) ? [{ key: "f", header: "Figure", wrap: true, cell: (e: MarketEvent) => e.figure ?? "" } as Column<MarketEvent>] : []),
+                      ]} />
+                  </div>
                 ) : <p className="k-small k-muted">No scheduled events in the next seven days.</p>}
                 <ul className="k-list plain ev-week-more">
                   <li className="k-note">Results this week: <Link className="link tap" to="/research/results">{v.week.results ?? "the results calendar"}</Link></li>

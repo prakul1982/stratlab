@@ -352,9 +352,12 @@ NOTABLE_DIVE = None
 @pytest.fixture
 def two_company_layers(monkeypatch):
     """The test theme's layers have two companies with figures: these tests check how a post is written and stored, so they lower the
-    floors to two (R25 raised them to three; the floor itself is checked in test_a_layer_of_two_companies_is_never_notable)."""
+    floors to two (R25 raised them to three; the floor itself is checked in test_a_layer_of_two_companies_is_never_notable). (updated on
+    purpose, blog2: a theme post's table is the deck's, so the deck's floor is lowered with the dive's)"""
+    from app import deck
     monkeypatch.setattr(D, "COMPARE_MIN", 2)
     monkeypatch.setattr(D, "MIN_BASE", 2)
+    monkeypatch.setattr(deck, "MIN_BASE", 2)
 
 
 def dive():
@@ -363,19 +366,24 @@ def dive():
 
 @pytest.mark.usefixtures("two_company_layers")
 def test_a_draft_post_is_made_only_when_the_data_is_notable_and_is_never_published():
-    d = dive()
+    # gl50 (R50, updated on purpose): a gap between layers is notable only where their companies' ways of earning are read
+    assert not [x for x in dive()["notable"] if x["kind"] == "gap"]
+    from tests.gl50_read import read
+    d = D.build("IN", "Test theme", read(CHECKED), src())
     assert d["notable"] and d["notable"][0]["kind"] == "gap"
     post = blog_research.theme_post(d, "Test theme", "IN", datetime(2026, 10, 5, tzinfo=timezone.utc))
     assert post["published"] is False and post["kind"] == "research" and post["slug"] == "theme-test-theme-margins-in"
     text = json.dumps(post["blocks"])
-    # R11: the gap is said as "39.5 points apart", and the margins are drawn as a bar chart beside the table
-    assert "49.0%" in text and "9.5%" in text and "39.5 points apart" in text and blog_research.advice_words(post) is None
+    # R11: the margins are drawn as a bar chart beside the table (updated on purpose, blog2: the post says a gap only as its chain does, and
+    # this chain ranks no layer: the medians are said each with its own figure, as its deck prints them, whole-point margins whole)
+    assert "Mining 49%; Cells 9.5%" in text and "points apart" not in text and blog_research.advice_words(post) is None
     assert any(b["t"] == "hbar" for b in post["blocks"]) and post["src"]["rows"][0]["companies"]
     flat = {**d, "notable": []}
     assert blog_research.theme_post(flat, "Test theme", "IN") is None
     assert blog_research.draft_theme_post(flat, "Test theme", "IN") == {"result": "nothing notable", "slug": None}
 
 
+@pytest.mark.usefixtures("two_company_layers")       # (updated on purpose, blog2: a layer's margin is a median of the deck's floor of companies)
 def test_the_owners_button_drafts_a_post_from_any_theme_with_two_layers_of_margins():
     """R15 (owner: "did you remove the blog button for me too?"): the button is on every theme with figures, so the post is made from the
     layers' figures when nothing is notable; a chain with fewer than two layers with a margin still makes none."""
@@ -386,6 +394,7 @@ def test_the_owners_button_drafts_a_post_from_any_theme_with_two_layers_of_margi
     assert blog_research.draft_theme_post(one, "Test theme", "IN", notable_only=False) == {"result": "too few figures", "slug": None}
 
 
+@pytest.mark.usefixtures("two_company_layers")       # (updated on purpose, blog2: as above)
 def test_a_theme_read_with_no_post_gets_one_hidden_once_and_at_most_three_a_day(monkeypatch):
     """R15 (owner: "if someone searches a theme we don't have a blog about, make a blog out of it automatically"): from the dive just built,
     stored hidden, one per theme, at most AUTO_POSTS_A_DAY new ones a day."""

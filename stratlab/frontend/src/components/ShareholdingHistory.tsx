@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { grouped, pctPlain } from "../lib/format";
 import { changeOver, HOLDER_NAME, stacks, type HolderKey, type HoldingQuarter, type Region, type Shareholding } from "../lib/companyTables";
-import { Card, CardHead, DataTable, ErrorState, PlanNote, Signed, Skeleton, type Column } from "./kit";
+import { Card, CardNote, CardHead, DataTable, ErrorState, PlanNote, Signed, Skeleton, usePhone, type Column } from "./kit";
 import "./companyTables.css";
 
 /* Shareholding by quarter (lane c-f2): promoters, FIIs, DIIs, government and public, and the number of shareholders, from the quarterly
@@ -34,6 +34,7 @@ export function ShareholdingCard({ region, symbol, id = "co-holding-history" }: 
   const [v, setV] = useState<Shareholding | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
+  const phone = usePhone();
 
   useEffect(() => {
     let live = true;
@@ -65,8 +66,9 @@ export function ShareholdingCard({ region, symbol, id = "co-holding-history" }: 
       {moves.length > 0 && (
         <p className="k-small">Since {v.quarters[0].quarter}: {moves.map((x, i) => <span key={x.k}>{i > 0 && " · "}{HOLDER_NAME[x.k]} <Signed value={x.d}>{`${x.d! > 0 ? "+" : x.d! < 0 ? "−" : ""}${Math.abs(x.d!).toFixed(2)} pts`}</Signed></span>)}</p>
       )}
-      <DataTable label={`${symbol} shareholding by quarter`} rows={rows} rowKey={(q) => q.quarter} columns={columns} grid />
-      {v.pledge_note && <p className="k-note">{v.pledge_note}</p>}
+      {/* LIVE11B: on a phone each quarter is a card of its groups' shares, not a 660px table scrolled sideways in a 322px card */}
+      <DataTable label={`${symbol} shareholding by quarter`} rows={rows} rowKey={(q) => q.quarter} columns={columns} grid={!phone} stack={phone} />
+      {v.pledge_note && <CardNote><p>{v.pledge_note}</p></CardNote>}
       {v.locked && <PlanNote plan={v.locked.plan}>{v.locked.message}</PlanNote>}
     </Card>
   );

@@ -169,7 +169,8 @@ export const signed = (v: number | null | undefined) => (v == null ? "–" : `${
 export const crore = (v: number | null | undefined, sign = false) =>
   v == null ? "–" : `${sign && v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
 /** A share in percent: 21.8%. */
-export const pct = (v: number | null | undefined) => (v == null ? "–" : `${Number.isInteger(v) ? v : v.toFixed(1)}%`);
+// one precision for every share: "61.0% / 39.0%" beside "65.9% / 34.1%", never "61% / 39%" (LIVE8B-021)
+export const pct = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
 /** Both sides of a long/short pair: "21.8% long · 78.2% short" (bought · sold for the day's trades). */
 export function sides(long: number | null | undefined, short: number | null | undefined, words: [string, string] = ["long", "short"]): string {
   return long == null || short == null ? "–" : `${pct(long)} ${words[0]} · ${pct(short)} ${words[1]}`;

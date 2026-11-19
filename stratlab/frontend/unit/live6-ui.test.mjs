@@ -81,16 +81,15 @@ test("LIVE6-014: signed in, the analytics question is an overlay along the foot 
   // the page's flow: it covers nothing, and the side menu, spanning both rows, never moves
   assert.doesNotMatch(css, /body:has\(\.shell\) \.consent \{ position: fixed; \}/);
   assert.match(css, /\.shell > \.sidebar \{ grid-column: 1; grid-row: 1 \/ -1; \}/);
-  assert.match(css, /\.shell > \.main \{ grid-column: -2 \/ -1; grid-row: 2; \}/);
+  // (updated on purpose, LIVE8B-004: the question is the page column's last row, after the page)
+  assert.match(css, /\.shell > \.main \{ grid-column: -2 \/ -1; grid-row: 1; \}/);
 });
 
-test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted; the pill is a plain link there", () => {
+// (owner, 18 Nov) changed on purpose: the pill is gone, so Invest's Themes entry is the only Themes link in the menu
+test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted; there is no pill beside it", () => {
   const shell = src("components/Shell.tsx"), css = src("styles.css");
-  assert.match(shell, /className=\{`side-feature\$\{path\.startsWith\(THEMES\) \? " here" : ""\}`\}/);
-  const here = css.match(/\.side-list a\.side-feature\.here \{([^}]*)\}/)?.[1] ?? "";
-  assert.match(here, /background: none/);
-  assert.match(here, /border-color: var\(--line-2\)/);                 // no orange edge: it doesn't read as selected
-  assert.doesNotMatch(here, /orange/);
+  assert.doesNotMatch(shell, /side-feature/);
+  assert.doesNotMatch(css, /side-feature/);
 });
 
 test("LIVE6-019: on a phone the heatmap's settings fold into one row with Options; the period stays out", () => {

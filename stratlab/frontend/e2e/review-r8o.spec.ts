@@ -84,6 +84,8 @@ test("R8O-002: Account says the day's fresh AI reads against the cap", async ({ 
 test("R8O-002: Plans lists the fresh AI reads a day, Pro with no cap", async ({ page }) => {
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "INR" });
   await expect(page.locator("#compare")).toBeVisible({ timeout: 30_000 });          // (R11: the comparison is open under the cards)
+  // (updated on purpose (nav3): 12 rows at a glance, every row of the full comparison one fold below them)
+  await page.locator("#compare summary", { hasText: "The full comparison, row by row" }).click();
   const row = page.getByRole("row", { name: /Fresh AI reads a day/ });
   await expect(row).toContainText("60", { timeout: 30_000 });
   await expect(row).toContainText("Unlimited");
@@ -104,7 +106,7 @@ test("R8O-007: a company page shows its numbers at once and its AI read when it 
   await expect(page.locator(".ai-read")).toContainText("Reading the numbers");          // the page is up; the read is on its way
   await expect(page.locator(".ai-read")).toContainText("Runs refineries", { timeout: 15_000 });
   expect(asked).toBe(3);
-  await expect(page).toHaveTitle(/^Reliance Industries.* \(RELIANCE\) ₹/);
+  await expect(page).toHaveTitle(/^Reliance Industries.* \(RELIANCE\) · StratLab$/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab"): name and symbol, no price
   expect(errors).toEqual([]);
 });
 
@@ -130,8 +132,9 @@ test("R8O-006, item 34: a visitor who once chose euros sees the rupee charge wit
     countries: { ...j.countries, DE: "EUR" }, usd_inr: { rate: 90, fallback: false } })));
   // changed on purpose by item 34 (owner, 29 Oct): rupees first, the dollar beside them, whatever was chosen on this device before
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "EUR" });
-  await expect(page.getByTestId("about-basic")).toHaveText("about $8", { timeout: 30_000 });
-  await expect(page.getByTestId("about-pro")).toHaveText("about $22");
+  // (updated on purpose, LIVE11B: the dollar beside the rupees is StratLab's own US price when it has one, not the rupees converted)
+  await expect(page.getByTestId("about-basic")).toHaveText("US price $8", { timeout: 30_000 });
+  await expect(page.getByTestId("about-pro")).toHaveText("US price $20");
   await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699");
   const main = page.locator("main");
   await expect(main.getByTestId("usd-note")).toContainText("at ₹90 to the dollar (today's rate)");
@@ -154,7 +157,7 @@ test("R8O-009: a lazy page's tab has its title before its code arrives", async (
   const held = new Promise<void>((ok) => { release = ok; });
   await page.route(/\/assets\/Research-[A-Za-z0-9_-]+\.js$/, async (r) => { await held; return r.fallback(); });
   const errors = await open(page, "/research/rotation");
-  await expect(page).toHaveTitle("Sectors · Market today · StratLab", { timeout: 15_000 });          // IA-1: Market today's Sectors tab (was Sector rotation)
+  await expect(page).toHaveTitle("Sectors · StratLab", { timeout: 15_000 });          // IA-1: Market today's Sectors tab (was Sector rotation) (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
   release();
   expect(errors).toEqual([]);
 });

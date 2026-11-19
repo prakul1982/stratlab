@@ -119,7 +119,7 @@ def test_notices_that_arent_upcoming_results_meetings_are_ignored():
 def test_us_rows_carry_reported_numbers_but_never_estimates():
     rows = {r["symbol"]: r for r in R.us_rows(us_calendar(TODAY))}
     assert set(rows) == {"AAPL", "NVDA", "MSFT"}
-    assert rows["AAPL"]["when"] == "after the close" and rows["AAPL"]["purpose"] == "Quarterly results (Q4 2026)"
+    assert rows["AAPL"]["when"] == "after the close" and rows["AAPL"]["purpose"] == "Quarterly results (fiscal Q4 2026)"   # (updated on purpose, fix11 LIVE10A-020: the fiscal quarter said as one)
     assert rows["MSFT"]["reported"] == [{"label": "EPS", "value": "$3.21"}, {"label": "Revenue", "value": "$69.40 billion"}]
     assert "estimate" not in json.dumps(rows).lower()
 

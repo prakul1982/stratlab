@@ -111,23 +111,39 @@ def change_2dp(price, prev, given=None) -> float | None:
 
 
 CLOSED_KEEP = 10 * 60             # seconds a quote read after the market closed is reused by every page (LIVE5-001)
-_closed_quotes: dict[tuple[str, str], tuple[float, dict]] = {}
+CLOSED_LONG = 12 * 3600           # ...and up to this long while the market's latest settled session is still the one it was read in (rel1)
+_closed_quotes: dict[tuple[str, str], tuple[float, dict, str | None]] = {}
 _closed_lock = threading.Lock()
 
 
+def _settled_day(region: str) -> str | None:
+    """The market's latest completed, settled session (its close doesn't change until the next one), or None when it can't be said."""
+    try:
+        from ..last_session import latest_day
+        return latest_day(region)
+    except Exception:
+        return None
+
+
 def _closed_quote(region: str, symbol: str, now: float | None = None) -> dict | None:
-    """A quote read since the market closed, within CLOSED_KEEP; None otherwise."""
+    """A quote read since the market closed: within CLOSED_KEEP, or within CLOSED_LONG while the latest settled session is still the
+    one it was read in (rel1, LIVE9B-010: before the next open every page read 24 quotes, each with its daily candles, from the broker
+    again, and the home page's India tiles and watchlist stayed grey for 8-17 s). None otherwise."""
     hit = _closed_quotes.get((region, symbol))
-    if hit and (now if now is not None else time.time()) - hit[0] < CLOSED_KEEP:
+    if not hit:
+        return None
+    age = (now if now is not None else time.time()) - hit[0]
+    if age < CLOSED_KEEP or (age < CLOSED_LONG and hit[2] and hit[2] == _settled_day(region)):
         return dict(hit[1])
     return None
 
 
 def _keep_closed_quote(region: str, symbol: str, q: dict, now: float | None = None) -> None:
+    day = _settled_day(region)
     with _closed_lock:
         if len(_closed_quotes) > 4000:
             _closed_quotes.clear()
-        _closed_quotes[(region, symbol)] = (now if now is not None else time.time(), dict(q))
+        _closed_quotes[(region, symbol)] = (now if now is not None else time.time(), dict(q), day)
 
 
 def forget_closed_quotes() -> None:
@@ -399,6 +415,25 @@ def pe_one_off_note(effects: list[dict], scr: dict | None) -> str | None:
     last4 = set(cols[-4:])
     hit = next((e for e in effects if e.get("other_income") and e["quarter"] in last4), None)
     return f"{hit['quarter']} had {hit['other_income']}" if hit else None
+
+
+def one_cap(symbol: str, cap_cr: float | None, price: float | None) -> float | None:
+    """A company's market value in crore on the share count the peers table and the screens use (the stored page's value over its price),
+    at this page's price, so the page says one figure (LIVE9B-016: TCS ₹8.69 lakh cr in its header, ₹8.70 lakh cr in Peers and Screens).
+    The page's own when the index has no row for it, or its count is far off the page's own (a split or a bad read)."""
+    if not cap_cr or not price or price <= 0:
+        return cap_cr
+    try:
+        from .. import screens
+        r = next((x for x in screens.load_index("IN").get("rows") or [] if x.get("symbol") == symbol), None)
+        icap, iprice = num((r or {}).get("market_cap")), num((r or {}).get("price"))
+    except Exception:
+        return cap_cr
+    if not icap or not iprice or icap <= 0 or iprice <= 0:
+        return cap_cr
+    shares = icap / iprice
+    mine = shares * price
+    return mine if abs(mine / cap_cr - 1) <= 0.02 else cap_cr
 
 
 def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=None) -> dict:
@@ -980,14 +1015,27 @@ class Research:
         if not symbols:
             return {}, []
         if region == "IN" and self._kite():
+            closed = not market_open(region)
+            # the market closed: each stock's quote of the last session, once worked out, serves every page until the next session (rel1)
+            kept = {s: q for s in symbols if closed and (q := _closed_quote(region, s)) is not None}
+            ask = [s for s in symbols if s not in kept]
+            if not ask:
+                return kept, []
             try:
                 # one read of the broker's feed shared by everyone for a few seconds, not one for each page open (LIVE-1: the pages
                 # read their prices again each minute)
-                got = quote_share.read(self.kite, symbols)
+                got = quote_share.read(self.kite, ask)
             except Exception:
                 got = None
             if got is not None:
-                return ({s: self._last_session(s, q) for s, q in got.items()} if not market_open(region) else got), []
+                if not closed:
+                    return got, []
+                out = dict(kept)
+                for s, q in got.items():
+                    out[s] = self._last_session(s, q)
+                    if out[s] and out[s].get("price") is not None:
+                        _keep_closed_quote(region, s, out[s])
+                return out, []
         out: dict[str, dict | None] = {}
         pending: list[str] = []
         closed = not market_open(region)
@@ -1236,8 +1284,30 @@ class Research:
                 m = {**m, **{x: k.get(x) for x in ("price", "prev_close", "change_pct", "high", "low", "at")}}
             if m.get("price") is None:
                 continue
-            out.append(index_level(name, m, region, now))
+            out.append(self._pinned(region, index_level(name, m, region, now)))
         return out
+
+    PIN_NOISE = 0.0001        # a closed session's level read again within this share of the first reading is that reading (LIVE12A-014)
+    PIN_KEEP = 120            # closed sessions' levels kept, the oldest dropped first
+
+    def _pinned(self, region: str, lvl: dict) -> dict:
+        """LIVE12A-014: one figure for a closed session's level. The quote source answered the same 17 Nov close as 50,759.42 on one load
+        and 50,759.40 on the next; once the session is over and settled, the first reading stands for every later read that differs from
+        it by rounding noise only (a real correction, larger, replaces it). A live, settling or pre-close level is never pinned."""
+        day = lvl.get("day")
+        if lvl.get("live") or lvl.get("settling") or lvl.get("pre_close") or not day or lvl.get("price") is None:
+            return lvl
+        pins = self.__dict__.setdefault("_level_pins", {})
+        key, price = (region, lvl["name"], day), float(lvl["price"])
+        was = pins.get(key)
+        if was is None or abs(price - was) > abs(was) * self.PIN_NOISE:
+            pins[key] = price
+            while len(pins) > self.PIN_KEEP:
+                pins.pop(next(iter(pins)))
+            return lvl
+        hi = lvl.get("high52")
+        return {**lvl, "price": was, "change_pct": change_2dp(was, lvl.get("prev_close"), lvl.get("change_pct")),
+                "from_high_pct": ((was / hi - 1) * 100) if hi else lvl.get("from_high_pct")}
 
     # ---------- served from memory (R24-001) ----------
     PULSE_FRESH = 15          # seconds the index levels are served from memory before a read behind the page
@@ -1322,7 +1392,7 @@ class Research:
     def headlines(self, region: str, focus: str = "") -> list[dict]:
         """The market's headlines for Pulse and the briefs: stories only, never a site's own title or a third party's
         buying worded as advice ("We're buying the dip in a stock…", R7O-005)."""
-        from ..newsletter.content import MARKET_WORDS, OFF_TOPIC
+        from ..newsletter.content import BUSINESS_WORDS, MARKET_WORDS, OFF_TOPIC
 
         def ok(title, market_words: bool) -> bool:
             # stories about markets and business only (R43A-006: "NBA tightens betting rules", "Norwegian teen jailed"
@@ -1331,7 +1401,11 @@ class Research:
             # search keeps what its own words found
             if not title or not plain_headline(title) or (not focus and OFF_TOPIC.search(title)):
                 return False
-            return bool(focus) or not market_words or bool(MARKET_WORDS.get(region, MARKET_WORDS["US"]).search(title))
+            if focus:
+                return True
+            if bool(MARKET_WORDS.get(region, MARKET_WORDS["US"]).search(title)):
+                return True
+            return not market_words and bool(BUSINESS_WORDS.search(title))      # LIVE9A-008: a wire story is still about business
         if region == "US" and self.finnhub.ready() and not focus:
             try:
                 return grouped([{"headline": n.get("headline"), "url": n.get("url"), "source": news_source(n.get("source")),
@@ -1731,7 +1805,7 @@ class Research:
             "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,
             # the figures are the company's last stored ones (the fundamentals source busy): when they were worked out (LIVE4-004)
             **({"figures_kept": kept.get("built_at") or True} if kept and not scr else {}),
-            "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
+            "market_cap": one_cap(sym, s.get("market_cap_cr"), s.get("price")) * 1e7 if s.get("market_cap_cr") else None,
             # a share listed within the year: its range is since its first day of trading, said so (DD-011)
             "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {}),
                                      **({"traded_from": traded_from} if traded_from and not listed_on else {})},

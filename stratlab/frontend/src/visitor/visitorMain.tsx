@@ -44,8 +44,8 @@ export function startVisitor(root: HTMLElement) {
         {/* page moves are not transitions, as in the app (R17-003): a first click shows the next page's loading bar at once */}
         <BrowserRouter useTransitions={false}>
           <Watch />
-          <Tracking />{/* before the page in its order, so the keyboard meets the question first (A11Y-2) */}
           <VisitorApp />
+          <Tracking />{/* after the page (LIVE8B-004, LIVE8A-017): its arrival never pushes the page down */}
           {/* Help & feedback for a visitor: a plain request, none of the app's account code (owner, 4 Nov) */}
           <VisitorFeedback />
         </BrowserRouter>

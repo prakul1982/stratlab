@@ -19,14 +19,15 @@ test("A11Y-2: each fund's sales table is named after the fund, so open folds do 
   assert.match(page, /<DataTable label=\{`Redemptions matched to purchases, \$\{name\}`\}/);
 });
 
-test("A11Y-2: the cookie banner comes first in the page's order and keeps what has focus clear of it", () => {
+test("A11Y-2: the cookie banner has its place in the page's order and keeps what has focus clear of it", () => {
   const card = read("src/components/Tracking.tsx"), app = read("src/main.tsx"), visitor = read("src/visitor/visitorMain.tsx"), shell = read("src/components/Shell.tsx");
-  // before the page in both halves of the site, so the keyboard and a screen reader meet the question first
-  // (updated on purpose, LIVE7B-006: signed in, the Shell draws it after its skip links and before the menu; every other branch before the page)
+  // (updated on purpose, LIVE7B-006: signed in, the Shell draws it in the page column)
+  // (updated on purpose, LIVE8B-004: before the page, "Skip to content" landed on it and its arrival pushed the page down) after the page in
+  // both halves of the site
   assert.match(app, /<Shell ask=\{<Tracking \/>\}>/);
-  assert.match(app, /return <><Tracking \/><VisitorApp \/><\/>;/);
-  assert.ok(shell.indexOf("{ask}") > shell.indexOf("Skip to the menu") && shell.indexOf("{ask}") < shell.indexOf("{sidebar}"));
-  assert.ok(visitor.indexOf("<Tracking />") < visitor.indexOf("<VisitorApp />"));
+  assert.match(app, /return <><VisitorApp \/><Tracking \/><\/>;/);
+  assert.ok(shell.indexOf("{ask}") > shell.indexOf('<main className="main" id="main"'));
+  assert.ok(visitor.indexOf("<Tracking />") > visitor.indexOf("<VisitorApp />"));
   // (updated on purpose, LIVE7B-006) it is in the page's own flow, so nothing can be under it: no scroll padding is needed any more
   assert.doesNotMatch(card, /scroll-padding-bottom/);
   assert.match(card, /role="dialog" aria-modal="false" aria-label=\{`\$\{title\} on StratLab`\} aria-describedby=\{text\}/);

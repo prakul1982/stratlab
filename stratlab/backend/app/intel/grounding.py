@@ -871,6 +871,21 @@ def grounded_in(text: str, sources: list[str], share: float = 0.75, ignore: str 
     return sum(1 for w in stems if re.search(r"\b" + re.escape(w), src)) / len(stems) >= share
 
 
+def one_row_per_company(hot: list[dict]) -> list[dict]:
+    """LIVE13A-007: "Companies in today's headlines" lists each company once. The read named two companies twice, once with a group in
+    brackets ("Tata Consultancy Services" and "Tata Consultancy Services (IT sector)", the same headline in all four rows): a bracketed
+    note after a name is dropped, and a second row of the same ticker or the same name is left out."""
+    out, seen = [], set()
+    for h in hot or []:
+        name = re.sub(r"\s*\([^)]*\)\s*$", "", str(h.get("name") or "")).strip() or str(h.get("name") or "")
+        keys = {k for k in (str(h.get("ticker") or "").strip().upper(), name.lower()) if k}
+        if keys & seen:
+            continue
+        seen |= keys
+        out.append({**h, "name": name})
+    return out
+
+
 def plain_title(t: str) -> str:
     """A headline as a one-liner: without the " - Source" a news feed adds, at most 160 characters."""
     t = re.sub(r"\s+[-\u2013|]\s+[^-\u2013|]{2,40}$", "", " ".join(str(t or "").split()))
@@ -921,7 +936,7 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
         if not why or not grounded_in(why, mine, 0.8, ignore=f"{h.get('name') or ''} {h.get('ticker') or ''}"):
             why = plain_title(mine[0])
         hot.append({**h, "why": why})
-    res["hot"] = hot
+    res["hot"] = one_row_per_company(hot)
     both = lambda s: claim(s) and stands(s)          # noqa: E731
     res["flows"] = [{**f, "detail": keep_sentences(f.get("detail"), pool, both)} for f in out.get("flows") or []]
     res["flows"] = [f for f in res["flows"] if f["detail"] and _topics_backed(f.get("title") or "", support) and flow_claim_ok(f.get("title") or "", nets)
@@ -1047,13 +1062,27 @@ def base_noted(text: str, facts: dict, seen: set | None = None) -> str:
     return text
 
 
+# a bank's or lender's top line is its revenue (the interest it earns), never "sales" (LIVE8B-010: HDFCBANK's read said "Sales in the Sep
+# 2026 quarter were ₹95,132 Cr"); the page's own groups say "Revenue growth" for a lender (DD-013)
+_SALES_WORD = re.compile(r"\b(S|s)ales\b(?!\s+(?:tax|force|team|staff|channel|network)\b)")
+
+
+# "Sales … were" becomes "Revenue … was" (LIVE9B-002: "Revenue in the Sep 2026 quarter were ₹95,132 Cr"): the verb within the same phrase
+_REVENUE_WERE = re.compile(r"\b([Rr]evenue)((?:\s+(?:in|for|of|over|during)\s+[^,.;()]{0,40}?)?)\s+were\b")
+
+
+def lender_top_line(text: str) -> str:
+    return _REVENUE_WERE.sub(r"\1\2 was", _SALES_WORD.sub(lambda m: "Revenue" if m.group(1) == "S" else "revenue", str(text or "")))
+
+
 _TAIL_NOTE = re.compile(r"\s\(([^()]*(?:one-off|base effect|moved by|other income|tax rate|exceptional|unusual)[^()]*)\)\.?$", re.I)
 
 
-def notes_once(lines: list) -> list:
+def notes_once(lines: list, seen: set | None = None) -> list:
     """A read's lines with each one-off note in brackets kept on its first line only (a read kept from before LIVE7B-004 had the same
-    tax-rate note on two lines)."""
-    seen, out = set(), []
+    tax-rate note on two lines). `seen`: the notes already said in the read's earlier parts."""
+    seen = set() if seen is None else seen
+    out = []
     for x in lines or []:
         s = str(x)
         m = _TAIL_NOTE.search(s)
@@ -1230,6 +1259,17 @@ def india_label(end: tuple[int, int]) -> str:
     return f"Q{q} FY{y + 1 if m >= 6 else y}" if q else ""
 
 
+# a ratio named and the figure given for it: "P/E is 17.1", "a P/B ratio of 7.42", "price-to-earnings of 30", "debt to equity at 0.10x"
+_RATIO = re.compile(r"(?<![\w/])(?<!forward )((?:trailing\s+)?(?:P/E|PE(?=\s+(?:ratio|multiple))|price[- ]to[- ]earnings|P/B|PB(?=\s+(?:ratio|multiple))|price[- ]to[- ]book|EV/EBITDA|debt[- ]to[- ]equity|debt/equity|D/E))"
+                    r"(?![\w/])(?:\s+(?:ratio|multiple))?(?:\s+\([^)]{0,20}\))?[^.\d%₹$]{0,24}?(?<![\d.])(\d+(?:\.\d+)?)(?![\d%]|\.\d)(?!\s*(?:%|per\s?cent|years?|days?|months?|quarters?))", re.I)
+_BEAT_WORD = re.compile(r"\b(beat|beats|beaten|topped|exceeded|ahead of|above)\b[^.]{0,60}\b(estimate|estimates|expectations?|consensus)\b"
+                        r"|\b(estimate|estimates|expectations?|consensus)\b[^.]{0,60}\b(beat|beaten|topped|exceeded)\b", re.I)
+_BEAT_COUNT = re.compile(r"\b(one|two|three|four|five|six|seven|eight|\d)\s+of\s+(?:the\s+)?(?:last|past|latest|recent)\s+(two|three|four|five|six|seven|eight|\d)\s+quarters\b", re.I)
+_EPS_PAIR = re.compile(r"\$\s?(\d+\.\d+)\s+(?:against|versus|vs\.?|compared with|over)\s+(?:an?\s+|the\s+)?(?:estimate\s+of\s+|expected\s+)?\$\s?(\d+\.\d+)", re.I)
+_RATIO_KEYS = {"pe": re.compile(r"(?<![\w/])(?:p/e|price to earnings)(?![\w/])(?!.*forward)"), "pb": re.compile(r"(?<![\w/])(?:p/b|price to book)(?![\w/])"),
+               "ev": re.compile(r"ev/ebitda"), "de": re.compile(r"debt\s*/\s*equity|debt to equity")}
+
+
 class PageFacts:
     """The page's own figures, in the shapes a sentence's claims are checked against: the yearly table (and what it
     gives: growth, CAGRs and margins), the labelled Key numbers, the dates the facts carry and the latest quarter
@@ -1252,6 +1292,11 @@ class PageFacts:
         years = sorted({y for s in self.series.values() for y in s})
         self.years, self.latest = years, (years[-1] if years else None)
         self.labelled = self._labelled(facts)
+        # the page's own Key numbers alone (not a stored read's own fact rows, written with it): what a stated ratio is held to (LIVE9B-002)
+        # each quarter's (reported EPS, estimate), oldest first, as the page's results-versus-expectations card shows them
+        self.earnings = [(num_or_none(e.get("actual")), num_or_none(e.get("estimate"))) for e in sorted(
+            (e for e in facts.get("earnings_surprises") or [] if isinstance(e, dict)), key=lambda e: str(e.get("period") or ""))]
+        self.page_metrics = [(str(k).lower(), n) for k, n in ((k, num_or_none(v)) for k, v in (facts.get("metrics") or {}).items()) if n is not None]
         self.dates = set(dates_in(json_text(facts))) | {today.isoformat()}
         res = facts.get("results") or {}
         self.last_q = quarter_end(res.get("latest_quarter_end") or res.get("latest_quarter") or "")
@@ -1353,7 +1398,42 @@ class PageFacts:
     # --- the checks ---
     def check(self, s: str) -> bool:
         return (not JUDGE.search(s) and self._periods_ok(s) and self._dates_ok(s) and self._money_ok(s) and self._percents_ok(s)
-                and self._moves_ok(s))
+                and self._moves_ok(s) and self._ratios_ok(s) and self._beats_ok(s))
+
+    def _beats_ok(self, s: str) -> bool:
+        """A count of beaten estimates ("beat in three of the last four quarters") is the page's own count over that many latest quarters,
+        and an EPS told against its estimate ("$2.05 against $2.03") is one quarter's pair on the page (LIVE9B-002: an Apple read of 7 Nov
+        said both beside the page's "4 of 4 quarters beat" at $2.10)."""
+        rows = [r for r in self.earnings if r[0] is not None and r[1] is not None]
+        if not rows or not re.search(r"estimate|expect|consensus", s, re.I):
+            return True
+        for m in (_BEAT_COUNT.finditer(s) if _BEAT_WORD.search(s) else ()):
+            k, n = (_COUNT_WORDS.get(x.lower()) if not x.isdigit() else int(x) for x in (m.group(1), m.group(2)))
+            if k is None or n is None or n > len(rows):
+                continue
+            if sum(1 for a, e in rows[-n:] if a > e) != k:
+                return False
+        for m in _EPS_PAIR.finditer(s):
+            a, e = float(m.group(1)), float(m.group(2))
+            if not any(abs(a - x) <= 0.006 and abs(e - y) <= 0.006 for x, y in rows):
+                return False
+        return True
+
+    def _ratios_ok(self, s: str) -> bool:
+        """A P/E, P/B, EV/EBITDA or debt-to-equity the sentence states is the page's own, to the sentence's rounding (LIVE9B-002: a TCS read
+        of 12 Nov said "P/E is 17.1 … P/B is 7.42" on 17 Nov beside Key numbers of 16.9 and 7.31; any number within 1.2% of a fact passed
+        the plain number check). A ratio the page doesn't show has nothing to be held to."""
+        for m in _RATIO.finditer(s):
+            g = m.group(1).lower()
+            name = "ev" if "ev/" in g else "de" if ("debt" in g or "d/e" in g) else "pb" if ("b" in g.split()[-1]) else "pe"
+            have = [v for k, v in self.page_metrics if _RATIO_KEYS[name].search(k)]
+            if not have:
+                continue
+            raw = m.group(2).replace(",", "")
+            stated, dp = float(raw), _dp(raw)
+            if not any(abs(stated - v) <= 0.5 * 10 ** -dp + 0.001 + abs(v) * 0.002 for v in have):
+                return False
+        return True
 
     def _moves_ok(self, s: str) -> bool:
         """A rise or fall between two named years is the yearly table's: "Net income fell from FY24 to FY25" beside a
@@ -1974,6 +2054,8 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
 
     for k in ("summary", "valuation_note", "position"):
         out[k] = prose(read.get(k))
+        if lender:
+            out[k] = lender_top_line(out[k])
     # a strength or a risk about a move between years older than the newest the read reports isn't current (R8B-003)
     newest = newest_move_year([read.get(k) for k in ("summary", "position")] + list(read.get("bull") or []) + list(read.get("bear") or []))
     for k in ("bull", "bear", "watch"):
@@ -1986,10 +2068,14 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
             x = " ".join(s for s in _SENT.split(x) if s and not (classes and mentions_class_move(s, classes))
                          and not (k != "watch" and stale_move(s, newest)))
             if x:
-                items.append(app_dates(x, today))
+                items.append(app_dates(lender_top_line(x) if lender else x, today))
         out[k] = items
-    # the page lists strengths and risks as one list: a one-off's note once in it (LIVE7B-004)
-    both = notes_once(list(out.get("bull") or []) + list(out.get("bear") or []))
+    # a one-off's note once in the whole read, the prose and the lists together (LIVE7B-004; LIVE8B-010: HDFCBANK's read said "(Mar 2024 had
+    # a tax rate of -1% against a median of 24%)" twice)
+    seen_notes: set = set()
+    for k in ("summary", "valuation_note", "position"):
+        out[k] = " ".join(notes_once([x for x in _SENT.split(out.get(k) or "") if x], seen_notes))
+    both = notes_once(list(out.get("bull") or []) + list(out.get("bear") or []), seen_notes)
     out["bull"], out["bear"] = both[:len(out.get("bull") or [])], both[len(out.get("bull") or []):]
     ideas = []
     for i in read.get("ideas") or []:

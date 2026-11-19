@@ -10,13 +10,14 @@ import { fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signe
 import {
   SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsWhen, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type Idea, type MetricGroup, type MetricItem, type NewsItem, type Quote, type Region, type SeriesPoint,
+  metricFoots,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { surpriseShown } from "../lib/surprise";
 import { tinyBase } from "../lib/researchFormat";
 import { Star } from "./Icons";
 import { Info } from "./ui";
-import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton, type Column } from "./kit";
+import { Card, CardNote, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton, type Column } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { AiAd } from "./AiAd";
 import { StoredNote, StoredStamp, useStoredRefresh } from "./StoredStamp";
@@ -200,7 +201,7 @@ const TERMS: Record<string, string> = {
 
 /** A note longer than this under a figure is a footnote under the grid ("Jun 2025 had other income of Rs 15,119 crore against a median of Rs 4,464 crore...": five
  * lines beside a -24.6%, so its row was four times as tall as its neighbours, LIVE1A-062). A short one stays under its label. */
-const LONG_NOTE = 90;
+const LONG_NOTE = 60;
 
 /** A figure of a range in the measure's own unit, short: "12", "0.5", "25%" (no ".0"). */
 function rangeFig(v: number, unit: string | null | undefined): string {
@@ -232,8 +233,10 @@ const industryWord = (industry?: string | null): string => (/\bbank/i.test(indus
 /** Key numbers: each group is a small table (the group's name | Value | Basis | Range bar), the tables in two columns of one width (CSS columns balance them, in reading order on a phone). A long note is a numbered note under the tables, its mark beside the value (UI-CO item 2). */
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
   const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
-  const foot: { n: number; label: string; text: string }[] = [];
-  for (const g of groups) for (const m of g.items) if (m.note && m.note.length > LONG_NOTE) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
+  // LIVE9B-012: a group where only some rows have a basis gives those as numbered notes too, not a Basis column empty in three of its four rows
+  // (Sales growth, Profit growth); and a basis too long for a narrow cell is a note as well (Div yield's ran to five lines)
+  const sparse = (g: MetricGroup) => { const n = g.items.filter((m) => m.note).length; return n > 0 && n * 2 < g.items.length; };
+  const foot = metricFoots(groups.flatMap((g) => g.items.filter((m) => m.note && (m.note.length > LONG_NOTE || sparse(g)))), () => true);
   const mark = (m: { label: string; note?: string | null }) => foot.find((f) => f.label === m.label && f.text === m.note);
   const anyBar = groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry)));
   // LIVE4-013: the note says which spans are this industry's, or that they are the same for all (a bank and a defence maker had identical
@@ -247,17 +250,19 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 {/* LIVE7B-010: on a phone each group is a list (the measure and its value on one line, the basis and the range under them), not a
                     four-column table 322px wide with a basis wrapping to seven lines; its column header is out of sight there, so its name is here */}
                 <b className="inv-mt-title" aria-hidden="true">{g.title}</b>
+                {/* LIVE8B-015: a group whose rows have no basis (or no range bar) has no column for it: "Basis" stood empty in seven of
+                    twelve rows on the right */}
                 <DataTable label={`Key numbers: ${g.title}`} rows={g.items} rowKey={(m) => m.label} stack
                   columns={[
                     { key: "m", header: g.title, rowHeader: true, cell: (m) => <span className="k-small">{m.label}</span> },
                     { key: "v", header: "Value", numeric: true, cell: (m) => <b className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</b> },
-                    { key: "b", header: "Basis", cell: (m) => <span className="k-note">{m.note && !mark(m) ? m.note : ""}</span> },
-                    { key: "r", header: anyBar ? "Usual range" : "", cardLabel: "Usual range", cell: (m) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} m={m} currency={currency} industry={industry} /> : null; } },
+                    ...(g.items.some((m) => m.note && !mark(m)) ? [{ key: "b", header: "Basis", cell: (m: MetricGroup["items"][number]) => <span className="k-note">{m.note && !mark(m) ? m.note : ""}</span> }] : []),
+                    ...(g.items.some((m) => bandPosition(m.label, m.value, industry)) ? [{ key: "r", header: "Usual range", cardLabel: "Usual range", cell: (m: MetricGroup["items"][number]) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} m={m} currency={currency} industry={industry} /> : null; } }] : []),
                   ]} />
               </div>
         ))}
       </div>
-      {anyBar && <p className="k-note inv-krail-key" data-testid="krail-legend"><span className="inv-krail-demo" aria-hidden="true"><span /><b /></span>Usual range: the shaded part of each bar is the usual span of that measure for large listed companies (StratLab's rule of thumb, not this company's own history){scaledAny ? `; for ${industryWord(industry)} a few measures use that industry's span instead (${scaledAny}), the others the general one` : "; it is the same span for every industry"}. The dark mark is this company. The figures under a bar are the shaded part's ends; hover a bar for its whole scale.</p>}
+      {anyBar && <CardNote summary="How to read the bars"><p className="k-note inv-krail-key" data-testid="krail-legend"><span className="inv-krail-demo" aria-hidden="true"><span /><b /></span>Usual range: the shaded part of each bar is the usual span of that measure for large listed companies (StratLab's rule of thumb, not this company's own history){scaledAny ? `; for ${industryWord(industry)} a few measures use that industry's span instead (${scaledAny}), the others the general one` : "; it is the same span for every industry"}. The dark mark is this company. The figures under a bar are the shaded part's ends; hover a bar for its whole scale.</p></CardNote>}
       {foot.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">{foot.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.label}: {f.text}</li>)}</ul>}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
@@ -488,7 +493,8 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
 export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quarters"]>; bank?: boolean }) {
   const f = (v: number | null) => (v == null ? "–" : num(Math.round(v), 0));
   const rows = [
-    { name: "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
+    // a bank's top line is its revenue, the interest it earns, as its Key numbers say (LIVE8B-010)
+    { name: bank ? "Revenue" : "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
     // a bank reports a financing margin there, not an EBITDA margin (R7O-001)
     { name: bank ? "Financing margin" : "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ].filter((r) => !(r.name === "Financing margin" && r.cells.every((c) => c === "–")));   // a bank's margin the source gets wrong is left out, not shown as dashes (R10O-011)

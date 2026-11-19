@@ -49,7 +49,11 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
     c = deck.reconciled_counts(v, cov)
     words = deck.counts_words(c)
     assert words.startswith(f"Considered {c['considered']:,} · ") and f"with figures {c['with_figures']:,}" in words
-    assert "confirmed" in words and (not c["each"] or "in each calculation: " in words)
+    # l55 (R55, the owner's review of the live R54 decks): the members by evidence state, never one "confirmed" total (updated on purpose)
+    # (a view made before the states were kept, every company checked and in the theme: "in the theme N")
+    assert "confirmed" not in words and (" description-verified, " in words and " not checked" in words if c.get("tally")
+                                         else "membership checked " in words or " · in the theme " in words)
+    assert not c["each"] or "in each calculation: " in words
     conf = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
     find = next(ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]
                 if ln.startswith("Considered"))
@@ -62,6 +66,13 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
         else:
             assert int(m.group(4).replace(",", "")) == c["considered"] and int(m.group(3).replace(",", "")) <= c["considered"]
     for m in re.finditer(r"\b(\d[\d,]*) with figures\b", t):                         # one count of companies with figures, wherever it is said
+        # ...except the one line that adds the adjacent participants to it, naming both populations ("40 core members + 20 adjacent
+        # participants = 60 with figures": e54, R54), whose core part is that count (updated on purpose)
+        both = re.search(r"(\d[\d,]*) core members? \+ (\d[\d,]*) adjacent participants? = $", t[max(0, m.start() - 80):m.start()])
+        if both:
+            assert int(both.group(1).replace(",", "")) == c["with_figures"] and \
+                int(both.group(1).replace(",", "")) + int(both.group(2).replace(",", "")) == int(m.group(1).replace(",", "")), m.group(0)
+            continue
         assert int(m.group(1).replace(",", "")) == c["with_figures"], m.group(0)
 
 
@@ -172,7 +183,9 @@ def test_a_comparison_headlines_only_on_sample_coverage_one_model_and_one_period
 
 
 def block(name, n, k, med, model=None, year="Mar 2026"):
-    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "model": model, "stats": {"ebitda": {"median": med, "n": k}},
+    # gl50 (R50, updated on purpose): a layer given no model has its way of earning read (READ), else no layer is ranked
+    from tests.gl50_read import READ
+    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "model": dict(READ) if model is None else model, "stats": {"ebitda": {"median": med, "n": k}},
             "companies": [{"symbol": f"{name}{i}", "year": year} for i in range(n)]}
 
 

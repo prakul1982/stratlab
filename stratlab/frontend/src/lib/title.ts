@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { NAV, locate, locateGroup } from "./nav";
+import { locate, locateGroup } from "./nav";
 import { isAppPath } from "./deepLinks";
-import { HOME_TITLE } from "../content/seo";
+import { BRAND, HOME_TITLE, withBrand } from "../content/seo";
 
-/** The browser tab's title. Every page gets one from the one map of pages (lib/nav.ts): "Holdings · StratLab". A page
- * that knows something more specific (a company's symbol and price, a notebook's name) sets it with `useDocTitle`. */
-export const BRAND = "StratLab";
-export const DEFAULT_TITLE = "StratLab: test it, research it, track it";
+/** The browser tab's title. Every page gets one from the one map of pages (lib/nav.ts): "Holdings · StratLab", the page's
+ * own name in the menu and the brand, one pattern everywhere (owner, 18 Nov; content/seo.ts withBrand). A page that knows something
+ * more specific (a company's name, a notebook's name) sets it with `useDocTitle`. */
+export { BRAND, withBrand };
+export const DEFAULT_TITLE = BRAND;
 
 /** Pages that are not in a space's menu, by address. */
 const OWN: Record<string, string> = {
@@ -21,35 +22,41 @@ export const ADMIN_SECTIONS: Record<string, string> = {
   users: "Users and growth", money: "Money", data: "Data and jobs", quality: "Quality", system: "System", emails: "Email previews",
 };
 
-/** "Page · StratLab" (or the brand's line alone when the page has no name). */
-export const withBrand = (name?: string | null) => (name ? `${name} · ${BRAND}` : DEFAULT_TITLE);
-
-/** A notebook's tab titles: the notebook itself is "<notebook>", one of its runs "Run v2 · <notebook>" and the compare
- * page "Compare runs · <notebook>", so a notebook and its run pages never share a title. */
-export const notebookTitle = (name: string | null | undefined, page?: string | null) => (name ? (page ? `${page} · ${name}` : name) : null);
+/** A notebook's tab titles: the notebook itself is "<notebook>", one of its runs "Run v2: <notebook>" and the compare
+ * page "Compare runs: <notebook>", so a notebook and its run pages never share a title. */
+export const notebookTitle = (name: string | null | undefined, page?: string | null) => (name ? (page ? `${page}: ${name}` : name) : null);
 
 /** The title an address gets before the page adds anything of its own. */
 export function titleFor(path: string): string {
+  return withBrand(pageName(path));
+}
+
+/** The page's own name for its tab (null where the address names no page): the name it has in the menu, alone. A renamed
+ * tab ("Breadth", was "Market breadth") and an entry page ("Practise") are named like every other page, not "Breadth · Market
+ * today" beside "Movers" (LIVE13A-023). */
+export function pageName(path: string): string | null {
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
-  if (OWN[p]) return withBrand(OWN[p]);
-  if (p === "/admin" || p.startsWith("/admin/")) return withBrand(`Admin · ${ADMIN_SECTIONS[p.split("/")[2]] ?? "Overview"}`);
+  if (OWN[p]) return OWN[p];
+  if (p === "/admin" || p.startsWith("/admin/")) return `Admin: ${ADMIN_SECTIONS[p.split("/")[2]] ?? "Overview"}`;
   const company = p.match(/^\/research\/(IN|US)\/([^/]+)(\/deep)?$/);
   if (company) {
     // the company's name from the first frame when it has been opened before (R8O-009: "POLYCAB · StratLab" until the
     // page's numbers arrived)
     const sym = decodeURIComponent(company[2]).toUpperCase();
     const name = knownName(company[1], sym);
-    return withBrand(`${name ? `${name} (${sym})` : sym}${company[3] ? " deep dive" : ""}`);
+    return `${companyName(name, sym)}${company[3] ? " deep dive" : ""}`;
   }
   const chart = p.match(/^\/chart\/([^/]+)\/([^/]+)$/);
-  if (chart) { let sym = chart[2]; try { sym = decodeURIComponent(sym); } catch { /* as written */ } return withBrand(`${sym.toUpperCase()} chart`); }
+  if (chart) { let sym = chart[2]; try { sym = decodeURIComponent(sym); } catch { /* as written */ } return `${sym.toUpperCase()} chart`; }
   const g = locateGroup(p);
-  if (g) return withBrand(`${g.group.label} · ${NAV[g.space].label}`);
-  const at = locate(p);
-  // a tab renamed by IA-1 names its entry too ("Figures · Find stocks · StratLab"): "Figures" or "Mood" alone says nothing
-  if (at) return withBrand(at.page.was ? `${at.page.label} · ${at.group.label}` : at.page.label);
-  return DEFAULT_TITLE;
+  if (g) return g.group.label;
+  return locate(p)?.page.label ?? null;
 }
+
+/** A company's name for its tab: "Reliance Industries (RELIANCE)", or the symbol alone when the name is the symbol or not
+ * known yet. The page's first frame and the drawn page give the same title, with no price in it (owner, 18 Nov). */
+export const companyName = (name: string | null | undefined, symbol: string) =>
+  name && name.toUpperCase() !== symbol.toUpperCase() ? `${name} (${symbol})` : symbol;
 
 const NAMES_KEY = "stratlab.company-names";
 
@@ -83,22 +90,22 @@ export const PUBLIC_TITLES: Record<string, string> = {
 /** The title of a page nothing is at. */
 export const NOT_FOUND_TITLE = withBrand("Page not found");
 
-/** The title for a visitor who isn't signed in: "Sign in · Options builder · StratLab" on an app address (so a tab says
- * what it is waiting for), "Plans · StratLab" on /pricing and "Plans and prices · StratLab" on /plans, "Terms · StratLab" on a policy, "Page not found ·
- * StratLab" where nothing is, the brand's line on the landing page itself. */
+/** The title for a visitor who isn't signed in: "Sign in: Options builder · StratLab" on an app address (so a tab says
+ * what it is waiting for), "Plans · StratLab" on /pricing and /plans, "Terms · StratLab" on a policy, "Page not found ·
+ * StratLab" where nothing is, the brand alone on the landing page itself. */
 export function signedOutTitle(path: string): string {
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
   if (PUBLIC_TITLES[p]) return withBrand(PUBLIC_TITLES[p]);
-  if (p === "/plans") return withBrand("Plans and prices");      // the page's own title in content/seo.ts (DK-006)
-  if (p === "/pricing" || p === "/upgrade") return withBrand("Plans");
+  if (p === "/plans" || p === "/pricing" || p === "/upgrade") return withBrand("Plans");      // signed in or out, one name (LIVE13A-023)
   if (p === "/help") return withBrand("Help");
   if (p === "/") return HOME_TITLE;
+  if (p === "/tour") return withBrand("How StratLab works");          // a visitor's tour: the landing's spaces and steps (LIVE9B-029)
   if (p === "/features") return withBrand("What StratLab does");      // its own title, not the home page's (DI-033)
   if (p === "/app") return withBrand("Get the app");                 // readable signed out: the install steps (DI-029)
   if (!isAppPath(p)) return NOT_FOUND_TITLE;
   if (p === "/admin" || p.startsWith("/admin/")) return withBrand("Sign in");     // never names a page only some open
-  const t = titleFor(p);
-  return t === DEFAULT_TITLE ? withBrand("Sign in") : `Sign in · ${t}`;
+  const name = pageName(p);
+  return withBrand(name ? `Sign in: ${name}` : "Sign in");
 }
 
 /** Set the tab's title from a page (runs after the shell's default for the address, so it wins). Pass null while the

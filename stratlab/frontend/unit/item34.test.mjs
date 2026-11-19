@@ -32,24 +32,31 @@ test("the dollar figure: whole dollars at the app's rate, always 'about', the fi
 test("a lock's price sentence is rupees first with the dollar beside each amount, whatever currencies the table has", () => {
   const p = { offer: paid, countries: { US: "USD" }, usd_inr: { rate: 88 }, currencies: { INR,
     USD: { symbol: "$", name: "US dollar", basic: 8, pro: 20, basic_year: 80, pro_year: 200, charged_in: "USD", yearly_charged_in: "USD" } } };
-  assert.equal(planPriceLine("basic", p), "Basic is ₹699 a month (about $8) or ₹6,999 a year (about $80).");
-  assert.equal(planPriceLine("pro", p), "Pro is ₹1,999 a month (about $23) or ₹19,999 a year (about $227).");
-  assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }), "Pro is ₹1,999 a month (about $23).");
+  // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when the table has one, not the rupees converted)
+  assert.equal(planPriceLine("basic", p), "Basic is ₹699 a month (US price $8) or ₹6,999 a year (US price $80).");
+  assert.equal(planPriceLine("pro", p), "Pro is ₹1,999 a month (US price $20) or ₹19,999 a year (US price $200).");
+  assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }), "Pro is ₹1,999 a month (US price $20).");
+  const { USD: _drop, ...rupeesOnly } = p.currencies;
+  assert.equal(planPriceLine("pro", { ...p, currencies: rupeesOnly }), "Pro is ₹1,999 a month (about $23) or ₹19,999 a year (about $227).");
   // never dollars alone: a currency of its own in the table changes nothing
   assert.doesNotMatch(planPriceLine("basic", p), /^Basic is \$/);
 });
 
-test("no browser locale or saved choice picks the currency; checkout asks for the rupee plan as before", () => {
+// (updated on purpose: owner 16 Nov, US dollars for US visitors on a visible "Prices in" switch: the region (lib/homeMarket) picks
+// dollars until the visitor chooses, the page says why, the old picker's saved choice stays cleared, and checkout asks for the rupee
+// plan unless dollars are really charged; su1-email-usd.test.mjs checks the new rules)
+test("no browser locale picks the currency; the old saved choice stays cleared; checkout asks for the rupee plan unless dollars are charged", () => {
   const cur = read("src/lib/currency.ts");
   assert.doesNotMatch(cur, /resolvedOptions\(\)\.timeZone|navigator\.languages/);
   assert.match(cur, /try \{ localStorage\.removeItem\(KEY\); \} catch/);
   const plans = read("src/pages/PlansPage.tsx"), land = read("src/pages/Login.tsx");
-  assert.match(plans, /body: \{ plan, period, currency: "INR" \}/);
+  assert.match(plans, /body: \{ plan, period, currency \}/);
+  assert.match(plans, /const currency = checkoutCur\(cur, usd, period, usdOn\);/);
   assert.match(plans, /\{price\.about && <span className="k-note" data-testid=\{`about-\$\{p\}`\}>\{price\.about\}<\/span>\}/);
-  assert.match(plans, /<li data-testid="usd-note">\{usdNote\(rate, pricing\?\.usd_inr\?\.fallback\)\}<\/li>/);      // one line of the small print (R11)
+  assert.match(plans, /<li data-testid="usd-note">\{cur === "USD" && usd \? usdPricesNote\(usd, period, usdOn\) : usdNote\(rate, pricing\?\.usd_inr\?\.fallback, usd\)\}<\/li>/);      // one line of the small print (R11) (updated on purpose: LIVE10B-001 names the US prices)
   assert.match(land, /\{about && <span className="small muted" data-testid=\{`about-\$\{p\}`\}>\{about\}<\/span>\}/);
-  for (const src of [plans, land]) assert.doesNotMatch(src, /aria-label="Prices in"|label="Prices in"|In India\? Show prices in ₹/);
-  // the paywall sentences come from the same line (usePlanPrice / planPriceFor)
-  assert.match(cur, /return planPriceLine\(plan, p\);/);
-  assert.match(cur, /return shared\.then\(\(r\) => planPriceLine\(plan, r\)\)/);
+  for (const src of [plans, land]) assert.doesNotMatch(src, /In India\? Show prices in ₹/);
+  // the paywall sentences come from the same line (usePlanPrice / planPriceFor), in the currency shown
+  assert.match(cur, /return planPriceLine\(plan, p, shownCur\(\), usdCheckoutOn\(\)\);/);
+  assert.match(cur, /return shared\.then\(\(r\) => planPriceLine\(plan, r, shownCur\(\), usdCheckoutOn\(\)\)\)/);
 });

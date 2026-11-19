@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, sourceWords } from "../lib/format";
+import { ago, daysOld, fmtDate, HOLDINGS_OLD_DAYS, sourceWords } from "../lib/format";
 import { aiCountText, aiMissingRow, serverRow } from "../lib/connection";
 import { HELP } from "../lib/help";
 import { planLabel } from "../lib/account";
@@ -79,23 +79,29 @@ export function SettingsPage() {
 }
 
 function ExperienceCards() {
-  const { me, focus, level, savePrefs, setLevel, theme, setTheme } = useApp();
+  const { me, focus, level, savePrefs: savePrefsApp, setLevel: setLevelApp, theme, setTheme } = useApp();
   const companies = companiesPref(me);
+  // LIVE10A-023: each change says it was kept, or that it wasn't (a failed save showed nothing on the page)
+  const [saved, setSaved] = useState<"saving" | "saved" | "failed" | null>(null);
+  const track = (p: Promise<boolean>) => { setSaved("saving"); return p.then((ok) => setSaved(ok ? "saved" : "failed")); };
+  const savePrefs = (p: Parameters<typeof savePrefsApp>[0]) => track(savePrefsApp(p));
+  const setLevel = (l: Level) => track(setLevelApp(l));
   return (
     <>
       <Card id="experience" label="What you see first">
-        <CardHead title="What you see first" info="Changes only which space the menu and home page open in, which settings start open, and which companies the calendars and Invest home open on. Every tool stays available." />
+        <CardHead title="What you see first" info="Changes only which space the menu and home page open in, which settings start open, and which companies the calendars and Invest home open on. Every tool stays available."
+          actions={saved && <span className={`k-note${saved === "failed" ? " k-warn-text" : ""}`} role="status" data-testid="prefs-saved">{saved === "saving" ? "Saving…" : saved === "saved" ? "Saved" : "Couldn't save the change. Pick it again to retry."}</span>} />
         {/* the choices two by two: one under the other left a wide card holding small switches in its left third (UI-FIX-1, R2) */}
         <div className="k-two">
         <FieldGroup label="What you're here for">
           <Seg label="What you're here for" options={FOCUSES.map(([f, title]) => ({ value: f, label: title }))} value={focus ?? ""}
             onChange={(f) => void savePrefs({ focus: f as Focus, space: viewForFocus(f as Focus)! })} />
-          {focus && <p className="k-small k-muted k-hint-line">{FOCUSES.find(([f]) => f === focus)?.[2]}</p>}
+          <p className="k-small k-muted k-hint-line">{focus ? FOCUSES.find(([f]) => f === focus)?.[2] : "Not set yet: pick one."}</p>
         </FieldGroup>
         {/* LIVE1B-041: named for what it asks, not for the tab it is in */}
         <FieldGroup label="How experienced you are">
           <Seg label="How experienced you are" options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} value={level ?? ""} onChange={(l) => void setLevel(l as Level)} />
-          {level && <p className="k-small k-muted k-hint-line">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
+          <p className="k-small k-muted k-hint-line">{level ? LEVELS.find(([l]) => l === level)?.[2] : "Not set yet: pick one."}</p>
         </FieldGroup>
         {/* owner, 5 Nov: "give a global option": which companies the results, corporate actions, all-dates and filings pages and Invest home open
             on. Each page's own switch still changes that page only */}
@@ -138,8 +144,11 @@ function ConnectedAccounts() {
       <CardHead title="Connected accounts" info="Your holdings, funds and trades come from files you upload, numbers you type, or the connections below that update them by themselves. Each one shows when it last changed." />
       {/* the three files share the card's width: in four 240px columns they left the right quarter empty (VR3-009) */}
       <TileGrid className="k-linkcards" fill>
-        <LinkCard to="/holdings" title="My Holdings" note={note(h, noun(h?.count, "stock", "stocks"))}>
-          {h?.source ? `From ${sourceWords(h.source)}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
+        {/* LIVE10B-043: the import's day said once, in India's time ("on 24 Oct" over "updated 25 Oct 2026" were one import) */}
+        <LinkCard to="/holdings" title="My Holdings" note={h?.source && h.updated_at ? noun(h.count, "stock", "stocks") : note(h, noun(h?.count, "stock", "stocks"))}>
+          {/* imported once, with the day: never "From your Zerodha login" beside "Zerodha · Not connected" as if it still came from there (LIVE9B-021);
+              "once" said (LIVE12B-019: "Imported from your Zerodha login" beside "Not connected" still read as a live link) */}
+          {h?.source ? `Imported once from ${sourceWords(h.source)}${h.updated_at ? ` on ${fmtDate(h.updated_at, { year: false, tz: "Asia/Kolkata" })}` : ""}${(daysOld(h.updated_at) ?? 0) >= HOLDINGS_OLD_DAYS ? `, ${daysOld(h.updated_at)} days ago` : ""}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
         </LinkCard>
         <LinkCard to="/money/mutual-funds" title="Mutual funds statement" note={note(mf, noun(mf?.count, "scheme", "schemes"))}>Upload your Consolidated Account Statement (PDF or CSV).</LinkCard>
         <LinkCard to="/tax-report" title="Broker tradebooks" note={note(tax, noun(tax?.count, "file", "files"))}>Upload tradebooks and tax P&amp;L files from any broker for your capital gains.</LinkCard>

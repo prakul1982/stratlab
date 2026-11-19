@@ -5,7 +5,7 @@ import { arrowOf } from "../lib/format";
 import { crore, dayName, spanLine, statusLine, type CashPoint, type Summary } from "../lib/positioning";
 import { cutPoints } from "../lib/range";
 import { LineChart } from "../components/Charts";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, RangeChips, Signed, Skeleton, useRange, type Column } from "../components/kit";
+import { Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, RangeChips, Signed, Skeleton, useRange, type Column } from "../components/kit";
 
 /* /invest/flows (IA-1: Market today's Flows tab): what foreign portfolio investors (FII/FPI) and domestic institutions (DII)
  * bought and sold in India's cash market, from the exchange's provisional evening figures. The latest day for everyone;
@@ -73,8 +73,9 @@ export function FlowsPage() {
             {!full ? (
               <Card label="Every recorded day" testId="flows-locked">
                 <CardHead title="Every recorded day" />
-                <p className="k-small k-muted">Each recorded day's FII and DII net buying, as a table and a chart, is on the {s.plan_needed} plan, as on Positioning. The latest day above is on every plan.</p>
-                <Link to="/plans" className="btn sm k-btn-end">See the {s.plan_needed} plan</Link>
+                {/* LIVE9A-018: the lock said once, here, as the page's own plan note (the banner over the page said it a second time and
+                    arrived after the figures, moving the page: CLS 0.277) */}
+                <PlanNote>Each recorded day's FII and DII net buying, as a table and a chart, is on the {s.plan_needed} plan, as on Positioning. The latest day above is on every plan.</PlanNote>
               </Card>
             ) : (
               <Card label="Every recorded day" testId="flows-days">
@@ -89,7 +90,7 @@ export function FlowsPage() {
                       {shown.length >= 2 && (
                         <LineChart lines={[{ values: shown.map((p) => p.fii), color: "var(--pos-call)", width: 2, label: "FII/FPI" },
                           { values: shown.map((p) => p.dii), color: "var(--pos-put)", width: 2, label: "DII" }]}
-                          labels={shown.map((p) => dayName(p.day))} times={shown.map((p) => p.day.slice(0, 10))} ranges={false} legend format={(v) => crore(v, true)} signedTip
+                          labels={shown.map((p) => dayName(p.day))} times={shown.map((p) => p.day.slice(0, 10))} x={shown.map((p) => Date.parse(`${p.day.slice(0, 10)}T00:00:00Z`))} ranges={false} legend format={(v) => crore(v, true)} signedTip
                           axisFormat={(v) => crore(v)} baseline={0} height={220} ariaLabel="FII and DII net cash market flows by day" />
                       )}
                       <DataTable csv="FII DII flows by day" label="FII and DII net buying by day" columns={cols} rows={rows} rowKey={(r) => r.day} phonePage={30}

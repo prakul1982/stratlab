@@ -90,7 +90,8 @@ test("LAND-2: the page draws the intro right under the hero, in heading order, w
 test("VR5-owner-2: the landing page never says 'ten markets', 'paper trading only / never real orders' or 'facts, not tips' twice", () => {
   const login = read("src/pages/Login.tsx");
   // the hero's eyebrow and line, the line under the button and Options' tag no longer carry them
-  assert.match(login, /"Trade · Invest · Money"\}<\/span>/);
+  // (updated on purpose, NAV3: the hero's eyebrow says who it is for, not the three spaces)
+  assert.match(login, /"For traders and investors in India and the US"\}<\/span>/);
   assert.doesNotMatch(login, /Ten markets|Facts and tests, never tips|Paper trading only, no real orders|No real orders, ever/);
   // nothing else drawn from the intro's data says them again: the sentence is the only place
   const rest = JSON.stringify([INTRO_SPACES, HOW_STEPS, HOW_MONEY]).toLowerCase();

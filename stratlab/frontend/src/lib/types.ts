@@ -41,6 +41,7 @@ export interface Market {
   hours: { open: string | null; close: string | null; days: string; fo_close?: string | null } | null; what: string; costs: string;
   brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
   holidays?: string[];      // weekday closures in the next few weeks, as dates in the exchange's own calendar
+  stored_daily?: boolean;   // offline, but a daily test runs on its stored daily closes meanwhile (India's, LIVE11B-013)
 }
 
 export type VerdictKind = "edge" | "mixed" | "luck" | "not_enough" | "no_edge";
@@ -138,12 +139,14 @@ export interface PlanInfo {
   themes_per_month?: number | null; ai_reads_per_day?: number | null; search_ai_per_day?: number | null;
   /** Market Watch (MW-1): lists, symbols in a list, charts that keep drawings, indicators on a chart. null: no limit. */
   watchlists?: number | null; watchlist_symbols?: number | null; chart_saves?: number | null; chart_indicators?: number | null;
+  /** kept counts (None: no limit) */
+  mf_schemes?: number | null; networth_items?: number | null; journal_trades?: number | null;
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";
 export type Focus = "invest" | "trade" | "money" | "both";
 
-export type FreeChange = { on: string; rows: { key: string; label: string; before: number | null; after: number | null }[]; moves: string[] };
+export type FreeChange = { on: string; rows: { key: string; label: string; before: number | null; after: number | null }[]; moves: string[]; over?: string[] };
 
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
@@ -204,7 +207,7 @@ export interface LiveSnapshot {
   id: string; name: string; status: "running" | "stopped" | "paused"; stop_reason?: string | null; notice?: string | null;
   instrument: Instrument; strategy: Strategy; started_at: string; stopped_at?: string | null;
   last_price?: number | null; last_tick_at?: string | null; feed_connected?: boolean;
-  bars: { t: string; o: number; h: number; l: number; c: number }[]; forming?: { t: string; c: number } | null;
+  bars: { t: string; o: number; h: number; l: number; c: number }[]; forming?: { t: string; o?: number; h?: number; l?: number; c: number } | null;
   overlays: Record<string, (number | null)[]>; events: LiveEvent[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; qty: number; entry?: number | null; stop?: number | null;
     target?: number | null; unrealised: number; realised: number; trades: number; wins: number;

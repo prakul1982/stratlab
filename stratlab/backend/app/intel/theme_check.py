@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
 from ..ai_providers import AIError
+from .net import SourceError
 
 # words a group's name or text shares with every other group, which prove nothing about the work
 _WORK_GENERIC = {
@@ -73,6 +74,20 @@ def clean_description(text, limit: int = EVIDENCE_CHARS) -> str:
     return " ".join(str(text or "").split())[:limit]
 
 
+def kept_description(text, limit: int = EVIDENCE_CHARS) -> str:
+    """A company's description as stored (theme_routes.evidence_reader): its words on one line, at most `limit` characters; d53 (LIVE8A-004:
+    "a broad portfolio of solutio" quoted on the page from a description kept to its first 700 characters): one longer than that is kept to
+    its last whole sentence within them, else to its last whole word, never cut inside a word."""
+    t = " ".join(str(text or "").split())
+    if len(t) <= limit:
+        return t
+    cut = t[:limit]
+    end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+    if end >= limit // 2:
+        return cut[:end + 1]
+    return cut[:cut.rfind(" ")].rstrip(" ,;:-–—") if " " in cut else cut
+
+
 _SENTENCE = re.compile(r"[^.;!?]+")
 
 
@@ -88,6 +103,20 @@ def own_words(about, group_text, claimed) -> str:
             continue
         quote = " ".join(words[:MAX_QUOTE_WORDS])
         if supports(quote, group_text) and len(stems(quote) & want) >= 2 and quote_in(quote, about):
+            return quote
+    return ""
+
+
+def group_sentence(about, group_text) -> str:
+    """p57: the first sentence of a company's own description (word for word, MIN_QUOTE_WORDS to MAX_QUOTE_WORDS words) that speaks of a
+    group's work (supports), or "": the quote a published member kept in its group shows (theme_base.keep_published, check_placements
+    `held`), with no answer of the AI's to compare."""
+    for part in _SENTENCE.findall(str(about or "")):
+        words = part.split()
+        if len(words) < MIN_QUOTE_WORDS:
+            continue
+        quote = " ".join(words[:MAX_QUOTE_WORDS])
+        if supports(quote, group_text) and quote_in(quote, about):
             return quote
     return ""
 
@@ -149,6 +178,11 @@ def gather_evidence(symbols: list[str], read, budget: float = EVIDENCE_BUDGET, w
             return sym, "late"
         try:
             return sym, read(sym)
+        except SourceError as e:
+            # gl52 (R52): a source that says it has nothing for this company (not busy) has answered: nothing to read, never "try later"
+            # (the live Release 51 checks retried 43 such companies on every pass and placed none of them)
+            print("theme check: description not read:", sym, type(e).__name__, str(e)[:100])
+            return sym, (None if not e.busy else "late")
         except Exception as e:                     # a source that can't answer now: this company waits for the next request
             print("theme check: description not read:", sym, type(e).__name__, str(e)[:100])
             return sym, "late"
@@ -163,12 +197,17 @@ def gather_evidence(symbols: list[str], read, budget: float = EVIDENCE_BUDGET, w
     return got, pending
 
 
-def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None, budget: float = EVIDENCE_BUDGET) -> dict:
+def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None, budget: float = EVIDENCE_BUDGET, held: dict | None = None) -> dict:
     """The map with only the companies whose own description shows they do their group's work. Each kept company in a
     layer or sub-theme carries "what" (the words from its description). Also gives "placements": {"checked": every company
     could be checked, "pending": how many couldn't be yet, "left_out": how many named pairs were dropped}. `evidence_of(symbols)`
     -> ({symbol: {about, industry}}, pending symbols); `ask(system, text)` is the AI's JSON answer; `verdict_cache` is a
-    dict that keeps a pair's answer for the next request."""
+    dict that keeps a pair's answer for the next request.
+    p57 (R56 review: Capital One and Sarepta out on a re-check's "no" for the same stored words the version before had checked to show
+    their group's work): `held`, {symbol: the map group of its published layer, "" when none of the map's (theme_base.published_group)}:
+    a published member is not asked again: it stays in that group (else the first the map names it in), its own words' sentence of the
+    group's work its quote when there is one ("verified"), else kept unconfirmed ("kept_member"), unless its own words contradict that group
+    (theme_base.contradicted): then it is asked like a new company. "held" in the placements counts those not asked."""
     out = dict(out)
     groups = groups_of(out)
     by_id = {g["id"]: g for g in groups}
@@ -183,9 +222,27 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     cache = verdict_cache if verdict_cache is not None else {}
     got: dict[str, dict] = {}
     todo = []
+    not_asked = 0
+    from .theme_base import KEPT_SAID, contradicted
+    for sym, gids in syms.items():
+        if sym not in (held or {}):
+            continue
+        ev = evidence.get(sym) or {}
+        home = next((g for g in gids if by_id[g]["name"] == held[sym]), gids[0])
+        g = by_id[home]
+        # r571 (the live R57 Defence deck: Bharat Forge, published in "Parts, component and ingredient makers", a layer the split made and no
+        # group of the map, was judged against the first map group naming it, "Combat aircraft and helicopters", asked, and dropped): only a
+        # published group of the map's own is a test of its words; one published elsewhere stays, its layer held by the placement's last step
+        if held[sym] and contradicted(g["name"], ev.get("about") or "", ev.get("industry") or "", g["text"]):
+            continue                         # its own words contradict its published group: asked like a new company
+        quote = group_sentence(ev.get("about") or "", f"{g['name']} {g['text']}")
+        for gid in gids:
+            got[f"{gid}|{sym}"] = {"does": gid == home, "quote": quote if gid == home else "", "held": True}
+        pending.discard(sym)
+        not_asked += 1
     for sym, gids in syms.items():
         ev = evidence.get(sym)
-        if not ev:
+        if not ev or f"{gids[0]}|{sym}" in got:
             continue
         need = []
         for gid in gids:
@@ -219,7 +276,8 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
                 gtext = f"{g['name']} {g['text']}"
                 quote = v["quote"] if quote_in(v["quote"], ev["about"]) and supports(v["quote"], gtext) else (own_words(ev["about"], gtext, v["quote"]) if v["does"] else "")
                 ok = bool(v["does"]) and bool(quote)
-                answer = {"does": ok, "quote": quote if ok else ""}
+                # t56: a "yes" whose quote its words don't back is told apart from a "no" (theme_routes.keep_confirmed)
+                answer = {"does": ok, "quote": quote if ok else "", **({"unbacked": True} if v["does"] and not ok else {})}
                 cache[(theme, gid, g["name"], c["symbol"], norm(ev["about"])[:200])] = answer
                 got[f"{gid}|{c['symbol']}"] = answer
     left_out = 0
@@ -231,7 +289,12 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         for c in cos:
             sym = c.get("ticker")
             v = got.get(f"{gid}|{sym}")
-            if v and v["does"]:
+            if v and v["does"] and v.get("held"):          # p57: a published member, not asked again
+                kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": bool(v["quote"]),
+                             "kept_member": KEPT_SAID.format(layer=by_id[gid]["name"])})
+            elif v and v.get("held"):
+                pass                                      # its other groups: it is kept once, in its published one
+            elif v and v["does"]:
                 kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": True})
             elif v is None:
                 # not checked yet (the AI or a source busy) or nothing to check it by (no description found): shown, marked not yet
@@ -247,8 +310,28 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     placed = {c["ticker"] for v in out["value_chain"] + out["sub_themes"] for c in v["companies"]}
     out["screen"] = [x for x in out.get("screen") or [] if x.get("ticker") in placed]
     out["clusters"] = [c for c in ({**c, "companies": [x for x in c.get("companies") or [] if x.get("ticker") in placed]} for c in out.get("clusters") or []) if c["companies"]]
+    # t56 (R55 review, the live R55 Payments deck: "removed 1: Adyen Nv-Unspon ADR (no longer in the theme's map)"): each company the check
+    # left out of every group the map named it in, with what the check said (a "no" of its own words, or a "yes" its words don't back) and
+    # what kind of listing line it is, so its removal says it is a business-membership decision, never a listing one
+    dropped = []
+    for sym, gids in syms.items():
+        if sym in placed:
+            continue
+        said = [got.get(f"{gid}|{sym}") for gid in gids]
+        if not said or any(x is None for x in said):
+            continue
+        from .theme_base import issuer_name, listing_line
+        line = listing_line(names[sym])
+        # p57 (R56 review: "its own words don't show the work of “Card issuers and lenders”" printed of a card issuer): whether its own words
+        # use the vocabulary of a group it was left out of, so its reason never says they don't show a work they name
+        from .theme_base import shares_vocabulary
+        about_ = (evidence.get(sym) or {}).get("about") or ""
+        names_it = [by_id[g]["name"] for g in gids if about_ and shares_vocabulary(by_id[g]["name"], about_)]
+        dropped.append({"ticker": sym, "name": names[sym], "groups": [by_id[g]["name"] for g in gids],
+                        "said": "unbacked" if all(x.get("unbacked") for x in said) else "no", **({"words_name": names_it} if names_it else {}),
+                        **({"listing": line, "issuer": issuer_name(names[sym])} if line else {})})
     out["placements"] = {"checked": not pending and not failed, "pending": len(pending), "left_out": left_out, "placed": len(placed),
-                         "unconfirmed": len(unconfirmed)}
+                         "unconfirmed": len(unconfirmed), **({"dropped": dropped} if dropped else {}), **({"held": not_asked} if not_asked else {})}
     return out
 
 
@@ -290,6 +373,10 @@ MODELS = {
     "broking": ("financial_fees", "Brokers and distributors of financial products", "commissions and fees for selling or arranging others' financial and insurance products"),
     "asset_management": ("financial_fees", "Fund and asset managers", "fees on the money they manage"),
     "market_infrastructure": ("financial_fees", "Exchanges, depositories and ratings", "fees for trading, settling, holding or rating securities"),
+    # gl52 (R52, the rotating review of Release 51: the Payments deck's "Merchant acquiring and processing" held 1 of its 5 companies in its
+    # figures, Fiserv read as managed IT services, Toast as software, Visa and Mastercard with no way of earning): processors, acquirers, card
+    # networks and wallets earn a fee or a share of each payment they process
+    "payments": ("payments", "Payment networks and processors", "fees on the value or number of payments they process"),
     "resources": ("resources", "Mining, oil, gas and farming", "selling what they mine, drill or grow"),
     "utility": ("utility", "Power, gas and water supply", "selling power, gas or water, much of it at regulated tariffs"),
     # R29 (the owner's review of the live R27 Utilities and Metals decks: regulated networks beside generators and traders, miners beside
@@ -309,6 +396,10 @@ MODELS = {
     "transport": ("transport", "Transport and logistics", "fees for moving and storing goods or people"),
     "consumer_services": ("consumer_services", "Hotels, travel and consumer services", "fees paid by consumers for stays, trips, meals or courses"),
     "holding": ("holding", "Diversified groups", "several businesses that earn in different ways"),
+    # r571x (R57.1, the 10 new live R57 themes: Yum Brands and Restaurant Brands International, in "Franchisors earning royalties", left out
+    # as "its words don't state how it earns", the model list having no franchisor): a franchisor earns royalties and fees from the franchisees
+    # who run outlets under its brands
+    "franchising": ("franchising", "Franchisors", "royalties and fees from franchisees who run outlets under their brands"),
 }
 
 
@@ -340,7 +431,7 @@ OSAT_WORDS = r"\bosat\b|(?:assembly|packaging) and test(?:ing)? services|manufac
 MODEL_NEEDS = {
     "platform": r"marketplace|commission|advertis|take[- ]rate|listing fee|listings|classified|aggregator|gross merchandise|gmv|booking platform|"
                 r"connects (?:buyers|sellers|users|customers)|two-sided|(?:e-?)?commerce platforms?|online travel|food delivery|ride-hailing|"
-                r"third[- ]party sellers",
+                r"third[- ]party sellers|online (?:technology |travel |booking )?platforms?",
     "hardware_resale": r"resell|resale|reseller|distribut|system integrat|systems integrat|value[- ]added|channel partner|authori[sz]ed partner|"
                        r"install|trading|dealer|partner of (?:leading|global)|brands? such as",
     "distribution": r"distribut|wholesal|trading|trader|dealer|stockist|import|export|supply chain services",
@@ -358,6 +449,8 @@ MODEL_NEEDS = {
                               # R37 (lane r2, the live R35 Semiconductors deck: Amkor and ChipMOS, "packaging and test services", left out as "way
                               # of earning not shown"): packaging and testing others' chips (OSAT) is contract making in so many words
                               + OSAT_WORDS + r"|electronics system design and manufactur|\besdm\b|contract-led manufactur|custom synthesis",
+    "payments": r"payment|card transactions|merchant acquir|\\bacquir(?:er|ers|ing)\\b|interchange|card networks?|money (?:movement|transfer)|remittance|"
+                r"wallets?\\b|point[- ]of[- ]sale|checkout|electronic funds? transfers?|\\btpv\\b",
     "lending": r"\bloan|lend|credit|financ|bank|nbfc|microfinance|mortgage|deposit",
     "underwriting": r"insur|underwrit|premium|reinsur|assurance",
     "broking": r"brok|intermediar|distribut|commission|agent|advis|wealth|insurance web|aggregator",
@@ -415,10 +508,14 @@ MODEL_WORDS = {
     "utility": r"\bpower\b|electricity|generation|transmission|distribution of (?:power|electricity|gas)|tariff|water supply|city gas|utility|"
                r"megawatt|\bmw\b|\bgw\b",
     "property": r"\brent|lease|leasing|\breit|commercial (?:space|property|real estate)|office (?:space|parks?)|malls?\b|warehous|annuity assets",
-    "care": r"hospital|clinic|diagnostic|patients|healthcare services|pathology|\blabs?\b|beds\b",
+    "care": r"hospital|clinic|diagnostic|patients|healthcare services|pathology|\blabs?\b|laborator|beds\b",
     "media": r"media|broadcast|channels?\b|\bfilms?\b|content|publish|advertis|streaming|newspaper|music",
     "transport": r"logistic|transport|freight|shipping|courier|airline|cargo|\bports?\b|warehous|\brail|fleet",
     "holding": r"conglomerate|diversified|group companies|subsidiaries|holding company|several businesses",
+    "payments": r"payments? (?:processing|processors?|networks?|technology|platforms?|solutions|services|volume|acceptance)|"
+                r"process(?:es|ing)? (?:\w+ ){0,3}?(?:payments|card transactions|transactions)\b|merchant acquir|acquiring (?:services|business)|"
+                r"interchange|card networks?|payment cards?|(?:credit|debit) (?:and|&) (?:credit|debit) cards?|electronic funds? transfers?|"
+                r"money movement|money transfer|remittance|digital wallets?|point[- ]of[- ]sale|\btpv\b",
 }
 
 
@@ -459,7 +556,8 @@ def own_words_show(model, evidence) -> bool:
         return False
     _, own = _split_evidence(evidence)
     words = _words_of(model)
-    return bool(words and re.search(words, own, re.I)) or family_shown(model, own)
+    # x57 (second wave): the words that name a way beside a company's other words (WORDS_SAY: "Contract Research Organization (CRO)") show it
+    return bool(words and re.search(words, own, re.I)) or family_shown(model, own) or bool(WORDS_SAY.get(model) and re.search(WORDS_SAY[model], own, re.I))
 
 
 def family_shown(model, own) -> bool:
@@ -496,15 +594,33 @@ MODEL_SAYS = {
     "contract_manufacturing": r"contract manufactur|\bcdmo\b|\bcrams\b|electronics manufacturing services|\bems provider|\bosat\b|pure-play foundry|"
                               r"(?:dedicated|independent) (?:semiconductor )?foundr",
     "fabless": r"fabless",
-    "platform": r"commission income|take rate|online marketplace|gross merchandise value|marketplace (?:revenue|commissions?|fees)",
+    "platform": r"commission income|take rate|online marketplace|gross merchandise value|marketplace (?:revenue|commissions?|fees)|"
+                # gl52 (R52: TBO Tek, "operating multiple online technology platforms ... to book global travel inventory")
+                r"operat\w* (?:\w+ ){0,2}online (?:technology |travel |booking )?platforms?|online travel agen(?:cy|cies|t)",
     "lending": r"interest income (?:on|from) loans|loan book|\bnbfc\b|non-banking financ",
     "life_insurance": r"life insurance company|life insurer",
     "general_insurance": r"general insurance company|general insurer|health insurer|non-life insurer",
     "reinsurance": r"reinsurer|reinsurance company",
     "hardware_resale": r"(?:authori[sz]ed|channel) (?:partner|reseller|distributor) (?:of|for)|value[- ]added reseller|system integrator for",
     "property_development": r"real estate develop|residential (?:real estate )?develop",
+    "payments": r"payments? processing|payment processors?|process(?:es)? (?:\w+ ){0,2}?(?:payments|(?:debit|credit) (?:and (?:debit|credit) )?card "
+                r"transactions)|merchant acquir|card networks?|payment networks?|payment transaction processing|total payment volume|\btpv\b|"
+                r"money movement platforms?|money transfer services|payments? (?:technology|solutions|services) (?:to|for) merchants|"
+                r"(?:facilitates|processes) electronic funds? transfers?",
     "telecom_services": r"telecom(?:munications?)? (?:service providers?|operators?)|providers? of telecommunications? services|mobile network operators?|"
                         r"(?:mobile|wireless|broadband|cellular) (?:and (?:home )?broadband )?operators?|wireless carriers?",
+    # r571x (R57.1, the 10 new live R57 themes: franchisors, gas distribution utilities, pipelines, logistics providers and media companies
+    # left out as "insufficient evidence" though their own words say their business): each business in so many words
+    "franchising": r"\bfranchisors?\b|\bfranchising\b|franchised (?:restaurants|outlets|stores|units|locations|hotels)|royalt(?:y|ies) (?:and fees )?(?:from|paid by) franchisees",
+    "regulated_utility": r"(?<!for )(?<!to )(?<!serving )(?<!supplies )natural[- ]gas(?:[- ]only)? distribut(?:ors?\b|ion (?:compan|utilit|business|services|operations))|(?<!for )(?<!to )(?<!serving )(?<!natural )gas distribution (?:utilit|compan|business)|"
+                         r"local distribution compan|regulated (?:natural gas |gas |electric |water )?(?:and (?:gas|electric) )?utilit|"
+                         r"public utility holding compan|(?:electric|natural gas|gas|water) utility (?:holding )?compan",
+    "transport": r"pipelines? (?:that |which )?(?:transport|carr(?:y|ies)|move)|(?:crude oil|natural gas|liquids) pipelines? (?:and|network|system|operator)|"
+                 r"midstream (?:energy |infrastructure |services )?(?:compan|business|operator)|gathering,? (?:and )?processing|"
+                 r"(?:integrated |third[- ]party |contract )logistics|\b3pl\b|logistics (?:services?|solutions) (?:provider|company)|"
+                 r"supply chain (?:solutions|services|management) (?:provider|company)|freight forwarding|less[- ]than[- ]truckload",
+    "media": r"mass media|media and entertainment (?:company|conglomerate|group)|entertainment conglomerate|(?:television|tv|cable|broadcast) networks?\b|"
+             r"film (?:and television )?studios?|streaming (?:service|platform)s?\b|(?:television|radio) broadcast(?:ing|ers?)\b",
 }
 
 
@@ -530,7 +646,9 @@ OWN_SAYS = {
                               r"electronics manufacturing services|electronics system design and manufactur|\besdm\b|on behalf of (?:its |their )?(?:customers|clients)",
     "components": r"\b(?:auto(?:motive)?|automobile|vehicle|tractor|engine) (?:[\w-]+ ){0,2}(?:components?|parts|ancillar\w*)\b|\bcomponents? manufacturers?\b|"
                   r"\bmanufactur\w* (?:and \w+ )?(?:of )?(?:[\w&/,-]+ ){0,4}?components\b|\btier[- ]?(?:1|i|one) supplier",
-    "project_services": r"software (?:development|consultancy|consulting|outsourcing) services|\bsoftware development\b|\bit (?:consult\w*|services)\b|"
+    # d53 (LIVE8A-005: Arm "left out ... the way of earning of “Project and consulting services”" for "provides software development
+    # tools"): software development tools, kits or platforms are products sold, not development done for clients
+    "project_services": r"software (?:development|consultancy|consulting|outsourcing) services|\bsoftware development\b(?! (?:tools?|kits?|platforms?|environments?)\b)|\bit (?:consult\w*|services)\b|"
                         r"information technology services|(?:technical|technology|it) consult(?:ing|ancy)(?: services)?|\bsoftware services\b|"
                         r"customi[sz]ed software (?:solutions|development)",
     "software": r"\b(?:develops?|sells?|licen[cs]es?)(?: and \w+)? (?:its |our )?own (?:software )?products|\bsoftware products? (?:company|developer)",
@@ -538,9 +656,11 @@ OWN_SAYS = {
 }
 # making or trading in so many words: a maker of its own products ("manufactures", "is engaged in the manufacturing of", "a manufacturer of",
 # "produces"), or a trader of others' goods; a parts maker when its official industry is one of parts or components
-MAKER_SAYS = (r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\b(?:engaged in|in the business of|business of|does|involved in) (?:the )?"
+# d53 (LIVE8A-005: Ichor "insufficient evidence: its own words don't state how it earns" beside "the design, engineering and manufacturing of
+# critical fluid delivery subsystems"): "manufacturing of" what it names is a maker's own words too
+MAKER_SAYS = (r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\bdesign, engineering and manufacturing of\b|\b(?:engaged in|in the business of|business of|does|involved in) (?:the )?"
               r"(?:business of )?(?:the )?(?:manufactur\w*|production)\b|\bmanufacturing (?:and|&) (?:sell|sale|market|suppl|export)\w*|\bproduces\b|"
-              r"\bproducers? (?:and \w+ )?of\b|\bmakes\b|\bmanufacturing company\b")
+              r"\bproducers? (?:and \w+ )?of\b|\bmakes\b(?! (?:it|them|us|sure|up)\b)(?![^.;]{0,40}\bpossible\b)|\bmanufacturing company\b")
 TRADER_SAYS = (r"\btrad(?:ing|es|er|ers)\b(?! (?:name|mark)s?\b)|\bdistribut(?:es|or|ors|ion)\b|\bwholesal\w*|\bdeals? in\b(?! (?:the )?manufactur)|"
                r"\bdealers?\b|\bstockists?\b|\bimports?\b")
 # trading as the business itself ("engaged in trading of chemicals", "a distributor of"), not shares or securities traded beside another business
@@ -597,7 +717,12 @@ def stated_model(evidence) -> str:
 # R40 (the owner's review of the live Release 39 Consumer retail deck: "Online retailers and marketplaces" took no online seller, its map name
 # "Online marketplaces" stating a platform's way of earning): the ways of earning a layer's own name states in so many words, a retailer's
 # and a platform's beside the words of stated_model
-NAME_STATES = {"retail": r"\bretail(?:ers?|ing)?\b|\bstores?\b|\bshops?\b", "platform": r"\bmarketplaces?\b|\bplatforms?\b"}
+# r582 (R58.2, the live R58.1 Hospitals deck: "Contract research and life-science services" read as makers of their own products, two
+# makers read at medium against its contract research firms read at low, so 8 of its 13 left out): a name that says contract research, or
+# research or consulting services, states the fees of projects and time worked (a name that says contract research and manufacturing
+# states both, so neither alone)
+NAME_STATES = {"retail": r"\bretail(?:ers?|ing)?\b|\bstores?\b|\bshops?\b", "platform": r"\bmarketplaces?\b|\bplatforms?\b",
+               "project_services": r"\bcontract research\b(?! (?:and|&) manufactur)|\b(?:research|consulting) services\b"}
 
 
 def name_models(name) -> set[str]:
@@ -608,10 +733,43 @@ def name_models(name) -> set[str]:
     return got | ({one} if one else set())
 
 
+# rv51 (R51, the outside review of the live Release 49 Consumer retail deck: "Online stock-holding retailers ..., a different business model:
+# platforms and marketplaces (the map's name for the layer)" and "Store retailers of home, auto and beauty goods ..., a different business model:
+# parts, component and ingredient makers": a label the map gave a layer before it was renamed for the retailers it holds, and a parts maker's
+# model read from "auto parts", the goods a store sells): the families of making, whose vocabulary names what a seller sells or a servicer
+# serves, never how a retailer or a service firm earns
+MAKING_FAMILIES = {"making", "components", "contract_making"}
+_HALF_NAME = re.compile(r" \((?:larger|smaller)\)$")
+
+
+def layer_business(named: str, name: str, was: str = "", description: str = "", family: str = "") -> tuple[str, str]:
+    """rv51: the business model a layer is compared on apart from how its companies earn (ex49's "named"), as its own canonical records
+    support it: (model, where), where is "name" (the layer's own name states it) or "map" (the map's earlier name for the layer states it and
+    the layer's own description states it too); ("", "") when they don't. A map label is used only for the same layer (the name it was read from
+    is the layer's own) or when its vocabulary fits the layer's definition (its description states the same model and nothing else). Never a
+    model of making for a layer whose companies earn otherwise (`family`, how they are read to earn: a retailer of auto parts is no parts
+    maker), nor one the layer's own name contradicts by stating another way of earning ("Online stock-holding retailers" is no platform)."""
+    if named not in MODELS:
+        return "", ""
+    fam = model_family(named)
+    if fam in MAKING_FAMILIES and family and family not in MAKING_FAMILIES:
+        return "", ""
+    own = _HALF_NAME.sub("", str(name or "")).removesuffix(", by revenue model")
+    says = name_models(own)
+    if any(model_family(m_) != fam for m_ in says):
+        return "", ""
+    if named in says:
+        return named, "name"
+    defined = name_models(description)
+    if was and named in name_models(was) and named in defined and all(model_family(m_) == fam for m_ in defined):
+        return named, "map"
+    return "", ""
+
+
 # ---------- q1: a network operator's subscriptions are for a service it runs, not software (the GPT review of the live R34 Telecom deck) ----------
 # Its customers named are never what it is: a tower company leases "to wireless telecom operators", a messaging platform caters "to mobile network
 # operators (MNOs)"
-_CUSTOMERS = re.compile(r"\b(?:to|for|serving|serves|catering to|customers(?: such as| include| including)?|clients(?: such as| include)?)\s+"
+_CUSTOMERS = re.compile(r"\b(?:to|for|serving|serves|catering to|shared by|used by|with|(?:requirements|needs) of|customers(?: such as| include| including)?|clients(?: such as| include)?)\s+"
                         r"(?:[\w&,()-]+\s+){0,5}?(?:telecom\w*|mobile|wireless|broadband|cellular)\s+(?:network\s+|service\s+)?"
                         r"(?:operators?|service providers?|providers?|carriers?|companies|businesses|industry)\b(?:\s*\([^)]{0,12}\))?", re.I)
 # its own words that it runs a network service for subscribers
@@ -900,8 +1058,12 @@ SELLS_OWN = (r"\bsold by us\b|\bwe sell (?!services|advertising|ads\b)|\bsells? 
 # R36 (GPT review of the live R35 Semiconductors deck: FTC Solar's trackers and T1 Energy's modules among "Makers of their own products"): the SEC
 # files solar module, tracker and inverter makers under semiconductors (SIC 3674); one whose own words describe solar products or installations
 # and no chips is in another business, whatever its code says. (official industry, its own words of another business, chip words that keep it)
+# r60 (an independent review of the live R59 Semiconductors deck: SunHydrogen, which "may sell hydrogen panels" and "hydrogen produced by
+# systems we own", listed as a semiconductor company): a hydrogen-from-sunlight panel or hydrogen producer filed under semiconductors is of
+# the same other business as a solar module maker
 OFF_INDUSTRY = ((r"semiconductor|\bchips?\b|integrated circuits?",
-                 r"\bsolar\b|photovoltaic|\bpv\b (?:modules?|panels?|cells?|industry|systems?)",
+                 r"\bsolar\b|photovoltaic|\bpv\b (?:modules?|panels?|cells?|industry|systems?)|\bhydrogen (?:panels?|produc\w*|generation|fuel)\b|"
+                 r"\b(?:green|renewable) hydrogen\b",
                  r"integrated circuits?|\bchips?\b|chipsets?|microcontrollers?|(?:micro)?processors?|\bics\b|\basics?\b|\bgpus?\b|"
                  r"wafer fab|semiconductor (?:devices|chips|equipment|manufacturing)|power semiconductors?|\bleds?\b|lasers?"),
                 # R40 (the owner's review of the live Release 39 Consumer retail deck: Ferrellgas and Suburban Propane, propane distributors,
@@ -936,6 +1098,159 @@ def off_industry(evidence) -> bool:
     industry, own = _split_evidence(evidence)
     return any(re.search(ind, industry, re.I) and re.search(other, own, re.I) and not re.search(keep, own, re.I)
                for ind, other, keep in OFF_INDUSTRY)
+
+
+# v55 (R55, the owner's review of the live R54 FMCG deck: Indo National, a maker of dry-cell batteries, torches and electrical accessories
+# filed under Household Products, taken out of "Branded packaged foods manufacturing" and parked in "Other FMCG companies": "moving an
+# out-of-scope business into Other is not removing it"): kinds of product a company's principal business can be of, each with the words a
+# theme's definition (its name and its map's own layers, their names and descriptions) states when the kind is of its scope. A company the
+# theme's official industry brought in whose principal business (its description's sentence of what it does now) names one of these kinds
+# first, in a theme whose definition states none of it, is not a member: screened out with its reason, never in "Other". Each: (the kind as
+# the deck says it, its products, the words of a theme it is of)
+SCOPE_PRODUCTS = (
+    ("batteries, torches and electrical goods",
+     r"\bdry[- ]?cells?\b|\bdry batter(?:y|ies)\b|\bbatter(?:y|ies)\b|\btorch(?:es)?\b|\bflash ?lights?\b|\belectrical accessories\b",
+     r"\bbatter|\belectric|\benergy\b|\bpower (?:generation|equipment|plants?|utilit\w*|transmission|tools)\b|\bauto(?:mo\w*)?\b|\bvehicles?\b|"
+     r"\bmobility\b|\bmotors?\b|\bstorage\b|\blighting\b|\bsemiconductor|\belectronic|\bdurables?\b|\bappliances?\b|\bcapital goods\b|"
+     r"\bindustrials?\b|\bengineering\b|\butilit|\btelecom|\brenewab|\bsolar\b|\bdefen[cs]e|\bcomponents?\b|\bequipment\b"),
+    ("cables, wires and electrical equipment",
+     r"\b(?:power |electric(?:al)? )?cables?\b|\bwires? and cables?\b|\bswitchgears?\b|\b(?:power |distribution )?transformers\b|"
+     r"\belectrical equipment\b|\belectric motors?\b",
+     r"\belectric|\bpower\b|\benergy\b|\butilit|\bcapital goods\b|\bindustrials?\b|\bengineering\b|\binfrastructure\b|\btelecom|"
+     r"\bauto(?:mo\w*)?\b|\bconstruction\b|\bequipment\b|\bcomponents?\b|\bdefen[cs]e|\brenewab|\bsolar\b|\bcables?\b|\bmetals?\b"),
+    ("steel and metal products",
+     r"\b(?:stainless |alloy )?steel(?! utensils)\b|\bpig iron\b|\bsponge iron\b|\bferro ?alloys?\b|\baluminium\b|\baluminum\b|\bcopper\b|"
+     r"\bzinc\b|\bcastings?\b|\bforgings?\b|\bseamless pipes?\b",
+     r"\bmetal|\bsteel\b|\bmining\b|\bminerals?\b|\bauto(?:mo\w*)?\b|\bvehicles?\b|\bcapital goods\b|\bindustrials?\b|\bengineering\b|"
+     r"\binfrastructure\b|\bconstruction\b|\bdefen[cs]e|\bcomponents?\b|\bequipment\b|\bhousing\b|\breal ?estate|\brealty\b|\bcables?\b|"
+     r"\bchemical|\butilit|\bpower\b|\benergy\b|\bmaterials?\b|\bcommodit"),
+    ("cement and building materials",
+     r"\bcement\b|\bclinker\b|\bceramic tiles\b|\bvitrified tiles\b|\bsanitary ?ware\b|\bplywood\b|\blaminates\b",
+     r"\bcement\b|\bbuilding\b|\bconstruction\b|\binfrastructure\b|\breal ?estate|\brealty\b|\bhousing\b|\bmaterials?\b|\bhome improvement\b"),
+    ("tyres and vehicle parts",
+     r"\btyres?\b|\btires\b|\bauto(?:motive)? (?:components?|parts|ancillar\w*)\b|\bvehicle (?:components?|parts)\b",
+     r"\bauto(?:mo\w*)?\b|\bvehicles?\b|\bmobility\b|\btyres?\b|\btires?\b|\brubber\b|\bcomponents?\b|\bcapital goods\b|\bindustrials?\b|"
+     r"\bengineering\b|\bdefen[cs]e|\btransport"),
+    # r60 (an independent review of the live R59 Defence deck: Hariyana Ship Breakers, "in the business of ship breaking, trading and
+    # investment", a member of Defence by its official industry, Ship Building & Allied Services): breaking up old ships for scrap is not
+    # building them
+    ("ship breaking and recycling",
+     r"\bship[- ]?breaking\b|\bship recycling\b|\b(?:dismantling|breaking up|demolition) of (?:old |obsolete )?(?:ships|vessels)\b",
+     r"\bship[- ]?breaking|\bship recycling|\bscrap\b|\brecycl|\bsteel\b|\bmetals? (?:and mining|trad\w*)|\bcommodit"),
+    ("fertilisers and crop protection",
+     r"\bfertili[sz]ers?\b|\bpesticides?\b|\bagrochemicals?\b|\binsecticides?\b|\bherbicides?\b|\bfungicides?\b|\bcrop protection\b",
+     r"\bagri|\bfarm|\bcrop|\bfertili|\bchemical|\bcommodit|\bseeds?\b|\bplantation"),
+)
+_SCOPE_PLAIN = {"manufactur", "manufacturing", "manufacturer", "maker", "make", "produc", "product", "producer", "production", "supplier",
+                "suppl", "seller", "brand", "branded", "compan", "consumer", "good", "goods", "market", "marketing", "distribut", "trading",
+                "larger", "smaller", "mixed", "diversified", "various", "sold", "selling", "earning", "earn", "revenue", "these", "layer"}
+
+
+_OF_ANOTHER = re.compile(r"\banother company\b|\bsubsidiary of\b|\bpart of\b|\bgroup\b|\bpromoted by\b|\bparent\b|\bconglomerate\b", re.I)
+
+
+def off_scope(about, theme_text: str, name: str = "") -> dict | None:
+    """v55: {"kind", "said", "text"} when a company's principal business, the first sentence of its own description that says what it does
+    now (theme_data.business_sentence, its own name's words left out), names a kind of product (SCOPE_PRODUCTS) before any product of the
+    theme's own and the theme's definition (`theme_text`: its name and its map's own layers' names and descriptions) states none of that
+    kind; None else (no words of its own, or a kind of the theme's scope)."""
+    from .theme_data import _stems, business_sentence, does_the_work
+    if name:
+        # r67e (the owner's review of the live R65 Fertilizers deck, P0: "descriptions checked before use"): a reason that screens a company
+        # out quotes its own words only, never the opening sentences of another company sharing its first word (theme_base.own_part)
+        from .theme_base import own_part
+        about = own_part(str(about or ""), name)
+    shown = said = business_sentence(str(about or ""))
+    if not said:
+        return None
+    if name:
+        from .theme_base import without_name
+        said = " ".join((without_name(said, name) or said).split())
+    own = {w for w in _stems(theme_text) if w not in _SCOPE_PLAIN}
+    for kind, products, scope in SCOPE_PRODUCTS:
+        if re.search(scope, theme_text or "", re.I):
+            continue
+        txt = said
+        m = _kind_named(products, txt)
+        if m is None and said is not shown:
+            # r60: words of its work its own name shares ("ship breaking" of "Hariyana Ship Breakers") are read in the sentence as written,
+            # never the name itself
+            m2 = _kind_named(products, shown)
+            if m2 and m2.group(0).lower() not in str(name or "").lower():
+                txt, m = shown, m2
+        if m is not None and _listed_after(txt[:m.start()]):
+            continue                     # r67e: a kind named after another product of its list is not its principal business
+        # (a kind said of its parent or group, "a subsidiary of another company, a conglomerate with interest in ... cement", is not its own)
+        # (r60: "another company is in the business of ship breaking", the company's own name taken off its own sentence, is its own work)
+        lead = re.sub(r"\banother company (?=(?:is|was|has|operates|engages)\b)", "", txt[:m.start()]) if m else ""
+        # (r60: a kind named as its customers' business, "serving pharmaceuticals, food ... agrochemicals", is not its own)
+        for_ = re.search(r"\b(?:serv(?:es|ing)|customers?|clients?|caters? to|catering to|industries like|sectors such as)\b[^.;]{0,160}$", txt[:m.start()], re.I) if m else None
+        if m and not for_ and not does_the_work(txt[:m.start()], own) and not _OF_ANOTHER.search(lead):
+            # (r60: the quote says the company's own name where the reading put "another company" in its place)
+            quote = shown.replace("another company", name, 1) if name and name.split()[0] in str(about or "") else shown
+            return {"kind": kind, "said": m.group(0), "text": quote[:200], "quote": _kind_clause(txt, m)}
+    return None
+
+
+# r67e (the owner's review of the live R65 Fertilizers deck: Tatva Chintan, "a manufacturer of a diverse portfolio of structure Directing
+# Agents, Phase Transfer Catalysts, electrolyte salts for batteries, and Pharmaceutical and Agrochemical Intermediates", screened out as a
+# maker of "batteries, torches and electrical goods"): a kind of product named as what the company's product is for ("electrolyte salts for
+# batteries", "used in batteries") is not a product of that kind, and one named after another product of the same list ("carbon, cement and
+# advanced materials") is not the first product its principal business is of
+_FOR_USE = re.compile(r"\b(?:for|used (?:in|for|by)|for use (?:in|by|with)|serving)\s+(?:[\w-]+\s+){0,2}$", re.I)
+_LIST_OPEN = re.compile(r"\b(?:of|makes?|manufactures?|produces?|sells?|supplies|offers?|in the business of|engaged in|deals? in)\b", re.I)
+_NOT_ITEM = {"the", "a", "an", "its", "our", "their", "all", "kinds", "types", "range", "wide", "various", "high", "quality", "premium",
+             "durable", "reliable", "diverse", "portfolio", "leading", "integrated", "vertically", "other", "and", "also"}
+
+
+def _kind_named(products: str, txt: str):
+    """r67e: the first match of a kind's products in a sentence that is not named as what another product is for, or None."""
+    for m in re.finditer(products, txt, re.I):
+        if not _FOR_USE.search(txt[max(0, m.start() - 40):m.start()]):
+            return m
+    return None
+
+
+def _listed_after(lead: str) -> bool:
+    """r67e: whether the words before a kind, after the last word that opens what the company makes or does ("a producer of"), name
+    another product of the same list first ("carbon, " of "a producer of carbon, cement"; "Adhesives and " of "Adhesives and Plywood")."""
+    parts = _LIST_OPEN.split(lead)
+    if len(parts) < 2:
+        return False
+    m = re.search(r"^(.*?)(?:,\s*(?:[\w-]+\s+)?|\s(?:and|&)\s+)$", parts[-1], re.S)
+    return bool(m) and any(w.lower() not in _NOT_ITEM for w in re.findall(r"[A-Za-z][\w-]{2,}", m.group(1)))
+
+
+def _kind_clause(txt: str, m) -> str:
+    """r67e: the words of a company's own sentence that name the kind, from the list item it is in to the next comma ("electrolyte salts for
+    batteries", "dry cell batteries and torches"), for the reason that screens it out to quote; at most 80 characters."""
+    cut = max(txt.rfind(",", 0, m.start()), txt.rfind(";", 0, m.start()))
+    # (a verb that opens it is quoted with it, "manufactures and markets batteries"; "of", "engaged in" are not)
+    opens = [x.start() if re.match(r"(?:make|manufacture|produce|sell|suppl|offer)", x.group(0), re.I) else x.end()
+             for x in _LIST_OPEN.finditer(txt, 0, m.start())]
+    start = max([cut + 1] + opens)
+    end_m = re.search(r"[,;.]|\s+(?:which|that|with|at|across)\s", txt[m.end():])
+    end = m.end() + (end_m.start() if end_m else len(txt) - m.end())
+    out = " ".join(txt[start:end].split()).strip(" ,;.")
+    return out if len(out) <= 80 else out[:80].rsplit(" ", 1)[0]
+
+
+def off_scope_listed(name: str, industry: str, theme_text: str) -> dict | None:
+    """v55 (R55, the owner's acceptance test: "a battery maker can't remain in FMCG solely through Other"): for a company with no
+    description of its own (nothing off_scope can read), {"kind", "said", "where", "text"} when its official industry, else its listed
+    name (its issuer's, theme_base.issuer_name), names a kind of product (SCOPE_PRODUCTS) the theme's definition doesn't include; None
+    else. "where": "industry" or "name"."""
+    from .theme_base import issuer_name
+    for where, text in (("industry", str(industry or "")), ("name", issuer_name(name or ""))):
+        if not text:
+            continue
+        for kind, products, scope in SCOPE_PRODUCTS:
+            if re.search(scope, theme_text or "", re.I):
+                continue
+            m = re.search(products, text, re.I)
+            if m:
+                return {"kind": kind, "said": m.group(0), "where": where, "text": text[:120]}
+    return None
 
 
 RETAIL_STOCK = (r"\bstores?\b|\bshops?\b|inventor(?:y|ies)|\bretailer|\bwe sell\b|\bsells\b|\bselling\b|merchandise|own[- ]brands?|private label|"
@@ -979,7 +1294,11 @@ DESIGN_VERB = r"\b(?:designs?|develops?|designing|developing|designers?|develope
 DESIGN_CHIP = DESIGN_VERB + r"[^.;]{0,60}?(?:" + CHIP_NOUNS + ")"
 CHIP_ONLY = r"\bgpus?\b|\bsocs?\b|\basics?\b|\bfpgas?\b|microcontrollers?|microprocessors?"
 NOT_DESIGNER = (r"electronic design automation|\beda\b|(?:software|tools)\b[^.]{0,30}\b(?:to|for) (?:the )?design|"
-                r"licens\w*\b[^.]{0,30}(?:\bip\b|intellectual property|architectures?|\bcores?\b)|(?:semiconductor|wafer fab\w*|capital) equipment")
+                r"licens\w*\b[^.]{0,30}(?:\bip\b|intellectual property|architectures?|\bcores?\b)|(?:semiconductor|wafer fab\w*|capital) equipment|"
+                # r572 round 2 (the release gate on the live R57.1 Semiconductors input: Arm, "the design of central processing unit (CPU) cores
+                # that implement the ARM architecture family of instruction sets", read as a fabless chip maker): the design of processor cores
+                # and instruction sets is a design licensor's work, never chips of its own made by foundries
+                r"design of (?:[\w()-]+ ){0,6}cores?\b|\binstruction sets?\b")
 MAKES_OWN = r"manufactur|\bproduc(?:es|tion)\b|\bmakes\b"
 MODEL_NEEDS["fabless"] += "|" + DESIGN_CHIP
 
@@ -1090,6 +1409,93 @@ def recheck_models(rejected: list[dict], ask, theme: str) -> dict:
     pairs = [(s, x.get("model") if isinstance(x, dict) else x) for s, x in model_items(got.get("models") if isinstance(got, dict) else None)]
     ev = {c["symbol"]: c.get("evidence") or "" for c in rejected}
     return {s: str(m) for s, m in pairs if s in ev and str(m) in MODELS and model_supported(str(m), ev[s])}
+
+
+# p57 (R56 audit RC2/RC3, second wave): the companies a strict test flags as misfits of their layer, judged against the map's existing
+# layers in one bounded answer a theme and rules version (theme_base.misfit_moves); the answer is kept only where the company's own words
+# bear it out
+FIT_SYSTEM = """You place listed companies into the EXISTING layers of a map of an industry theme. For each COMPANY, using ONLY its own
+description given, pick the one existing layer (by its id) whose definition describes what the company itself mainly does, or "other" when
+none does. Never invent a layer. Being a customer of, or a supplier to, a layer's companies is not doing its work.
+Reply with ONLY this JSON: {"moves": [{"symbol": "<symbol>", "layer": "<layer id>|other"}]}"""
+
+
+def best_existing_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict:
+    """p57: {symbol: an existing layer's name, or "" for "other"} for the flagged companies ([{symbol, name, words, layer}]) against the
+    map's existing layers ([{layer, description}]), one answer. An id not on the list, or a symbol not asked, is dropped; an empty answer
+    is no answer (raises), so nothing moves on it."""
+    import json
+    if not companies or not layers:
+        return {}
+    ids = {f"L{i}": v["layer"] for i, v in enumerate(layers)}
+    payload = {"theme": theme, "layers": {k: {"name": n, "definition": str(layers[int(k[1:])].get("description") or "")[:300]} for k, n in ids.items()},
+               "companies": [{"symbol": c["symbol"], "name": c.get("name") or c["symbol"], "now_in": c.get("layer") or "", "flag": c.get("why") or "",
+                              "description": clean_description(c.get("words") or "", 420)} for c in companies]}
+    got = ask(FIT_SYSTEM, "MAP:\n" + json.dumps(payload, ensure_ascii=False))
+    if not isinstance(got, dict) or not got:
+        raise ValueError("no answer")
+    want = {c["symbol"] for c in companies}
+    out = {}
+    for x in got.get("moves") or []:
+        if isinstance(x, dict) and x.get("symbol") in want:
+            lay = str(x.get("layer") or "")
+            if lay in ids:
+                out[x["symbol"]] = ids[lay]
+            elif lay.lower() == "other":
+                out[x["symbol"]] = ""
+    return out
+
+
+AUDIT_SYSTEM = """You audit the membership of the layers of a map of an industry theme. For each LAYER you get its name, its definition and
+some of its member companies, each with its own stored description. Name only the members that do NOT do what their layer says; for each,
+give the one EXISTING layer (by its id) whose definition fits what the company itself mainly does, or "other" when none does, with two
+quotes copied word for word from THAT company's description: "quote_new" showing the work of the new layer, "quote_old" showing its main
+business is not the old layer's. Use only the descriptions given. When unsure, leave the company out.
+Reply with ONLY this JSON: {"moves": [{"symbol": "<symbol>", "to": "<layer id>|other", "quote_new": "", "quote_old": ""}]}"""
+AUDIT_MAX = 60                  # p57: members one audit answer reads, the largest by value first
+
+
+def audit_layers(layers: list[dict], ask, theme: str) -> dict:
+    """p57 (third wave): {symbol: {"to": an existing layer's name or "" for "other", "quote_new", "quote_old"}} from one answer auditing the
+    map's layers ([{layer, description, members: [{symbol, name, words}]}]). An id not on the list or a symbol not sent is dropped; an empty
+    answer is no answer (raises)."""
+    import json
+    if not layers:
+        return {}
+    ids = {f"L{i}": v["layer"] for i, v in enumerate(layers)}
+    sent = {m["symbol"] for v in layers for m in v.get("members") or []}
+    payload = {"theme": theme, "layers": {k: {"name": layers[int(k[1:])]["layer"],
+                                              "definition": str(layers[int(k[1:])].get("description") or "")[:300],
+                                              "members": [{"symbol": m["symbol"], "name": m.get("name") or m["symbol"],
+                                                           "description": clean_description(m.get("words") or "", 600)}
+                                                          for m in layers[int(k[1:])].get("members") or []]} for k in ids}}
+    got = ask(AUDIT_SYSTEM, "AUDIT:\n" + json.dumps(payload, ensure_ascii=False))
+    if not isinstance(got, dict) or not got:
+        raise ValueError("no answer")
+    out = {}
+    for x in got.get("moves") or []:
+        if isinstance(x, dict) and x.get("symbol") in sent:
+            to = str(x.get("to") or "")
+            if to in ids or to.lower() == "other":
+                out[x["symbol"]] = {"to": ids.get(to, ""), "quote_new": " ".join(str(x.get("quote_new") or "").split()),
+                                    "quote_old": " ".join(str(x.get("quote_old") or "").split())}
+    return out
+
+
+def vocabulary_fake(system: str, text: str) -> dict:
+    """p57: a deterministic stand-in for the model in offline replays only (the release gate, the tests): it answers FIT_SYSTEM from the
+    vocabulary test (theme_base.vocabulary_choice) and nothing else ({}: no answer). The live placement asks the real model."""
+    import json
+    from .theme_base import vocabulary_choice
+    if system != FIT_SYSTEM:
+        return {}
+    p = json.loads(text.split("MAP:\n", 1)[1])
+    names = {x["name"]: k for k, x in p["layers"].items()}
+    vc = [{"layer": x["name"], "description": x.get("definition") or "", "companies": [{"ticker": ""}]} for x in p["layers"].values()]
+    flagged = [{"symbol": c["symbol"], "why": c.get("flag") or "", "words": c.get("description") or "",
+                "targets": [n for n in names if n != c.get("now_in")]} for c in p["companies"]]
+    got = vocabulary_choice(flagged, vc, None, p.get("theme") or "")
+    return {"moves": [{"symbol": s_, "layer": names[t] if t else "other"} for s_, t in got.items()]}
 
 
 # ---------- a layer's name fits how its companies earn once each holds one model (R26) ----------
@@ -1381,3 +1787,154 @@ def match_listings(items: list[dict], out: dict, ask, theme: str, cache=None) ->
         if hits:
             result.append({"id": i["id"], "groups": [h[0] for h in hits], "what": hits[0][1].strip(" ,;:-–—")})
     return result
+
+
+# ---------- ex49 (R48): a seller of goods of its own design (the outside review of the live R48 Consumer retail deck) ----------
+# lululemon ("principally a designer, distributor, and retailer of technical athletic apparel, footwear, and accessories") sat in "Apparel and
+# consumer brand owners" by its own words and was left out of that layer's figures as "another business": the answer read it as a retailer,
+# whose way of earning (MODELS["retail"]) is the margin on goods bought from others. A company that designs what it sells, or makes it and
+# sells it under its own brand, sells products of its own (the making family: "selling products of their own, made in their own plants or by
+# contract makers"), whatever share of them it sells in its own stores.
+DESIGNS_SELLS = (r"\bdesigners?,? (?:[\w-]+,? ){0,3}(?:and )?(?:retailers?|marketers?|distributors?|sellers?|makers?|manufacturers?) of\b|"
+                 r"\bdesigns?,? (?:develops?,? )?(?:and )?(?:markets?|sells?|retails?|distributes?|manufactures?)\b")
+MAKES_OWN_GOODS = r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\bmakes\b|\bproduces\b"
+OWN_BRAND = (r"\bunder (?:the |its |our |their )?(?:own )?[\w&'’.-]+(?: [\w&'’.-]+){0,2} brands?\b|\b(?:its|our|their) own brands?\b|"
+             r"\bproprietary brands?\b|\bown[- ]brand(?:ed)?\b")
+
+
+def own_goods(evidence) -> bool:
+    """Whether a company's own words say it designs the goods it sells (a designer and retailer of them), or makes them and sells them under
+    its own brand (ex49); its official industry and the customers it names left out. A retailer of goods others design says neither."""
+    _, own = _split_evidence(evidence)
+    own = _SOLD_TO.sub(" ", not_customers(own))
+    return bool(re.search(DESIGNS_SELLS, own, re.I) or (re.search(MAKES_OWN_GOODS, own, re.I) and re.search(OWN_BRAND, own, re.I)))
+
+
+# gl52 (R52, the rotating review of Release 51: Labcorp, Quest and Natera, filed as medical laboratories, read as "managed and outsourced IT
+# services" at low confidence; Guardant as consumer services, "stays, trips, meals or courses"): an official industry that says the way of
+# earning outright, and the families an answer can give such a company only wrongly (a service firm's, a seller's or a software house's)
+INDUSTRY_MODEL = ((r"medical laborator|\bhospitals?\b|health ?care facilit|nursing (?:homes?|care)|diagnostic (?:centres?|centers?|labs?|services)|"
+                   r"patholog|clinical laborator|home health care", "care"),)
+NOT_FOR_INDUSTRY = {"services", "bpo", "consumer_services", "software", "platform", "resale", "capacity"}
+
+
+def industry_model(model, evidence, confidence: str = "") -> str:
+    """gl52: the model a company's official industry states outright (INDUSTRY_MODEL) in place of one of another family that the answer gave
+    at low confidence, or of a family such a company never earns by (NOT_FOR_INDUSTRY); else the model as given."""
+    industry, _ = _split_evidence(evidence)
+    for rx, md in INDUSTRY_MODEL:
+        if industry and re.search(rx, industry, re.I) and model_family(model) != model_family(md) and \
+                (confidence == "low" or model_family(model) in NOT_FOR_INDUSTRY):
+            return md
+    return model
+
+
+# x57 (R57, the audit of the 24 live R56 decks, RC4: Mahindra & Mahindra, "one of the most diversified automobile company in India with presence
+# across 2-wheelers, 3-wheelers, PVs, CVs, tractors", left out of the passenger vehicle makers' figures because a later sentence lists the
+# group's "auto components, ... retail ... through its subsidiaries and group companies"): a sentence of a company's own words that speaks of
+# the businesses of its subsidiaries, group companies or associates, or of the other businesses it also runs, says what else it earns from,
+# never what its principal business is
+SECONDARY = re.compile(r"\b(?:through|via|by) (?:its |their |the group'?s? )?(?:various |\w+ )?(?:subsidiar\w*|group compan\w*|associates?|associate compan\w*|"
+                       r"joint ventures?|affiliates?)\b|\b(?:its|the company'?s|the group'?s) other businesses\b|\bother businesses includ\w*|"
+                       r"\b(?:it|the company|the group) also (?:has|runs|operates|owns)\b|\balso has (?:a )?presence\b|"
+                       r"\balso has certain other businesses\b|\bcertain other businesses\b", re.I)
+_SENTENCES = re.compile(r"(?<=[.;])\s+(?=[A-Z(•])")
+
+
+# x57 (second wave, the release gate's "model contradicted" rows: EverestIMS and Kratikal, "Software-as-a-Service (SaaS)", printed as
+# managed or project IT services; Pharmaids, "Custom Research and Manufacturing Services (CRAMS)", as project services; BILL, "total payment
+# volume", as software): the families of making are one kin (a maker, a parts maker, a contract maker, a miner, a metal processor)
+KIN_OF_MAKING = {"making", "components", "contract_making", "mining", "metal_processing", "resources"}
+
+
+def words_state(evidence) -> str:
+    """x57 (second wave): the one model a company's own words state in so many words (stated_model), never one only inferred (a chip
+    designer's design words read as fabless); "" else."""
+    st = stated_model(evidence)
+    if not st:
+        return ""
+    _, own = _split_evidence(evidence)
+    rx = MODEL_SAYS.get(st) or OWN_SAYS.get(st)
+    if st == "fabless" and not (rx and re.search(rx, own, re.I)):
+        return ""
+    return st
+
+
+_WORK_WITH = re.compile(r"\b(?:collaborate|partner|work)s? with (?:us|it|the company|[A-Z][A-Za-z]{1,})\b")     # its customers named as who works with it
+_ALSO = re.compile(r"^\s*(?:it|the company|additionally,?)\s+(?:also\s+)?(?:provides|offers|has|runs|operates|undertakes)\b|^\s*(?:it|the company) also\b", re.I)
+
+
+def contradicted_read(model, evidence, confidence: str = "") -> str:
+    """x57 (second wave): the model a company's own words state in so many words (words_state) when the read it was given (low or medium
+    confidence) is of another family, not of the kin of making with it, and its own words show nothing of the read (own_words_show, the ways
+    its words name); "" when the read stands."""
+    if model not in MODELS or confidence not in ("low", "medium"):
+        return ""
+    # read on the words of its principal business: never a sentence on what it also does ("It also provides software development") nor
+    # the operators it names as its customers ("Telecom operators ... collaborate with" it: telecom_operator)
+    industry, own = _split_evidence(principal_words(evidence))
+    own = " ".join(x for x in _SENTENCES.split(own) if not _ALSO.search(x) and not _WORK_WITH.search(x))
+    st = words_state((f"Industry: {industry}. " if industry else "") + own)
+    if not st or st == model or (st == "telecom_services" and not telecom_operator(evidence)):
+        return ""
+    fa, fb = model_family(st), model_family(model)
+    if fa == fb or (fa in KIN_OF_MAKING and fb in KIN_OF_MAKING):
+        return ""
+    if own_words_show(model, evidence) or model in words_models(evidence):
+        return ""
+    return st
+
+
+def principal_words(evidence) -> str:
+    """x57: a company's evidence with the sentences of its own words that speak of what its subsidiaries, group companies or associates do,
+    or of the other businesses it also runs (SECONDARY), left out: the words that say its principal business. Its official industry line is
+    kept as it is. The whole evidence when every sentence is of that kind (nothing would be left to read)."""
+    industry, own = _split_evidence(evidence)
+    parts = _SENTENCES.split(str(own or ""))
+    kept = [x for x in parts if not SECONDARY.search(x)]
+    if not kept or len(kept) == len(parts):
+        return str(evidence or "")
+    return (f"Industry: {industry}. " if industry else "") + " ".join(kept)
+
+
+def secondary_models(evidence) -> set[str]:
+    """x57: the ways of earning only the sentences on its subsidiaries', group companies' or other businesses name (words_models of its whole
+    words less those of principal_words): what a company also earns from, beside its principal business."""
+    return words_models(evidence) - words_models(principal_words(evidence))
+
+
+# x57 (RC4: Syngene, "India's first Contract Research Organization (CRO)", read only as a contract manufacturer from "(CRAMS)"; Sagility, a
+# share of "the U.S. healthcare outsourcing market", read as stating no way of earning): words that name a way of earning beside a company's
+# other words, read only to say which ways its words name (words_models), never to give a company a model on their own (stated_model)
+WORDS_SAY = {"project_services": r"contract research (?:organi[sz]ations?|services)|\bcros?\b(?! ?-)|clinical (?:trial |research )?services|"
+                                 r"r ?& ?d services|research (?:and|&) development services",
+             "bpo": r"\b(?:healthcare|business process|back[- ]office|customer (?:care|experience)) outsourcing\b|\boutsourcing market\b|"
+                    r"revenue cycle management|technology[- ]enabled healthcare solutions"}
+
+
+FOOD_SHOP = r"\b(?:coffee|sandwich|pizza|donut|doughnut|bagel|ice[- ]cream|juice|tea|bakery|burger|sub|food)\s+shops?\b"
+
+
+def words_models(evidence) -> set[str]:
+    """ex49 (R48): every way of earning a company's own words name (MODEL_SAYS, OWN_SAYS, a chip designer's own words, making words without
+    trading words), its official industry and the customers it names left out: what stated_model reads, before it settles on one."""
+    _, own = _split_evidence(evidence)
+    own = _SOLD_TO.sub(" ", not_customers(own))
+    if not own.strip():
+        return set()
+    own = re.sub(RETAIL_BUYERS, " ", own, flags=re.I)        # r62: "retail customers" names whom it sells to (below)
+    hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) + list(WORDS_SAY.items()) if re.search(rx, own, re.I)}
+    one = stated_model(evidence)
+    # stores, shops, retailing: a retailer's own words; r572 (the live R57.1 Restaurants deck: Restaurant Brands International, "Canadian coffee
+    # shop and fast food restaurant chain", read as naming a retailer's way of earning): a coffee, sandwich or pizza shop is a place that serves
+    # food, never a shop that resells goods
+    # r62 (the live R60 Electric utilities deck: Southern's "providing electric service to retail customers in three Southeastern states",
+    # read as naming a retailer's way of earning): "retail" said of the customers a company serves, or of the electricity, gas or energy it
+    # sells them, names whom it sells to, never stores of its own
+    own_ = re.sub(FOOD_SHOP, " ", own, flags=re.I)
+    shop = {"retail"} if re.search(NAME_STATES["retail"], own_, re.I) else set()
+    return hits | ({one} if one else set()) | shop
+
+
+RETAIL_BUYERS = r"\bretail(?:,| and| or)? (?:(?:and |or )?(?:wholesale|commercial|industrial|business|institutional) )*(?:customers?|clients?|consumers|" \
+                r"electric(?:ity)?(?: service)?|energy|power|gas|banking|deposits?|investors?)\b"

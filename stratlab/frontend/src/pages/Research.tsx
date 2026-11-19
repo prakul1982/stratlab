@@ -1,4 +1,7 @@
 import { DocSearchLink } from "../components/DocSearchLink";
+import { openMarkets } from "../components/watch/Launcher";
+import { getLists } from "../lib/watchApi";
+import { labelOf, type WatchList } from "../lib/watch";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
@@ -28,7 +31,7 @@ import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { useShareCompany } from "../components/ShareCompany";
 import { MoreMenu } from "../components/MoreMenu";
 import { suggestions, type Suggestion } from "../components/CompanyCombobox";
-import { rememberName, useDocTitle } from "../lib/title";
+import { companyName, knownName, rememberName, useDocTitle } from "../lib/title";
 import { DealsPanel } from "../components/Deals";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { SaveButton } from "../components/SavedSearches";
@@ -39,7 +42,7 @@ import { CompanyLinksCard } from "../components/CompanyLinks";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
-import { companyRows, moodBehindNote, moodDay } from "../lib/pulseMood";
+import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, PULSE_UPDATING_NOTE, pulseAskAgain, pulseBeingWritten } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -262,8 +265,9 @@ function CompanyView() {
   const nav = useNavigate();
   useEffect(() => { if (moved) nav(`/research/${region}/${encodeURIComponent(sym)}${window.location.search}`, { replace: true }); }, [moved, region, sym, nav]);
   const share = useShareCompany(region, sym);
-  // the name and the symbol, then the price (R8O-009); the name is kept for the next first frame (lib/title titleFor)
-  useDocTitle(c ? `${c.name || c.symbol}${c.name && c.name.toUpperCase() !== c.symbol ? ` (${c.symbol})` : ""}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : null);
+  // the name and the symbol (R8O-009), as the first frame gives them: "Reliance Industries (RELIANCE) · StratLab", one pattern
+  // with every other tab and no price (owner, 18 Nov); the name is kept for the next first frame (lib/title titleFor)
+  useDocTitle(c ? companyName(c.name, c.symbol) : null);
   useEffect(() => { if (c) rememberName(region, c.symbol, c.name); }, [c, region]);
   // the price and the day's change again each minute while the market trades; the rest of the page stays as read
   useLiveRefresh(!!c?.market_open && (c.quote?.at == null || liveQuote(c.quote.at)), () => {
@@ -313,10 +317,14 @@ function CompanyView() {
       </Card>
     </div>
   );
+  // the wait holds the header's final shape: the name this device last saw (or the symbol), a line where "NSE · TCS" goes and the
+  // two date chips' places, unseen; the page no longer drops 70 px when they arrive (LIVE9B-001: CLS 0.3 desktop, 0.65 phone)
   if (!c) return (
-    <div className="k-page">
-      <PageHeader eyebrow={eyebrow} title={sym} />
-      <Card><Skeleton label={`Pulling live data for ${sym}`} lines={5} onRetry={() => setTries((n) => n + 1)} /></Card>
+    <div className="k-page co-wait" data-name-known={knownName(region, sym) ? "1" : "0"}>
+      <PageHeader eyebrow={eyebrow} title={knownName(region, sym) ?? sym} lede={<span className="k-meta-wait">{sym}</span>}
+        actions={<><span className="k-meta-wait" aria-hidden="true"><Badge>Prices as of 16 Nov 2026, 15:30 IST</Badge></span>
+          <span className="k-meta-wait" aria-hidden="true"><Badge>Latest results: quarter to Sep 2026</Badge></span></>} />
+      <Card><Skeleton label={`Pulling live data for ${sym}`} lines={5} onRetry={() => setTries((n) => n + 1)} page /></Card>
     </div>
   );
 
@@ -357,7 +365,9 @@ function CompanyView() {
           <div className="k-stack inv-head-price">
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} tradedFrom={c.range52.traded_from} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
-            {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
+            {/* a US results day comes from a calendar that carries projected days too, so it says "expected"; an Indian one is the board
+                meeting the company told the exchange of (LIVE8B-023: "Results on Wed 27 Jan" before Apple had announced a date) */}
+            {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>{region === "US" ? "Results expected" : "Results on"} {resultDay(nextResults)}</Link>}
             {filedNow && (results?.next?.out?.url
               ? <a className="link k-small" href={safeHref(results.next.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.next.out.at)} ↗</a>
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(nextDay!)}{latestQuarter ? ` · quarter to ${latestQuarter}` : ""}</Link>)}
@@ -384,7 +394,7 @@ function CompanyView() {
             {!c.delisted && (lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet"))}
             {!c.delisted && <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>}
             {!c.delisted && <StarButton region={region} symbol={c.symbol} name={c.name} />}
-            {!c.delisted && <AlertButton region={region} symbol={c.symbol} />}
+            {!c.delisted && <AlertButton region={region} symbol={c.symbol} showOn />}
             <MoreMenu items={[
               { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
               ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
@@ -520,27 +530,43 @@ export function PulsePage() {
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const seq = useRef(0);   // a late answer for the market you left is ignored, and doesn't clear the newer read's busy
+  const again = useRef(0); // fix12: how many times the session's earlier read has been asked again for the newer one
   const rf = useStoredRefresh();
   const refreshAI = () => {
     const mine = seq.current;
     rf.run(async () => { const out = await researchApi.pulseAI(region, "", true); if (mine === seq.current) setAi(out); return out; });
   };
-  const loadAI = async (refresh = false) => {
+  const loadAI = async (refresh = false, tries = 0) => {
     const mine = ++seq.current;
     setBusy(true); setAiErr(null);
     try { const out = await researchApi.pulseAI(region, "", refresh); if (mine === seq.current) setAi(out); }
-    catch (e) { if (mine === seq.current) setAiErr((e as Error).message); }
+    catch (e) {
+      // LIVE9A-008: another visit is writing this read: asked again in a moment, a few times, never a request held open for minutes
+      if (mine === seq.current && pulseBeingWritten((e as Error).message) && tries < PULSE_AI_TRIES) {
+        setTimeout(() => { if (mine === seq.current) void loadAI(false, tries + 1); }, PULSE_AI_RETRY_MS);
+        return;
+      }
+      if (mine === seq.current) setAiErr((e as Error).message);
+    }
     finally { if (mine === seq.current) setBusy(false); }
   };
   useEffect(() => {
     setAi(null);
+    again.current = 0;
     loadAI();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region]);
+  // fix12 (LIVE10A-010): the session's earlier read is shown while a newer one is written: asked again in a moment for the newer one
+  useEffect(() => {
+    if (!pulseAskAgain(again.current, ai)) return;
+    const t = window.setTimeout(() => { again.current += 1; void loadAI(); }, PULSE_AI_RETRY_MS);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ai]);
   const aiNothing = !!ai && !ai.tone && !ai.hot.length && !ai.flows.length && !ai.themes.length;
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
+      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={PULSE_TITLE}
         lede={pulseLede((() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfPending={!data} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
@@ -565,6 +591,7 @@ export function PulsePage() {
               {ai.tone ? <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>
                 // LIVE7A-016: a read with no reason for the day's move left the card with a head and no body: it says so, and where the rest is
                 : <p className="k-small" data-testid="pulse-tone-none">{ai.story_line || "No headline gives a reason for the day's move."} The companies, topics and themes the headlines name are in the tables below.</p>}
+              {ai.updating && <p className="k-note" data-testid="pulse-ai-updating">{PULSE_UPDATING_NOTE}</p>}
               {/* the FII/DII source line goes under the FII table (LIVE4-006); without that table it stays here */}
               {ai.flows_source && !mood?.flows && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
             </>
@@ -577,7 +604,7 @@ export function PulsePage() {
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
         left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
       {mood?.global && <GlobalTable g={mood.global} region={region} today={dayIn(new Date(), marketTz(region))} />}
-      {mood?.calendar && <CalendarTable c={mood.calendar} />}
+      {mood?.calendar && <CalendarTable c={mood.calendar} today={dayIn(new Date(), marketTz(region))} region={region} />}
       {ai && companyRows(ai.hot).length > 0 && <HotTable ai={ai} region={region} />}
       {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
       {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}
@@ -803,6 +830,13 @@ export function WatchlistPage() {
   const { fail, notify, markets } = useApp();
   const [importing, setImporting] = useState(false);
   const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
+  // LIVE10A-014: the lists made in the Markets panel are named here too, each opening there (they were nowhere on this page)
+  const [others, setOthers] = useState<WatchList[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    getLists().then((a) => { if (live) setOthers(a.lists.filter((l) => !l.default)); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   // between the US close and its settle point the prices are the day's last prints, said as the company header says it (R13-005)
   const settling = settlingNow(markets.find((m) => m.id === region));
   // the market closed (a weekend, a holiday, after the bell): its prices are the last session's, whatever the date is in
@@ -914,6 +948,20 @@ export function WatchlistPage() {
               // on a phone card Remove sits at the card's top right, not alone on a last row of its own (VR3-006)
               { key: "r", header: "", action: true, corner: true, cell: (w) => <button className="btn quiet sm icon-only" aria-label={`Remove ${w.symbol} from your watchlist`} title="Remove" onClick={() => remove(w)}><Trash size={16} /></button> },
             ]} />
+        </Card>
+      )}
+      {others && others.length > 0 && (
+        <Card testId="watch-other-lists">
+          <CardHead title="Your other lists" info="The lists made in the Markets panel. Each opens there, with its prices and charts." />
+          <ul className="watch-lists">
+            {others.map((l) => (
+              <li key={l.id}>
+                <b>{l.name}</b>
+                <span className="k-small k-muted"> · {l.items.length} symbol{l.items.length === 1 ? "" : "s"}{l.items.length ? `: ${l.items.slice(0, 6).map(labelOf).join(", ")}${l.items.length > 6 ? ", …" : ""}` : ""}</span>
+                {" "}<button type="button" className="link" onClick={() => openMarkets({ open: true, list: l.id })}>Open in the Markets panel</button>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
     </div>

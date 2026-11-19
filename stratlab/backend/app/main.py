@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
+import os
 import math
 import logging
 from html import escape as html_escape
@@ -75,13 +76,14 @@ from .guard import UPLOADS, Guard, HeavyGate, Window, address as caller_address
 from . import research
 from .engine import walkforward
 from . import rule_check
-from .engine.verdict import restate_empty, restated as verdict_restated, with_notes
+from .engine.verdict import restate_empty, restated as verdict_restated, with_notes, with_yearly
 from .data import DataError, Registry, split_id
+from .data.stored_india import StoredIndia
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
-from .intel.net import RequestWaits, TTLCache
-from .intel import filings, sec
+from .intel.net import RequestWaits, TTLCache, with_rate_wait
+from .intel import filings, sec, theme_routes
 from .intel.sec import SEC
 from .intel.us_calendar import USCalendar
 from .intel.net import SourceError
@@ -111,6 +113,7 @@ from . import etf_nav
 from . import heatmap
 from . import data_status, movers
 from . import vix
+from . import mood_job
 from . import biz_updates, library_seed, shareholders
 from . import positioning
 from . import fo_changes_routes
@@ -143,6 +146,10 @@ manager = LiveManager(kite, hub, markets, options_data)
 recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings.OPTION_SNAPSHOTS), settings.OPTION_SNAPSHOT_MINUTES,
                     prune=db.delete_option_snapshots_before, keep_days=settings.OPTION_SNAPSHOT_KEEP_DAYS)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
+# LIVE11B-013: India's daily tests on the stored daily closes while the broker's data login is off (data/stored_india.py)
+markets.providers["IN"].stored = StoredIndia(lambda sym: research_hub.chart("IN", sym, "max", "1d")["candles"],
+                                             kept_fn=lambda token: kite.kept_instrument(token),
+                                             known_fn=lambda sym: (stock_pages.find("IN", sym) or (None, None))[1])
 # a currency option's underlying when its future has no live quote: the spot pair it settles against (R13-002)
 options_data.spot_source = lambda pair: (lambda m: {"price": m.get("price"), "at": m.get("at")})(research_hub.yahoo.meta(pair))
 options_data.spot_close = lambda pair, day: next((b["c"] for b in research_hub.yahoo.chart(pair, "1d", 7, ttl=60, exact=True)["candles"]
@@ -405,6 +412,11 @@ def start_failed_jobs() -> None:
         _start(name, fn)
 
 
+def _theme_recheck_start():
+    from .intel import theme_recheck
+    theme_recheck.job.start()
+
+
 def start_jobs():
     try:
         manager.resume()  # crypto sessions always; India ones once Kite is logged in
@@ -442,6 +454,7 @@ def start_jobs():
     _start("stock-list", lambda: threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start())
     _start("screens-index", lambda: threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start())
     _start("stock-prices", lambda: threading.Thread(target=stock_price_refresh_job, daemon=True, name="stock-prices").start())   # pages follow each close
+    _start("rotation", lambda: threading.Thread(target=rotation_job, daemon=True, name="rotation").start())   # sector charts at each close
     _start("screen_job", screen_job.start)
     _start("breadth_job", breadth_job.start)
     _start("library-seed-once", lambda: threading.Thread(target=library_seed_once, daemon=True, name="library-seed-once").start())
@@ -449,6 +462,7 @@ def start_jobs():
     _start("etf_job", etf_job.start)
     _start("closing_auction_job", closing_auction_job.start)       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
     _start("vix_job", vix_job.start)
+    _start("mood_job", mood_job.job.start)              # the market mood read after each close, once the closes settle (LIVE8A-006)
     _start("biz_job", biz_job.start)
     _start("holders_job", holders_job.start)
     _start("doc_index.job", doc_index.job.start)          # the filings search index, once a night when switched on
@@ -456,6 +470,7 @@ def start_jobs():
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
+    _start("theme_recheck.job", _theme_recheck_start)     # r66e: every stored theme checked again after a version change, one at a time
     _start("autofix", lambda: threading.Thread(target=autofix.loop, daemon=True, name="autofix").start())   # self-healing: retries what failed, emails the owner only when that fails (owner, 4 Nov)
 
 
@@ -536,6 +551,7 @@ from . import embeds, public_themes, share  # noqa: E402  (bet 3: public, sharea
 app.include_router(share.router)               # /research/share/..., /research/shares: share links to a deep dive or a theme
 app.include_router(share.page_router)          # /r/<token>: a share link's public page
 app.include_router(public_themes.router)       # /themes, /themes/<in|us>/<slug>: public theme pages
+app.include_router(theme_routes.admin_router)  # /admin/themes/industries/repick: the owner's switch to have the AI pick a theme's industries again (ex49)
 app.include_router(embeds.router)              # /embed/price/..., /embed/theme/...: charts other sites may frame
 app.include_router(supply_links.router)        # /research/links: customers and suppliers named in filings
 app.include_router(supply_links.admin_router)  # /admin/supply-links: the nightly job's switch, AI cap and review queue
@@ -557,8 +573,11 @@ async def unexpected_errors(request: Request, call_next):
         tb = traceback.extract_tb(e.__traceback__)
         own = [f for f in tb if "site-packages" not in f.filename and f.name != "unexpected_errors"] or tb   # the deepest frame of our own code
         where = f"{own[-1].filename.rsplit('/', 1)[-1]}:{own[-1].lineno} in {own[-1].name}" if own else ""
+        # with the build it happened on: the list is kept across deploys, so an error a later build fixed is told apart from one on the live
+        # build (ops49: two errors already fixed in later releases read as live ones)
         RECENT_ERRORS.append({"ref": ref, "at": datetime.now(IST).isoformat(), "method": request.method,
-                              "path": request.url.path, "error": connect_redact.mask(f"{type(e).__name__}: {str(e)[:300]}"), "where": where})
+                              "path": request.url.path, "error": connect_redact.mask(f"{type(e).__name__}: {str(e)[:300]}"), "where": where,
+                              "build": build_info.info().get("short")})
         del RECENT_ERRORS[:-25]
         _save_errors()
         report(e, ref=ref, path=f"{request.method} {request.url.path}")
@@ -627,11 +646,33 @@ def _save_errors():
     t.start()
 
 
+ERRORS_KEEP_DAYS = 7          # r58 (the owner: 25 errors from 2 Oct to 12 Nov on the overview, every one fixed since): an error ages out after this
+
+
+def fresh_errors(errors: list, now: datetime | None = None) -> tuple[list, int]:
+    """(the errors of the last ERRORS_KEEP_DAYS days, how many older ones were left out). An error with no readable time is kept: never
+    hidden while it may be fresh."""
+    now = now or datetime.now(timezone.utc)
+    keep, old = [], 0
+    for e in errors:
+        try:
+            at = datetime.fromisoformat(str(e.get("at")))
+            at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            keep.append(e)
+            continue
+        if (now - at).total_seconds() > ERRORS_KEEP_DAYS * 86400:
+            old += 1
+        else:
+            keep.append(e)
+    return keep, old
+
+
 def _load_errors():
     try:
         saved = json.loads(db.get_setting("recent_errors") or "[]")
         if isinstance(saved, list):
-            RECENT_ERRORS[:0] = [e for e in saved if isinstance(e, dict)][-25:]
+            RECENT_ERRORS[:0] = fresh_errors([e for e in saved if isinstance(e, dict)][-25:])[0]
     except Exception as x:
         print("could not load errors:", x)
 
@@ -860,6 +901,14 @@ def health():
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
             "feed": "connected" if hub.connected else "disconnected" if hub.started else "idle",
             "ai_configured": any(p["in_use"] for p in ai_health()), "version": build_info.info()["short"]}
+
+
+@app.get("/public/data-online")
+def data_status():
+    """Public: whether Indian prices are read live and, while they aren't, the same note /me carries (India closed today
+    anyway, when the next data login runs). The app asks for it as it starts, beside the sign-in check, so the page's first
+    frame already carries the offline line instead of pushing the page down when /me answers later (LIVE11B-004)."""
+    return {"data_online": kite.ready(), "data_note": data_note()}
 
 
 @app.get("/version")
@@ -1126,7 +1175,12 @@ def my_usage(profile=Depends(current_profile)):
     from . import computed
     from .plans import refreshes_allowed
     word = computed.plan_word(profile)
-    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile)})
+    # LIVE9A-003: a Free account made before the smaller Free plan keeps the old counts until a date (plans.free_grace_until); every note that
+    # shows such a count ("60 left today", the decks left) says until when and what Free has after, so it never reads as Free's own limit
+    from .plans import free_grace_until
+    end = free_grace_until(profile) if plan == "free" else None
+    grace = {"until": end.isoformat(), "reads_after": PLANS["free"]["ai_reads_per_day"], "decks_after": PLANS["free"]["decks_per_month"]} if end else None
+    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile), "grace": grace})
 
 
 _usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")
@@ -1815,14 +1869,16 @@ def backtest_slot(profile):
         yield box["limit"]
 
 
-def run_test(profile, strategy: Strategy, req) -> dict:
+def run_test(profile, strategy: Strategy, req, hint: dict | None = None) -> dict:
     if not strategy.entry:
         err(400, "no_entry_rules", "Add at least one buy rule first.")
     with backtest_slot(profile) as limit:
-        data = research.load(markets, strategy, req)
+        data = research.load(markets, strategy, req, **({"hint": hint} if hint else {}))
         check_features(profile, strategy, data["inst"])
         out = compute.run(strategy, data)                   # in a worker process: other pages stay quick meanwhile
         db.add_usage(profile["id"], "backtest")
+    if data.get("stored_through"):
+        out["stored_through"] = data["stored_through"]      # run on the stored daily closes while the live data was offline
     invite_rewards.safe_touch(profile, "backtest")
     used = backtests_used(profile)
     out["usage"] = {"backtests_used": used, "backtests_limit": limit}
@@ -1901,8 +1957,11 @@ def instrument_summary(inst_id: str | None, currency: str | None = None) -> dict
     try:
         return get_instrument(inst_id)[1]
     except (HTTPException, KiteNotReady, DataError):
-        # market data is briefly offline: keep the id, details fill in on the next save
-        return {"id": inst_id}
+        # market data is briefly offline: the stored record of a stock, an ETF or an index when there is one (LIVE11B-013), else keep the
+        # id, details fill in on the next save
+        prov = markets.provider(split_id(inst_id)[0])
+        got = _quiet(getattr(prov, "stored", None).resolve, split_id(inst_id)[1]) if getattr(prov, "stored", None) else None
+        return got or {"id": inst_id}
 
 
 @app.get("/notebooks")
@@ -1980,7 +2039,10 @@ def read_notebook(nid: str, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
     # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
     # ...and one saved before an account stopped at zero shows its account held to what it had (R18-008: -352.6%)
-    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in map(restate_empty, nb.get("experiments") or [])]
+    # ...and one saved before the yearly rates were said gets its "A year at a time" line (LIVE10B-031)
+    nb["experiments"] = [{**e, "verdict": with_yearly(verdict_restated(e.get("verdict"), e.get("stats")), e.get("stats"),
+                                                    [(e.get("range") or {}).get("from"), (e.get("range") or {}).get("to")])}
+                         for e in map(restate_empty, nb.get("experiments") or [])]
     nb["summary"] = research.summary(nb["experiments"])      # a summary stored before R38-001 is read afresh
     return ok(with_rule_problems(nb))
 
@@ -2077,8 +2139,14 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     else:
         if not req.bars and not req.instrument:
             req.instrument = (nb.get("instrument") or {}).get("id")
-        out = run_test(profile, strategy, req)
+        # the notebook's own record names its instrument only while that market's live data is off (a stored daily test, LIVE11B-013)
+        held = markets.provider(split_id(req.instrument)[0]) if req.instrument else None
+        out = run_test(profile, strategy, req, **({"hint": nb.get("instrument")} if held is not None and not held.ready() else {}))
         rec = research.record(out, strategy, req.label, version, db.now_iso())
+        if out.get("stored_through") and isinstance(rec.get("verdict"), dict):
+            # LIVE11B-013: said on the verdict, with the last close it read
+            day = date.fromisoformat(out["stored_through"])
+            rec["verdict"] = with_notes(rec["verdict"], [f"Indian live data was offline, so this ran on the stored daily closes, up to the close of {day.day} {day:%b %Y}."])
     rec["req_days"] = req.days
     stop_note = research.assumed_stop_note(nb.get("gaps"), strategy)
     if stop_note and isinstance(rec.get("verdict"), dict):
@@ -2402,6 +2470,8 @@ def rotation_run(region: str, set: str, members, interval: str, tail: int, keep_
     """Work out a rotation chart and hold it ten minutes; a shared set (keep_as names it) also keeps a copy for the
     hours the market's data is offline."""
     out = rotation.run(markets, region, set, members, interval, tail)
+    # LIVE11A-007: a chart made from the session's candles before its close is settled is made once more after it
+    out = {**out, "settled": str(out.get("as_of") or "")[:10] <= stock_pages.last_close(region)[0].isoformat()}
     _results.set(("rotation", region, set, tuple(_member_key(m) for m in members or []), interval, tail), out, 600)
     if keep_as:
         try:
@@ -2410,6 +2480,26 @@ def rotation_run(region: str, set: str, members, interval: str, tail: int, keep_
         except Exception as e:                    # a page that worked isn't failed for want of a copy
             print("rotation copy not kept:", e)
     return out
+
+
+ROTATION_AFTER = 15 * 60          # seconds after a close the sector chart is made with that session's candle (LIVE11A-007)
+
+
+def rotation_day(region: str, now: datetime | None = None) -> str:
+    """LIVE11A-007: the session a sector chart should run to: the latest one whose close is ROTATION_AFTER past. India's prices are taken as
+    settled three hours after its close (18:30 IST), by when the broker may be offline for the night, so the copy kept at 16 Nov stood until
+    the next morning ("Closes up to 16 Nov" at 04:40 IST, 13 h after the 17 Nov close)."""
+    return stock_pages.last_session(region, now, ROTATION_AFTER)[0].isoformat()
+
+
+def rotation_behind(kept: dict | None, region: str, now: datetime | None = None) -> bool:
+    """Whether a kept sector chart is to be made again: behind the latest session, of an older version, or made from that session's candles
+    before its close was settled while the settled close is in now."""
+    k = kept or {}
+    as_of = str(k.get("as_of") or "")[:10]
+    if k.get("v") != rotation.VERSION or as_of < rotation_day(region, now):
+        return True
+    return not k.get("settled", True) and as_of <= stock_pages.last_close(region, now)[0].isoformat()
 
 
 def rotation_after_close(now: datetime | None = None) -> list[str]:
@@ -2421,11 +2511,10 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
         prov = markets.provider(region)
         if prov is None or not prov.ready():
             continue
-        day = stock_pages.last_close(region, now)[0].isoformat()
         name = rotation.index_sets(region)["sectors"]["name"]
         for interval in ("weekly", "daily"):
             kept = db.json_value(db.get_setting(f"rotation:last:{region}:sectors:{interval}:5"), {})
-            if str((kept or {}).get("as_of") or "")[:10] >= day and (kept or {}).get("v") == rotation.VERSION:
+            if not rotation_behind(kept, region, now):
                 continue
             try:
                 rotation_run(region, "sectors", None, interval, 5, name)
@@ -2433,6 +2522,67 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
             except Exception as e:                # the next pass tries again
                 print("rotation after close:", region, interval, str(e)[:120])
     return done
+
+
+ROTATION_START = 45               # seconds after startup of the first look for a sector chart behind its close (LIVE12A-003)
+ROTATION_EVERY = 5 * 60           # ...and between looks
+
+
+def rotation_job(sleep=time.sleep):
+    """LIVE12A-003: the kept sector charts brought to each close by a job of their own, a few minutes after the close and after a restart.
+    They were brought up at the end of the company pages' price pass, which waits 7 minutes after a start and then reads hundreds of
+    pages first, so after a morning deploy the India page showed "Closes up to 16 Nov" at 09:40 IST until a visit made the chart.
+    A look with nothing behind reads four stored copies and nothing else."""
+    sleep(ROTATION_START)
+    while True:
+        try:
+            if leader.leading():          # another container leads: it runs this look
+                rotation_after_close()
+        except Exception as e:
+            print("rotation after close:", str(e)[:120])
+        sleep(ROTATION_EVERY)
+
+
+_rotation_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rotation-behind")
+ROTATION_BEHIND = os.environ.get("READ_BEHIND", "1").strip().lower() not in ("0", "false", "no", "off")    # off in the test suite
+_rotation_busy: set = set()
+_rotation_lock = threading.Lock()
+
+
+def _rotation_behind(region: str, set_id: str, interval: str, tail: int, name: str) -> bool:
+    """LIVE10A-011: a shared rotation chart worked out again on one worker (once per chart at a time, four waiting at most); False when full."""
+    k = (region, set_id, interval, tail)
+    with _rotation_lock:
+        if k in _rotation_busy:
+            return True
+        if len(_rotation_busy) >= 4:
+            return False
+        _rotation_busy.add(k)
+
+    def run():
+        try:
+            rotation_run(region, set_id, None, interval, tail, name)
+        except Exception as e:
+            print("rotation behind the page:", region, set_id, str(e)[:120])
+        finally:
+            with _rotation_lock:
+                _rotation_busy.discard(k)
+    _rotation_pool.submit(run)
+    return True
+
+
+def rotation_kept(region: str, last_key: str, now: datetime | None = None) -> dict | None:
+    """The kept rotation chart when it is at the market's latest close and of this version, without its name and market; else None."""
+    try:
+        kept = db.json_value(db.get_setting(last_key), {})
+        day = stock_pages.last_close(region, now)[0].isoformat()
+    except Exception:
+        return None
+    if not isinstance(kept, dict) or not kept.get("rows") or kept.get("v") != rotation.VERSION or str(kept.get("as_of") or "")[:10] < day:
+        return None
+    if rotation_behind(kept, region, now):        # LIVE11A-007: the session that closed in the last hours isn't in it yet
+        return None
+    return {k: v for k, v in kept.items() if k not in ("name", "market")}
 
 
 @app.get("/research/rotation")
@@ -2464,6 +2614,24 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
             err(400, "empty", "Pick a group with at least two stocks, or star more companies for your watchlist.")
     key = ("rotation", region, set, tuple(_member_key(m) for m in members or []), interval, tail)
     out = _results.get(key)
+    if out is None and shared:
+        # the copy the price job keeps after each close is already at the latest completed session (a session still trading is left out of
+        # the chart either way): served at once instead of reading every member's prices again (rel1, LIVE9A-017: 15 s, and "Still
+        # working" 9 h after the close)
+        out = rotation_kept(region, last_key)
+        if out is not None:
+            _results.set(key, out, 600)
+        else:
+            # LIVE10A-011: a kept copy a close behind (the after-close copy not made yet, or made before the day's candles were out) is served
+            # at once, dated by its own candles, and the chart is worked out again behind it (03:50 ET, 12 h after the close, the page said
+            # "Still working…" while every member's prices were read again inside the request)
+            # a store that can't be read is no older copy: the chart is worked out in the request, as before (Release 63 CI)
+            try:
+                older = db.json_value(db.get_setting(last_key), {}) if ROTATION_BEHIND else {}
+            except Exception:
+                older = {}
+            if isinstance(older, dict) and older.get("rows") and older.get("v") == rotation.VERSION and _rotation_behind(region, set, interval, tail, name):
+                return ok({**older, "skipped": [public_text(x) for x in older.get("skipped") or []], "updating": True})
     if out is None:
         try:
             out = rotation_run(region, set, members, interval, tail, name if shared else None)
@@ -2869,14 +3037,31 @@ def us_price_ratios(p: dict, sym: str) -> dict:
         p["share_note"] = (f"{sym.upper()} is a preferred share, warrant or unit of the company, not its common stock: "
                            "the figures are the company's, and its price isn't used for market value or P/E.")
     else:
+        p.update(us_split_adjusted(p, sym))
         p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
     return m
+
+
+def us_split_adjusted(p: dict, sym: str) -> dict:
+    """`p` with its share count on today's basis after a split the price history lists since the count's date (sec.split_since);
+    unchanged when the history can't be read. The same read as the page's dividends (one cached call)."""
+    if not p.get("shares_at") or sec.non_common(sym):
+        return p
+    try:
+        splits = research_hub.yahoo.events(sec.price_symbol(sym), 400)["splits"]
+    except Exception:
+        return p
+    return sec.split_since(p, splits, date.today().isoformat())
 
 
 def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
     p = sec.with_fx(dict(research_routes.source_call(lambda: sec_feed.company(sym))), usd_per)
     m = us_price_ratios(p, sym)
+    # the market trading: the quote is a live price; the valuation stands on the last close, as on the public page (rel1)
+    in_session = bool(m.get("price") and m.get("prev_close") and not sec.non_common(sym) and research_hub_market_open("US"))
+    if in_session:
+        p["ratios"] = sec.ratios(p, m["prev_close"], m.get("high52"), m.get("low52"))
     try:
         wiki = research_hub.wiki.company(p.get("name") or sym) or {}
         p["about"] = wiki.get("extract") or ""
@@ -2890,8 +3075,17 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
     cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
     trend, why = price_status(sym, "US")
-    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why,
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why, "in_session": in_session,
             "quote": {k: m.get(k) for k in ("price", "prev_close", "high", "low", "at")} if m.get("price") else None}
+
+
+def research_hub_market_open(region: str) -> bool:
+    """Whether the market is trading now (its hours, on a trading day)."""
+    from .intel.company import market_open
+    try:
+        return market_open(region)
+    except Exception:
+        return False
 
 
 def usd_per(cur: str) -> float | None:
@@ -2912,6 +3106,10 @@ def deep_years(years: int) -> int:
 BSE_WAIT = "Documents are not available from BSE right now (it is turning requests away). Try again later."
 
 
+DEEP_WAIT = 6.0
+DEEP_BUSY = ("The company's figures are being read: the source is taking requests slowly just now. This page asks again on its own "
+             "in a few seconds, and this deep dive isn't counted until it opens.")
+
 _deep_pool = ThreadPoolExecutor(max_workers=12, thread_name_prefix="deep-dive")   # the deep dive's sources, read side by side
 
 
@@ -2927,7 +3125,17 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
              "trend": _deep_pool.submit(price_status, sym)}
     if trades:
         ahead["insider"] = _deep_pool.submit(lambda: _quiet(lambda: filings_feed.insider_trades(sym)))
-    p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(code or sym)))
+    # a person's deep dive waits its turn at the fundamentals source a little longer than a page does (DEEP_WAIT), ahead of the
+    # background jobs (net.RateLimit.reserve); still busy, the company's last whole read stands in (Screener.kept), and with none
+    # the answer says the page asks again on its own, never a bare error (rel1, CX1 problem 3)
+    def read():
+        try:
+            return with_rate_wait(DEEP_WAIT, lambda: research_hub.screener.company(code or sym))()
+        except SourceError as e:
+            if getattr(e, "busy", False):
+                err(503, "source_busy", DEEP_BUSY)
+            raise
+    p = with_industry(sym, research_routes.source_call(read))
     try:
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
     except Exception:
@@ -2997,7 +3205,7 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
     except Exception:
         return None, "error"
     if got:
-        return got, None
+        return with_session(got, bars, market), None
     if len(bars) >= 30:
         return None, None
     # under 30 candles: a new listing, or an old share that trades on a handful of days a year (the broker's candles
@@ -3007,6 +3215,23 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
         return None, "new" if (datetime.now(IST).date() - first).days <= 60 else "sparse"
     except (TypeError, ValueError):
         return None, "new"
+
+
+def with_session(trend: dict, bars: list[dict], market: str, now: datetime | None = None) -> dict:
+    """The trend, and when its last daily candle is a session still trading (the market open, the candle dated after the latest
+    completed session), that candle's price as `live` and the session before it as the close (`close`, `close_t`): a live price is
+    never labelled "last close" (rel1, CX1 problem 9: the AAPL deep dive said "Last close as of 16 Nov" at an intraday price, P/E 39.2,
+    while the public page said 13 Nov close, P/E 39.7)."""
+    from . import last_session
+    try:
+        done = last_session.latest_day(market, now)
+    except Exception:
+        return trend
+    day = str((bars[-1] if bars else {}).get("t") or "")[:10]
+    if not day or day <= done or len(bars) < 2:
+        return trend
+    prev = bars[-2]
+    return {**trend, "live": {"price": bars[-1].get("c"), "day": day}, "close": prev.get("c"), "close_t": prev.get("t")}
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
@@ -3054,6 +3279,30 @@ def pre_issue_cap(snap: dict, p: dict, listed_on: str | None) -> dict:
     return {**snap, "market_cap_cr": cap} if cap and balance_before(p, listed_on) else snap
 
 
+def close_price(trend: dict | None):
+    """The last close a page's valuation stands on: the session before one still trading, else the last candle's."""
+    t = trend or {}
+    return t.get("close") if t.get("live") else t.get("price")
+
+
+def close_day(trend: dict | None) -> str | None:
+    """The day of that close, for "Last close as of …"."""
+    t = trend or {}
+    return candle_day(t.get("close_t") if t.get("live") else t.get("t"))
+
+
+def deep_live_price(base: dict) -> dict | None:
+    """{"price", "at"} while the company's market is trading: the quote's own price and time when there is one (a US
+    company's), else the live candle's price and when it was read."""
+    t = base.get("trend") or {}
+    q = base.get("quote") or {}
+    if base.get("in_session") and q.get("price"):
+        return {"price": q["price"], "at": q.get("at")}
+    if t.get("live") and t["live"].get("price"):
+        return {"price": t["live"]["price"], "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}
+    return None
+
+
 def deep_view(sym: str, base: dict) -> dict:
     p = base["p"]
     us = p.get("region") == "US"
@@ -3073,7 +3322,7 @@ def deep_view(sym: str, base: dict) -> dict:
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         # a share listed in the last weeks (its candles are too few to scan): the source's value on the shares in issue now, not the old balance sheet's
         snap = pre_issue_cap(snap, p, (datetime.now(IST).date() - timedelta(days=60)).isoformat() if base.get("trend_why") == "new" else None)
-        snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
+        snap = at_live_price(snap, close_price(base.get("trend")), sym, p.get("fetched_at"))
         # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
         # valuation and the P/E worked out from it (R10C-001)
         snap = stock_pages.india_snap_checked(snap, p)
@@ -3088,7 +3337,7 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
-            "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
+            "name": (stock_pages.proper_name(p.get("name")) if us else p.get("name")) or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
             "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pe_why", "pb", "roce", "roe", "debt_equity", "div_yield")},
                          "cap_note": stock_pages.CAP_UNAVAILABLE if snap.get("cap_problem") else None},
             "industry_measures": industry.measures(p, sym),
@@ -3097,7 +3346,11 @@ def deep_view(sym: str, base: dict) -> dict:
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym, base.get("trades")),
             "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-            "numbers_at": p.get("fetched_at"), "price_at": candle_day((base["trend"] or {}).get("t")),
+            "numbers_at": p.get("fetched_at"), "price_at": close_day(base["trend"]),
+            # a session still trading: its price, labelled live with the time it was read; the figures above stay on the close
+            "live": deep_live_price(base),
+            # the latest read couldn't be had (the source busy): these are the company's last whole read, from numbers_at
+            "figures_kept": bool(p.get("kept_busy")),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
 
 
@@ -3465,7 +3718,7 @@ def with_sectors(items: list[dict], known: dict[str, str] | None = None) -> list
         f = todo.get(i["symbol"])
         got = f.result() if f is not None and f.done() and not f.exception() else None
         out.append({**i, "sector": known.get(i["symbol"]) or holdings.sector_label(investor.sector_of("IN", i["symbol"]), got)})
-    return out
+    return _screen_sectors(out)
 
 
 connect_routes.setup(throttle)
@@ -3618,6 +3871,31 @@ def _full_names(items: list[dict]) -> list[dict]:
     return out
 
 
+def _named_now(items: list[dict]) -> list[dict]:
+    """Each holding's name in the one style the rest of the app writes (LIVE10B-027: holdings imported before R60 kept the broker's capitals,
+    "STATE BANK OF INDIA", beside title case after a re-import): stored names are left as they are, only the view is tidied."""
+    from .results import display_name
+    stock = lambda i: not str(i.get("kind") or "").startswith("etf") and not re.search(r"\b(ETF|BEES|ETN)\b", str(i.get("name") or ""))  # noqa: E731
+    return [{**i, "name": display_name(holdings.market_of(i), i["name"]) or i["name"]} if i.get("name") and i.get("name") != i.get("symbol") and stock(i) else i
+            for i in items]
+
+
+def _screen_sectors(items: list[dict]) -> list[dict]:
+    """Each Indian stock in the sector the stock screens give it (one list for every page: the screens' index classifies every listed
+    company), in place of the label saved when it was imported (LIVE9B-005: 60 of 100 holdings "Not classified", others under a sector
+    index's name such as "Infrastructure" or "Capital Markets" that the screens never use). A stock the index doesn't hold keeps its own."""
+    ind = [i for i in items if holdings.market_of(i) == "IN" and not i.get("kind")]
+    if not ind:
+        return items
+    try:
+        from . import screens
+        known = {r["symbol"]: r["sector"] for r in screens.load_index("IN").get("rows") or [] if r.get("sector")}
+    except Exception:
+        return items
+    return [{**i, "sector": known[i["symbol"]]} if holdings.market_of(i) == "IN" and not i.get("kind") and known.get(i["symbol"]) else i
+            for i in items]
+
+
 def holdings_view(profile) -> dict:
     """The person's holdings at today's prices. The prices are read once and shared for a few seconds, so My space, Money,
     Holdings and the net worth add up to the same rupees when opened one after another."""
@@ -3637,7 +3915,7 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(_full_names(_etf_named(h["items"])), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+    return {**holdings.view(_screen_sectors(_named_now(_full_names(_etf_named(h["items"])))), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"], "sources": holdings.sources(h),
             "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "us_prices_at": got.get("us_prices_at"), "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
@@ -3716,15 +3994,29 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
             # LIVE1B-065: the same file again would double every quantity; nothing is added, and the page says so
             out.update(duplicate=True, n=0, saved=False, over=[])
             return None
-        rows = found
+        if req.mode == "add" and not req.overlap_ok:
+            # LIVE10B-024: a newer copy of a file already read (held before its digest was remembered, or a fresh download of
+            # the same account) would add every quantity again; adding to a stock already held waits for the user's word
+            held = {(holdings.market_of(i), i["symbol"]): i for i in before["items"]}
+            both = [i for i in found if (holdings.market_of(i), i["symbol"]) in held]
+            if both:
+                same = len(both) == len(found) and all(
+                    held[(holdings.market_of(i), i["symbol"])]["qty"] == i["qty"]
+                    and abs((held[(holdings.market_of(i), i["symbol"])].get("avg") or 0) - (i.get("avg") or 0)) < 0.01 for i in both)
+                out.update(duplicate=same, overlap=[] if same else sorted({i["symbol"] for i in both}), n=0, saved=False, over=[])
+                return None
+        # LIVE10B-026: each holding keeps where and when it was imported, so a second broker's file doesn't re-date the first's
+        src = "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
+        rows = holdings.tag(found, src, datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        kept = holdings.tag(before["items"], before["source"], before["updated_at"])
         if req.mode == "add":
-            rows = holdings.merge(before["items"] + rows)
+            rows = holdings.merge(kept + rows)
         elif rows:                        # a file replaces only the markets it covers: US holdings stay
             covered = {holdings.market_of(i) for i in rows}
             # a held stock named on a line that didn't match stays as it was (as a sync keeps it)
             names = {str(v).upper() for m in missed for v in (m.get("symbol"), m.get("isin")) if v}
             have = {(holdings.market_of(i), i["symbol"]) for i in rows}
-            rows = rows + [i for i in before["items"] if holdings.market_of(i) not in covered
+            rows = rows + [i for i in kept if holdings.market_of(i) not in covered
                            or ((holdings.market_of(i), i["symbol"]) not in have
                                and (i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names))]
         rows, out["over"] = holdings.cap(rows, before["items"], limit)   # a downgrade deletes nothing
@@ -3738,14 +4030,14 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         # RC2B-009: Kite's holdings export is a file; "Zerodha Kite" as a stored source means the Kite login's read, and the
         # page said "from your Zerodha login" after an upload
-        return with_sectors(rows, known), "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
+        return with_sectors(rows, known), src
     holdings.update(profile["id"], merged)
     if out["saved"]:
         holdings.file_remember(profile["id"], digest, req.mode == "replace")
         invite_rewards.safe_touch(profile, "holdings")
     over = out["over"]
     return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")),
-               "saved_lines": out.get("lines", [])[:500] if out["saved"] else [], "unmatched": missed[:200],
+               "overlap": out.get("overlap", []), "saved_lines": out.get("lines", [])[:500] if out["saved"] else [], "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 
@@ -3866,6 +4158,10 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             return None                   # nothing changed (a stock that matched nothing, or one already removed)
         if found:
             known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
+            # LIVE10B-026: a stock typed in is "your own entries" of today; the ones already held keep where and when they came from
+            now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            found = [i if i.get("from") else {**i, "from": before["source"], "from_at": before["updated_at"]}
+                     if (holdings.market_of(i), i["symbol"]) in saved and before["source"] else {**i, "from": "Manual", "from_at": now} for i in found]
             return with_sectors(found, known), before["source"] or "Manual"
         return None if out["missed"] else db.REMOVE      # every row removed
     holdings.update(profile["id"], edited)
@@ -4659,9 +4955,18 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
                 # build knows it isn't a fund (R12-013: GSMT, listed from such a build, answered "GSMT is a fund" when next built)
                 checks["type_unread"] = True
             items = [{"at": d["at"], "title": d["title"], "url": d.get("url")} for d in p.get("documents") or []]
-            exchange, red = "Listed in the US", None
+            # the exchange the SEC names for this ticker ("Nasdaq"), as an Indian page names NSE (CX2: Apple's page named none)
+            exchange, red = p.get("listed_on") or "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
+            if (p or {}).get("about"):
+                # e57 (R57): the company's own profile, just read for its page, kept as its description for every theme (theme_routes.
+                # keep_profile), so a theme's check never reads the same page again and its membership rests on these words, not its label
+                try:
+                    from .intel import theme_routes as _theme_routes
+                    _theme_routes.keep_profile("IN", sym, p["about"], " > ".join(str(x) for x in p.get("industry_path") or []))
+                except Exception as e:
+                    print("stock pages: profile not kept for themes:", sym, type(e).__name__, str(e)[:100])
             try:
                 p = research_hub.screener.with_cash(p)       # cash on hand, for a theme's enterprise value (left as it is when the breakdown is busy)
             except Exception:
@@ -4706,6 +5011,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         # the ratios at the same close the page shows (the quote read above is the live price), and the dividend yield
         # from the dividends the price history lists for the year to that close: none in the year is a real 0%, a
         # history that couldn't be read is n/a (the filings' dividend line is missing for many foreign filers)
+        p = us_split_adjusted(p, sym)
         p["ratios"] = sec.ratios(p, close, prices.get("high52"), prices.get("low52"))
         # the app's own dividends list first (its Corporate actions card), so both pages have one yield (R7O-004)
         dy = us_page_dividend_yield(sym, close, prices.get("price_at"))
@@ -4721,6 +5027,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             checks["annual_filed"] = p["annual_filed"]      # when its newest annual report was filed (stock_pages.annual_behind)
             if p.get("annual_form"):
                 checks["annual_form"] = p["annual_form"]    # R46: which report (10-K, 20-F, 40-F), for a theme's figure source record
+        if "revenue_basis" in p:
+            # r60b: the lines the latest year's revenue is read from (sec.revenue_parts); {} when the build read no revenue for that year
+            checks["revenue_basis"] = p["revenue_basis"] if isinstance(p["revenue_basis"], dict) else {}
         if close and not sec.non_common(sym):
             # one P/E definition, the app's: the close over earnings per share for the last four reported quarters,
             # else the latest year's, said so (R7V-002, R7V-003); the earnings per share itself, for the app's page
@@ -4912,7 +5221,7 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
         # own candles are read as before (official_close.widen_to_range)
         try:
             rep = official_close.ranges() or {}
-            bars = stock_pages.fit_to_exchange_range(bars, official_close.range_row(sym, rep), rep.get("day"))
+            bars = stock_pages.fit_to_exchange_range(bars, official_close.range_row(sym, rep), rep.get("day"), official_close.report_through(rep))
         except Exception as e:                       # the candles as they are rather than none
             print("52-week report for the public page:", sym, str(e)[:120])
     return bars
@@ -4983,6 +5292,16 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
 stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
+
+
+def build_page(region: str, sym: str) -> dict | None:
+    """r58: a company's page built (or its stored one) for a theme's data gaps (theme_routes.fix_gaps), within the pages' per-minute
+    ration (stock_pages.Busy when it is taken); None when there is no public page for it."""
+    hit = stock_pages.find(region, sym)
+    return stock_page_store.get(region, hit[0], hit[1]) if hit else None
+
+
+research_routes.build_page = build_page
 # lane c-f2: a company's peers, statements and shareholding by quarter (company_tables.py), from the same stored readers
 from . import company_tables  # noqa: E402
 company_tables.setup(screener=lambda: research_hub.screener, sec=lambda: sec_feed, facts=lambda r, s: stock_page_store.peek(r, s),
@@ -5338,7 +5657,8 @@ def screen_warm(region: str, sym: str, co: dict):
     stock_page_store.get(region, sym, co)
 
 
-screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c))
+screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c), night_per_run=60)   # more pages a run in India's night and at the weekend (screens.Indexer.pace)
+stock_page_store.limit = lambda: stock_page_store.per_minute * (screens.FAST_RATION if screens.fast_window() else 1)   # FAST_RATION times the pages a minute in India's night and at the weekend
 stock_page_store.on_built = screens.note_page       # a page built is in the screens and the largest list at once (R8O-005)
 stock_page_store.on_priced = screens.note_price     # ...and a page moved to a newer close, its price and market value (LIVE3-003)
 
@@ -5363,19 +5683,30 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
     for region, (limit, gap) in PRICE_REFRESH.items():
         # India: a page read at the close before the exchange's official close was out takes it once it is (R7O-004)
         extra = {"official": lambda s, d: official_close.official(s, d, use_quote=False),
-                 "official_ready": official_close.settled} if region == "IN" else {}
+                 "official_ready": official_close.settled, "official_range": official_close.day_range} if region == "IN" else {}
+        before = price_refresh_status.get(region) if isinstance(price_refresh_status.get(region), dict) else {}
         try:
             price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep, **extra)
         except Exception as e:                        # a source or storage down: the next pass tries again
             price_refresh_status[region] = {"error": str(e)[:160]}
-    try:
-        rotation_after_close()
-    except Exception as e:
-        print("rotation after close:", str(e)[:120])
+        # passes in a row in which no page's price could be read (the source down, or no read working): a single such pass is the
+        # source not answering for a moment, cleared by the next pass a few minutes later; Admin calls it a Problem from the second
+        # (owner, 13 Nov: "Company pages' prices" opened a check that cleared by itself)
+        price_refresh_status[region]["failed_passes"] = (int(before.get("failed_passes") or 0) + 1) if price_pass_failed(price_refresh_status[region]) else 0
     price_refresh_status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     from . import job_status
     job_status.kept("page-prices", dict(price_refresh_status))       # so Admin has it after a restart (R94-001)
     return price_refresh_status
+
+
+def price_pass_failed(x: dict | None) -> bool:
+    """Whether a market's pass of the price job read no page's price: it raised, or every read raised. A pass turned away by its source
+    (India's broker before the morning login) or with only pages that have no newer close yet is not a failure."""
+    if not isinstance(x, dict):
+        return False
+    if x.get("error"):
+        return True
+    return not x.get("source_down") and bool(x.get("errors", x.get("failed", 0))) and not x.get("refreshed")
 
 
 def refresh_backlog(status: dict) -> bool:
@@ -5932,10 +6263,48 @@ def options_ready():
         err(503, "data_offline", offline_when("Option quotes come from the live feed, which is offline until the daily data login completes."))
 
 
+UNDERLYINGS_KEY = "options:underlyings:last"     # app_settings: the last list of option underlyings read from the live contract list
+_underlyings_kept = {"day": None}
+
+
+def keep_underlyings(rows: list[dict]) -> None:
+    """The day's list of option underlyings, kept once a day for the hours the live feed is offline (LIVE11B-006)."""
+    today = positioning.ist_now().date().isoformat()
+    if _underlyings_kept["day"] == today or not rows:
+        return
+    try:
+        db.set_setting(UNDERLYINGS_KEY, json.dumps({"day": today, "rows": rows}))
+        _underlyings_kept["day"] = today
+    except Exception as e:                         # the page has its answer either way
+        print("option underlyings not kept:", str(e)[:120])
+
+
+def stored_underlyings() -> list[dict] | None:
+    """The last kept list of option underlyings with the expiries already past taken out, each marked `stored` (the exchange's list of
+    F&O underlyings changes rarely; their quotes need the live feed). None when nothing was kept."""
+    today = positioning.ist_now().date().isoformat()
+    try:
+        kept = json.loads(db.get_setting(UNDERLYINGS_KEY) or "null") or {}
+    except Exception:                              # the store down or a value of another shape: nothing kept
+        kept = {}
+    out = []
+    for u in (kept.get("rows") if isinstance(kept, dict) else None) or []:
+        if not isinstance(u, dict):
+            continue
+        ex = [e for e in u.get("expiries") or [] if isinstance(e, str) and e >= today]
+        if not ex:
+            continue
+        lots = {e: n for e, n in (u.get("lots") or {}).items() if e in ex}
+        out.append({**u, "expiries": ex, "lots": lots, "lot": lots.get(ex[0], u.get("lot")), "stored": True})
+    return out or None
+
+
 @app.get("/options/underlyings")
 def options_underlyings(profile=Depends(current_profile)):
     options_ready()
-    return options_data.underlyings()
+    got = options_data.underlyings()
+    keep_underlyings(got)              # for the hours the feed is offline (/options/recorded lists it then)
+    return got
 
 
 def recorded_options(exchange: str, underlying: str, expiry: str = "current") -> "opt_recorded.Recorded":
@@ -5963,6 +6332,15 @@ def options_recorded(profile=Depends(current_profile)):
             rec = None
         if rec:
             out.append(opt_recorded.Recorded(ex, name, rec).underlying())
+    # every other F&O underlying from the last list the live feed gave, marked stored: browsable in the picker outside market hours,
+    # priced once the feed is back (LIVE11B-006: "Other underlyings (0)" with the feed offline)
+    have = {(u.get("exchange"), u.get("name")) for u in out}
+    try:
+        kept = stored_underlyings() or []
+    except Exception as e:                         # the recorded ones still answer
+        print("kept underlyings unavailable:", str(e)[:120])
+        kept = []
+    out += [u for u in kept if (u.get("exchange"), u.get("name")) not in have]
     return out
 
 
@@ -6495,7 +6873,7 @@ def server_status() -> dict:
             "auto_login_next": next_auto_login(),
             "billing_enabled": billing.enabled(), "billing_hook": billing.hook_status(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
-            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
+            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(fresh_errors(list(RECENT_ERRORS))[0])], "recent_errors_aged_out": fresh_errors(list(RECENT_ERRORS))[1], "recent_errors_keep_days": ERRORS_KEEP_DAYS, "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
             "rules_watch": rules_watch_summary(), "audit_mismatches": mismatches, "audit_checked": checked,
             # whether India is shut today anyway, so a weekend's logged-out broker is OK, not Check (DJ-003)
@@ -6643,6 +7021,9 @@ def parse_holidays(text: str) -> list[str]:
 OVERVIEW_FOR = 45                     # seconds Overview's counts are kept (the server's status is read each time)
 _overview = {"at": None, "client": None, "stats": None, "test": None}
 _overview_lock = threading.Lock()
+# R75: bumped by forget_overview; a read that began before a forget keeps its counts to itself instead of storing them over the
+# forget (a "Tell me when plans open" made while another Admin read was under way showed 0 for 45 seconds)
+_overview_gen = 0
 
 
 def revenue_since(days: int = 30) -> dict:
@@ -6666,6 +7047,7 @@ def overview_stats(fresh: bool = False, include_test: bool = False) -> dict:
     accounts too (DJ-001: Admin's "Show test accounts")."""
     with _overview_lock:
         o = dict(_overview)
+        gen = _overview_gen
     if (not fresh and o["stats"] is not None and o["client"] == id(db.sb()) and o["test"] == include_test
             and time.monotonic() - o["at"] < OVERVIEW_FOR):
         return o["stats"]
@@ -6681,12 +7063,15 @@ def overview_stats(fresh: bool = False, include_test: bool = False) -> dict:
                      extra={"plan_interest": plan_interest.count, "revenue_30d": safe(revenue_since),
                             "active_7d": safe(lambda: admin.active_users(7, include_test))})
     with _overview_lock:
-        _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st, test=include_test)
+        if gen == _overview_gen:            # nothing was forgotten while these were read: keep them
+            _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st, test=include_test)
     return st
 
 
 def forget_overview() -> None:
+    global _overview_gen
     with _overview_lock:
+        _overview_gen += 1
         _overview.update(at=None, client=None, stats=None, test=None)
 
 
@@ -7322,6 +7707,8 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
 
 PLATFORM_RUN = "platform-check-run"
 PLATFORM_BUILD_RUN = "platform-check-build"
+PLATFORM_RECHECK_RUN = "platform-check-again"
+PLATFORM_RECHECK = timedelta(hours=1)             # a check that failed in an automatic run alone is run again this long after it
 PLATFORM_BUILD_AFTER = timedelta(minutes=20)      # a new build is checked once it has been up this long (its caches warm, its jobs started)
 
 
@@ -7342,6 +7729,22 @@ def platform_build_due(now: datetime) -> str | None:
     return build
 
 
+def platform_recheck_due(now: datetime) -> str | None:
+    """The kept automatic run's time when it has failing checks the run before didn't have and PLATFORM_RECHECK has passed since: the
+    check runs again once, so a failure that lasts is an issue within the hour and one that was a source's moment is not."""
+    try:
+        last = json.loads(db.get_setting(PLATFORM_LAST) or "null")
+    except (ValueError, TypeError):
+        return None
+    if not platform_unconfirmed(last):
+        return None
+    try:
+        at = datetime.fromisoformat(str(last.get("at")))
+    except ValueError:
+        return None
+    return str(last["at"]) if now >= at + PLATFORM_RECHECK else None
+
+
 def platform_pass(now: datetime) -> bool | None:
     """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it. A new build
     is checked once too, whatever the time (platform_build_due).
@@ -7357,6 +7760,19 @@ def platform_pass(now: datetime) -> bool | None:
             except Exception as e:
                 print("platform check of the new build failed:", e)
                 db.delete_setting(PLATFORM_BUILD_RUN)
+                return True
+            run.done()
+    again = platform_recheck_due(now)
+    if again:
+        if not leader.leading():
+            return None
+        run = run_marks.claim(PLATFORM_RECHECK_RUN, again)
+        if run is not None:
+            try:
+                daily_platform_check()
+            except Exception as e:
+                print("platform check run again failed:", e)
+                db.delete_setting(PLATFORM_RECHECK_RUN)
                 return True
             run.done()
     at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
@@ -7396,10 +7812,28 @@ def platform_job():
         time.sleep(max(1, min(600, (at - now).total_seconds())))       # ten minutes at most: a new build is checked soon after its wait
 
 
-def platform_issue(out: dict | None) -> "autofix.Check":
+def platform_before(out: dict | None) -> list[str] | None:
+    """The checks that failed in the run before `out` (from the kept history), or None when there was none to compare with."""
+    try:
+        hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")
+    except (ValueError, TypeError):
+        return None
+    at = (out or {}).get("at")
+    earlier = [h for h in hist if isinstance(h, dict) and h.get("at") != at and str(h.get("at") or "") < str(at or "~")]
+    return list(earlier[-1].get("failed") or []) if earlier else None
+
+
+def platform_issue(out: dict | None, before: list[str] | None = None) -> "autofix.Check":
     """The feature check's failures as one self-healing issue: it has retried each failing check already, so what still fails goes to
-    the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov)."""
-    bad = [r for r in (out or {}).get("checks") or [] if r.get("state") == "fail"]
+    the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov). A check that
+    fails in one run only is a source not answering for a moment (owner, 13 Nov: "Feature check" mailed, then cleared by itself): the issue
+    names the checks failing in two runs in a row (`before`: the run before's failed checks; the run is repeated PLATFORM_RECHECK later),
+    or every failing check when a large share fail at once."""
+    rows = (out or {}).get("checks") or []
+    failing = [r for r in rows if r.get("state") == "fail"]
+    counts = {r["name"]: 2 if r["name"] in set(before or ()) else 1 for r in failing}
+    keep = set(autofix.lasting([r["name"] for r in failing], counts, len(rows)))
+    bad = [r for r in failing if r["name"] in keep]
     problem = (f"{len(bad)} check{'s' if len(bad) > 1 else ''} failing after a retry: "
                + "; ".join(f"{r['name']} ({str(r.get('detail') or '')[:140]})" for r in bad[:6])) if bad else None
     return autofix.Check(id="platform", name="Feature check", problem=problem, owner_only=True, to="/admin/system",
@@ -7407,17 +7841,26 @@ def platform_issue(out: dict | None) -> "autofix.Check":
                                 "clears by itself at the next daily check; anything else needs a developer's look.")
 
 
+def platform_unconfirmed(out: dict | None) -> bool:
+    """Whether an automatic run has failing checks that the run before didn't have (not yet an issue: they are checked again)."""
+    if not isinstance(out, dict) or not out.get("auto"):
+        return False
+    failing = {r.get("name") for r in out.get("checks") or [] if r.get("state") == "fail"}
+    return bool(failing - set(platform_before(out) or ()))
+
+
 @autofix.source
 def platform_checks_failing() -> list:
     try:
-        return [platform_issue(json.loads(db.get_setting(PLATFORM_LAST) or "null"))]
+        out = json.loads(db.get_setting(PLATFORM_LAST) or "null")
     except (ValueError, TypeError):
         return []
+    return [platform_issue(out, platform_before(out))]
 
 
 def daily_platform_check(retry_after: float = 120) -> dict:
     out = run_platform_check(retry_after=retry_after, auto=True)
-    autofix.report(platform_issue(out), send=lambda subject, text: tell_admins(subject, text) > 0)
+    autofix.report(platform_issue(out, platform_before(out)), send=lambda subject, text: tell_admins(subject, text) > 0)
     return out
 
 
@@ -7866,6 +8309,9 @@ def news_view(issue: dict) -> dict:
     # every section that lists figures as a table (O5): drawn by the Briefs page, the email and the PDF alike, from the stored issue
     from .newsletter import tables as news_tables
     out["tables"] = news_tables.of(issue)
+    # the index moves are the Indices table's: the summary over it starts after them, not with the same figures again (LIVE11B-015)
+    if any(t.get("title") == "Indices" for t in out["tables"] if isinstance(t, dict)):
+        out["summary"] = news.write.without_moves(out.get("summary"), issue.get("indices"))
     return out
 
 
@@ -7897,7 +8343,8 @@ def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile
         err(400, "bad_kind", "Pick the market brief or my stocks.")
     scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
     return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
-                        "preview": email_kit.short_line(news_write.past_today(i.get("summary"), i, _news_today(i)), 200)}
+                        # the title names the lead index's move and the brief's table every index's: the preview starts after them (LIVE11B-015)
+                        "preview": email_kit.short_line(news_write.past_today(news_write.without_moves(i.get("summary"), i.get("indices"), i.get("sections")), i, _news_today(i)), 200) or None}
                        for i in news.recent(kind, scope, max(1, min(60, limit)))]}
 
 

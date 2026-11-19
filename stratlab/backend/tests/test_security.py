@@ -33,6 +33,7 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/public/markets/watch",                  # the visitor's fixed Market Watch board
           # (updated on purpose: new public pages) each market's movers (their top 5) and the data status page with its JSON
           "/stocks/{region}/movers", "/status", "/public/data-status",
+          "/public/data-online",                    # (updated on purpose, LIVE11B-004) whether market data is online and its note, read beside the sign-in check
           # (updated on purpose, bet 3) public research: a share link's page (its random token is the key), the public theme pages and
           # the embeddable charts; making, listing and turning off links needs sign-in
           "/r/{token}", "/themes", "/themes/{region}", "/themes/{region}/{s}",

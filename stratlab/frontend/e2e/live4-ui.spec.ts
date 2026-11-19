@@ -13,7 +13,10 @@ async function rowBoxes(page: Page) {
     const b = tr.getBoundingClientRect();
     const link = tr.querySelector("th a")!.getBoundingClientRect(), tag = tr.querySelector("th .res-sym > .k-note:not(.res-name)")?.getBoundingClientRect();
     const cells = [...tr.querySelectorAll("td")].filter((td) => getComputedStyle(td).display !== "none").map((td) => td.getBoundingClientRect());
-    return { h: b.height, right: b.right, link: { x: link.x, y: link.y, width: link.width, height: link.height, sw: (tr.querySelector("th a") as HTMLElement).scrollWidth },
+    // the company's name under its symbol (LIVE10A-027: a phone row showed tickers only): its own lines are allowed on top of the two
+    const name = tr.querySelector(".res-name") as HTMLElement | null;
+    const nameH = name && getComputedStyle(name).display !== "none" ? name.getBoundingClientRect().height : 0;
+    return { h: b.height, nameH, right: b.right, link: { x: link.x, y: link.y, width: link.width, height: link.height, sw: (tr.querySelector("th a") as HTMLElement).scrollWidth },
       tag: tag ? { x: tag.x, y: tag.y, width: tag.width, height: tag.height } : null, cellRight: Math.max(0, ...cells.map((c) => c.right)) };
   }));
 }
@@ -34,7 +37,8 @@ test("LIVE4-010: a results day is two short lines a company on a phone, one line
   if (phone) {
     // two lines: the symbol with the price and the day's move, then the usual move (and what the options imply)
     for (const r of rows) {
-      expect(r.h, "a company's row on a phone").toBeLessThan(r.tag ? 92 : 72);
+      // (updated on purpose, Release 65 LIVE10A-027: the name's lines are added to the two-line limit; nothing else may grow the row)
+      expect(r.h, "a company's row on a phone").toBeLessThan((r.tag ? 92 : 72) + r.nameH);
       expect(r.cellRight, "a figure past the row's edge").toBeLessThanOrEqual(r.right + 1);
     }
     await expect(day.locator("tbody tr").first().locator("td.k-brief")).toHaveCount(2);
@@ -62,7 +66,8 @@ test("LIVE4-010: a results day is two short lines a company on a phone, one line
 
 test("LIVE4-007/010: Mood's index levels and the Invest breadth card are short rows on a phone; their columns fit on a desktop", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const errors = await open(page, "/research/pulse", "How the market", pro);
+  // (updated on purpose (fix9, LIVE9A-031): one page title, "Market mood", for both markets and every hour)
+  const errors = await open(page, "/research/pulse", "Market mood", pro);
   const levels = page.getByRole("table", { name: "Index levels" });
   await expect(levels.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
   const hs = await levels.locator("tbody tr").evaluateAll((trs) => trs.map((t) => t.getBoundingClientRect().height));

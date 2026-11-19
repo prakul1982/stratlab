@@ -35,7 +35,9 @@ def steel():
 
 
 def lender_block(name, n, roe, k=None):
-    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "stats": {"roe": {"median": roe, "n": k if k is not None else n}}, "companies": []}
+    # gl50 (R50, updated on purpose): the layers' way of earning read (lending), else no layer is ranked
+    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "stats": {"roe": {"median": roe, "n": k if k is not None else n}}, "companies": [],
+            "model": {"id": "lending", "family": "lending"}}
 
 
 def said(slides) -> list[str]:
@@ -54,7 +56,7 @@ def said(slides) -> list[str]:
 def test_a_ranking_headline_says_which_layers_it_ranks_and_why_a_layer_beyond_it_is_not():
     v, slides = steel()
     ch = v["chain"]
-    assert ch["line"].startswith(f"Among the 2 layers with {FLOOR} and one kind of business, median EBITDA margin is highest in Integrated steel (22%)")
+    assert ch["line"].startswith("Median EBITDA margin is highest in Integrated steel (22%)") and f"among the 2 layers with {FLOOR} and one kind of business." in ch["line"]  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert ch["line"].endswith(f"Shown, not ranked: Aluminium smelting (41%), a different commodity; Sponge iron makers (8%), fewer than {D.HEADLINE_MIN} "
                                "companies with the figure.")
     assert ch["unranked"] == [{"layer": "Aluminium smelting", "why": "a different commodity"},
@@ -93,8 +95,8 @@ def test_a_lenders_headline_names_the_layer_below_its_lowest_and_why():
                         lender_block("Regional banks, smaller", 5, 11.2, 4), lender_block("Microfinance lenders", 3, 4.9),
                         lender_block("Payments banks", 2, 1.0)])
     assert ch["measure"] == "roe" and (ch["highest"], ch["lowest"]) == ("Regional banks, larger", "Large universal banks")
-    assert ch["line"] == (f"Among the 2 layers with {FLOOR}, median return on equity is highest in Regional banks, larger (13.5%) and lowest in "
-                          "Large universal banks (12.1%), a gap of 1.4 points. Shown, not ranked: Regional banks, smaller (11.2%) and "
+    assert ch["line"] == ("Median return on equity is highest in Regional banks, larger (13.5%) and lowest in "  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
+                          f"Large universal banks (12.1%), a gap of 1.4 points, among the 2 layers with {FLOOR}. Shown, not ranked: Regional banks, smaller (11.2%) and "
                           f"Microfinance lenders (4.9%), fewer than {D.HEADLINE_MIN} companies with the figure.")
     # a median of two companies is not shown in the table or the chart: nothing to explain
     assert [x["layer"] for x in ch["unranked"]] == ["Regional banks, smaller", "Microfinance lenders"]
@@ -103,7 +105,7 @@ def test_a_lenders_headline_names_the_layer_below_its_lowest_and_why():
 
 def test_a_ranking_of_every_shown_layer_adds_no_second_sentence_and_ties_say_no_reason():
     ch = D.chain_table([lender_block("A banks", 6, 15.0), lender_block("B banks", 5, 12.0)])
-    assert ch["line"] == f"Among the 2 layers with {FLOOR}, median return on equity is highest in A banks (15%) and lowest in B banks (12%), a gap of 3 points."
+    assert ch["line"] == f"Median return on equity is highest in A banks (15%) and lowest in B banks (12%), a gap of 3 points, among the 2 layers with {FLOOR}."  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert ch["unranked"] == []
     inside = D.chain_table([lender_block("A banks", 6, 15.0), lender_block("B banks", 5, 12.0), lender_block("C banks", 3, 13.0)])
     assert "Shown, not ranked" not in inside["line"]                                              # between the two named: the footnote says why
@@ -299,7 +301,9 @@ def test_the_smaller_layers_page_never_ends_a_description_in_an_ellipsis():
         cells = [r[2] for r in table_of(slides, deck.SMALL_TITLE)["rows"]]
         assert cells and not any(str(c).endswith("…") for c in cells)
     src = open(deck.__file__).read()
-    assert 'whole_clause(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' in src   # LIVE6-007 passes the name (updated on purpose)
+    # r63e (updated on purpose): the smaller layers' cell is layer_cell (whole_clause, and the item of its words that says its layer)
+    assert 'layer_cell(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' in src   # LIVE6-007 passes the name (updated on purpose)
+    assert "got = whole_clause(text, limit)" in src[src.index("def layer_cell"):src.index("def _what")]
 
 
 SECTOR_HEAD = ["Company", "SBC / revenue", "Capex / revenue", "Capex", "Inventory days", "R&D / revenue", "RPO / revenue", "RPO growth",

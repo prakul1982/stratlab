@@ -5,6 +5,7 @@ No script runs on them (guard.HTML_CSP)."""
 from html import escape as e
 
 from .config import settings
+from .titles import page_title
 
 MANAGE_PATH = "/settings#notifications"          # Settings → Notifications: each email's choices
 
@@ -25,7 +26,7 @@ def page(title: str, body_html: str) -> str:
     site = settings.PUBLIC_SITE_URL.rstrip("/")
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<meta name="color-scheme" content="light dark"><meta name="robots" content="noindex,nofollow">'
-            f'<title>{e(title)} · StratLab</title><link rel="icon" href="{e(site)}/favicon.svg" type="image/svg+xml">'
+            f'<title>{e(page_title(title))}</title><link rel="icon" href="{e(site)}/favicon.svg" type="image/svg+xml">'
             f"<style>{_style()}</style></head><body>"
             f'<header class="nav"><a class="brand" href="{e(site)}/" aria-label="StratLab home">{LOGO}'
             f'<span class="word"><b>Strat</b>Lab</span></a></header>'

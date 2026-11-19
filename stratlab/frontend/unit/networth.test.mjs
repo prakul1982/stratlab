@@ -49,7 +49,9 @@ test("net worth hides Download CSV until there is an entry; the journal says buy
   const { readFileSync } = await import("node:fs");
   const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
   assert.match(src("pages/money/NetWorthPage.tsx"), /\{!empty && <button type="button" className="btn quiet" onClick=\{download\}>/);
-  assert.match(src("pages/trade/JournalPage.tsx"), /"Long or short: not in the file"/);
+  // (updated on purpose, LIVE9B-024: a side the file doesn't give is said once over the trades, not on every row)
+  assert.match(src("pages/trade/JournalPage.tsx"), /Your files don't say whether these trades were long or short/);
+  assert.doesNotMatch(src("pages/trade/JournalPage.tsx"), /"Long or short: not in the file"/);
   assert.doesNotMatch(src("pages/trade/JournalPage.tsx"), /Side not in the file/);
 });
 

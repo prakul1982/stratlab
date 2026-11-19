@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import { LegalLinks } from "./LegalLinks";
 import { Logo } from "./Logo";
 import { SkipLink } from "./SkipLink";
-import { signedInHere, signIn, warmSignIn } from "../lib/signin";
+import { signedInHere, startSignIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { BROWSE_COMPANIES } from "../content/seo";
 
-/** The site's public pages, the same list as the pages the server draws (backend stock_pages.PUBLIC_MENU, AS1): none asks for sign-in. */
-export const PUBLIC_MENU: [string, string][] = [["/", "Home"], ["/library", "Library"], ["/stocks", "Companies"], ["/themes", "Themes"], ["/blog", "Blog"],
+/** The site's public pages, the same list as the pages the server draws (backend stock_pages.PUBLIC_MENU, AS1) and the landing page's
+ * header (NAV3, LIVE9A-019), and the menu index.html draws before the app starts: none asks for sign-in. The logo is the way home. */
+export const PUBLIC_MENU: [string, string][] = [["/library", "Library"], ["/stocks", "Companies"], ["/themes", "Themes"], ["/blog", "Blog"],
   ["/pricing", "Plans"], ["/about", "About"], ["/contact", "Contact"]];
 
 /** The footer's way to the public pages that show real work: the strategy library with the verdict each earned, the
@@ -20,8 +21,10 @@ export const SiteLinks = () => (
     <nav className="k-row k-small legal-links" aria-label="Explore">
       <Link className="muted" to="/library">Strategy library</Link>
       <a className="muted" href="/stocks">Companies</a>
+      <a className="muted" href="/themes">Themes</a>
       <a className="muted" href="/blog">Blog</a>
       <Link className="muted" to="/plans">Plans</Link>
+      <a className="muted" href="/status">Data status</a>
     </nav>
     <nav className="k-row k-small legal-links" aria-label="Browse companies" data-browse-companies>
       <span className="muted">Browse companies:</span>
@@ -35,7 +38,9 @@ export const OpenApp = ({ className = "btn outline sm" }: { className?: string }
 
 /** The frame around every public page that isn't the landing page itself (a shared verdict, StratLab's library, "Sign in
  * to see …", "Page not found"): the logo home, a way in, the page in a `main`, and the policies at the bottom. */
-export function PublicFrame({ children, className = "", action }: { children: ReactNode; className?: string; action?: ReactNode }) {
+/** `foot` false: the footer waits (a page whose words are still on their way: drawn under a short page, it moved down when they came,
+ * LIVE8A-017's layout shift on /about at 390). */
+export function PublicFrame({ children, className = "", action, foot = true }: { children: ReactNode; className?: string; action?: ReactNode; foot?: boolean }) {
   const menu = useRef<HTMLDetailsElement>(null);
   useDetailsDismiss(menu);
   return (
@@ -57,10 +62,10 @@ export function PublicFrame({ children, className = "", action }: { children: Re
             {PUBLIC_MENU.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        {action ?? (signedInHere() ? <OpenApp /> : <a className="btn outline sm" href="/" onPointerEnter={warmSignIn} onFocus={warmSignIn} onTouchStart={warmSignIn} onClick={(e) => { e.preventDefault(); void signIn(); }}>Sign in</a>)}
+        {action ?? (signedInHere() ? <OpenApp /> : <a className="btn outline sm" href="/" onPointerEnter={warmSignIn} onFocus={warmSignIn} onTouchStart={warmSignIn} onClick={(e) => { e.preventDefault(); void startSignIn(); }}>Sign in</a>)}
       </header>
       <main id="main" tabIndex={-1} className={`pub-main k-page ${className}`.trim()}>{children}</main>
-      <footer className={`pub-main ${className}`.trim()}><SiteLinks /><LegalLinks /></footer>
+      {foot && <footer className={`pub-main ${className}`.trim()}><SiteLinks /><LegalLinks /></footer>}
     </div>
   );
 }

@@ -13,3 +13,5 @@
 .ct-h-government { fill: var(--muted); background: var(--muted); }
 .ct-h-others { fill: var(--line-2); background: var(--line-2); }
 @media (max-width: 640px) { .ct-statement table th[scope="row"] { min-width: 8.5rem; } }
+/* LIVE11B: a phone's statements show three periods at a time, stepped with Earlier / Later */
+.ct-window { justify-content: space-between; flex-wrap: nowrap; }

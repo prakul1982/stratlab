@@ -8,6 +8,9 @@ from types import SimpleNamespace
 
 USERS = {
     **{f"load-{i}": (f"u-load-{i}", f"load{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(300)},
+    # lane ops49's e2e (e2e/review-di1.spec.ts, My space's order): its own accounts, one per project and repeat (Basic on a desktop and
+    # Pro on a phone, as the load accounts it used), so a repeat or a second run on a server kept running never starts from another's layout
+    **{f"ops49-{i}": (f"u-ops49-{i}", f"ops49{i}@example.com", ("basic", "pro")[i % 2]) for i in range(40)},
     # the MONEY lane's e2e (e2e/money-imports.spec.ts): its own Pro accounts, one per test and project, so nothing it saves meets another spec
     **{f"money-{i}": (f"u-money-{i}", f"money{i}@example.com", "pro") for i in range(24)},
     # the SECMEM lane's e2e (e2e/auth-pkce.spec.ts, e2e/consent.spec.ts): its own accounts, one per test and project
@@ -30,9 +33,10 @@ USERS = {
     **{f"cf2-{i}": (f"u-cf2-{i}", f"cf2{i}@example.com", ("free", "basic", "pro")[i // 8]) for i in range(24)},
     # the F3 lane's e2e (e2e/f3-import-report.spec.ts): its own accounts, one per test and project (free, basic, pro in turn)
     **{f"f3-{i}": (f"u-f3-{i}", f"f3{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(12)},
-    # e2e/review-di1.spec.ts's My space order test: its own accounts, one per project and repeat (Basic on the desktop, Pro on
-    # the phone, as the load accounts it used), so a repeat never starts from the order another one saved
-    **{f"di1-{i}": (f"u-di1-{i}", f"di1{i}@example.com", ("basic", "pro")[i % 2]) for i in range(24)},
+    # lane su1's e2e (e2e/su1-email-usd.spec.ts): its own Free accounts, one per test and project; su1-0 to su1-5 signed in by email
+    **{f"su1-{i}": (f"u-su1-{i}", f"su1{i}@example.com", "free") for i in range(12)},
+    # lane fix16's e2e (e2e/fix16.spec.ts): its own accounts, one per test and project (fix16-0 to 7 Free, 8 to 15 Pro)
+    **{f"fix16-{i}": (f"u-fix16-{i}", f"fix16{i}@example.com", "free" if i < 8 else "pro") for i in range(16)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),
@@ -234,7 +238,7 @@ class FakeAuth:
             u = None                          # the sign-in record is gone: the token no longer checks out
         if not u:
             raise AuthApiError("invalid JWT: unable to parse or verify signature", 401, "bad_jwt")
-        provider = "email" if token == "email-signup-admin-token" else "google"
+        provider = "email" if token == "email-signup-admin-token" or token in {f"su1-{i}" for i in range(6)} else "google"
         return SimpleNamespace(user=SimpleNamespace(id=u[0], email=u[1], email_confirmed_at="2026-01-01T00:00:00Z",
                                                     app_metadata={"provider": provider, "providers": [provider]}))
 

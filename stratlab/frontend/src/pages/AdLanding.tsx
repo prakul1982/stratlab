@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { EmailWay } from "../components/EmailWay";
 import { Link, useLocation } from "react-router-dom";
 import { AD_DESCRIPTION, AD_HEADLINE, AD_POINTS, AD_TITLE } from "../content/ad";
 import { applySeo } from "../lib/seo";
@@ -76,7 +77,8 @@ export function AdLanding() {
           </ul>
           <div className="adl-go">
             <button type="button" className="btn lp-cta adl-cta" onClick={() => void go()}><Google />Try free with Google</button>
-            <span className="small muted">Free to start · No card · No code</span>
+            <EmailWay next={null} className="lp-cta-2" />
+            <span className="small muted">Free to start · No card · No coding</span>
           </div>
           {error && <p className="banner" role="alert">{error}</p>}
           <Link className="small adl-more" to="/">See everything StratLab does →</Link>

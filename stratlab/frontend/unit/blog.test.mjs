@@ -18,8 +18,10 @@ test("Blog is in the public header menu, the public footer and the landing page'
   assert.match(frame, /<a className="muted" href="\/blog">Blog<\/a>/);
   assert.doesNotMatch(frame, /to="\/blog"/);                                  // not a route of the app
   const login = read("src/pages/Login.tsx");
-  assert.match(login, /\["\/library", "Library"\], \["\/stocks", "Companies"\], \["\/blog", "Blog"\]\]\);/);
-  assert.equal((login.match(/\/blog/g) ?? []).length, 1, "the landing page names the blog once, in its header links, not in its hero");
+  // (updated on purpose, NAV3/LIVE9A-019: the landing page's header is the public menu itself, PUBLIC_MENU, which has Blog; the landing
+  // page's own file names the blog nowhere, not in its hero)
+  assert.match(login, /const NAV_LINKS = PUBLIC_MENU;/);
+  assert.equal((login.match(/\/blog/g) ?? []).length, 0, "the landing page names the blog only through the public menu, not in its hero");
 });
 
 test("the signed-in app's footers (Account and Plans) link to the blog; the policy row alone does not", () => {

@@ -14,6 +14,7 @@
 .res-count { justify-content: space-between; }
 .res-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--s3) var(--s4); align-items: start; }
 .res-filter-grid > .k-field.wide { grid-column: 1 / -1; }
+@media (min-width: 900px) { .res-filter-grid > .res-sort { grid-column: span 2; max-width: 22rem; } }
 @media (max-width: 900px) { .k-cols { grid-template-columns: minmax(0, 1fr); } }
 .k-split2 { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s5); align-items: start; }
 /* side by side only when the results still get a wide column next to the filters and the menu (R1-045) */
@@ -33,6 +34,15 @@
 .inv-head > .inv-head-more:not(:has(*)) { display: none; }
 @media (max-width: 900px) { .inv-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .inv-head > .inv-head-price { grid-column: 1 / -1; } }
 @media (max-width: 560px) { .inv-head { grid-template-columns: minmax(0, 1fr); } }
+/* LIVE9B-027: on a phone the header's actions are even rows, never ragged ones with "More" alone; the main action has a row of its own and the
+   rest go two to a row, so no label wraps inside its button (three to a row left 103px buttons with "Test a strategy on TCS →" on 3 lines) */
+@media (max-width: 560px) {
+  .inv-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+  .inv-actions > :first-child { grid-column: 1 / -1; }
+  .inv-actions > :last-child:nth-child(even) { grid-column: 1 / -1; }
+  .inv-actions > *, .inv-actions > * > .btn { width: 100%; justify-content: center; min-width: 0; }
+  .inv-actions .btn { white-space: nowrap; text-align: center; }
+}
 .inv-badges { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .inv-badges:empty { display: none; }
 .inv-head-price { gap: var(--s2); }
@@ -76,7 +86,9 @@
   .inv-mt .k-tbl-wrap.stack .k-table td:nth-child(2) { grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; overflow-wrap: normal; }
   .inv-mt .k-tbl-wrap.stack .k-table td[data-label]::before { display: none; }
   .inv-q-unit { display: inline; color: var(--muted); font-weight: 400; }
-  .inv-q .k-tbl-wrap.stack .k-table tr { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: var(--s3) 0; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+  /* four quarters a line: eight quarters are two years, the same quarter of each year in one column (LIVE8B-012: three a line put Sep 2025
+     and Sep 2026 in different columns) */
+  .inv-q .k-tbl-wrap.stack .k-table tr { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: var(--s3) 0; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
   .inv-q .k-tbl-wrap.stack .k-table tbody tr:last-child { border-bottom: 0; }
   .inv-mt .k-tbl-wrap.stack .k-table td:empty, .inv-mt .k-tbl-wrap.stack .k-table td:has(> .k-note:empty) { display: none; }
 }
@@ -203,6 +215,8 @@
 }
 /* business updates: the small history chart in a company's row (RES-1 follow-up) */
 .biz-spark { display: block; width: 120px; max-width: 100%; }
+/* a latest figure well behind the others (LIVE9B-007): muted, with its age under it */
+.biz-old { color: var(--muted); }
 .res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
 /* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than
@@ -211,7 +225,9 @@
 /* LIVE5-002: the name is the second line's start, never squeezed beside the symbol and its tags to 1-3 letters at 1280; a plain
    "Financial Results" meeting leaves the line to the name; any other meeting follows it after a dot */
 .res-sub { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.res-name + .res-purpose::before { content: " · "; }
+/* LIVE10A-037: a meeting about more than results has its purpose on a line of its own under the name, never cut mid-word after it
+   ("Libas Consumer Products Limited · Financial Resul…"); a plain results meeting keeps the two-line row */
+.res-sub > .res-name, .res-sub > .res-purpose { display: block; overflow: hidden; text-overflow: ellipsis; }
 .res-name + .res-purpose.res-plain { display: none; }
 .res-filed { font-size: inherit; }
 .res-mv { display: grid; gap: 0; line-height: 1.4; }
@@ -223,7 +239,10 @@
 @media (max-width: 640px) {
   .res-co { max-width: none; }
   /* LIVE4-010: a compact phone row: the usual move without its four arrows (the company page has them), no plain "Financial Results" line */
-  .k-tbl-wrap.compact .res-moves, .k-tbl-wrap.compact .res-plain, .k-tbl-wrap.compact .res-name { display: none; }
+  .k-tbl-wrap.compact .res-moves, .k-tbl-wrap.compact .res-plain { display: none; }
+  /* LIVE10A-027: the company's name under its symbol on a phone too, wrapping if it is long (a phone row showed tickers only; on one line
+     its clipped end ran under the row's report flag) */
+  .k-tbl-wrap.compact .res-name { white-space: normal; }
   .k-tbl-wrap.compact .res-purpose::before { content: none; }
   .k-tbl-wrap.compact .res-sub { white-space: normal; }   /* a meeting about more than results says so in full, under the symbol */
   .k-tbl-wrap.compact .res-mv { display: inline-flex; gap: 6px; }

@@ -1,0 +1,277 @@
+{
+ "adjacent_n": 2,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [],
+  "highest": null,
+  "line": null,
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": []
+ },
+ "lender": true,
+ "listed": 14,
+ "members": 12,
+ "notable": [],
+ "page": "/themes/in/public-bank",
+ "period": {
+  "n": 12,
+  "of": 12,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "State Bank of India",
+     "out": "",
+     "symbol": "SBIN",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bank of Baroda",
+     "out": "",
+     "symbol": "BANKBARODA",
+     "unverified": false,
+     "what": "Bank of Baroda is engaged in providing various services, such as personal banking, corporate banking, international banking, small and medium enterprise (SME) banking, rural…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Punjab National Bank",
+     "out": "",
+     "symbol": "PNB",
+     "unverified": false,
+     "what": "PNB is a Banking and Financial service bank owned by the Government of India with its headquarters is in New Delhi",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Canara Bank",
+     "out": "",
+     "symbol": "CANBK",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 1.73,
+   "gnpa_n": 2,
+   "layer": "Large national banks",
+   "listed": 4,
+   "n": 4,
+   "net": 15.25,
+   "net_n": 4,
+   "nii_assets": 2.38,
+   "nii_assets_n": 4,
+   "official": false,
+   "pb": 0.95,
+   "pb_n": 4,
+   "revenue": 906374.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 14.2,
+   "roe_n": 4,
+   "scale": null,
+   "words": "These banks gather deposits across the country and lend to retail, corporate and agriculture borrowers."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Union Bank of India",
+     "out": "",
+     "symbol": "UNIONBANK",
+     "unverified": false,
+     "what": "Union Bank of India is engaged in the Business of Banking Services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indian Bank",
+     "out": "",
+     "symbol": "INDIANB",
+     "unverified": false,
+     "what": "The Bank's segments include Treasury",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bank of India",
+     "out": "",
+     "symbol": "BANKINDIA",
+     "unverified": false,
+     "what": "The Bank's segments include Treasury Operations, Wholesale Banking and Retail Banking",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bank of Maharashtra",
+     "out": "",
+     "symbol": "MAHABANK",
+     "unverified": false,
+     "what": "The Bank's segments include Treasury, Corporate/Wholesale Banking, Retail Banking and Other banking operations",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 1.43,
+   "gnpa_n": 2,
+   "layer": "Mid-sized banks",
+   "listed": 4,
+   "n": 4,
+   "net": 17.75,
+   "net_n": 4,
+   "nii_assets": 2.65,
+   "nii_assets_n": 4,
+   "official": false,
+   "pb": 1.25,
+   "pb_n": 4,
+   "revenue": 279198.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 15.55,
+   "roe_n": 4,
+   "scale": null,
+   "words": "These lenders serve corporates, MSMEs and retail customers mostly in their home regions."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Central Bank of India",
+     "out": "",
+     "symbol": "CENTRALBK",
+     "unverified": false,
+     "what": "The Bank's segments include Treasury Operations, Corporate/Wholesale Banking, Retail Banking and other Banking business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indian Overseas Bank",
+     "out": "",
+     "symbol": "IOB",
+     "unverified": false,
+     "what": "Indian Overseas Bank was founded in 1937 by Chidambaram Chettyar",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "UCO Bank",
+     "out": "",
+     "symbol": "UCOBANK",
+     "unverified": false,
+     "what": "UCO Bank is engaged in providing wide range of banking and financial services including Retail Banking, Corporate Banking and Treasury Operations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Punjab & Sind Bank",
+     "out": "",
+     "symbol": "PSB",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 2.09,
+   "gnpa_n": 3,
+   "layer": "Smaller banks",
+   "listed": 4,
+   "n": 4,
+   "net": 11.75,
+   "net_n": 4,
+   "nii_assets": 2.72,
+   "nii_assets_n": 4,
+   "official": false,
+   "pb": 1.0,
+   "pb_n": 4,
+   "revenue": 106327.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 10.75,
+   "roe_n": 4,
+   "scale": null,
+   "words": "These banks have smaller networks and rebuilt balance sheets after capital support."
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "REC Limited",
+     "out": "",
+     "symbol": "RECLTD",
+     "unverified": false,
+     "what": "REC is a Central Public Sector Undertaking under the Ministry of Power involved in financing projects in the complete power sector value chain from generation to distribution",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Power Finance Corporation Limited",
+     "out": "",
+     "symbol": "PFC",
+     "unverified": false,
+     "what": "Power Finance Corporation Limited is a Systemically Important Non-Deposit taking NBFC registered with the RBI as an Infrastructure Finance Company",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 0.55,
+   "gnpa_n": 1,
+   "layer": "Government-owned infrastructure financiers",
+   "listed": 2,
+   "n": 2,
+   "net": 28.25,
+   "net_n": 2,
+   "nii_assets": 3.76,
+   "nii_assets_n": 2,
+   "official": false,
+   "pb": 0.8,
+   "pb_n": 2,
+   "revenue": 115450.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 20.4,
+   "roe_n": 2,
+   "scale": null,
+   "words": "These non-bank lenders fund power, renewable and railway assets, mostly with market borrowings."
+  }
+ ],
+ "sector": "Public sector banks",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Public sector banks",
+ "total": 14,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 14,
+  "shown": 14
+ }
+}

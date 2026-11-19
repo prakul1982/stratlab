@@ -87,6 +87,13 @@
     }
   } catch (e) { /* storage off */ }
 
+  // the home address: only it shows the landing's start-up hero (LIVE13B-001)
+  try {
+    var path = location.pathname;
+    if ((path === "/" || path === "/index.html") && !/[?&](fbclid=|utm_source=(facebook|fb|ig|instagram|meta)\b)/i.test(location.search || ""))
+      document.documentElement.setAttribute("data-home", "1");
+  } catch (e) {}
+
   // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme
   try { var saved = localStorage.getItem("stratlab-theme"); if (saved) document.documentElement.dataset.theme = saved; } catch (e) { /* storage off */ }
 

@@ -64,10 +64,10 @@ test("every public page has a tab title of its own, and a page nothing is at say
   assert.equal(signedOutTitle("/signup"), "Sign up · StratLab");
   assert.equal(signedOutTitle("/about"), "About · StratLab");
   assert.equal(signedOutTitle("/nowhere"), "Page not found · StratLab");
-  assert.equal(signedOutTitle("/holdings"), "Sign in · Holdings · StratLab");        // an app address still says what it waits for
+  assert.equal(signedOutTitle("/holdings"), "Sign in: Holdings · StratLab");      // an app address still says what it waits for (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
   const titles = Object.values(PUBLIC_TITLES);
   assert.equal(new Set(titles).size, titles.length, "two public pages share a title");
-  assert.equal(titleFor("/nowhere"), "StratLab: test it, research it, track it", "the signed-in default is unchanged: NotFound titles itself");
+  assert.equal(titleFor("/nowhere"), "StratLab", "the signed-in default is the brand: NotFound titles itself");      // (updated on purpose, owner 18 Nov: the brand alone, not a tagline)
 });
 
 test("/login, /signup and /about are real addresses, not dead routes (R4-017)", () => {

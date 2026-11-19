@@ -34,8 +34,11 @@ test("item 1: corporate actions are one table with headers; the dividend total s
 test("item 2: Key numbers are small tables (name | Value | Basis | Range), one width, no long qualifier inside a row", () => {
   const r = read("src/components/Research.tsx");
   // the range column says what it is (owner, 5 Nov: "where is the context of it?"): "Usual range", the shaded span and its two figures under each bar
-  for (const h of ['header: "Value"', 'header: "Basis"', 'header: anyBar ? "Usual range" : ""', 'className="inv-krange-txt"']) assert.ok(r.includes(h), h);
-  assert.match(r, /if \(m\.note && m\.note\.length > LONG_NOTE\) foot\.push/);                                  // a long qualifier is a numbered note under the tables
+  // (updated on purpose, LIVE8B-015: a group with no range bar, or no basis, has no column for it, so the header is plain)
+  for (const h of ['header: "Value"', 'header: "Basis"', 'header: "Usual range"', 'className="inv-krange-txt"']) assert.ok(r.includes(h), h);
+  // a long qualifier is a numbered note under the tables (updated on purpose, LIVE9B-012: and so is a basis only a few of the group's rows have)
+  // (updated on purpose, LIVE12B-016: the same rule, through metricFoots, which numbers a repeated note once)
+  assert.match(r, /g\.items\.filter\(\(m\) => m\.note && \(m\.note\.length > LONG_NOTE \|\| sparse\(g\)\)\)/);
   assert.match(r, /\{mark\(m\) && <sup className="cmp-foot-mark"/);                                               // marked next to the value
   assert.match(r, /m\.note && !mark\(m\) \? m\.note : ""/);                                                      // and never inside the row
   const css = read("src/styles-invest.css");
@@ -89,7 +92,7 @@ test("item 6: the documents read, the business model, the measures, the plans an
   assert.doesNotMatch(dd, /className="rs-grid"/);
   assert.doesNotMatch(dd, /className="promises"/);
   assert.match(dd, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Growth a year"/);                                              // the growth tiles are a table too
-  assert.match(dd, /<DataTable label="How it's valued"/);
+  assert.doesNotMatch(dd, /How it's valued/);     // (updated on purpose, owner 18 Nov: valuation is the company page's Key numbers)
 });
 
 test("item 8 (LIVE1A-048): a long note on a compared figure is a numbered note under its table, with its mark beside the value", () => {

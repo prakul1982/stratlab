@@ -4,8 +4,8 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { download as saveFile } from "../lib/share";
 import { pct, pctPlain } from "../lib/format";
-import { capText, downloadPath, peText, sortPeers, type PeerKey, type PeerRow, type Peers, type Region } from "../lib/companyTables";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, PlanNote, Select, Signed, Skeleton, usePhone, type Column } from "./kit";
+import { capText, downloadPath, peText, sortPeers, wholeOnly, type PeerKey, type PeerRow, type Peers, type Region } from "../lib/companyTables";
+import { Card, CardHead, CardNote, DataTable, EmptyState, ErrorState, PlanNote, Select, Signed, Skeleton, usePhone, type Column } from "./kit";
 import "./companyTables.css";
 
 /* Peers (lane c-f2): the companies of the same industry nearest in market value, with the company's own row in bold and the median of the
@@ -38,7 +38,7 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
   };
 
   const head = (actions?: React.ReactNode) => <CardHead title="Peers" actions={actions}
-    info="Listed companies of the same industry (its sector when the industry has too few), nearest in market value. Sales growth is compounded over 3 years; EBITDA margin, net margin and the return are of the latest reported year; P/E at the last close. A lender is compared on return on equity." />;
+    info="Listed companies of the same industry (its sector when the industry has too few) with a market value between 1/20 of the company's own and 20 times it, nearest first. Sales growth is compounded over 3 years; EBITDA margin, net margin and the return are of the latest reported year; P/E at the last close. A lender is compared on return on equity." />;
 
   if (error) return <Card id={id}>{head()}<ErrorState title="The peers couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState></Card>;
   if (!v) return <Card id={id}>{head()}<Skeleton label="Reading the peers" lines={4} /></Card>;
@@ -46,23 +46,26 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
 
   const peers = sort ? sortPeers(v.rows, sort.key, sort.desc) : v.rows;
   const rows: PeerRow[] = v.own ? [v.own, ...peers] : peers;
-  const pctCell = (x: number | null) => pctPlain(x, 1).replace("-", "−");
+  // a column the index gives in whole numbers (an EBITDA margin of 27) is written whole, as Key numbers writes it, never "27.0%" (LIVE9B-003)
+  const whole = (k: "ebitda" | "net" | "ret") => wholeOnly(rows.map((r) => r[k]));
+  const pctCell = (x: number | null, k?: "ebitda" | "net" | "ret") => pctPlain(x, k && whole(k) && (x == null || Number.isInteger(x)) ? 0 : 1).replace("-", "−");
   const cols: Column<PeerRow>[] = [
     { key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => (r.own
       ? <b>{r.name}<span className="sr-only"> (this company)</span></b>
       : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link>) },
     { key: "market_cap", header: "Market value", numeric: true, sortable: true, cell: (r) => capText(r.market_cap, region) },
-    { key: "sales_growth", header: "Sales growth", info: "Compounded a year over the last 3 years.", numeric: true, sortable: true,
+    // the header says the span: the 3-year compounded rate, not the latest year's (LIVE8B-017)
+    { key: "sales_growth", header: "Sales growth, 3 yrs", info: "Compounded a year over the last 3 years.", numeric: true, sortable: true,
       cell: (r) => (r.sales_growth == null ? "–" : <Signed value={r.sales_growth}>{pct(r.sales_growth, 1)}</Signed>) },
-    ...(v.lender ? [] : [{ key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (r: PeerRow) => pctCell(r.ebitda) } as Column<PeerRow>]),
-    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (r) => pctCell(r.net) },
+    ...(v.lender ? [] : [{ key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (r: PeerRow) => pctCell(r.ebitda, "ebitda") } as Column<PeerRow>]),
+    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (r) => pctCell(r.net, "net") },
     { key: "ret", header: v.return_label, info: v.lender ? "Return on equity: net profit over shareholders' equity." : "Return on capital employed: operating profit over equity and debt.",
-      numeric: true, sortable: true, cell: (r) => pctCell(r.ret) },
+      numeric: true, sortable: true, cell: (r) => pctCell(r.ret, "ret") },
     { key: "pe", header: "P/E", numeric: true, sortable: true, cell: (r) => peText(r.pe) },
   ];
   const m = v.median;
   const foot = m ? { name: `Median of ${v.rows.length} peer${v.rows.length === 1 ? "" : "s"}`, market_cap: capText(m.market_cap, region),
-    sales_growth: m.sales_growth == null ? "–" : pct(m.sales_growth, 1), ebitda: pctCell(m.ebitda), net: pctCell(m.net), ret: pctCell(m.ret), pe: peText(m.pe) } : undefined;
+    sales_growth: m.sales_growth == null ? "–" : pct(m.sales_growth, 1), ebitda: pctCell(m.ebitda, "ebitda"), net: pctCell(m.net, "net"), ret: pctCell(m.ret, "ret"), pe: peText(m.pe) } : undefined;
   const onSort = (k: string) => setSort((s) => ({ key: k as PeerKey, desc: s?.key === k ? !s.desc : true }));
   // on a phone the rows are cards with no header to press: the sort is picked here instead (Basic)
   const phoneSort = phone && v.can_sort ? <>
@@ -74,14 +77,16 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
   return (
     <Card id={id}>
       {head(phoneSort || download ? <>{phoneSort}{download}</> : undefined)}
-      <p className="k-small k-muted">{v.basis_words[0].toUpperCase() + v.basis_words.slice(1)}{v.return_label === "ROE" ? "; compared on return on equity, as a lender" : ""}. Market value in {region === "IN" ? "rupees" : "dollars"}.</p>
       <div className="ct-peers">
-        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot}
+        {/* on a phone the company and its five nearest, then "Show more" (LIVE8B-012: eleven stacked cards ran 2,400 px) */}
+        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot} phonePage={6}
           rowAttrs={(r): Record<string, string> => (r.own ? { className: "ct-own", "data-own": "" } : { "data-peer": r.symbol })}
           sort={v.can_sort ? { key: sort?.key ?? "", desc: sort?.desc ?? true, onSort } : undefined} />
       </div>
       {v.locked && <PlanNote plan={v.locked.plan}>{v.locked.message}</PlanNote>}
       {v.export_locked && <p className="k-note">{v.export_locked.message}</p>}
+      {/* the basis of the list, under it in the card's one fold (owner, 18 Nov), not a line between the head and the table */}
+      <CardNote summary="About this list"><p data-testid="peers-basis">{v.basis_words[0].toUpperCase() + v.basis_words.slice(1)}{v.return_label === "ROE" ? "; compared on return on equity, as a lender" : ""}. Market value in {region === "IN" ? "rupees" : "dollars"}.</p></CardNote>
     </Card>
   );
 }

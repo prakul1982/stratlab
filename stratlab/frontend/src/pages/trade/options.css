@@ -24,6 +24,8 @@
 .k-leg-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .k-leg-pick .k-input { width: auto; }
 .k-leg-pick .k-input[type="number"] { width: 84px; }
+/* a box's range error goes under the row, after its unit, not squeezed between the box and "strikes" (LIVE8B-013) */
+.k-leg-pick .k-bad { flex-basis: 100%; order: 9; }
 .k-table tr[data-atm] td { background: var(--chip); }
 .k-link-line { margin: 0; font-size: var(--t-label); color: var(--muted); }
 .k-whatif { display: flex; flex-direction: column; gap: var(--s3); }

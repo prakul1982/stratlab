@@ -409,6 +409,11 @@ class KiteService:
         self._load_instruments()
         return self._by_token.get(int(token))
 
+    def kept_instrument(self, token: int) -> dict | None:
+        """The instrument from the last list held in memory, whatever day it was read, without asking the broker: names a token while
+        the data login is off (a stored daily test, LIVE11B-013). None when no list is held."""
+        return self._by_token.get(int(token))
+
     def defaults(self) -> list[dict]:
         self._load_instruments()
         out = []

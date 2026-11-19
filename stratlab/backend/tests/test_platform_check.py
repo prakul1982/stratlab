@@ -78,6 +78,10 @@ def test_daily_check_retries_and_only_tells_admins_about_what_still_fails(monkey
         monkeypatch.setattr(main, "tell_admins", lambda subject, text: told.append((subject, text)) or 1)
         out = main.daily_platform_check(retry_after=0.01)
         assert out["counts"] == {"pass": 2, "warn": 0, "fail": 1} and tries["flaky"] == 2
+        # (updated on purpose, ops49: a check failing in one run alone is not mailed; the run is repeated an hour later and a check
+        # still failing then is, so the mail comes from the second run)
+        assert told == []
+        main.daily_platform_check(retry_after=0.01)
         assert told and "1 check failing" in told[0][0] and "Broken source" in told[0][1] and "Flaky" not in told[0][1]
         c = w["client"]
         last = c.get("/admin/platform/last", headers=W.headers("admin-token")).json()

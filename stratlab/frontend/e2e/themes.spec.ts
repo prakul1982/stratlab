@@ -40,21 +40,39 @@ test("the theme page is a deep dive made of tables, with each company only where
   // said; the AI's additions from other industries are marked (NTPC kept in its own words, ONGC left out by its own); Vedanta, which the
   // map doesn't name, is listed under its own industry
   const members = page.locator("#theme-members");
-  await expect(members.getByTestId("theme-counts")).toHaveText(/^6 companies: 5 from the official industry list, 1 added \(1 confirmed from its own description\)\.$/);
+  // l55 (R55, updated on purpose): the evidence states by the deck's names, never "confirmed"
+  await expect(members.getByTestId("theme-counts")).toHaveText(/^6 companies: 5 from the official industry list, 1 added \(1 description-verified\)\.$/);
   await expect(members).toContainText("Official industries: Iron & Steel");
+  // e54: what each company's place rests on, the deck's states and counts (never an official-industry record said confirmed by its words)
+  await expect(members.getByTestId("theme-evidence")).toHaveText(/^Membership checked \d+ of \d+: \d+ description-verified · \d+ industry-supported( · \d+ [a-z' -]+)*; \d+ not checked\./);   // r69e (updated on purpose): the states add up to those checked
+  // (updated on purpose, fix15 LIVE12A-007: a layer whose companies are all in the theme the same way says it once over its table, so the
+  // state is on its row or in that line)
+  await expect(members.getByTestId("member-evidence").or(members.getByTestId("layer-by-once")).first())
+    .toHaveText(/^((Every company in this layer is in the theme by: )?(Official industry|Named in the theme's list) · )?(Description-verified|Industry-supported \(official industry only\)|Not checked)\.?$/);
+  await expect(members.getByTestId("layer-evidence").first()).toHaveText(/^\d+ description-verified · \d+ industry-supported · (\d+ [a-z' -]+ · )*\d+ not checked$/);
   // R21: Vedanta, which the map doesn't name, is placed in the map's own layer that fits it (mining), never in an exchange-industry layer
   // beside the map's
   await expect(members.getByRole("heading", { name: /official industry/ })).toHaveCount(0);
   await expect(members.getByRole("table", { name: /Coal and metal mining: companies in the theme/ })).toContainText("Vedanta");
-  await expect(members.getByRole("table", { name: /Power generation: companies in the theme/ })).toContainText("Added");
+  // r60 (R60, updated on purpose: the owner's R59 review P0): a layer the map named whose one company's own words say what it is stays, so
+  // NTPC ("generates electricity ... power generation") keeps "Power generation", said to be one company; it is still marked as added
+  await expect(members.getByRole("row").filter({ hasText: "NTPC" }).first()).toContainText("Added");
   // the whole chain in one table, with the basis said
   const chain = page.getByRole("table", { name: /value chain by layer/i });
   await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^i?Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
-  await expect(chain.locator("tbody tr")).toHaveCount(3);          // the map's three layers (R21: Vedanta placed in one of them)
+  // r60 (R60, updated on purpose: the owner's R59 review P0): the map's two layers of more than one company (R21: Vedanta placed in one of
+  // them) and NTPC's one-company "Power generation", kept on its own words, shown with no median (r582 had it in Other, outside the chain)
+  await expect(chain.locator("tbody tr")).toHaveCount(3);
+  await expect(chain.locator("tbody tr").filter({ hasText: "Power generation" })).toHaveCount(1);
   await expect(main).toContainText("Consolidated accounts where the company files them");
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
   const steel = page.locator("#layer-1");
   await expect(steel).toContainText("Steel making");
+  // (updated on purpose, r69e LIVE13A-013: on a phone a layer's tables are a press away under its description; the press opens them)
+  if (phone) {
+    await expect(steel.locator("table").first()).toBeHidden();
+    await steel.getByTestId("phone-fold").getByText(/^Show its \d+ compan(y|ies) and figures$/).click();
+  }
   await expect(steel.getByRole("table").first().locator("tbody tr")).toHaveCount(5);        // Tata Steel, JSW Steel, SAIL, Median, Range
   await expect(steel).toContainText("In its own words");
   await expect(steel.locator('tr[data-kind="median"]')).toContainText("Median");
@@ -68,7 +86,8 @@ test("the theme page is a deep dive made of tables, with each company only where
   expect(navY, "section links above the companies").toBeLessThan(memY);
   await expect(main).not.toContainText("Oil and Natural Gas");
   // a sub-theme with no listed company says so
-  await expect(page.locator("#theme-subs")).toContainText("No listed company is shown for this sub-theme");
+  // (updated on purpose, LIVE9A-022: the empty sub-themes are named in one line under the others)
+  await expect(page.locator("#theme-subs").getByTestId("subs-empty")).toContainText(/No listed company is shown for (this sub-theme|these sub-themes): /);
   // claims: the one an old scheme rests on is gone, the rest is marked general background
   const claims = page.locator("#theme-claims");
   await expect(claims).toContainText("General background");

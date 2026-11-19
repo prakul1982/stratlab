@@ -161,7 +161,8 @@ test("DP2-030: the daily report isn't shown ticked on Free; an empty email box s
 test("DP2-031: Account lists every kept limit and the trial's days left", () => {
   assert.deepEqual(acct.keptRow({ key: "stock_alerts", used: 3, limit: 5, next: "Basic" }), ["Stock alerts on", "3 of 5"]);
   assert.deepEqual(acct.keptRow({ key: "networth_items", used: 12, limit: null, next: null }), ["Net worth entries", "12 (no limit)"]);
-  assert.deepEqual(acct.keptRow({ key: "journal_trades", used: null, limit: 50, next: "Basic" }), ["Trades the journal counts", "The last 50"]);
+  // (updated on purpose, LIVE8B-025: Account said "counts" where Plans says "keeps" for the same limit; one label now)
+  assert.deepEqual(acct.keptRow({ key: "journal_trades", used: null, limit: 50, next: "Basic" }), ["Trades the journal keeps", "The last 50"]);
   assert.equal(acct.keptRow({ key: "unknown", used: 1, limit: 1, next: null }), null);
   const me = { plan: "free", view_as: null, live_running: 0, live_limit: 1 };
   assert.equal(acct.trialUse({ ...me, trial: { started: false, active: false, ends_at: null, available: true, days: 5, days_left: 5 } }),

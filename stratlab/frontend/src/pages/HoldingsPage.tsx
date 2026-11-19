@@ -5,7 +5,7 @@ import { numberProblem, problems, qtyProblem, type Limits } from "../lib/validat
 import { useApp } from "../lib/app";
 import { useMarketRefresh } from "../lib/marketLive";
 import { usTodayNote } from "../lib/marketHours";
-import { aFile, ago, asOf as asOfText, dateOnly, fmtDate, inr, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
+import { aFile, ago, asOf as asOfText, dateOnly, daysOld, fmtDate, HOLDINGS_OLD_DAYS, inr, IST, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
 import { NoBreak } from "../components/NoBreak";
 import { Trash } from "../components/Icons";
@@ -14,13 +14,13 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, Card, CardHead, CsvButton, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Badge, CardNote, Card, CardHead, CsvButton, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { orList } from "../lib/brokers";
 import { BrokerGuide } from "../components/BrokerGuide";
 import { SourceChip } from "../components/kit/SourceChip";
-import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
+import { dayLabel, dollarRate, editChange, importedLine, oldPart, pnlLabel, priceNote, syncedNote, type Change, type Closes, type HoldingSource, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -40,7 +40,7 @@ type View = {
   totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number;
     pnl_partial?: { priced: number; lines: number } | null;
     no_cost?: { count: number; symbols: string[]; value: number } | null; session?: string | null; other_session?: string[] };
-  source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; us_prices_at?: string | null; closes?: Closes; limit: number; facts_max: number;
+  source: string | null; updated_at: string | null; sources?: HoldingSource[]; prices: boolean; prices_at?: string | null; us_prices_at?: string | null; closes?: Closes; limit: number; facts_max: number;
   us?: UsTotals | null; usd_inr?: number | null; usd_inr_at?: string | null; us_prices?: boolean | null;
   /** the connected Zerodha account's last read (R7M-009); absent when it isn't connected */
   zerodha?: ZerodhaRead | null;
@@ -57,7 +57,7 @@ type Facts = {
 type FactsReply = { rows: Record<string, Facts>; filings: boolean; filings_plan: string; checked: number; count: number };
 type Unmatched = { line: number | null; text: string; reason: string };
 type Saved = { symbol: string; exchange?: string | null; qty: number; avg: number | null };
-type ImportReply = { broker: string; imported: number; saved: boolean; duplicate?: boolean; saved_lines?: Saved[]; unmatched: Unmatched[]; unmatched_count: number; over_limit: string[]; limit: number; holdings: View };
+type ImportReply = { broker: string; imported: number; saved: boolean; duplicate?: boolean; overlap?: string[]; saved_lines?: Saved[]; unmatched: Unmatched[]; unmatched_count: number; over_limit: string[]; limit: number; holdings: View };
 
 const MAX_MB = 2;
 const BROKERS = "Zerodha (Console or Kite), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
@@ -85,6 +85,7 @@ const QTY: Limits = { min: 0, above: true, max: 1e9 };
 const AVG: Limits = { min: 0, max: 1e8, optional: true };
 
 export function HoldingsPage() {
+  const phone = usePhone();
   const { fail, notify, markets } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +97,7 @@ export function HoldingsPage() {
   const [busy, setBusy] = useState(false);
   const [readingFrom, setReadingFrom] = useState<string | null>(null);   // the broker chip reading now (its loading bar)
   const [pending, setPending] = useState<File | null>(null);              // a file picked, waiting for Add or Start again (R15 #4)
+  const [overlapFile, setOverlapFile] = useState<File | null>(null);      // a file naming stocks already held, waiting for the user's word (LIVE10B-024)
   const [reading, setReading] = useState(false);        // a file is being read: only then does the upload button say "Reading…" (LIVE1B-047)
   const [result, setResult] = useState<(ImportReply & { replaced: boolean; usKept: number }) | null>(null);
   const [edit, setEdit] = useState<Row | null>(null);
@@ -171,7 +173,7 @@ export function HoldingsPage() {
     const f = files?.[0];
     if (!f) return;
     // LIVE1B-002: the last file's answer goes the moment another is picked, so a refusal never sits under an old "saved" line
-    setResult(null); clearProblem();
+    setResult(null); clearProblem(); setOverlapFile(null);
     if (f.size > MAX_MB * 1024 * 1024) { reject(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
     // nothing held yet: the file is the holdings either way, read at once. With holdings, the file waits for Add or Start again,
     // which show only now (R15 #4, owner 7 Nov: the choice took a row before any file was picked)
@@ -187,8 +189,8 @@ export function HoldingsPage() {
     if (mode === "replace" && rows.some((r) => !isUS(r))) { setReplacing(f); return; }
     await upload(f, mode);
   };
-  const upload = async (f: File, how: "replace" | "add") => {
-    setBusy(true); setReading(true);
+  const upload = async (f: File, how: "replace" | "add", overlapOk = false) => {
+    setBusy(true); setReading(true); setOverlapFile(null);
     try {
       let data: string;
       // MONEY-6a: the browser failing to open the file is said as that: nothing was sent, so nothing changed
@@ -196,7 +198,8 @@ export function HoldingsPage() {
         reject(`${f.name} couldn't be opened here, so nothing was sent and your holdings are unchanged. Pick the file again (if it was changed after you picked it, pick the saved copy).`);
         return;
       }
-      const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode: how } });
+      const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode: how, overlap_ok: overlapOk } });
+      if (r.overlap?.length) setOverlapFile(f);
       track("holdings imported", { rows: r.imported, method: how });
       setResult({ ...r, replaced: how === "replace", usKept: r.holdings.us?.count ?? 0 });
       show(r.holdings);
@@ -322,17 +325,19 @@ export function HoldingsPage() {
               title={`${b.name} is connected${b.read_at ? `, last read ${ago(b.read_at)}` : ""}${b.live ? "" : ". Its login has ended, so the next read asks you to log in again"}.`} />
           ))}
         </div>
-        {pending && (
+        {pending && (<>
           <div className="k-source-row" role="group" aria-label="The file picked" data-testid="holdings-pending">
             <span className="k-small"><b>{pending.name}</b></span>
             <Seg label="What the file does" options={[{ value: "add", label: "Add to my holdings" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} />
             <button type="button" className="btn sm" onClick={() => void readPending()}>Read this file</button>
             <button type="button" className="btn quiet sm" onClick={() => setPending(null)}>Cancel</button>
           </div>
-        )}
+          {/* LIVE10B-024: what the chosen way does, before the file is read */}
+          <p className="k-note" data-testid="holdings-mode-note">{mode === "add" ? "Adds this file's stocks to what you hold. If the file names a stock you already hold, you're asked before anything is added." : "Your Indian holdings become this file's stocks; US stocks stay."}</p>
+        </>)}
         {zerodhaChip && <p className="k-note" data-testid="zerodha-note">Zerodha ends its login each morning, so one tap a day keeps it current; <Link to="/settings#accounts">a statement inbox in Settings</Link> does it without a tap.</p>}
         <UploadProblem problem={problem} />
-        {(problem || (result && !result.saved && !result.duplicate)) && (
+        {(problem || (result && !result.saved && !result.duplicate && !result.overlap?.length)) && (
           // MONEY-6a: a refused file says what is read, not only why this one wasn't
           <p className="k-note" data-testid="holdings-format">A file of your own needs the columns <b>Symbol</b> (or ISIN), <b>Quantity</b> and <b>Average price</b>, one stock a line (e.g. INFY, 10, 1500); the names may be in any case. Files read as they are: {BROKERS}.</p>
         )}
@@ -345,10 +350,17 @@ export function HoldingsPage() {
             <p className="k-small">
               <b>Read as {aFile(result.broker)}:</b>{" "}
               {result.duplicate ? "you added this same file before, so your holdings are unchanged. To read it again, choose Start again with this file."
+                : result.overlap?.length ? `nothing added yet: you already hold ${result.overlap.join(", ")}. Adding puts this file's quantities on top of what you hold; a newer copy of the same account's file belongs in Start again with this file.`
                 : result.saved ? `${result.imported} stock${result.imported === 1 ? "" : "s"} saved.${result.replaced && result.usKept > 0 ? ` Your ${result.usKept} US stock${result.usKept === 1 ? " is" : "s are"} kept: a file replaces your Indian holdings only.` : ""}`
                 : "nothing matched, so your saved holdings are unchanged."}
               {result.unmatched_count > 0 && ` ${result.unmatched_count} line${result.unmatched_count === 1 ? "" : "s"} couldn't be matched (below).`}
             </p>
+            {overlapFile && (result.overlap?.length ?? 0) > 0 && (
+              <div className="k-source-row" data-testid="holdings-overlap">
+                <button type="button" className="btn sm" disabled={busy} onClick={() => { const f = overlapFile; setOverlapFile(null); setReplacing(f); }}>Start again with this file</button>
+                <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void upload(overlapFile, "add", true)}>Add these shares too</button>
+              </div>
+            )}
             {(result.saved_lines?.length ?? 0) > 0 && (
               <Disclosure summary={`Show the ${result.saved_lines!.length} stock${result.saved_lines!.length === 1 ? "" : "s"} saved from this file`}>
                 <DataTable label="Stocks saved from this file" columns={savedCols} rows={result.saved_lines!} rowKey={(x) => `${x.exchange ?? ""}:${x.symbol}`} />
@@ -395,19 +407,32 @@ export function HoldingsPage() {
           <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-import", label: "Import a file" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
           <Card id="h-summary">
             <CardHead title="Where your stocks stand" />
-            {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles with their changes under them */}
-            <FigureTable label="Where your stocks stand" header="Total" valueHeader="Amount" noteHeader="Change" rows={[
-              { key: "value", label: "Current value", value: inr(t.value) },
-              { key: "invested", label: "Invested", value: inr(t.invested) },
-              { key: "pnl", label: pnlLabel("Unrealised P&L", t.pnl_partial), value: t.pnl == null ? "–" : inr(t.pnl), tone: signTone(t.pnl),
-                note: t.pnl == null ? undefined : <><Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>{t.pnl_partial ? ` on the ${t.pnl_partial.priced} with a price; the rest are at cost` : ""}</> },
-              { key: "day", label: dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false })), value: t.day == null ? "–" : inr(t.day), tone: signTone(t.day),
-                note: t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta> },
-            ]} />
+            {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles.
+                Owner (18 Nov, "what ui is this"): on a laptop the four totals are one row across the card, each amount under its own
+                heading with its change under it, and the notes under the table; the half-width table with an empty half beside it is gone.
+                A phone keeps the stacked table (four columns do not fit 390 px). */}
+            {(() => {
+              const figs = [
+                { key: "value", label: "Current value", value: inr(t.value) },
+                { key: "invested", label: "Invested", value: inr(t.invested) },
+                { key: "pnl", label: pnlLabel("Unrealised P&L", t.pnl_partial), value: t.pnl == null ? "–" : inr(t.pnl), tone: signTone(t.pnl),
+                  note: t.pnl == null ? undefined : <><Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>{t.pnl_partial ? ` on the ${t.pnl_partial.priced} with a price; the rest are at cost` : ""}</> },
+                { key: "day", label: dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false })), value: t.day == null ? "–" : inr(t.day), tone: signTone(t.day),
+                  note: t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta> },
+              ];
+              const notes = (
+            <div className="h-sum-notes">
             <p className="k-note">
-              {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${sourceWords(view.source)}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
+              {/* "imported from … on 25 Oct": a login's holdings are as of when they were read, not a live connection (LIVE9B-021) */}
+              {/* LIVE10B-026: each source once, with one date of its own (the day in India's time; "(3 h ago)" only while it is recent) */}
+              {t.count} stock{t.count === 1 ? "" : "s"}{importedLine(view.sources, { source: view.source, at: view.updated_at }, (d) => fmtDate(d, { year: false, tz: IST }), sourceWords,
+                (d) => ((daysOld(d) ?? 99) < 7 ? ago(d) : null))}
               {(() => { const n = priceNote(view.prices, view.closes, rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && ` · ${n}`; })()}
             </p>
+            {(() => {
+              const old = oldPart(view.sources, view.updated_at, t.count, (d) => daysOld(d), HOLDINGS_OLD_DAYS);
+              return old && <p className="k-note" data-testid="holdings-old">{old.words} {old.days} days old: the prices are today's, the shares and quantities as imported. Import again to bring in any trades since.</p>;
+            })()}
             {t.no_cost && (
               <p className="k-note">
                 Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ${dollarRate(view.usd_inr, view.usd_inr_at)})` : ""}, except Today, which includes {t.no_cost.count === 1 ? "its" : "their"} change.
@@ -427,6 +452,22 @@ export function HoldingsPage() {
                   {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. Sales of US stocks come from the trades on the <Link className="link" to="/money/us-tax">US stocks tax page</Link>, not from this list.</span>
               </p>
             )}
+            </div>
+              );
+              if (phone) return (
+            <div className="h-sum">
+            <FigureTable label="Where your stocks stand" header="Total" valueHeader="Amount" noteHeader="Change" rows={figs} />
+              {notes}
+            </div>);
+              const cols: Column<typeof t>[] = figs.map((f) => ({ key: f.key, header: f.label, cell: () => <>
+                <span className={`h-total${f.tone && /up|pos/.test(f.tone) ? " k-up" : f.tone && /down|neg/.test(f.tone) ? " k-down" : ""}`}>{f.value}</span>
+                {f.note && <span className="k-sub-line">{f.note}</span>}</> }));
+              return (
+            <div className="h-sum wide">
+              <DataTable label="Where your stocks stand" rows={[t]} rowKey={() => "totals"} columns={cols} />
+              {notes}
+            </div>);
+            })()}
           </Card>
           <HoldingsActionsPanel<View> version={actionsAt} onHoldings={put} onLoaded={() => setActionsReady(true)} />
           {!actionsReady && <Card><Skeleton label="Opening your sectors and positions" /></Card>}
@@ -445,6 +486,8 @@ export function HoldingsPage() {
           <Card id="h-positions" label="Positions">
             <CardHead title="Positions" actions={<>
               {!facts && <span className="k-note">Checking each stock's trend and filings…</span>}
+              {/* LIVE8B-008: the count against the plan's limit where it bites (at 80% of it or more) */}
+              {view && view.limit > 0 && rows.length >= Math.ceil(view.limit * 0.8) && <span className="k-note" data-testid="holdings-count">{rows.length} of {view.limit} kept</span>}
               {more.toggle}
               {/* LIVE7B-013: the CSV with the table's other controls in its header, not alone on a line under them */}
               <CsvButton name="holdings positions" label="Positions" columns={cols} rows={rows} />
@@ -515,7 +558,7 @@ export function HoldingsPage() {
 
       {view && rows.length > 0 && actionsReady && (
         <section className="k-stack">
-          <p className="k-note">Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p>
+          <CardNote summary="How your holdings are kept"><p>Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p></CardNote>
           <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my holdings</button>
         </section>
       )}

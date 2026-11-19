@@ -5,13 +5,21 @@ import type { ReactNode } from "react";
 import { Info } from "./ui";
 import { ADS, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
 import { EVERYONE, hasMore, MORE_FLAGS, SHARE_LINKS } from "../lib/planFeatures";
+import { changeCount, changeDay } from "../lib/freeChange";
+import type { FreeChange } from "../lib/types";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
-export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
+export function PlanCompare({ plans, grace }: { plans?: Record<string, Partial<Limits>>;
+  /** a Free account in its grace (the server's free_change): its earlier count beside Free's, until the day (LIVE10A-003) */
+  grace?: FreeChange | null }) {
   const lim = (p: PlanId): Limits => ({ ...LIMITS[p], ...(plans?.[p] ?? {}) });
+  const graceDay = grace ? changeDay(grace.on).replace(/ \d{4}$/, "") : "";
   const num = (p: PlanId, k: keyof Limits) => {
     const v = lim(p)[k] as number | null;
+    // LIVE10A-003: "0 (a sample deck)" and "5 fresh AI reads a day" stood beside a Free account's "60 left today (5 a day from 27 Nov)"
+    const kept = p === "free" && grace ? grace.rows.find((r) => r.key === k && r.before !== r.after) : undefined;
+    if (kept) return `${v == null ? unlimitedLabel(p, k) : v.toLocaleString("en-IN")} (${changeCount(kept.before)} for you until ${graceDay})`;
     // Free's one session is a trial of 5 market days: said as a trial in the cell (DK-005)
     // FREE-TIER: no decks of its own on Free: the sample deck (Plans page) shows what one holds
     return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v === 0 && k === "decks_per_month" ? "0 (a sample deck to download)" : v.toLocaleString("en-IN");
@@ -42,6 +50,27 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
     ...FLAG_GROUPS.map((g) => ({ id: `paid-${g.id}`, title: g.title, sub: "What each plan adds", rows: flagRows(g.id) })),
   ];
   const everyone: Row[] = EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" }));
+  // NAV3 (CX-1, 16 Nov: "a comparison table of about 60 feature rows", so a newcomer can't tell what the product is): the table in view is
+  // 12 rows, one for each kind of thing a plan changes, from the same limits and features; every row of the full comparison is one fold
+  // below it, word for word as before. Same plans, same prices, same limits: only how they are laid out.
+  const lims = (p: PlanId, ...ks: (keyof Limits)[]) => ks.map((k) => num(p, k).replace(/ \(.*\)$/, "")).join(" · ");
+  const paid = (g: string) => flagRows(g);
+  const share = (g: string) => (p: PlanId) => {
+    const rows = paid(g), n = rows.filter((r) => r.cell(p) === "✓").length;
+    return n === 0 ? "–" : n === rows.length ? `All ${n}` : `${n} of ${rows.length}`;
+  };
+  const glance: Row[] = [
+    { id: "g-backtests", label: "Backtests a month", cell: (p) => num(p, "backtests_per_month") },
+    { id: "g-builds", label: "AI strategy builds a month", cell: (p) => num(p, "ai_builds_per_month") },
+    { id: "g-paper", label: "Paper trading sessions at once", cell: (p) => num(p, "live_limit") },
+    { id: "g-deep", label: "Deep dives a month", cell: (p) => num(p, "deepdives_per_month") },
+    { id: "g-decks", label: "Slide decks a month (a company or a theme)", cell: (p) => num(p, "decks_per_month") },
+    { id: "g-themes", label: "New themes a month", cell: (p) => num(p, "themes_per_month") },
+    { id: "g-alerts", label: "Stock alerts and saved screens", cell: (p) => lims(p, "stock_alerts", "screens") },
+    { id: "g-kept", label: "Holdings, fund schemes and net worth entries kept", cell: (p) => lims(p, "holdings", "mf_schemes", "networth_items") },
+    ...FLAG_GROUPS.map((g) => ({ id: `g-${g.id}`, label: `${g.title}: paid features (each one is a row in the full comparison below)`, cell: share(g.id) })),
+    { id: "g-ads", label: "Ads", cell: (p: PlanId) => ADS[p] },
+  ];
   const columns = (first: string): Column<Row>[] => [
     // the group's name is the heading just above the table: said again as the first column's header it was the same word twice, so it is named for assistive tools only (VR3-016)
     { key: "label", header: <span className="sr-only">{first}</span>, wrap: true, cell: (r) => nameOf(r.label) },
@@ -49,6 +78,11 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   ];
   // one table per group, each with the plan names on top; the header stays in view as the page scrolls past it
   const body = (<>
+      <div className="k-stack" data-plans-group="glance">
+        <DataTable label="Plans side by side, at a glance" columns={columns("At a glance")} rows={glance} rowKey={(r) => r.id} pinHead />
+      </div>
+      <div className="k-stack" data-plans-group="full">
+      <Disclosure summary="The full comparison, row by row">
       {groups.map((g, i) => (
         <div key={g.id} className="k-stack" data-plans-group={g.id}>
           {g.sub && groups[i - 1]?.sub !== g.sub && <h3 className="k-sub">{g.sub}</h3>}
@@ -56,6 +90,8 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
           <DataTable label={`Plans side by side: ${g.sub ? `${g.sub.toLowerCase()}, ` : ""}${g.title.toLowerCase()}`} columns={columns(g.title)} rows={g.rows} rowKey={(r) => r.id} pinHead />
         </div>
       ))}
+      </Disclosure>
+      </div>
       {/* the same on every plan: a table like the others, folded so the page stays short (DP1-022: three lists said the same facts) */}
       <div className="k-stack" data-plans-group="all">
         <Disclosure summary={`On every plan (${everyone.length} tools)`}>

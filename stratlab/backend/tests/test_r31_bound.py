@@ -314,5 +314,5 @@ def test_a_ranking_line_states_how_many_layers_it_compared():
     view, _ = deck_of(t["region"], m, t["facts"])
     line = view["chain"]["line"]
     # changed on purpose (m2): the scope is in the ranking's own sentence, and the layer left out is named after it with why
-    assert line.startswith("Among the 2 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in")
+    assert line.startswith("Median EBITDA margin is highest in") and "among the 2 layers with at least 5 companies with the figure and one kind of business." in line  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert line.endswith("Shown, not ranked: Aluminium smelting (41%), a different commodity.") and "Aluminium" not in line.split(" Shown, not ranked: ")[0]

@@ -94,7 +94,9 @@ export function RatesPage() {
         <Card label="Market rates">
           <CardHead title="Treasury bills, government bonds and the repo rate" info={d.market_read_at ? `Read from the Reserve Bank on ${asOfText(d.market_read_at)}.` : undefined} />
           {/* DG-041: each market row says the day its figure is of (the G-secs are a day before the page's own date) */}
-          {d.market_available ? table(d.market, "Market rates", (r) => (r.as_of ? sub(`as on ${dateOnly(r.as_of)}`) : null))
+          {/* LIVE9B-019: a T-bill's figure is the cut-off of the Reserve Bank's last weekly auction, read on that day: never "as on" the read day,
+              which made an auction of 11 Nov read as a rate of 16 Nov */}
+          {d.market_available ? table(d.market, "Market rates", (r) => (r.as_of ? sub(r.key.startsWith("tbill") ? `cut-off at the last weekly auction, read ${dateOnly(r.as_of)}` : `as on ${dateOnly(r.as_of)}`) : null))
             : <EmptyState title="The Reserve Bank's rates couldn't be read just now">They are read again every few hours. Come back later.</EmptyState>}
           {d.market_available && d.tbill_note && <p className="k-note" data-testid="tbill-note">{d.tbill_note}</p>}
         </Card>

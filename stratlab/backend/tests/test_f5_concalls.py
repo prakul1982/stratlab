@@ -298,7 +298,10 @@ def test_the_money_calendar_feed_carries_your_stocks_calls_on_basic(mem, monkeyp
     import time_machine
     with time_machine.travel(datetime(2026, 11, 12, 6, 0)):
         got = C.calendar_dates("u1", 30)
-        assert [(e["date"], e["title"]) for e in got] == [("2026-11-13", "ACME: earnings call at 16:00 IST"), ("2026-11-24", "BETA: analyst or investor meet")]
-        assert JOIN in got[0]["detail"] and got[0]["url"] == "/research/IN/ACME"
+        # (updated on purpose, LIVE9B-008: a meeting the filing lists on two days is on both days)
+        assert [(e["date"], e["title"]) for e in got] == [("2026-11-13", "ACME: earnings call at 16:00 IST"), ("2026-11-24", "BETA: analyst or investor meet"),
+                                                          ("2026-11-26", "BETA: analyst or investor meet")]
+        # (updated on purpose, LIVE9B-008: the filing's link is a link of its own, never its address written into the detail)
+        assert got[0]["link"] == JOIN and "http" not in got[0]["detail"] and got[0]["url"] == "/research/IN/ACME"
         monkeypatch.setattr(db, "cached_profile", lambda uid: {"id": uid, "plan": "free", "_plan": "free"})
         assert C.calendar_dates("u1", 30) == []

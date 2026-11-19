@@ -217,6 +217,11 @@ def restated(e: dict) -> dict:
     if hold:
         rel = ("about the same as" if abs(hold["gap"]) < 0.05 else "less than" if hold["gap"] < 0 else "more than")
         head = f"{lab}, and returned {rel} buy and hold"
+        if lab == "Lost money after costs" and hold["gap"] > -1:
+            # a loss beside "returned more than buy and hold" read as a contradiction (LIVE10A-035): both returns said
+            r, h = float(st["ret"]), float(st["buy_hold"])
+            head = (f"Lost money after costs ({_pc(r)}); buying and holding lost more ({_pc(h)})" if hold["gap"] >= 0.05
+                    else f"Lost money after costs ({_pc(r)}), about what buying and holding lost ({_pc(h)})")
         if hold["gap"] <= -1:
             # behind buy and hold: the shortfall leads, before any check it passed (R6V-005: "Passed all 3 checks run"
             # above "+55.8% vs +172.9%, 117.1 points behind")
@@ -273,7 +278,27 @@ def restated(e: dict) -> dict:
                            .get(s, f"{n} trades, too few to tell skill from luck."))
     # the engine's own headline and summary stay as they were stored; pages show these instead
     v.update(label=lab, fact_headline=head + ".", fact_summary=" ".join(out), checks=checks_of(e))
+    if hold and hold["gap"] <= -1 and kind == "edge":
+        # LIVE11A-022: a card's one line leads with the verdict, then what the checks test ("84.0 points behind … · all 3 passed" read as a pass)
+        v["card_headline"] = (f"Trailed buy and hold by {abs(hold['gap']):.1f} points after costs. "
+                              f"Checks of the result itself: {lab[:1].lower() + lab[1:]}.")
+    elif hold and hold["gap"] <= -1 and (count := checks_count(v)):
+        # LIVE12A-013: every card behind buy and hold in that one format, its checks' count in the same line, so two cards side by side never
+        # read "Trailed buy and hold by 84.0 points … Checks of the result itself: …" beside "120.3 points behind …; lost money …" over a
+        # count of its own
+        gap = f"{abs(hold['gap']):.1f}"
+        v["card_headline"] = (f"Lost money after costs and trailed buy and hold by {gap} points. Checks of the result itself: {count}."
+                              if lab == "Lost money after costs" else
+                              f"Trailed buy and hold by {gap} points after costs. Checks of the result itself: {count}; {lab[:1].lower() + lab[1:]}.")
     return v
+
+
+def checks_count(v: dict) -> str | None:
+    """The checks as the cards count them ("3 of 4 checks run · 2 passed", the app's checksLine), or None without the counts."""
+    passed, run = v.get("passed"), v.get("total")
+    if not isinstance(passed, int) or not isinstance(run, int) or run <= 0:
+        return None
+    return f"{run} of 4 checks run · " + (f"all {run} passed" if passed >= run else f"{passed} passed")
 
 
 _A_NUMBER = re.compile(r"\b([Aa]) (?=(?:8|11|18|8\d|8\d\d)(?:[.,]\d+)?\s?(?:%|-))")

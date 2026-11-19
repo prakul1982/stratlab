@@ -248,6 +248,11 @@ class Live:
             save(g, day, pts)
         self.last_round[region] = time.time()
         closing = hhmm >= CLOSE_ROUND_FROM
+        try:            # LIVE13A-012/-029: the same prices for the heatmap and the movers until the evening run stores the day's closes
+            from . import heatmap
+            heatmap.save_live(region, day, slot, closing, quotes, indexes)
+        except Exception as e:      # the counts are stored either way; the map keeps the closes
+            print("breadth live prices for the map:", str(e)[:120])
         _set_status(region, at=breadth._now(), day=day, time=hhmm, quoted=got, stocks=len(symbols), error=None,
                     base_day=(base or {}).get("day"), calls=-(-len(asked) // BATCH), **({"close_day": day} if closing else {}))
         return {"ok": True, "region": region, "time": hhmm, "quoted": got, "stocks": len(symbols)}
@@ -322,6 +327,9 @@ class LiveJob:
                     day = now.astimezone(IST).date().isoformat()
                     if load("nifty500", day)["points"]:
                         official_close.index_closes(day, fetch=True, now=now)
+                    # LIVE8A-014: a weekend or holiday session the calendar didn't name (Diwali's Muhurat trading), from the exchange's
+                    # file of that day's index closes: one look a day
+                    official_close.find_sessions(now)
                 continue
             with memguard.heavy("breadth-live", force_release=True):      # every stock's quote and the day's base: one heavy job at a time (MEM-001)
                 res = self.live.round(region, now)

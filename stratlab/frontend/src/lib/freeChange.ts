@@ -27,3 +27,19 @@ export const CHANGE_KEEPS = "Everything you've saved stays, and reads and themes
 
 /** Where "Got it" is kept, so the notice shows once for the change (and again only for a different change date). */
 export const changeSeenKey = (fc: FreeChange) => `stratlab:free-change-seen:${fc.on.slice(0, 10)}`;
+
+/** The notice's table (LIVE8B-006: twelve sentences in a box): one row a limit that changes, [limit, now, from the day]. */
+export function changeRows(fc: FreeChange): [string, string, string][] {
+  return fc.rows.filter((r) => r.before !== r.after).map((r) => [r.label, changeCount(r.before), changeCount(r.after)]);
+}
+
+/** The Plans page's line on the Free card for an account in its grace (LIVE8B-008: "Current plan" listed limits this account doesn't
+ * have until the change): that it keeps its earlier limits, and from when the card's limits apply. One short line: each count is in
+ * Account's table, which the card links to (LIVE9B-009: every limit in one sentence was an 8-line run-on with "aI" for "AI", and made the
+ * Free card about 200px taller than Basic's and Pro's). */
+export function graceLine(fc: FreeChange): string {
+  const moved = fc.rows.filter((r) => r.before !== r.after), n = moved.length;
+  // LIVE13B-006: "your earlier limits on 10 counts" read like ten backtests; it is how many of the card's limits are still the earlier ones
+  const higher = n > 0 && moved.every((r) => r.before == null || (r.after != null && r.before > r.after)) ? "earlier, higher" : "earlier";
+  return `Until ${changeDay(fc.on)}, ${n === 1 ? `one of the limits above stays at your ${higher} level` : `${n} of the limits above stay at your ${higher} levels`}.`;
+}

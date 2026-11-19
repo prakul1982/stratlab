@@ -29,7 +29,8 @@ test("/about is its own page with what StratLab is, where the figures come from,
   await expect(page.locator('main a[href="/themes"]')).toHaveCount(1);
   // the header's menu is the site's public pages
   const menu = page.locator("header.pub-nav");
-  for (const [href, label] of [["/", "Home"], ["/library", "Library"], ["/stocks", "Companies"], ["/themes", "Themes"], ["/blog", "Blog"], ["/about", "About"], ["/contact", "Contact"]]) {
+  // (updated on purpose, NAV3/LIVE9A-019: the same list as the landing page's header and index.html's; the logo is the way home, no "Home")
+  for (const [href, label] of [["/library", "Library"], ["/stocks", "Companies"], ["/themes", "Themes"], ["/blog", "Blog"], ["/about", "About"], ["/contact", "Contact"]]) {
     await expect(menu.locator(`a[href="${href}"]`, { hasText: label }).first()).toBeAttached();
   }
   // nothing wider than the screen

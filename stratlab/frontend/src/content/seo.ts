@@ -4,17 +4,28 @@
  * the tags right while someone moves between pages). Plain data: no React. */
 
 export const SITE = "https://stratlab.studio";
+
+/** Every browser tab's title has one pattern (owner, 18 Nov): "Page · StratLab" ("Plans · StratLab", "Reliance Industries
+ * (RELIANCE) · StratLab"), and the brand alone where a page has no name of its own (the landing page). This is the one place
+ * it is written: the app (lib/title.ts), these public pages and the build (scripts/seoPages.mjs) use it, and the server's own
+ * pages use backend/app/titles.py, which writes the same. A page's name is one part: a second part goes after a colon ("Sign
+ * in: Holdings", "Run v2: My notebook"), never after another " · ". */
+export const BRAND = "StratLab";
+export const withBrand = (name?: string | null) => (name ? `${name} · ${BRAND}` : BRAND);
 /** StratLab's Instagram: linked from every footer and named in the home page's Organization data (sameAs). */
 export const INSTAGRAM = "https://www.instagram.com/stratlab.studio/";
 
-export const TAGLINE = "Test it, research it, track it.";
+// NAV3 (CX-1): one promise, not three jobs ("Test it, research it, track it." before)
+export const TAGLINE = "Is your trading idea skill or luck?";
 
 /** The company directories (SEO-1): every company page is a few links from the home page. [address, name]; the pages are the
  * API's (backend/app/stock_pages.py: A-Z letters under /stocks/in and /stocks/us, index lists), so plain links, not routes. */
 export const BROWSE_COMPANIES: [string, string][] = [["/stocks/in", "India A–Z"], ["/stocks/us", "US A–Z"],
   ["/stocks/in/index/nifty-50", "NIFTY 50"], ["/stocks/us/index/sp-500", "S&P 500"]];
 // the words people search for, not only the tagline (DK-013: "test it, research it, track it" names no keyword)
-export const HOME_TITLE = "StratLab: backtest trading ideas, research stocks, track money";
+// the brand alone (owner, 18 Nov: every tab is "Page · StratLab", the landing page "StratLab"); the search words are in the
+// description and the page's heading (DK-013 put them in the title before)
+export const HOME_TITLE = withBrand();
 export const HOME_DESCRIPTION = "Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.";
 
 export type PageMeta = {
@@ -56,36 +67,36 @@ export const PAGES: PageMeta[] = [
       "How it works: describe an idea in plain words, see what it would have done over years of history and whether the result was luck, then trade it on paper with fake money. For Money, upload your files and see your value, gains and tax worked out.",
       "Free to start with no card; Basic and Pro raise the limits.",
       "Browse companies: every Indian and US company page, A to Z, and the NIFTY 50 and S&P 500 lists."] },
-  { path: "/pricing", title: "Plans · StratLab",
+  { path: "/pricing", title: withBrand("Plans"),
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees, with the dollar figure beside each, and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)
     heading: "Plans and prices",
     summary: PLANS_SUMMARY },
   // /plans: the prices on their own page (the landing page scrolled to them is /pricing). Indexed, with its own address as the canonical
   // one, and listed in the sitemap (DK-006: it was noindex with no canonical, a page the sitemap and the menus point to)
-  { path: "/plans", title: "Plans and prices · StratLab",
+  { path: "/plans", title: withBrand("Plans"),
     description: "Free, Basic and Pro side by side: what each plan includes and costs, with prices in rupees and about how much each is in dollars, and how to cancel.", index: true, updated: "2026-10-24",
     heading: "Plans and prices",
     summary: PLANS_SUMMARY },
-  { path: "/faq", title: "Questions · StratLab",
+  { path: "/faq", title: withBrand("Questions"),
     description: "Answers about StratLab: whether it gives tips or places real trades, how the four checks work, options, invite rewards, who can see your money data, and the app.", index: true, updated: "2026-10-08",
     heading: "Questions" },
-  { path: "/library", title: "Strategy library · StratLab",
+  { path: "/library", title: withBrand("Strategy library"),
     description: "StratLab's own trading strategies, each with the rules that were tested, the results after costs and the four checks, shown as they came out on past prices.", index: true, updated: "2026-10-24",
     heading: "StratLab's own strategies",
     summary: ["Well-known rule sets that StratLab ran through its own backtest and four checks, each shown with the verdict it earned, the ones that failed as plainly as the ones that held up.",
       "Each strategy's page has the rules that were tested, the return after costs beside buy and hold, and the result of each check. A verdict describes the past, not what comes next, and nothing here is investment advice."] },
-  { path: "/terms", title: "Terms · StratLab",
+  { path: "/terms", title: withBrand("Terms"),
     description: "The terms for using StratLab: what it is, accounts, plans and payment, fair use, what you publish, market data and AI, and liability.", index: true, updated: "2026-10-16",
     heading: "Terms of service",
     summary: ["These terms cover your use of StratLab, the website and app at stratlab.studio. StratLab is a research and education tool: you test trading ideas on past market data and paper trade them with simulated money. No real orders are ever placed, and nothing on StratLab is investment advice.",
       "The terms cover your account, plans and payment, fair use, what you publish, market data and AI, liability, ending and changes."] },
-  { path: "/privacy", title: "Privacy · StratLab",
+  { path: "/privacy", title: withBrand("Privacy"),
     description: "What StratLab collects and why, who processes it, what your browser stores before and after sign-in, and how to see, correct or delete your data.", index: true, updated: "2026-10-28",
     heading: "Privacy policy" },
-  { path: "/refunds", title: "Refunds · StratLab",
+  { path: "/refunds", title: withBrand("Refunds"),
     description: "How to cancel a StratLab plan, the 7-day refund on any payment and how to ask. You can cancel any time from Account.", index: true, updated: "2026-10-25",
     heading: "Cancellation and refunds" },
-  { path: "/contact", title: "Contact · StratLab",
+  { path: "/contact", title: withBrand("Contact"),
     description: CONTACT_LINE, index: true, updated: "2026-09-26",
     heading: "Contact us",
     summary: [CONTACT_LINE,
@@ -93,13 +104,13 @@ export const PAGES: PageMeta[] = [
   // AS1: /about is a page of its own (content/legal.ts, drawn by LegalPage like the policies and written whole into its HTML): what
   // StratLab is, who runs it, where the figures come from and how they are checked. Indexed, linked from every footer
   // (R10V-005 had kept it out of search results while it only scrolled the landing page to its three spaces)
-  { path: "/about", title: "About · StratLab", description: "What StratLab is and who runs it, where its figures come from and how they are checked, and how to reach it. Facts, not advice.", index: true, updated: "2026-11-13",
+  { path: "/about", title: withBrand("About"), description: "What StratLab is and who runs it, where its figures come from and how they are checked, and how to reach it. Facts, not advice.", index: true, updated: "2026-11-13",
     heading: "About StratLab" },
   // addresses that open the landing page at a place, or ask for sign-in: not pages of their own, so not indexed (the landing page is
   // what search engines list: /features is also kept out, by vercel.json's noindex header). Not indexed, so no canonical address either.
-  { path: "/help", title: "Help · StratLab", description: "Help with StratLab: the questions people ask first, and how to reach a person.", index: false, heading: "Help" },
-  { path: "/login", title: "Sign in · StratLab", description: "StratLab signs in with your Google account: no password to set up.", index: false, heading: "Sign in to StratLab" },
-  { path: "/signup", title: "Sign up · StratLab", description: "Create a free StratLab account with Google. No card needed.", index: false, heading: "Sign up for StratLab" },
+  { path: "/help", title: withBrand("Help"), description: "Help with StratLab: the questions people ask first, and how to reach a person.", index: false, heading: "Help" },
+  { path: "/login", title: withBrand("Sign in"), description: "StratLab signs in with your Google account: no password to set up.", index: false, heading: "Sign in to StratLab" },
+  { path: "/signup", title: withBrand("Sign up"), description: "Create a free StratLab account with Google. No card needed.", index: false, heading: "Sign up for StratLab" },
 ];
 
 /** StratLab's own library strategies, [id, name], as backend/app/library_seed.py publishes them (backend test
@@ -207,7 +218,7 @@ const cut = (text: string, max: number) => {
 export const libraryTitle = (name: string, factHeadline?: string | null, label?: string | null) => {
   const l = lead(factHeadline, label).replace(/\s+after costs$/i, "");
   const short = shortName(name);
-  const make = (a: string, n: string) => (a ? `${a}: ${n} · StratLab` : `${n} · StratLab`);
+  const make = (a: string, n: string) => withBrand(a ? `${a}: ${n}` : n);
   const abbreviated = l.replace(/\bpoints\b/, "pts");
   const bare = short.replace(/\s*\([^)]*\)/g, "").trim() || short;
   const clause = abbreviated.split(/;|,(?!\d)/)[0].trim();           // a long label ("Passed all 3 checks run, and returned…") to its first clause
@@ -291,11 +302,11 @@ export const libraryMeta = (id: string, name: string, e?: LibraryEntryWords | nu
     };
   }
   // no entry from the server at build time: the strategy's own words, in the same lengths
-  const plainTitle = (n: string) => `${n}: rules and verdict · StratLab`;
+  const plainTitle = (n: string) => withBrand(`${n}: rules and verdict`);
   const bare = shortName(name).replace(/\s*\([^)]*\)/g, "").trim();
   return {
     path: `/library/${id}`, index: true,
-    title: [name, shortName(name), bare].map(plainTitle).find((t) => t.length <= TITLE_MAX) ?? plainTitle(cut(bare, TITLE_MAX - plainTitle("").length)),
+    title: [shortName(name), bare].map(plainTitle).find((t) => t.length <= TITLE_MAX) ?? plainTitle(cut(bare, TITLE_MAX - plainTitle("").length)),
     description: sentences([`${name}: the rules StratLab tested, the return after costs beside buy and hold, and the four checks.`],
       [], ["Facts about the past, not advice.", "Facts, not advice."], DESCRIPTION_MAX),
     heading: name,

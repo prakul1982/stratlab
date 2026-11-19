@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { IST, asOf, dayIn, firstName, fmtTime, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
+import { IST, asOf, dayIn, firstName, fmtTime, inr, inrCompact, inrCompactSteady, pct, price, signedInrCompact } from "../lib/format";
 import { mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../lib/networth";
 import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
@@ -11,9 +11,10 @@ import { useLiveRefresh } from "../lib/liveRefresh";
 import { useMarketsLive } from "../lib/marketLive";
 import { MARKET_TILES, STRIP_MARKETS, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUpAll, useMarketStrip, type Up } from "../lib/mine";
 import { goldLineParts, type IndiaGold } from "../lib/gold";
-import { fmtDate, monthShort } from "../lib/format";
+import { fmtDate, fmtDateTime, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, slotSpans, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
+import { keepMovers, readKeptMovers } from "../lib/mineMovers";
 import { useAfterPaint } from "../lib/defer";
 import { researchApi, savedRegion, useWatchlist, type Quote, type Region } from "../lib/research";
 import { greetingAt, greetingZone, hourIn } from "../lib/greeting";
@@ -106,7 +107,7 @@ export function MineHome() {
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
       }} />}
       {/* one line with the next step, so the first screen holds the person's own numbers (LIVE1B-086: a 375px checklist came first); the whole list is on each space's home */}
-      <FreeChangeNotice /><PromoCountdown /><FirstSteps compact />
+      <FreeChangeNotice line /><PromoCountdown /><FirstSteps compact />
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (
@@ -187,12 +188,13 @@ function NetWorthCard() {
   return (
     <Card testId="mine-networth">
       <CardHead title="Net worth" actions={<Link className="btn quiet sm" to="/money/net-worth" aria-label="Open net worth">Open</Link>} />
-      <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
+      <Stat label="What you own minus what you owe" value={inrCompactSteady(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
         note={move ? sinceNote(move, (d) => asOf(d) ?? d, inrCompact) : restated ?? `As of ${asOf(v.as_of) ?? "today"}`} />
       {/* two snapshots joined by a line read as a trend: the chart waits for a third (DI-012); until then the card shows the number alone, not a
           boxed dashed line that reads as a broken chart (VR1-005) */}
-      {whole.length >= 3 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
+      {/* the line's colour follows the line itself, first point to last (LIVE10B-010: a rising line was red from the day's fall beside it) */}
+      {whole.length >= 3 ? <Spark values={whole.map((h) => h.net)} tone={whole[whole.length - 1].net < whole[0].net ? "down" : "up"} area height={64} label="Net worth over time" />
         : !v.history_allowed && <HistoryPlaceholder />}
     </Card>
   );
@@ -262,9 +264,12 @@ function PaperCard() {
   const names = [...new Set(running.map((r) => r.instrument?.symbol).filter(Boolean))].slice(0, 3).join(", ");
   return (
     <Card testId="mine-paper">
-      <CardHead title="Paper sessions" actions={<Link className="btn quiet sm" to="/paper" aria-label="Open paper sessions">Open</Link>} />
+      {/* the title alone on its line, as in the no-sessions card, with Open under the figure: "Paper sessions" wrapped beside Open at 1440
+          (LIVE10A-026) and, kept on one line, ran 20px into it at 1280 (CI UI checker, Release 63) */}
+      <CardHead title="Paper sessions" />
       <Stat label="Running now" value={running.length ? `${running.length} running` : "None running"}
         note={[names, ...notRunning(rows)].filter(Boolean).join(" · ") || undefined} />
+      <div><Link className="btn quiet sm" to="/paper">Open paper sessions</Link></div>
     </Card>
   );
 }
@@ -274,16 +279,20 @@ function MarketsCard({ later }: { later: boolean }) {
   // the six levels (and gold in rupees) are read again each minute while India, the US, the dollar or gold trades (LIVE-1)
   const live = useMarketsLive(STRIP_MARKETS);
   const series = useMarketStrip(later, live);
-  const [gold, setGold] = useState<IndiaGold | null>(null);
+  // undefined while India's price is read: the line waits for it rather than say the world price first and change its definition a moment
+  // later (LIVE9B-031: one account read "at the world price … before import duty", another "in India, the price Net worth uses")
+  const [gold, setGold] = useState<IndiaGold | null | undefined>(undefined);
   useEffect(() => { if (later) api<IndiaGold>("/money/gold").then(setGold).catch(() => setGold(null)); }, [later]);
   useLiveRefresh(later && live, () => { api<IndiaGold>("/money/gold").then(setGold).catch(() => undefined); });
   const { markets } = useApp();
   // when the levels were read, for the line under the tiles: the newest of the six
-  const readAt = Math.max(0, ...Object.values(series).map((s) => s?.at ?? 0));
+  const readAt = Math.max(0, ...Object.values(series).map((s) => (s && !s.stale ? s.at ?? 0 : 0)));
+  // LIVE11B-010: levels kept from an earlier visit that are no longer the latest are drawn faded, with the time they were read
+  const keptAt = Math.max(0, ...Object.values(series).map((s) => (s?.stale ? s.at ?? 0 : 0)));
   const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   // the US closing prints settle about 50 minutes after the bell (the server's SETTLE_MIN): until then a tile's last value is the last trade
   const settling = (id: string | null) => usSettling(id === "US" ? markets.find((x) => x.id === id) : null);
-  const gline = series.gold ? goldLineParts(gold, series.usdinr ? goldInr10g(series.gold.last, series.usdinr.last) : null, inr) : null;
+  const gline = series.gold && gold !== undefined ? goldLineParts(gold, series.usdinr ? goldInr10g(series.gold.last, series.usdinr.last) : null, inr) : null;
   const goldShort = gline?.short ?? null, goldMore = gline?.more ?? null;
   return (
     <Card testId="mine-markets" label="Markets">
@@ -299,12 +308,19 @@ function MarketsCard({ later }: { later: boolean }) {
               {s === undefined ? <span className="mine-mkt-hold" aria-hidden="true"><span className="mine-mkt-v"><span className="k-skel w70" /></span>
                 <span className="k-stat-d mine-hold-ghost"><Delta value={0.5}>+0.00%</Delta><span className="k-note nowrap"> on 00 Oct</span></span><span className="mine-spark-hold" /></span>
                 : s === null ? <span className="k-stat-d">Not available right now</span>
-                : (
+                : s.stale ? (
+                  <span className="mine-mkt-old" data-testid="mine-mkt-old" title={`Kept from your last visit, read ${fmtDateTime(s.at ?? 0, { tz: IST, zone: true, year: false })}`}>
+                    <span className="mine-mkt-v">{t.fmt(s.last)}</span>
+                    <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
+                      <span className="k-note nowrap"> read {fmtTime(s.at ?? 0, { tz: IST })}</span></span>
+                    <Spark values={s.values} tone={s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month, as last read`} />
+                  </span>
+                ) : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
-                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={w.includes("settling") ? "k-note" : "k-note nowrap"} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>
+                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={`mine-mkt-when ${w.includes("settling") ? "k-note" : "k-note nowrap"}`} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>
                     <Spark values={s.values} tone={s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month`} />
                   </>
                 )}
@@ -314,9 +330,11 @@ function MarketsCard({ later }: { later: boolean }) {
       </div>
       {/* gold's rupee price as one short line under the tiles (inside its tile it ran to ten lines and made every tile as tall, UI-FIX-1); the world
           price and the duty between them, and what the line colours mean, are behind the (i) (VR1-002: two paragraphs of small print on a home card) */}
-      {goldShort && <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {goldShort}</p>}
+      {goldShort ? <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {goldShort}</p>
+        : series.gold && gold === undefined && <p className="k-note k-muted k-meta-wait" aria-hidden="true">Gold: ₹0,00,000 per 10 g in India, the price Net worth uses.</p>}
       {/* when the levels were read: the time moves with them as they are read again (LIVE-1); the same words whether a market is open or not, so the card does not change height at the open */}
-      {readAt > 0 && <p className="k-note k-muted" data-testid="mine-mkt-at">Levels read at {fmtTime(readAt, { tz: IST, zone: true })}, and again each minute while a market is open.</p>}
+      {readAt > 0 ? <p className="k-note k-muted" data-testid="mine-mkt-at">Levels read at {fmtTime(readAt, { tz: IST, zone: true })}, and again each minute while a market is open.</p>
+        : keptAt > 0 && <p className="k-note k-muted" data-testid="mine-mkt-at">Faded levels are from your last visit, read {fmtDateTime(keptAt, { tz: IST, zone: true, year: false })}: the latest are on their way.</p>}
     </Card>
   );
 }
@@ -355,7 +373,9 @@ type Mover = { region: Region; symbol: string; name: string | null; q: Quote };
 
 function WatchCard() {
   const { items, failed, retry } = useWatchlist();
-  const { markets } = useApp();
+  const { markets, me } = useApp();
+  // the last rows this card showed for this account: painted at once, said as the earlier read, until today's arrive (LIVE9B-010)
+  const kept = useMemo(() => readKeptMovers<Mover>(me?.id), [me?.id]);
   const day = (m: Mover) => { const mk = markets.find((x) => x.id === m.region); return moverDay(m.region, m.q, new Date(), !!mk && mk.status !== "soon" && !marketState(mk).open); };
   const [movers, setMovers] = useState<Mover[] | null>(null);
   // the prices of the watchlist's first 24 in each market, biggest movers first: read when the list arrives and again each minute
@@ -371,29 +391,33 @@ function WatchCard() {
     if (items === null) return;
     if (!items.length) { setMovers([]); return; }
     let live = true;
-    read(items).then((m) => { if (live) setMovers(m); });
+    read(items).then((m) => { if (live) { setMovers(m); keepMovers(me?.id, m); } });
     return () => { live = false; };
   }, [items, read]);
   const on = useRef(true);
   useEffect(() => { on.current = true; return () => { on.current = false; }; }, []);
   const trading = useMarketsLive(["IN", "US"]);
-  useLiveRefresh(trading && !!items?.length && movers !== null, () => { void read(items!).then((m) => { if (on.current && m.length) setMovers(m); }); });
+  useLiveRefresh(trading && !!items?.length && movers !== null, () => { void read(items!).then((m) => { if (on.current && m.length) { setMovers(m); keepMovers(me?.id, m); } }); });
   // VR2-004: six rows each said "Mon 26 Oct" under the name: when every row is from the same earlier day it is said once, under the list
-  const days = (movers ?? []).map((m) => day(m));
+  const earlier = movers === null && !failed && kept && items !== null && items.length > 0 ? kept : null;
+  const rows = movers ?? earlier?.rows ?? null;
+  const days = (rows ?? []).map((m) => day(m));
   const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
   return (
     <Card testId="mine-watch">
       <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
-        : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
-        : !movers.length ? (
+        // the placeholder as tall as the rows it waits for (up to six), so their arrival doesn't move the page (LIVE9B-010)
+        : rows === null ? <Skeleton label="Reading your watchlist prices" lines={Math.max(3, Math.min(6, items?.length ?? 3))} />
+        : !rows.length ? (
           items && items.length
             ? <EmptyState title="No prices yet" action={{ label: "Open the watchlist", to: "/research/watchlist" }}>Today's prices for your watchlist are not available right now.</EmptyState>
             : <EmptyState title="Your watchlist is empty" action={{ label: "Find a company", to: "/research" }}>Press Watch on any company to follow it here, with the biggest movers first.</EmptyState>
         ) : (
           <>
-          <ul className="mine-movers">
-            {movers.map((m) => (
+          {earlier && <p className="k-note k-muted" role="status" data-testid="mine-movers-earlier">As read {asOf(earlier.at, { year: false })}; today's prices are on their way.</p>}
+          <ul className={`mine-movers${earlier ? " k-muted" : ""}`}>
+            {rows.map((m) => (
               <li key={`${m.region}-${m.symbol}`}>
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
                 <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>

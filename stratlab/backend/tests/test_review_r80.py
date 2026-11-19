@@ -184,6 +184,8 @@ def test_rotation_after_close_brings_kept_copies_to_the_close(monkeypatch):
             return True
     monkeypatch.setattr(main.markets, "provider", lambda r: Prov())
     monkeypatch.setattr(main.stock_pages, "last_close", lambda r, now=None: (_date(2026, 10, 22), None))
+    # (updated on purpose, fix13 LIVE11A-007: the sector chart's session is its own day, a quarter hour after the close)
+    monkeypatch.setattr(main.stock_pages, "last_session", lambda r, now=None, after=0: (_date(2026, 10, 22), None))
 
     def run(markets, region, set_, members, interval, tail):
         ran.append((region, interval))

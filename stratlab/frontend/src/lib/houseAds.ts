@@ -8,7 +8,9 @@ export interface HouseCard { id: "plans" | "luck" | "brief"; title: string; text
 /** The cards that hold a Free account's slot while ads are off: StratLab's own pages, in plain facts. */
 export const HOUSE: HouseCard[] = [
   { id: "plans", title: "Basic has more AI builds and deep dives",
-    text: `Free includes ${LIMITS.free.ai_builds_per_month} AI strategy builds and ${LIMITS.free.deepdives_per_month} company deep dives a month. Basic includes ${LIMITS.basic.ai_builds_per_month} and ${LIMITS.basic.deepdives_per_month}, and has no ads.`,
+    // Basic's own numbers only: a Free account still in its grace has more than Free's new ones until its date, and "1 company deep
+    // dives" read wrong (LIVE9B-026); the account's own counts are on Account → Plan and usage
+    text: `Basic includes ${LIMITS.basic.ai_builds_per_month} AI strategy builds and ${LIMITS.basic.deepdives_per_month} company deep dive${LIMITS.basic.deepdives_per_month === 1 ? "" : "s"} a month, and has no ads. Your own counts are in Account → Plan and usage.`,
     to: "/plans", cta: "See the plans" },
   { id: "luck", title: "Test your idea with the four luck checks",
     text: "Describe a rule in plain words. StratLab runs it on years of real prices and asks whether it held up on prices it never saw.",

@@ -38,11 +38,15 @@ function textOf(node: ReactNode): string {
  * bad news (item 39, owner 30 Oct: the grey ▲/▼ pills on Market today's FII/DII and volatility tables beside green and red ones read as
  * broken, so there is no grey "neutral" pill any more). Screen readers hear "up" or "down". `value` decides the direction, except that a change whose printed
  * figure rounds to nothing ("0.00%") is flat: no arrow, and screen readers hear "Unchanged", not "Up 0.00%" (R11P-010). */
-export function Delta({ value, children }: { value: number | null | undefined; children: ReactNode }) {
+export function Delta({ value, children, badRise = false }: { value: number | null | undefined; children: ReactNode;
+  /** a count whose rise is no good news (stocks that fell, 52-week lows, down 4% or more): coloured by meaning, a rise red and a fall green,
+   *  the arrow still the figure's direction (LIVE10A-024; never the grey pill, which item 39 retired) */
+  badRise?: boolean }) {
   if (value == null || !Number.isFinite(value)) return null;
   const dir = changeDir(value, textOf(children));
+  const tone = badRise && dir !== "flat" ? (dir === "up" ? "down" : "up") : dir;
   return (
-    <span className={`k-delta ${dir}`}>
+    <span className={`k-delta ${tone}`}>
       {dir !== "flat" && <span aria-hidden="true">{dir === "up" ? "▲" : "▼"}</span>}
       {/* a figure that carries its own sign ("+0.63%") says the direction already: no "Up" before it as well (LIVE3-016) */}
       {!(dir !== "flat" && /^\s*[+\u2212-]/.test(textOf(children))) && <span className="sr-only">{dir === "up" ? "Up " : dir === "down" ? "Down " : "Unchanged "}</span>}

@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
+import { publicGet } from "./http";
 import { clearLocalData } from "./localData";
-import { signOutHere } from "./signout";
+import { signOutHere, signingOutOnPurpose } from "./signout";
 import { clearSignInEnded, noteSignInEnded, noteSignInUnfinished } from "./signin";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
@@ -19,6 +20,9 @@ import { toastMs } from "./toastTime";
 
 const ME_RETRY_MS = 1500;
 const SESSION_RETRY_MS = [2000, 5000];
+/** The longest the signed-in page waits for the public data-status answer before drawing without it (LIVE11B-004). */
+export const DATA_STATUS_WAIT_MS = 1500;
+export type DataNote = { closed: "weekend" | "holiday" | null; back_at: string | null } | null;
 
 /** No session, but one is saved in this browser: the sign-in service didn't answer while it was renewed (R20-002). The
  * person is still signed in; the page says it couldn't load instead of offering sign-in. */
@@ -37,6 +41,11 @@ interface AppState {
   notebooksFailed: boolean;
   markets: Market[];
   dataOffline: boolean;
+  /** the offline note (India closed today anyway, when data comes back): /me's, or the public data-status answer's before /me is in */
+  dataNote: DataNote;
+  /** whether the data status is known (or stopped being waited for): the page's first frame then carries the offline line, so it
+   * doesn't arrive a second later and push the page down (LIVE11B-004: /new moved 0.294 when the line came with /me) */
+  dataKnown: boolean;
   toast: Toast;
   notify: (msg: string, action?: { label: string; run: () => void }) => void;
   fail: (e: unknown) => void;
@@ -47,12 +56,13 @@ interface AppState {
   /** Indian futures and options (Pro) */
   fno: boolean;
   level: Level | null;
-  setLevel: (l: Level) => Promise<void>;
+  setLevel: (l: Level) => Promise<boolean>;
   /** What the user came for. Orders the menu, the home page and the examples; never hides anything. */
   focus: Focus | null;
-  setFocus: (f: Focus) => Promise<void>;
+  setFocus: (f: Focus) => Promise<boolean>;
   /** Several preferences in one save, like the welcome question's answers. */
-  savePrefs: (p: Prefs, quiet?: boolean) => Promise<void>;
+  /** whether the server kept it (LIVE10A-023: Settings says "Saved" or that it couldn't save) */
+  savePrefs: (p: Prefs, quiet?: boolean) => Promise<boolean>;
   /** The menu showing: one space (Trade, Invest, Money) or all of them. */
   space: SpaceView;
   /** Show another space's menu. `save` keeps it as the account's choice too (the switcher); a deep link into another
@@ -91,6 +101,9 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const [notebooksFailed, setNotebooksFailed] = useState(false);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [dataOffline, setDataOffline] = useState(false);
+  const [dataNote, setDataNote] = useState<DataNote>(null);
+  const [dataKnown, setDataKnown] = useState(false);
+  const meIn = useRef(false);
   const [toast, setToast] = useState<Toast>(null);
   const timer = useRef<number>(undefined);
   // preference saves: each waits for the one before (prefsQueue); every change made here, as sent (prefsLog), and how many of
@@ -147,7 +160,10 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
       if (newer.length) m = { ...m, prefs: Object.assign({ level: null }, m.prefs, ...newer) };
       setMe(m);
       setMeError(null);
+      meIn.current = true;
       setDataOffline(!m.data_online);
+      setDataNote(m.data_note ?? null);
+      setDataKnown(true);
     } catch (e) {
       setMeError((e as Error).message);
     }
@@ -161,6 +177,19 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     try { const got = await api<NotebookItem[]>("/notebooks"); if (n === nbSeq.current) { setNotebooks(got); setNotebooksFailed(false); } }
     catch (e) { if (n !== nbSeq.current) return; setNotebooks((x) => x ?? []); setNotebooksFailed(true); fail(e); }
   }, [fail]);
+
+  // LIVE11B-004: the data status from the public answer entry.tsx asked for as the page started (beside the sign-in check), so the
+  // offline line is in the page's first frame; /me's own answer, when it comes, is the one kept
+  useEffect(() => {
+    let live = true;
+    const cap = window.setTimeout(() => setDataKnown(true), DATA_STATUS_WAIT_MS);
+    publicGet<{ data_online: boolean; data_note?: DataNote }>("/public/data-online").then((st) => {
+      if (!live || meIn.current) return;
+      setDataOffline(!st.data_online);
+      setDataNote(st.data_note ?? null);
+    }).catch(() => undefined).finally(() => { window.clearTimeout(cap); if (live) setDataKnown(true); });
+    return () => { live = false; window.clearTimeout(cap); };
+  }, []);
 
   useEffect(() => {
     setApiHandlers({
@@ -193,6 +222,9 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     } else check(0);
     const { data } = supabase.auth.onAuthStateChange((e, s) => {
       if (e === "SIGNED_OUT") { writeViewAs(null); clearLocalData(); }          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
+      // signed out without anyone here asking (the saved sign-in left this browser mid-visit): the page says "You were signed out",
+      // never the first-visit "Sign in to see …" (rel1)
+      if (e === "SIGNED_OUT" && !signingOutOnPurpose()) noteSignInEnded();
       setSession(s);
       if (s) { setReady(true); clearSignInEnded(); }        // signed in again: a later sign-out is the person's own
     });
@@ -239,19 +271,17 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     applyThemeColor(t);
   }, []);
 
-  /** Save some of the preferences in one request (two at once could each overwrite the other's change). The saves go to the
-   * account one after another, in the order they were made: two sent together (Markets moved up twice on My space) could be
-   * applied the other way round, and the account kept the first change instead of the last (DI-006). */
-  const savePrefs = useCallback((p: Prefs, quiet = false) => {
+  /** Save some of the preferences in one request (two at once could each overwrite the other's change). The requests go one at a
+   * time, in the order they were made: two quick changes (My space's card moved up twice) sent at once could land the other way
+   * round, and the account kept the older layout while this screen showed the newer one. */
+  const savePrefs = useCallback(async (p: Prefs, quiet = false) => {
     if (p.space) { setSpaceHere(p.space); saveView(p.space); }
     setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...p, space: p.space ? viewToServer(p.space) : m.prefs?.space } } : m));
     const body = p.space ? { ...p, space: viewToServer(p.space) } : p;
     prefsLog.current.push(body as NonNullable<Me["prefs"]>);
-    const run = prefsQueue.current.then(() => api("/me/prefs", { method: "PUT", body }))
-      .then(() => undefined, (e) => { if (!quiet) fail(e); })
-      .finally(() => { prefsDone.current += 1; });
-    prefsQueue.current = run;
-    return run;
+    const sent = prefsQueue.current.then(() => api("/me/prefs", { method: "PUT", body }));
+    prefsQueue.current = sent.catch(() => undefined).finally(() => { prefsDone.current += 1; });
+    try { await sent; return true; } catch (e) { if (!quiet) fail(e); return false; }
   }, [fail]);
   const setLevel = useCallback((l: Level) => savePrefs({ level: l }), [savePrefs]);
   const setFocus = useCallback((f: Focus) => savePrefs({ focus: f }), [savePrefs]);
@@ -264,11 +294,11 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const space: SpaceView = spaceHere ?? viewFromSaved(me?.prefs?.space) ?? viewForFocus(me?.prefs?.focus) ?? "trade";
 
   const value = useMemo<AppState>(() => ({
-    session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
+    session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, dataNote, dataKnown, toast, notify, fail, refreshMe, refreshNotebooks,
     allIndicators: !!me?.plan_info.indicators, fno: !!me?.plan_info.fno, level: me?.prefs?.level ?? null, setLevel,
     focus: me?.prefs?.focus ?? null, setFocus, savePrefs, space, setSpace, theme, setTheme,
     viewAs: me?.is_admin ? me.view_as ?? null : null, setViewAs,
-  }), [session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme, setViewAs]);
+  }), [session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, dataNote, dataKnown, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme, setViewAs]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

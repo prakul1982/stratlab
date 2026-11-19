@@ -194,6 +194,12 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
            # a foreign company's page (a 20-F filer, depositary shares): a US company's peers aren't foreign filers (R10V-007)
            "foreign": bool(f["foreign"]) if region == "US" and f.get("foreign") is not None else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
+    # LIVE10A-007: the newest full year's revenue as the page files it, for the public theme pages' Revenue column (29 of 49 pages had it
+    # empty: their theme's stored dive is kept only under the current rules, so a page waited for someone to open the theme in the app)
+    unit = str(f.get("unit") or ("$ million" if region == "US" else "₹ crore"))
+    yrs = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM" and (_num(y.get("sales")) or 0) > 0]
+    if yrs and not old and unit in ("₹ crore", "$ million"):
+        out["sales"], out["sales_year"], out["sales_unit"] = _num(yrs[-1]["sales"]), str(yrs[-1].get("year") or "")[:20] or None, unit
     q = f.get("q") if isinstance(f.get("q"), dict) else None       # the latest quarter against its year-ago quarter, for the results calendar
     if q:
         out["q_sales"], out["q_profit"], out["q_of"] = _num(q.get("sales")), _num(q.get("profit")), str(q.get("of") or "")[:40] or None
@@ -295,12 +301,13 @@ def build_index(region: str, store: bool = True) -> dict:
     rows, ages, empty, old = [], {}, set(), {}
     bought = deals.buys()["buys"] if region == "IN" else {}
     marks = stock_pages.due_marks(region)          # pages behind a results filing a theme saw (stock_pages.mark_due)
-    shown = []
+    shown, versions = [], []
     for key, raw in db.all_settings_with_prefix(prefix):
         stored = db.json_value(raw, {})
         sym = key[len(prefix):]
         ages[sym] = stored.get("ts") or 0
         facts = stored.get("facts") or {}
+        versions.append({"v": facts.get("v"), "not_company": facts.get("not_company"), "no_numbers": facts.get("no_numbers")} if facts else None)
         # built again first when a large company's (see Indexer._due): nothing stored, or a page from before the facts
         # it shows now (every class of shares counted, one P/E: R7V-001, R7V-002; India's yield from its own dividends
         # list: R8O-001)
@@ -308,6 +315,11 @@ def build_index(region: str, store: bool = True) -> dict:
         # kept a table to the report before the last one, as long as nobody opened the page)
         # (a page still behind after a build that came after its report was out waits a week, R12-006: see behind_due)
         due = stock_pages.behind_due(facts, ages[sym], started) or stock_pages.filing_due(marks.get(sym), ages[sym], started)
+        # r581: a bank's or insurer's page with its net profit above its revenue (built before the sector schema) is built again first,
+        # at most once in a FRESH period (a source that still gives the same line is not asked again and again)
+        due = due or (stock_pages.financial_mismatch(facts) and started - (ages[sym] or 0) >= stock_pages.FRESH)
+        # r60b: a US financial filer's page built before its revenue's lines were kept is built again (once: the build keeps the key)
+        due = due or (stock_pages.basis_missing(facts) and started - (ages[sym] or 0) >= stock_pages.FRESH)
         if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION or due:
             empty.add(sym)
             if stock_pages.has_content(facts):
@@ -343,6 +355,11 @@ def build_index(region: str, store: bool = True) -> dict:
             db.set_setting(stock_pages.BUILT_KEY + region, json.dumps({"at": index["at"], "pages": sorted(ages), "shown": sorted(shown)}))
         except Exception as e:
             print("screens: could not save the built pages list", region, str(e)[:120])
+        # how far the pages are rebuilt to the facts a page shows now, for Admin (stock_pages.rebuild_progress)
+        try:
+            db.set_setting(stock_pages.REBUILD_KEY + region, json.dumps({"at": index["at"], "pages": len(ages), **stock_pages.rebuild_counts(versions)}))
+        except Exception as e:
+            print("screens: could not save the rebuild count", region, str(e)[:120])
     index["_ages"], index["_empty"], index["_old"] = ages, empty, old
     return index
 
@@ -742,8 +759,13 @@ def save(uid: str, req: dict, limit: int, sid: str | None = None) -> dict | None
                 old["matched"] = _symbols(s["region"], s["filters"])
             _write(uid, row_)
             return old
+        # LIVE10B-019: the same name, market and conditions again is refused in words, not saved as a twin chip beside the first
+        same = next((x for x in row_["items"] if str(x.get("name") or "").strip().lower() == str(s.get("name") or "").strip().lower()
+                     and x.get("region") == s["region"] and x.get("filters") == s["filters"]), None)
         if len(row_["items"]) >= limit:
             raise LimitReached(limit)
+        if same:
+            raise ScreenError(f"“{same['name']}” is already saved with these conditions.")
         s.update(id=secrets.token_hex(6), created_at=_now(), updated_at=None, matched=_symbols(s["region"], s["filters"]),
                  last_sent_at=None)
         row_["items"].append(s)
@@ -931,16 +953,60 @@ def _recent(t: str, now: datetime) -> bool:
 
 
 # ---------- the background job ----------
+NIGHT_UTC = (18.5, 1.0)        # India's night, 00:00-06:30 IST
+FAST_RATION = 6                # company pages built a minute in India's night and at the weekend: six times the configured ration (6: config)
+
+
+def fast_window(now: datetime | None = None) -> str | None:
+    """"weekend" (Saturday and Sunday in India: both markets closed), "night" (India's night) or None: the hours when few people
+    open pages, so more of them are built a minute (the pages' ration, main) and the screens' indexer builds more a run."""
+    now = now or datetime.now(timezone.utc)
+    if (now + timedelta(hours=5, minutes=30)).weekday() >= 5:
+        return "weekend"
+    h = now.hour + now.minute / 60
+    start, end = NIGHT_UTC
+    return "night" if ((h >= start or h < end) if start > end else (start <= h < end)) else None
+
+
 class Indexer:
     """Every half hour: top up a few stored company pages (through the pages' own ration), then gather every stored
     page into each market's index. `warm(region, symbol, company)` builds one page; it may raise when a source is
     busy, which only means trying again next time."""
 
-    def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 20, gap: float = 12.0):
+    # India's night (00:00-06:30 IST): few people open pages, so a run builds three times as many (the owner, 14 Nov: 13,700 pages
+    # rebuilt to new facts at 20 a market a run took about six days); Saturday and Sunday in India (both markets closed): all day, six
+    # times as many with a shorter gap. Past the pages' per-minute ration a page is served as stored, not rebuilt, so the gap keeps the
+    # indexer under the ration of these hours (FAST_RATION times the configured one) with room left for people opening pages
+    NIGHT_UTC = NIGHT_UTC
+    WEEKEND_GAP = 7.0                    # kept for callers; the fast pace below uses FAST_GAP
+    FAST_GAP = 2.0                       # night and weekend: 30 builds a minute at most, under the ration of those hours (36)
+    BUSY_STOP = 3                        # busy answers in a row before a market rests till the next run
+    MIN_REST = 60.0                      # seconds between runs at least
+
+    def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 20, gap: float = 12.0, night_per_run: int | None = None):
         self.warm, self.every, self.warm_per_run, self.gap = warm, every, warm_per_run, gap
+        self.night_per_run = night_per_run
         self.status = {"last_run": None, "rows": {}, "warmed": 0, "last_error": None}
 
-    def _due(self, region: str, ages: dict, empty: set | None = None, old: dict | None = None) -> list[tuple[str, dict]]:
+    def pace(self, now: datetime | None = None) -> tuple[int, float]:
+        """(pages built a run, seconds between them): more in India's night and all weekend, never more than fit in the half hour
+        with the gap between them (both markets)."""
+        if not self.night_per_run:
+            return self.warm_per_run, self.gap
+        window = fast_window(now)
+        if window not in ("night", "weekend"):
+            return self.warm_per_run, self.gap
+        # India's night and the weekend at one pace (owner, 15 Nov: finish the rebuild by tonight): as many pages as fit in the half
+        # hour with the short gap, both markets taken in turn
+        gap = min(self.gap, self.FAST_GAP)
+        fit = int(self.every * 0.8 / max(gap, 1.0) / max(len(REGIONS), 1))
+        want = self.night_per_run * 4
+        return max(self.warm_per_run, min(want, fit)), gap
+
+    def per_run(self, now: datetime | None = None) -> int:
+        return self.pace(now)[0]
+
+    def _due(self, region: str, ages: dict, empty: set | None = None, old: dict | None = None, n: int | None = None) -> list[tuple[str, dict]]:
         """Companies to build next: those with no stored page in the sector lists and the S&P 500, then the sector
         lists' and the S&P 500's own companies whose stored page had nothing (a source down when it was built: a large
         company missing from every list by size until someone opened it, R7V-001) or was built before the facts a page
@@ -963,26 +1029,48 @@ class Indexer:
         first |= set(behind)
         rest = [s for s in missing if s not in seeds and s not in big]
         stale = sorted((s for s, t in ages.items() if s in cos and s not in first and now - t > stock_pages.FRESH), key=lambda s: ages[s])
-        return [(s, cos[s]) for s in (known + hollow + behind + rest + stale)[:self.warm_per_run]]
+        return [(s, cos[s]) for s in (known + hollow + behind + rest + stale)[:n if n is not None else self.per_run()]]
 
     def run_once(self, sleep=time.sleep) -> dict:
         warmed = 0
+        due, failed = {}, set()
         for region in REGIONS:
             try:
                 with memguard.heavy("screens-index"):         # every stored page of the market gathered: one heavy job at a time (MEM-001)
                     index = build_index(region, store=False)
                 index = {k: v for k, v in index.items() if k != "rows"}      # only the pages' ages are needed through the warming pauses
-                if self.warm:
-                    for i, (sym, co) in enumerate(self._due(region, index["_ages"], index.get("_empty"), index.get("_old"))):
-                        if i:
-                            sleep(self.gap)              # leave room in the ration for people opening pages
-                        try:
-                            with memguard.heavy("screens-index"):     # a page is built in its turn, not through the pause between pages
-                                self.warm(region, sym, co)
-                            warmed += 1
-                        except Exception as e:           # busy or down: next run
-                            self.status["last_error"] = f"{region} {sym}: {str(e)[:120] or e.__class__.__name__}"
-                            break
+                due[region] = list(self._due(region, index["_ages"], index.get("_empty"), index.get("_old"))) if self.warm else []
+            except Exception as e:
+                failed.add(region)
+                self.status["last_error"] = f"{region}: {str(e)[:160]}"
+                print("screens index failed:", region, str(e)[:160])
+        # both markets' pages taken in turn, one at a time (owner, 15 Nov: "speed it up, finish by tonight"): each market's source
+        # sees half the pace, and a busy source skips that page instead of ending the market's run (a run used to stop at the first
+        # busy answer, so the pages behind it waited the half hour); past BUSY_STOP busy answers in a row the market rests till next run
+        gap = self.pace()[1]              # _due takes the paced number itself
+        queues = {r: list(q) for r, q in due.items()}
+        busy = {r: 0 for r in queues}
+        turn = 0
+        while any(queues.values()):
+            for region in [r for r in REGIONS if queues.get(r)]:
+                sym, co = queues[region].pop(0)
+                if turn:
+                    sleep(gap)                  # leave room in the ration for people opening pages
+                turn += 1
+                try:
+                    with memguard.heavy("screens-index"):     # a page is built in its turn, not through the pause between pages
+                        self.warm(region, sym, co)
+                    warmed += 1
+                    busy[region] = 0
+                except Exception as e:           # busy or down: this page next run
+                    self.status["last_error"] = f"{region} {sym}: {str(e)[:120] or e.__class__.__name__}"
+                    busy[region] += 1
+                    if busy[region] >= self.BUSY_STOP:
+                        queues[region] = []
+        for region in REGIONS:
+            if region in failed:
+                continue
+            try:
                 with memguard.heavy("screens-index", force_release=True):
                     index = build_index(region)
                 self.status["rows"][region] = len(index["rows"])
@@ -992,12 +1080,19 @@ class Indexer:
         self.status.update(last_run=_now(), warmed=warmed)
         return self.status
 
-    def loop(self):
-        time.sleep(300)                          # after startup traffic and the company lists
-        while True:
+    def loop(self, clock=None, sleep=None, runs: int | None = None):
+        # looked up at each call, not bound at definition: tests (and the leader check) replace this module's time
+        clock, sleep = clock or time.time, sleep or time.sleep
+        sleep(300)                               # after startup traffic and the company lists
+        while runs is None or runs > 0:
+            start = clock()
             if leader.leading():      # another container leads: it runs this pass
                 self.run_once()
-            time.sleep(self.every)
+            # every half hour from the START of a run: a long run (hundreds of pages at night) is followed by a short rest, not a
+            # full half hour on top of it (the rebuild ran about half the time, 15 Nov)
+            sleep(max(self.MIN_REST, self.every - (clock() - start)))
+            if runs is not None:
+                runs -= 1
 
 
 class Job(news_job.Job):

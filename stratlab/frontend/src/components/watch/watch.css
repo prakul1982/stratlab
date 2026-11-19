@@ -215,3 +215,6 @@ button.mw-col:hover, button.mw-col[aria-pressed="true"] { color: var(--ink); }
     .mw-c-abs { display: none; }
   }
 }
+
+/* LIVE10A-031: a price still this device's earlier read is faded until its fresh one comes */
+.mw-row.old .mw-num { opacity: .5; transition: opacity .2s; }

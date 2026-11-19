@@ -22,7 +22,7 @@ import { downloadCsv } from "../../lib/csvDownload";
 import { csvName } from "../../lib/csv";
 import { istToday } from "../../lib/format";
 import { useApp } from "../../lib/app";
-import { lastTradingDay } from "../../lib/marketDay";
+import { lastTradingDay, readInSession } from "../../lib/marketDay";
 import { marketState } from "../../lib/marketHours";
 import { signCls, currencySymbol } from "../../lib/format";
 import { getSparks, live } from "../../lib/watchApi";
@@ -65,12 +65,20 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   // ---------- prices: the rows in view, and the chart open ----------
   const [visible, setVisible] = useState<string[]>([]);
   // the prices last seen on this device at once, each with its own time, until the reads replace them (LIVE6-013)
-  const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>(() => keptQuotes(me?.id ?? "guest"));
+  // (each from its market's last session or later: never an older session's price under the newer one's date, LIVE8A-007)
+  const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>(() => keptQuotes(me?.id ?? "guest", Date.now(), undefined, (k) => {
+    const m = markets.find((x) => x.id === k.split(":")[0]);
+    return m ? lastTradingDay(m) : null;
+  }, (k, at) => { const m = markets.find((x) => x.id === k.split(":")[0]); return !!m && readInSession(m, at); },
+  (k) => { const m = markets.find((x) => x.id === k.split(":")[0]); return !!m && marketState(m).open; }));
   useEffect(() => {
     const t = window.setTimeout(() => keepQuotes(me?.id ?? "guest", quotes), 1000);
     return () => window.clearTimeout(t);
   }, [quotes]);       // eslint-disable-line react-hooks/exhaustive-deps
   const [ticks, setTicks] = useState<Record<string, number>>({});
+  // the rows whose price has been read since the panel opened: one still showing this device's earlier read is drawn faded until
+  // its fresh price comes (LIVE10A-031: a 25-minute-old read looked like the market's price for 1.6 s)
+  const [readNow, setReadNow] = useState<Set<string>>(() => new Set());
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
   const [tickAt, setTickAt] = useState<number | null>(null);          // when the last live tick came in: the foot's "as of" (LIVE4-009)
   const pending = useRef<Record<string, number>>({});
@@ -79,7 +87,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const chartKey = layout.chart;
   useEffect(() => {
     const s = live().subscribe({
-      quote: (k, q) => setQuotes((o) => (o[k] === q ? o : { ...o, [k]: q })),
+      quote: (k, q) => { setQuotes((o) => (o[k] === q ? o : { ...o, [k]: q })); setReadNow((o) => (o.has(k) ? o : new Set(o).add(k))); },
       tick: (k, t) => {                                                // ticks are folded into one update a quarter second
         pending.current[k] = t.p;
         if (!timer.current) timer.current = window.setTimeout(() => { timer.current = 0; const got = pending.current; pending.current = {}; setTicks((o) => ({ ...o, ...got })); setTickAt(Date.now()); }, 250);
@@ -134,7 +142,8 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const lastDay = allShut ? newestDay([...new Set(list!.items.map((it) => it.market))].map((id) => { const m = markets.find((x) => x.id === id); return m ? lastTradingDay(m) : null; })) : null;
   const asOf = asOfLine([...Object.values(quotes).map((q) => q?.at), allShut ? null : tickAt], allShut ? tzOf : undefined, allShut, lastDay);
   // "Closed" is said on a row only while another market on the list is trading: with all of them shut the foot says it once
-  const noteOf = (it: WatchItem): "Delayed" | "Closed" | null => (quotes[it.id]?.delayed ? "Delayed" : open[it.market] === false && !allShut ? "Closed" : null);
+  // a shut market's price is its last price, never "Delayed" (LIVE10A-014: a US row said "Delayed $12.31", the last close, while NYSE was shut)
+  const noteOf = (it: WatchItem): "Delayed" | "Closed" | null => (open[it.market] === false ? (allShut ? null : "Closed") : quotes[it.id]?.delayed ? "Delayed" : null);
   const notes = new Set(list?.items.map(noteOf));
   const changeAbsFor = (it: WatchItem) => changeAbsOf(quotes[it.id] ?? undefined, ticks[it.id]);
 
@@ -391,7 +400,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
                 </div>
                 <ul className="mw-rows" aria-label={named}>
                   {shown.map((it) => (
-                    <WatchRow key={it.id} ref={setRow(it.id)} item={it} quote={quotes[it.id]} price={priceOf(it)} change={changeFor(it)} changeAbs={changeAbsFor(it)} spark={sparks[it.id]} note={noteOf(it)}
+                    <WatchRow key={it.id} ref={setRow(it.id)} item={it} quote={quotes[it.id]} price={priceOf(it)} change={changeFor(it)} changeAbs={changeAbsFor(it)} spark={sparks[it.id]} note={noteOf(it)} old={!readNow.has(it.id) && ticks[it.id] == null && quotes[it.id] != null && open[it.market] !== false}
                       canMove={canMove} dragging={drag?.id === it.id} fresh={fresh === it.id} lists={w.lists ?? []} listId={listId}
                       onOpen={() => { patch({ chart: it.id }); }} onRemove={() => void w.remove(listId, it.id)} onMoveTo={(to) => void w.moveTo(listId, to, it)}
                       onGrip={startDrag(it.id)} onNudge={(by) => nudge(it, by)} />

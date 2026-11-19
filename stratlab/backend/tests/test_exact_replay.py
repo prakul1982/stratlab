@@ -152,7 +152,19 @@ _C1_GROUP = ("of the official industry {}, {}; with the others of that industry 
              "none of that industry with words of that way of earning elsewhere (c1, R44, theme_base.from_other 3)")
 _FROM_MAKERS = "moved by the split from \"Other\" into \"Makers of their own products\", a group named only by how its companies earn"
 _FROM_OTHER = "in \"Other\" with no words of its own"
+_CL48_MAP = ("the map (or its answer) placed it in {}; read as a retailer, the split moved it into \"Off-price and dollar stores\", the "
+             "largest layer of the retailers, which holds none of its industry and whose name (\"off-price\", \"dollar\") its words ({}) "
+             "don't say; they don't say its map layer's name either, nor two words of any retailers' layer: \"Other\" (cl48, R47, "
+             "by_model.home_of)")
+_CL48_OFF = ("in \"Other\" with its way of earning shown (retail): \"branched off\" no longer says \"off-price\" (a compound of a short "
+             "word is one word, as name_says reads it), so neither \"Off-price and dollar stores\" (its words say neither its name nor its "
+             "description) nor from_other 2 takes it there by chance; its words (\"plus-size clothing\", \"store\") say most of \"Family "
+             "clothing stores\", the one layer of its way of earning that they do (cl48, R47, theme_base.from_other 2)")
+_GL50_FIT = ("placed by its words alone in {}, whose name its own words don't say (more than half of a part of it) nor share a word of "
+             "its kind with the layer's description, its official industry ({}) not the layer's: no layer's name its first sentence says, "
+             "no layer naming its industry: \"Other\" (gl50, R50, theme_base.definition_fit)")
 APPROVED: dict = {
+    "realty:SIL": ("Other", _GL50_FIT.format("\"Rent-yielding commercial property trusts\"", "Real Estate related services")),
     **{f"it:{s_}": ("Software products and SaaS platforms", _C1_IND.format("Software Products")) for s_ in ("ACESOFT", "SOTEFIN")},
     "defence:LAXMIPATI": ("Naval shipbuilding", _C1_IND.format("Ship Building & Allied Services")),
     "metals:SIZEMASTER": ("Zinc, lead and silver mining and smelting", _C1_IND.format("Zinc")),
@@ -161,7 +173,10 @@ APPROVED: dict = {
     "retail:ZUMZ": ("Family clothing stores", _C1_WORDS.format("\"a specialty clothing store\"")),
     "retail:TLYS": ("Family clothing stores", _C1_WORDS.format("\"a specialty retailer of casual apparel\"")),
     "retail:DLTH": ("Family clothing stores", _C1_WORDS.format("\"workwear, casual wear, outdoor apparel\"")),
-    # Utilities: the cable makers and the electrical equipment makers, apart from each other by their official industry
+    # Utilities: the cable makers and the electrical equipment makers, apart from each other by their official industry. cv47 (R46): these
+    # 52 are also exactly the moves against the live Release 46 placement (inputs_r46/utilities.json, with each company's stored facts), where
+    # the titles of its filings had been read as a company's own words ("From its own filings" said "Makers of their own products"):
+    # test_cv47_coverage holds each of them to its entry here; no other company of the 14 themes' live Release 46 inputs moves
     **{f"utilities:{s_}": ("Electrical cables", _C1_GROUP.format("Cables - Electricals", _FROM_MAKERS)) for s_ in (
         "CMICABLES", "CORDSCABLE", "DYCL", "FINCABLES", "KEI", "KSHINTL", "LASERPOWER", "LUMINO", "PARACABLES", "POLYCAB", "QUADFUTURE",
         "UNIVCABLES")},
@@ -189,6 +204,12 @@ APPROVED: dict = {
         "HINDALUMI", "MMP")},
     **{f"metals:{s_}": ("Aluminium", _C1_GROUP.format("Aluminium", _FROM_OTHER)) for s_ in (
         "BMAL", "JIVIAL", "KANISHK", "MAITRI", "MSAFE", "PALCO", "PGFOILQ", "SACHEMT", "SUDAI")},
+    # cl48 (R47, the outside review of the live Release 46 Consumer retail deck: a designer of branded athletic apparel in "Off-price, dollar
+    # and discount store chains"): a company's layer rests on its own words or official industry, never on the largest layer by default or
+    # on a word shared by chance (test_cl48_class holds the same rule on the live Release 46 inputs)
+    "retail:LULU": ("Other", _CL48_MAP.format("\"Brand owners selling direct and wholesale\"", "athletic apparel and footwear")),
+    "retail:REAL": ("Other", _CL48_MAP.format("\"Online marketplaces\"", "luxury consignment and resale")),
+    "retail:CURV": ("Family clothing stores", _CL48_OFF),
 }
 # R40: "theme:symbol" -> why it is no longer in the theme (theme_base.without_off_industry): a company the theme's official industry brought
 # in whose own words describe another business is dropped, never placed in "Other", and named on the theme's coverage (placements.off_industry)
@@ -205,7 +226,10 @@ DROPPED = {**{f"retail:{s_}": _PAWN.format(what) for s_, what in (
            # c1 (R44, the outside review of the live Release 43 Consumer retail deck: 29 of 90 in "Other"; theme_check.OFF_INDUSTRY)
            **{f"retail:{s_}": _PAWN.format(what).replace("R43", "c1, R44") for s_, what in (
                ("VIPZ", "an online mobile sportsbook"), ("MDEX", "a live broadcast network"), ("ESSI", "enterprise software"),
-               ("AMZE", "a virtual reality concert production company"), ("LIVE", "a diversified holding company"))}}
+               ("AMZE", "a virtual reality concert production company"), ("LIVE", "a diversified holding company"))},
+           # r60 (updated on purpose: an independent review of the live R59 Semiconductors deck): hydrogen panels, filed as semiconductors
+           "semis:HYSR": "hydrogen panels and hydrogen production, filed as semiconductors: another business (r60, theme_check.OFF_INDUSTRY)",
+           "defence:HRYNSHP": "ship breaking, filed under shipbuilding: another business (r60, theme_check.SCOPE_PRODUCTS)"}
 # the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes; R40 (the owner's
 # review of Release 39, updated on purpose): Chewy into the online layer; Ferrellgas, Suburban Propane and T1 Energy out of the theme (None)
 REGRESSION = {"auto:BOSCHLTD": "Component and systems suppliers", "auto:ASAHIINDIA": "Component and systems suppliers",
@@ -376,8 +400,15 @@ def test_a_carried_answer_asks_no_unknown_model_again_and_keeps_its_models():
                 "models": {"EL2": "manufacturing"}}
     _, got = B.place_rest(mapped(), "Defence", ABOUT.get, ask=first)
     assert "SH2" not in got["models"]
-    _, same = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=got, carried=True)
-    assert "SH2" not in same["models"] and "reasked" not in same
+    # gl50 (R50, updated on purpose): every kept placement is carried after a rules bump, so "never asked again" left a theme whose answer
+    # gave few models without them for good (the live FMCG deck: 37 of 48 left out). A carried answer now asks each unknown model once
+    # (kept in "reasked", never asked twice), its own models kept; a model asked apart never moves a company out of the layer the map or
+    # the AI's answer put it in (settled: Hikal and Brooks stay)
+    once = []
+    _, same = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: once.append(s) or {"models": {}}, kept=got, carried=True)
+    assert once == [C.MODEL_SYSTEM] and "SH2" in same["reasked"] and same["models"]["EL2"] == "manufacturing"
+    _, again = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=same, carried=True)
+    assert "SH2" not in again["models"]
     asked = []
     B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: asked.append(s) or {"models": {}}, kept=got)
     assert asked == [C.MODEL_SYSTEM]                 # its own rules: the unknown model asked once (R30)

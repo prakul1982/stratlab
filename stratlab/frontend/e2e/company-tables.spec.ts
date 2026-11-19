@@ -55,7 +55,8 @@ test("Free: three peers and the company's own row, three years of profit and los
   await expect(table.locator("tbody tr").first()).toHaveClass(/ct-own/);
   await expect(table.locator("tbody tr").first()).toContainText("Tata Steel");
   await expect(table.locator("tfoot")).toContainText("Median of 3 peers");
-  await expect(peers.getByText(/The other 3 peers and sorting the table are on the Basic plan/)).toBeVisible();
+  // (updated on purpose, rel1 item 7: peers are within 1/20 to 20 times the company's market value, so the made-up Orion Polymers, ₹8,400 cr beside Tata Steel's ₹2.06 lakh cr, is no longer its peer: five peers, not six)
+  await expect(peers.getByText(/The other 2 peers and sorting the table are on the Basic plan/)).toBeVisible();
   await expect(table.getByRole("button", { name: /P\/E/ })).toHaveCount(0);      // no sorting on Free
   await expect(peers.getByLabel("Sort by")).toHaveCount(0);
   await expect(peers.getByRole("button", { name: "Download CSV" })).toHaveCount(0);
@@ -67,7 +68,12 @@ test("Free: three peers and the company's own row, three years of profit and los
   await st.scrollIntoViewIfNeeded();
   const pl = st.getByRole("table", { name: /Profit and loss/ });
   await expect(pl).toBeVisible({ timeout: 20_000 });
-  await expect(pl.locator("thead th")).toHaveCount(4);                           // the row names and three years
+  // (updated on purpose, LIVE12B-017: on a phone the window holds the periods that fit the card, two at 412 px, with Earlier for the third;
+  // three there were wider than the card and the first was out of view sideways)
+  if (phone) {
+    await expect(pl.locator("thead th")).toHaveCount(3);
+    await expect(st.getByTestId("ct-window").getByRole("button", { name: "← Earlier" })).toBeEnabled();
+  } else await expect(pl.locator("thead th")).toHaveCount(4);                   // the row names and three years
   await expect(st.getByRole("radio", { name: "Balance sheet" })).toHaveCount(0);
   await expect(st.getByText(/years of profit and loss, the balance sheet, cash flow, ratios and the last \d+ quarters/)).toBeVisible();
   await sane(page, errors, "#co-statements");
@@ -79,6 +85,9 @@ test("Free: three peers and the company's own row, three years of profit and los
   await expect(holding.locator("tbody tr")).toHaveCount(1);
   await expect(sh.getByRole("img")).toHaveCount(0);
   await expect(sh.getByText(/quarters and the chart of who owns it are on the Basic plan/)).toBeVisible();
+  // (updated on purpose, owner 18 Nov: the card's notes are in its one fold, "About these figures", closed until asked)
+  await expect(sh.getByText(/pledged isn't in the stored filings/)).toBeHidden();
+  await sh.locator(".k-cardnote summary").click();
   await expect(sh.getByText(/pledged isn't in the stored filings/)).toBeVisible();
   await sane(page, errors, "#co-holding-history");
   if (SHOTS) await peers.screenshot({ path: `${SHOTS}/company-peers-free-${info.project.name}.png` });
@@ -90,7 +99,10 @@ test("Basic: every peer and sorting, every statement and the quarters, twelve qu
   const peers = page.locator("#co-peers");
   await peers.scrollIntoViewIfNeeded();
   const table = peers.getByRole("table", { name: "TATASTEEL and its peers" });
-  await expect(table.locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
+  // (updated on purpose, LIVE8B-012: on a phone the company and its five nearest come first, then "Show more")
+  // (updated on purpose, rel1 item 7: peers are within 1/20 to 20 times the company's market value, so the made-up Orion Polymers, ₹8,400 cr beside Tata Steel's ₹2.06 lakh cr, is no longer its peer: five peers, not six): the company and its five fit a phone's first view, with no "Show more"
+  await expect(table.locator("tbody tr")).toHaveCount(6, { timeout: 20_000 });
+  await expect(peers.getByRole("button", { name: /^Show \d+ more/ })).toHaveCount(0);
   await expect(peers.getByText(/on the Basic plan/)).toHaveCount(0);
   await expect(peers.getByText("Downloading the peers as CSV is on the Pro plan.")).toBeVisible();
   // sort by P/E, highest first, then lowest (a header on a desktop, the card's "Sort by" on a phone): the company's own row stays on top
@@ -146,7 +158,8 @@ test("Pro: the peers download as CSV and the statements as Excel", async ({ page
   const errors = await open(page, "/research/IN/TATASTEEL", "Tata Steel", who(16, phone));
   const peers = page.locator("#co-peers");
   await peers.scrollIntoViewIfNeeded();
-  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
+  // (updated on purpose, LIVE8B-012: a phone shows the company and its five nearest first)
+  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(6, { timeout: 20_000 });      // (updated on purpose, rel1 item 7: peers are within 1/20 to 20 times the company's market value, so the made-up Orion Polymers, ₹8,400 cr beside Tata Steel's ₹2.06 lakh cr, is no longer its peer: five peers, not six)
   const csv = page.waitForEvent("download");
   await peers.getByRole("button", { name: "Download CSV" }).click();
   expect((await csv).suggestedFilename()).toBe("stratlab-TATASTEEL-peers.csv");
@@ -172,13 +185,38 @@ test("a US company: its SEC statements, and a note in place of a shareholding pa
   await sane(page, errors, "#co-holding-history");
 });
 
-test("the deep dive has the same three cards", async ({ page }, info) => {
+// (updated on purpose, owner 18 Nov: "in deep dive why are we putting repeated thing which we already have in the normal stock page?": the
+// three cards are the company page's; the deep dive keeps none of them and points to the company page)
+test("the deep dive leaves the three cards to the company page and points there", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research/IN/RELIANCE/deep", "business, capex and growth", who(10, phone));
-  for (const id of ["#dd-peers", "#dd-statements", "#dd-holding-history"]) {
-    const card = page.locator(id);
-    await card.scrollIntoViewIfNeeded();
-    await expect(card.getByRole("table").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Growth and margins" })).toBeVisible({ timeout: 30_000 });
+  for (const id of ["#dd-peers", "#dd-statements", "#dd-holding-history"]) await expect(page.locator(id)).toHaveCount(0);
+  for (const h of ["Peers", "Shareholding history", "Business updates", "How it's valued"]) await expect(page.getByRole("heading", { name: h, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "The last eight quarters" })).toHaveCount(0);
+  const pointer = page.getByTestId("dd-elsewhere");
+  await expect(pointer).toContainText("Price, valuation, peers, the statements, shareholding, business updates and filings are on the company page.");
+  await expect(pointer.getByRole("link", { name: "company page" })).toHaveAttribute("href", "/research/IN/RELIANCE");
+  await sane(page, errors, "[data-testid=dd-elsewhere]");
+});
+
+test("LIVE8B-003: a statements table wider than its card opens on the latest years with the row names in view", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research/IN/TATASTEEL", "Tata Steel", who(11, phone));
+  const st = page.locator("#co-statements");
+  await st.scrollIntoViewIfNeeded();
+  const pl = st.getByRole("table", { name: /Profit and loss/ });
+  await expect(pl).toBeVisible({ timeout: 20_000 });
+  const wrap = st.locator(".k-tbl-wrap").first();
+  // the card narrower than the years (a 12-year table in a 1,004 px card at 1440): squeeze the box, then scroll it to the latest year
+  // (updated on purpose, LIVE12B-017: a phone's window now fits its card, so the box is squeezed narrower there to make it scroll)
+  await wrap.evaluate((b, w) => { (b as HTMLElement).style.maxWidth = w; b.scrollLeft = b.scrollWidth; }, phone ? "200px" : "360px");
+  expect(await wrap.evaluate((b) => b.scrollLeft)).toBeGreaterThan(0);
+  const box = await wrap.boundingBox();
+  for (const cell of [pl.locator("tbody th[scope=row]").first(), pl.locator("thead th").first()]) {
+    const r = await cell.boundingBox();
+    expect(r && box && r.x >= box.x - 1, "the row names stay in view while the years scroll").toBeTruthy();
   }
-  await sane(page, errors, "#dd-statements");
+  await expect(pl.locator("tbody th[scope=row]").first()).toHaveCSS("position", "sticky");
+  await sane(page, errors, "#co-statements");
 });

@@ -158,7 +158,9 @@ def us_rows(raw: list) -> list[dict]:
             continue
         q, y = r.get("quarter"), r.get("year")
         period = f"Q{q} {y}" if q and y else None
-        x = row("US", sym, day, "Quarterly results" + (f" ({period})" if period else ""), when=WHEN.get(str(r.get("hour") or "")),
+        # the company's own fiscal quarter, said as one (LIVE10A-020: "(Q3 2027)" beside the calendar's "(quarter ended Sep 2026)" for the same
+        # season read as a typo)
+        x = row("US", sym, day, "Quarterly results" + (f" (fiscal {period})" if period else ""), when=WHEN.get(str(r.get("hour") or "")),
                 src="company data", period=period)
         rep = reported(r)
         if rep:
@@ -179,6 +181,21 @@ def us_name(name: str | None) -> str | None:
     from .stock_pages import proper_name
     name = re.sub(r"\s+(?:Class [A-Z] )?(?:Common Stock|Common Shares|Ordinary Shares|American Depositary Shares)\b.*$", "", str(name or "").strip())
     return proper_name(name) or None
+
+
+def display_name(region: str, name: str | None) -> str | None:
+    """A company's name in one style whatever list it came from: a US filing's capitals, "/CAN/" or "INC" and an index list's
+    "Home Depot (The)" tidied (LIVE9A-014: "WILLIAMS SONOMA INC", "Home Depot (The)"); an Indian list's capitals in title case."""
+    from .stock_pages import proper_name, tidy_in_name
+    if not name:
+        return name
+    out = (proper_name(name) if region == "US" else tidy_in_name(name)) or name
+    # LIVE11A-023: one punctuation of the legal ending ("Apple Inc." / "Amazon.com Inc" / "Meta Platforms, Inc." side by side): no comma
+    # before it, no full stop after it
+    return _ENDING_MARKS.sub(r" \1", out) if region == "US" else out
+
+
+_ENDING_MARKS = re.compile(r",?\s+(Inc|Corp|Co|Ltd|Plc|Corporation|Company|Incorporated)\.?$")
 
 
 def calendar_rows(raw: list, names: dict | None = None) -> list[dict]:
@@ -242,9 +259,19 @@ def reported(r: dict) -> list[dict]:
 
 
 # ---------- storage ----------
+_BARE_Q = re.compile(r"^Quarterly results \(Q(\d) (\d{4})\)$")
+
+
+def fiscal_purpose(row: dict) -> dict:
+    """LIVE11A-019: a US row stored before LIVE10A-020 says "(Q3 2027)", the company's own fiscal quarter, without saying fiscal (All dates
+    kept "Williams Sonoma Inc … (Q3 2027)" while Results said "fiscal Q3 2027"): said as one wherever it is shown."""
+    m = _BARE_Q.match(str(row.get("purpose") or "")) if row.get("region") == "US" else None
+    return {**row, "purpose": f"Quarterly results (fiscal Q{m.group(1)} {m.group(2)})"} if m else row
+
+
 def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
-    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
+    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": [fiscal_purpose(r) for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
 
 
 def save(region: str, rows: list[dict]):
@@ -267,6 +294,64 @@ def merge(old: list[dict], new: list[dict], frm: date, today: date) -> list[dict
         prior = learnt.get(k)
         out[k] = {**r, "out": prior["out"], **{f: prior[f] for f in ("told", "told_to") if f in prior}} if prior else r
     return list(out.values())
+
+
+def quarter_end_before(day: date) -> date:
+    """The last calendar quarter's end (31 Mar, 30 Jun, 30 Sep, 31 Dec) before a day."""
+    for y in (day.year, day.year - 1):
+        for m, d in ((12, 31), (9, 30), (6, 30), (3, 31)):
+            q = date(y, m, d)
+            if q < day:
+                return q
+    return date(day.year - 1, 12, 31)
+
+
+MAX_CONFIRM = 20                     # companies whose results filing one refresh looks up, to drop a date already reported
+
+
+def filed_since(feed):
+    """(symbol, ISO day) -> whether the company filed financial results on or after that day (its exchange notices); False when they
+    can't be read. Asked at most MAX_CONFIRM times a refresh."""
+    asked = {"n": 0}
+
+    def check(symbol: str, day: str) -> bool:
+        if feed is None or asked["n"] >= MAX_CONFIRM:
+            return False
+        asked["n"] += 1
+        try:
+            return india_out(feed, {"symbol": symbol, "date": day}) is not None
+        except (SourceError, AttributeError) as e:
+            print("results check:", symbol, str(e)[:120])
+            return False
+    return check
+
+
+def without_reported(rows: list[dict], past: dict[str, list[str]], today: date, filed=None) -> list[dict]:
+    """The calendar without an upcoming results meeting for a quarter the company has already reported: an Indian company that held
+    its results meeting after the quarter ended (its row before today, or a day on its list of earlier results days) has filed that
+    quarter's results, so a later date for the same quarter on the exchange's list is not a results day to show (rel1, CX1 problem 9:
+    Muthoot Microfin listed for Thu 19 Nov after it filed its September-quarter results on 5 Nov). Filed results supersede an announced
+    date; a meeting that was put off (no results filed since) and the next quarter's meeting (after that quarter ends) stay.
+    `filed(symbol, day)`: whether the company filed results on or after `day`; without it nothing is dropped."""
+    held: dict[str, set[str]] = {}
+    for r in rows:
+        if r.get("date") and r["date"] < today.isoformat():
+            held.setdefault(r["symbol"], set()).add(r["date"])
+    for sym, days in (past or {}).items():
+        held.setdefault(sym, set()).update(d for d in days or [] if isinstance(d, str) and d < today.isoformat())
+    out = []
+    for r in rows:
+        if r.get("date") and r["date"] >= today.isoformat():
+            try:
+                q = quarter_end_before(date.fromisoformat(r["date"])).isoformat()
+            except ValueError:
+                q = None
+            after = sorted(d for d in held.get(r["symbol"], ()) if q and q < d < today.isoformat())
+            # a meeting held after the quarter ended, and its results filed since (not a meeting that was put off): reported
+            if after and filed is not None and filed(r["symbol"], after[0]):
+                continue
+        out.append(r)
+    return out
 
 
 def lookup(region: str, symbol: str, today: date | None = None) -> dict:
@@ -385,6 +470,8 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
             have = {r["symbol"] for r in rows}
             rows += [r for r in old if r["date"] in unread and r["symbol"] not in have]
         merged = merge(old, rows, frm, today)
+        if region == "IN":
+            merged = without_reported(merged, load_past(region)["rows"], today, filed_since(feed))
         save(region, merged)
     add_past(region, merged, today)          # the days gone by stay on a company's list of earlier results days (the table's usual move)
     return {"rows": len(merged), "problems": problems}
@@ -877,10 +964,28 @@ class Context:
         self.sets = index_sets(region)
         self.fos = fo_symbols() if region == "IN" else set()
 
+    def official(self, symbol: str) -> tuple[float | None, str | None]:
+        """(close, day) of a listing the screener has no row for, from the exchange's own closes of the latest session (a REIT's or an
+        InvIT's units: LIVE9B-025, "–" for their price and yield though they trade). (None, None) when that day isn't stored."""
+        if self.region != "IN":
+            return None, None
+        if not hasattr(self, "_closes"):
+            self._closes: tuple[dict, str | None] = ({}, None)
+            try:
+                from . import last_session, official_close
+                day = last_session.latest_day("IN")
+                self._closes = (official_close.stored(day) or {}, day)
+            except Exception:
+                pass
+        rows, day = self._closes
+        v = rows.get(symbol)
+        return (v, day) if v else (None, None)
+
     def facts(self, symbol: str) -> dict:
         s = self.snaps.get(symbol) or {}
-        return {"cap": s.get("market_cap"), "band": band_of(self.region, s), "sector": s.get("sector"), "last": s.get("price"),
-                "last_at": s.get("price_at"), "fo": symbol in self.fos, "indices": [name for pid, (name, mem) in self.sets.items() if symbol in mem],
+        last, last_at = (s.get("price"), s.get("price_at")) if s.get("price") is not None else self.official(symbol)
+        return {"cap": s.get("market_cap"), "band": band_of(self.region, s), "sector": s.get("sector"), "last": last,
+                "last_at": last_at, "fo": symbol in self.fos, "indices": [name for pid, (name, mem) in self.sets.items() if symbol in mem],
                 "q": ({"sales": s.get("q_sales"), "profit": s.get("q_profit"), "of": s.get("q_of")} if s.get("q_sales") is not None or s.get("q_profit") is not None else None)}
 
     def passes(self, r: dict, size=(), sector: str = "", index: str = "", fo: bool = False) -> bool:
@@ -944,6 +1049,7 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
         out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv)}
         if not r.get("name") and (ctx.snaps.get(r["symbol"]) or {}).get("name"):
             out["name"] = ctx.snaps[r["symbol"]]["name"]
+        out["name"] = display_name(region, out.get("name"))
         return out
 
     window = [rich(r) for r in cal["rows"] if first.isoformat() <= r["date"] <= last.isoformat()
@@ -978,15 +1084,26 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
             else:
                 cap = max(1, limit)
             shown += on_day[:cap]
-            days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day))})
+            # LIVE10A-020: a US company dated on a Sunday or an exchange holiday (Thu 26 Nov, Thanksgiving) is a date the source estimates,
+            # not a session: the page gives such a day no chip (India's boards do meet and file on a Saturday: every day keeps its chip)
+            days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day)), "session": _session_day(region, d)})
             more += max(0, len(on_day) - cap)
         weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(), "days": days, "rows": shown})
-    unknown = sum(1 for r in window if r["band"] is None) if size else 0
+    unknown = sum(1 for r in window if r["band"] is None)       # said whatever the filters (CX2: sizes adding to 9 under "10 companies")
     return {"region": region, "scope": scope, "today": today.isoformat(), "updated_at": cal["at"], "weeks": weeks,
             "more": more, "day_rows": limit, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE,
             "total": len(window), "matching": len(narrowed), "unknown_size": unknown,
             "filters": {"size": size, "sector": sector, "index": index, "fo": bool(fo), "purpose": purpose if purpose in ("results", "more") else "", "on": on if only else "", "sort": sort},
             "facets": ctx.facets(window)}
+
+
+def _session_day(region: str, iso: str) -> bool:
+    """LIVE10A-020: whether `iso` is a trading day of the market (True when the calendar can't say)."""
+    try:
+        from .data.calendar import is_trading_day
+        return bool(is_trading_day(region, date.fromisoformat(iso)))
+    except Exception:
+        return True
 
 
 def facets(region: str, rows: list[dict], sets: dict, has_fo: bool) -> dict:

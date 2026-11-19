@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { changeDay } from "../lib/freeChange";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -37,6 +38,8 @@ type Total = {
   income: { normal: number; special: number; total: number; salary: number; standard_deduction: number; deductions: number };
   carry_forward: { speculative: number; business: number }; steps: string[]; lines: { label: string; amount: number; kind: string }[];
   notes?: string[]; confirmed?: boolean; source?: string | null;
+  /** from FY 2026-27, the Income-tax Act, 2025's numbers for the sections it renumbers ({"111A": "196"}), LIVE9B-018 */
+  sections?: Record<string, string> | null;
   /** as the return rounds them: total income (section 288A) and the tax on it (section 288B), DH-004 */
   rounded?: { income: number; tax: number } | null;
 };
@@ -123,6 +126,7 @@ export function TaxReportPage() {
   const [fy, setFy] = useState<number | null>(null);
   const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const [mode, setMode] = useState<"add" | "replace">("add");
+  const [replacing, setReplacing] = useState<File[] | null>(null);       // files that would replace the stored trades, asked first (LIVE10B-032)
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [allSales, setAllSales] = useState(false);
@@ -157,6 +161,12 @@ export function TaxReportPage() {
     const list = all.filter((f) => f.size <= capMb(f.name) * 1024 * 1024);
     for (const f of all) if (f.size > capMb(f.name) * 1024 * 1024) notify(`${f.name} is larger than ${capMb(f.name)} MB. Split it by year (or quarter) and upload each one.`);
     if (!list.length) { reset(); return; }
+    // "Start again" over stored trades is asked first, as holdings asks (LIVE10B-032: every trade went at once with no question)
+    if (mode === "replace" && (rep?.trades ?? 0) > 0) { reset(); setReplacing(list); return; }
+    await send(list);
+    reset();
+  };
+  const send = async (list: File[]) => {
     setBusy(true); clearProblem();
     let got: ImportReply | null = null;
     try {
@@ -171,7 +181,6 @@ export function TaxReportPage() {
       // a later file that failed doesn't hide the files before it: those are stored, so the page shows them, then the error stands
       if (got) { setResult(got); setRep(got.report); setFy(open(got.report, null)); setMode("add"); }
       setBusy(false);
-      reset();
     }
   };
 
@@ -240,8 +249,9 @@ export function TaxReportPage() {
   ];
   const lotCols: Column<Lot & { i: number }>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <><Link className="link" to={`/research/IN/${encodeURIComponent(r.key)}`}><b>{name(r.key)}</b></Link>{r.bonus && <span className="k-note"> bonus</span>}</> },
-    { key: "loss", header: "Below cost by", numeric: true, cell: (r) => <span className="k-down">{inr(r.loss)}{r.loss_pct != null && <span className="k-note"> {r.loss_pct.toFixed(1)}%</span>}</span> },
-    { key: "held", header: "Held", numeric: true, cell: (r) => `${r.days} days` },
+    { key: "loss", header: "Below cost by", numeric: true, cell: (r) => <span className="k-down">{inr(r.loss)}{r.loss_pct != null && <span className="k-note"> {r.loss_pct.toFixed(1).replace("-", "\u2212")}%</span>}</span> },
+    // one minus sign with the rupees, and a separator in the days (LIVE10B-033: "-19.5%" beside "−₹1,168", "1042 days")
+    { key: "held", header: "Held", numeric: true, cell: (r) => `${r.days.toLocaleString("en-IN")} day${r.days === 1 ? "" : "s"}` },
     { key: "term", header: "Term today", cell: (r) => (r.term === "LT" ? "Long-term" : <>Short-term<span className="k-sub-line">long-term from {dateOnly(r.long_from)}</span></>) },
     { key: "bought", header: "Bought", numeric: true, cell: (r) => dateOnly(r.bought) },
     ...(lotsMore.on ? [
@@ -328,6 +338,8 @@ export function TaxReportPage() {
         {has && rep && rep.files.length > 0 && (
           <p className="k-note">
             {rep.trades.toLocaleString("en-IN")} trades{rep.business_lines > 0 && ` and ${rep.business_lines.toLocaleString("en-IN")} F&O lines`} from {rep.files.length} file{rep.files.length === 1 ? "" : "s"}: {rep.files.map((f) => `${f.name} (${f.broker})`).join(", ")}{rep.updated_at ? ` · files updated ${ago(rep.updated_at)}` : ""}
+            {/* LIVE10B-034: the fund sales in the report come from the CAS on Mutual funds, not from these files: said here, with the files */}
+            {fundSalesLine(rep.mf)}
           </p>
         )}
       </Card>
@@ -349,6 +361,8 @@ export function TaxReportPage() {
                 <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
               </span>}
             </>} />
+            {/* LIVE8B-008: an account in the Free plan's grace keeps the downloads until the change: said where they are */}
+            {canExport && me?.free_change?.moves.some((m) => /tax report/i.test(m)) && <p className="k-small k-muted" data-testid="tax-export-moves">The CSV and PDF downloads move to Basic on {changeDay(me.free_change.on)}; the report on screen stays free.</p>}
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="tax-moved-year">{movedYearNote(movedFrom, y.fy, rep.current_fy, "trades")}</p>}
           </Card>
 
@@ -467,6 +481,10 @@ export function TaxReportPage() {
           <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my tax data</button>
         </section>
       )}
+      {replacing && <ConfirmDialog title="Start again with this file?" confirmLabel="Replace my trades" onClose={() => setReplacing(null)}
+        onConfirm={() => { const l = replacing; setReplacing(null); void send(l); }}>
+        This replaces your {(rep?.trades ?? 0).toLocaleString("en-IN")} trade{rep?.trades === 1 ? "" : "s"} with the ones in {replacing.length === 1 ? replacing[0].name : `these ${replacing.length} files`}. To keep them and add this file's, choose Add to my trades.
+      </ConfirmDialog>}
       {asking && <ConfirmDialog title="Delete my tax data?" confirmLabel="Delete my tax data" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every uploaded trade and file is removed from StratLab. Your broker account isn't touched.</ConfirmDialog>}
     </div>
   );
@@ -494,7 +512,7 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
           full-width card */}
       <FactTable label="The year's tax" itemHead="Figure" figureHead="Amount" noteHead="What it is" numeric rows={[
         { id: "est", k: `Estimated tax for ${y.label}`, v: <span aria-label="Total tax estimate">{inr(t.total)}</span>,
-          n: <>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></> },
+          n: <>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B${t.sections ? " of the 1961 Act" : ""}). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></> },
         ...(payable && !payable.locked && payable.total != null ? [{ id: "pay", k: "Payable now, with interest", v: <span aria-label="Payable now">{inr(payable.total)}</span>,
           n: payable.return_needed === false
             ? <>No return is needed for {y.label}: total income {inr(payable.income ?? 0)} is within the {inr(payable.exempt ?? 0)} basic exemption limit, so there is no late fee. {toolsLink}</>
@@ -506,17 +524,24 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
   );
 }
 
+/** A line's section numbers as the year's Act numbers them: "section 196 (111A before)" from FY 2026-27, so the page names a section
+ *  one way, not the 1961 numbers in its tables beside a note that they changed (LIVE9B-018). Unchanged for an earlier year. */
+export function actSections(text: string, map: Record<string, string> | null | undefined): string {
+  if (!map || !/\bsections?\b/i.test(text)) return text;
+  return text.replace(/\b(\d{2,3}[A-Z]{0,3})\b/g, (m) => (map[m] ? `${map[m]} (${m} before)` : m));
+}
+
 /** The year's total tax, where it comes from, the inputs it needs and, below, how it was worked out. */
 function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
   const t = y.total;
   const chips: [string, number, string][] = [
-    ["Tax on capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess."],
+    ["Tax on capital gains", t.parts?.capital_gains ?? 0, actSections("Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess.", t.sections)],
     ["Tax on intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
     ["Tax on F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
     ["Tax on other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
   ];
   const lineCols: Column<{ i: number; label: string; amount: number; kind: string }>[] = [
-    { key: "what", header: "Step", rowHeader: true, wrap: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{l.label}</b> : <span className={l.kind === "note" ? "k-muted" : undefined}>{l.label}</span>) },
+    { key: "what", header: "Step", rowHeader: true, wrap: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{actSections(l.label, t.sections)}</b> : <span className={l.kind === "note" ? "k-muted" : undefined}>{actSections(l.label, t.sections)}</span>) },
     { key: "amount", header: "Amount", numeric: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" || l.kind === "rounded" ? <b>{inr(l.amount)}</b> : <span className={l.kind === "amount" ? tone(l.amount) : undefined}>{inr(l.amount)}</span>) },
   ];
   return (
@@ -539,7 +564,8 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
           <FigureTable label="Where the tax comes from" header="Income" valueHeader="Amount" noteHeader={null}
             rows={chips.map(([label, v, info]) => ({ key: label, label: <>{label} <Info label={`About ${label}`}>{info}</Info></>, value: inr(v) }))} />
           {y.other_regime && <p className="k-note">With the same figures, the {REGIME[y.other_regime.regime].toLowerCase()} works out to {inr(y.other_regime.total)}{y.other_regime.regime === "old" ? " (with the deductions entered, if any)" : ""}.</p>}
-          {(t.notes ?? []).filter((n) => !/not yet confirmed/.test(n)).map((n) => <p key={n} className="k-small" role="note"><b>Note:</b> {n}</p>)}
+          {/* the Act's renumbering is said once, in the working below, not here as well (LIVE9B-018: printed twice on the page) */}
+          {(t.notes ?? []).filter((n) => !/not yet confirmed/.test(n) && !/Income-tax Act, 2025/.test(n)).map((n) => <p key={n} className="k-small" role="note"><b>Note:</b> {n}</p>)}
           {(t.carry_forward.speculative > 0 || t.carry_forward.business > 0) && (
             <p className="k-small">To carry forward:{t.carry_forward.speculative > 0 && <> intraday (speculative) loss <b className="k-down">{inr(t.carry_forward.speculative)}</b> (4 years, against speculative income only)</>}{t.carry_forward.speculative > 0 && t.carry_forward.business > 0 && ";"}{t.carry_forward.business > 0 && <> business loss <b className="k-down">{inr(t.carry_forward.business)}</b> (8 years, against business income)</>}. Only if the return is filed by its due date.</p>
           )}
@@ -552,10 +578,11 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
           with (owner, 7 Nov: "keep this open by default"); the words stay folded inside */}
       {t.available && (
         <Disclosure summary="How we got here" open>
-          {(t.notes ?? []).length > 0 && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
+          {/* only what isn't said above it already: the year's rules not yet confirmed, and the Act's renumbering */}
+          {(t.notes ?? []).some((n) => /not yet confirmed|Income-tax Act, 2025/.test(n)) && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.filter((n) => /not yet confirmed|Income-tax Act, 2025/.test(n)).map((n) => <li key={n}>{n}</li>)}</ul>}
           <DataTable label="Total tax breakdown" columns={lineCols} rows={t.lines.map((l, i) => ({ ...l, i }))} rowKey={(l) => String(l.i)} />
           {/* the steps in words say what the table's lines say in figures: one fold under it, not the same working twice in full (LIVE1C-056) */}
-          <Disclosure summary="The same working in words"><ol className="k-list">{t.steps.map((s, i) => <li key={i}>{s}</li>)}</ol></Disclosure>
+          <Disclosure summary="The same working in words"><ol className="k-list">{t.steps.map((s, i) => <li key={i}>{actSections(s, t.sections)}</li>)}</ol></Disclosure>
         </Disclosure>
       )}
     </Card>
@@ -617,6 +644,11 @@ function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inpu
 }
 
 /** Mutual fund gains from the Money space: already counted above, summarised here. */
+/** " · and 1 mutual fund sale from your CAS on Mutual funds" when the report counts fund sales (they come from there, not the files). */
+export function fundSalesLine(mf: Report["mf"]): string {
+  return mf?.allowed && mf.count > 0 ? ` · and ${mf.count.toLocaleString("en-IN")} mutual fund sale${mf.count === 1 ? "" : "s"} from your CAS on Mutual funds` : "";
+}
+
 function MutualFundsCard({ y, mf }: { y: Year; mf?: Report["mf"] }) {
   const m = y.mutual_funds;
   return (

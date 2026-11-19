@@ -6,7 +6,8 @@ export type Sibling = { to: string; label: string; current?: boolean };
 
 /** The trail at the top of every page: "Invest › Market view › Margin funding ▾". The space and the group are links (the
  * group opens its page of cards); the last part is the page you are on, and opens a small menu of the other pages in the
- * same group. When `onTogglePin` is given the menu ends with "Pin to sidebar" / "Unpin from sidebar". `page` is left out
+ * same group. When `onTogglePin` is given the menu ends with "Pin to My space" / "Unpin from My space" (the page then shows under
+ * Pinned at the top of the My space sidebar); the line above it only when something is above it. `page` is left out
  * on a group's own page: the trail then ends with the group, as plain text. */
 export function Breadcrumb({ trail, page, siblings = [], seeAll, pinned, onTogglePin }: {
   trail: Crumb[]; page?: string; siblings?: Sibling[]; seeAll?: Crumb; pinned?: boolean; onTogglePin?: () => void;
@@ -51,14 +52,14 @@ export function Breadcrumb({ trail, page, siblings = [], seeAll, pinned, onToggl
                   onClick={() => setOpen(!open)}><span aria-current="page">{page}</span><span className="caret" aria-hidden="true">▾</span><span className="sr-only">{siblings.length > 1 ? " (other pages in this group)" : " (page menu)"}</span></button>
                 {open && (
                   <div ref={menu} id={id} className="k-crumb-menu" role="menu" aria-label={`Pages near ${page}`} onKeyDown={keys}>
-                    {siblings.map((s) => (
+                    {siblings.length > 1 && siblings.map((s) => (
                       <Link key={s.to} role="menuitem" to={s.to} aria-current={s.current ? "page" : undefined} onClick={() => setOpen(false)}>{s.label}</Link>
                     ))}
                     {seeAll && <Link role="menuitem" className="all" to={seeAll.to} onClick={() => setOpen(false)}>{seeAll.label}</Link>}
                     {onTogglePin && (
                       <>
-                        <hr />
-                        <button type="button" role="menuitem" onClick={() => { onTogglePin(); setOpen(false); btn.current?.focus(); }}>{pinned ? "Unpin from sidebar" : "Pin to sidebar"}</button>
+                        {(siblings.length > 1 || seeAll) && <hr />}
+                        <button type="button" role="menuitem" onClick={() => { onTogglePin(); setOpen(false); btn.current?.focus(); }}>{pinned ? "Unpin from My space" : "Pin to My space"}</button>
                       </>
                     )}
                   </div>

@@ -51,6 +51,9 @@ BREAK_AFTER = 5                          # refusals in a row that end the night'
 CHUNK_CHARS = 2000                       # a passage's size at most
 INDIA_KINDS = ("transcript", "presentation")
 US_KINDS = ("annual_report", "earnings_release")
+COVER_CHARS = 8000                       # m53: a stored earnings release shorter than this whose text is the 8-K itself is its cover page
+RECHECK_CAP = 20                         # ...read again at most this many a run (the release exhibit by its name: sec.release_doc), once each
+RECHECK_KEY = "docidx:covers"            # JSON list of the filings already read again, never again
 KIND_WORDS = {"transcript": "Call transcript", "presentation": "Investor presentation", "annual_report": "Annual report",
               "earnings_release": "Earnings release"}
 
@@ -409,6 +412,7 @@ class Job:
         try:
             out["found"] = self.discover(store, discover, left, out["problems"], beat)
             self.read_queue(store, cap, left, out, beat)
+            self.reread_covers(store, left, out, beat)
             stats = {}
             try:
                 stats = store.queue_stats()
@@ -463,6 +467,9 @@ class Job:
                     beat()
             db.set_setting(CURSOR_KEY + region, str((start + n) % len(cos)))
         return added
+
+    def reread_covers(self, store, left, out: dict, beat=None) -> None:
+        _reread_covers(self, store, left, out, beat)
 
     def read_queue(self, store, cap: int, left, out: dict, beat=None) -> None:
         from . import memguard
@@ -519,6 +526,56 @@ class Job:
                     return
                 if beat:
                     beat()
+
+
+def _rechecked() -> list[str]:
+    import json
+    try:
+        got = json.loads(db.get_setting(RECHECK_KEY) or "[]")
+        return [str(u) for u in got] if isinstance(got, list) else []
+    except Exception:
+        return []
+
+
+def _reread_covers(job, store, left, out: dict, beat=None) -> None:
+    """m53: US earnings releases stored before the release exhibit was found by its name ("pypl3q-26earningsrelease.htm", not "ex99"):
+    their stored text is the 8-K's cover page (the filing itself, a few thousand characters). Up to RECHECK_CAP a run, within the run's
+    time, each is read again once: replaced when the filing's one other document is the release, else left as it is; never again either
+    way. A refused read is tried on a later night."""
+    import json
+    from . import memguard
+    sec = _feed("sec")
+    if sec is None or not hasattr(store, "covers") or left() <= 0:
+        return
+    done = _rechecked()
+    try:
+        rows = store.covers(COVER_CHARS, RECHECK_CAP, done)
+    except Exception as e:
+        out["problems"].append(f"covers: {str(e)[:120]}")
+        return
+    out.setdefault("reread", 0)
+    for item in rows:
+        if left() <= 0:
+            break
+        try:
+            with memguard.heavy("doc-index"):
+                got = read_us(sec, item)
+                if got is not None and got[0]["link"] != item["url"] and got[1]:
+                    store.save({**item, **got[0]}, got[1])
+                    out["reread"] += 1
+        except Exception as e:
+            from .intel.net import SourceError
+            if isinstance(e, SourceError) and (e.busy or re.search(r"\((?:403|429)\)", str(e))):
+                out["problems"].append(f"US {item['symbol']}: cover not read again ({str(e)[:80]})")
+                break
+            out["problems"].append(f"US {item['symbol']}: {str(e)[:120]}")
+        done.append(item["url"])
+        if beat:
+            beat()
+    try:
+        db.set_setting(RECHECK_KEY, json.dumps(done[-5000:]))
+    except Exception as e:
+        out["problems"].append(f"covers: not kept ({str(e)[:80]})")
 
 
 def _backoff(tries: int) -> float:

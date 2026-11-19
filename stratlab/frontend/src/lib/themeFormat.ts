@@ -30,7 +30,12 @@ export const CALC_WORDS: Record<string, string> = {
   "no revenue figure": "no revenue figure is stored for it",
 };
 /** A company row's place in its layer's calculations, as the server kept it (theme_data.calc_record); a row kept without one is in. */
-export const calcOf = (row: DiveRow): { in: boolean; why: string } => (row.calc && typeof row.calc.in === "boolean" ? row.calc : { in: true, why: "" });
+export const calcOf = (row: DiveRow): { in: boolean; why: string; kind?: string; detail?: string } =>
+  (row.calc && typeof row.calc.in === "boolean" ? row.calc : { in: true, why: "" });
+/** ex49 (R49): why a left-out company is out, precisely, as the server keeps it (theme_data.out_reason: "different revenue model, the way of
+ *  earning of …, not the layer's"; "insufficient evidence, no description of its own is stored"); a record kept before it, in CALC_WORDS. */
+export const calcWords = (c: { why: string; kind?: string; detail?: string }): string =>
+  c.kind && c.detail ? `${c.kind}: ${c.detail}` : CALC_WORDS[c.why] ?? c.why;
 
 /** A median cell as the deck writes it (deck._medn): "–" when no company has the figure; "–" with "(2 of 6)" when fewer than MIN_BASE
  *  do; the median, with "(5 of 6)" when it is of fewer companies than the `of` in the layer's calculations. */
@@ -62,6 +67,36 @@ export function layerLines(l: Layer): LayerLine[] {
  * page, the CSV and the deck): never a filing's title ("From its own filings: Annual report (20-F)"), its name alone, or an encyclopedia
  * lead that says where it is but not what it does. */
 export const NO_WORDS = "No description in its own words yet";
+/** LIVE10A-004: a company checked against its own description whose passage is not one this page quotes (a history, a ranking, a cut
+ *  sentence): said as that, never "No description in its own words yet" beside its "Description-verified". */
+export const NOT_QUOTED = "Checked against its own description; no line of it is quoted here";
+export const noWords = (checked: boolean) => (checked ? NOT_QUOTED : NO_WORDS);
+/** r66e (LIVE12A-002): a theme shown from its read under an earlier version of the checks, and its figures from the last stored read while
+ *  the new one is worked out, say so once (the page asks again on its own). */
+export function olderNote(o: { at: string | null; rechecking: boolean } | null | undefined, fmtDay: (iso: string) => string): string | null {
+  if (!o) return null;
+  return `This is the theme as it was checked${o.at ? ` on ${fmtDay(o.at.slice(0, 10))}` : ""}, under an earlier version of StratLab's checks.`
+    + (o.rechecking ? " It is being checked again now and fills in here when that is done." : "");
+}
+/** r69e (LIVE13A-003: "Last updated 7 Nov, 16:33 ET" beside "This is the theme as it was checked on 18 Nov 2026"): one date logic for a
+ *  theme's head: the map's own date and the day it was checked, each said as what it is, when they are different days; else the one stamp. */
+export function mapStamp(generatedAt: number | null | undefined, checked: string | null | undefined, written: string, fmtDay: (iso: string) => string): string | null {
+  if (!generatedAt) return null;
+  const made = new Date(generatedAt * 1000).toISOString().slice(0, 10);
+  const day = checked ? checked.slice(0, 10) : null;
+  if (!day || day === made) return `Last updated ${written}`;
+  return `Map made ${fmtDay(made)} · checked ${fmtDay(day)}`;
+}
+/** r66e (LIVE12A-001: "Checked against its own description; no line of it is quoted here" on 30 rows of one table, "No description in its own
+ *  words yet" on 20 more): the companies with no line quoted are counted in one line above the table, their cells left empty. */
+export function unquotedLine(checked: number, none: number): string | null {
+  const n = checked + none;
+  if (n === 0) return null;
+  const parts = [checked > 0 ? `${checked} checked against their own description, none of whose sentences is one this page quotes (a history, a ranking, an encyclopedia's opening)` : "",
+    none > 0 ? `${none} with no description in their own words yet` : ""].filter(Boolean);
+  return `No line of their own words is quoted for ${n} ${n === 1 ? "company" : "companies"} here: ${parts.join("; ")}.`;
+}
+export const DIVE_UPDATING = "These figures are from the theme's last stored read; the new read is being worked out and takes their place here when it is done.";
 const WORK = /\b(?:provid\w*|produc(?:es|ers?|ing|ts?|tion)|manufactur\w*|makes?|making|makers?|sells?|selling|suppl(?:y|ies|ying|iers?)|designs?|designing|develop(?:s|ing|ers?)|operat(?:es|ing|ors?)|offers?|offering|distribut\w*|retail\w*|services?|servic(?:es|ing)|foundr(?:y|ies)|licens\w*|leases?|leasing|lend(?:s|ing|ers?)|insur\w*|earns?|revenues?|customers?|clients?|subscri\w*|platforms?|stores?|brands?|engag(?:ed|es)|build(?:s|ing|ers?)|construct\w*|mines?|mining|miners?|refin\w*|generat(?:es|ing|ors?)|transmi\w*|explor(?:es|ing|ation)|invest(?:s|ing|ments?)|manag(?:es|ing)|deliver\w*|software|hardware|solutions?|products?|systems?|equipment|devices?|vehicles?|drugs?|medicines?|banking|bank|loans?|chemicals?|steel|cement|power|electricity|specializ\w*|specialis\w*|focus(?:es|ed) on|helps?|enables?|protect\w*|secur(?:es|ing))\b/i;
 const FILING_TITLE = /^(?:annual|quarterly|current|interim|half[- ]yearly)\s+report\b|^(?:form\s+)?(?:10-[kq]|20-f|40-f|8-k|6-k|def\s*14a)\b|^(?:press release|investor presentation|board meeting|outcome of board meeting|shareholding pattern|financial results)\b/i;
 const LEGAL_WORDS = /\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|nv|sa|ag|the|holdings?|group)\b\.?/gi;
@@ -83,10 +118,18 @@ export function ownWords(text: string | null | undefined, name = ""): string {
  *  everyone, not this person's reading history: it never says "Already read" or "read <date>" (an account that never opened a theme was
  *  shown "Already read: Cybersecurity · US, read 11 Nov"); the date is when the stored map was last updated. */
 export const LIBRARY_HEAD = "Ready to open:";
-export function libraryLabel(i: { name: string; region: string; at: string | null; day?: string | null }, fmtDay: (iso: string) => string): string {
+/** A theme's short name for its chip (owner, 18 Nov: "Utilities (Indian power, gas and water-linked infrastructure)" → "Utilities"):
+ *  the words before a bracket or a dash that explain it; the full name stays in the chip's title. */
+export function shortTheme(name: string): string {
+  const s = name.replace(/\s*\([^)]*\)\s*$/, "").split(/\s+[–—-]\s+|:\s+/)[0].trim();
+  return s || name;
+}
+export function libraryLabel(i: { name: string; region: string; at: string | null; day?: string | null }, fmtDay: (iso: string) => string, withMarket = true): string {
   const where = ({ IN: "India", US: "US" } as Record<string, string>)[i.region] ?? i.region;
   // LIVE7A-008: the map's own day in the market's time zone, the date its page says "Last updated" (theme_library.updated_at)
   const day = i.day ?? (i.at ? i.at.slice(0, 10) : null);
+  // LIVE11A-013: under a market's tab the market isn't said again on every chip
+  if (!withMarket) return `${i.name}${day ? ` · updated ${fmtDay(day)}` : ""}`;
   return `${i.name} · ${where}${day ? `, updated ${fmtDay(day)}` : ""}`;
 }
 
@@ -111,3 +154,31 @@ export function plainIndustry(text: string | null | undefined): string {
   const out = core.replace(/ & /g, " and ").split(" ").map((w) => SIC_ACRONYMS[w.toLowerCase().replace(/[(),]/g, "")] ?? w.toLowerCase()).join(" ");
   return out.slice(0, 1).toUpperCase() + out.slice(1);
 }
+
+const FUND_WORDS: Record<string, string> = { ISHARES: "iShares", INVESCO: "Invesco", VANECK: "VanEck", NIPPON: "Nippon", INDIA: "India" };
+/** LIVE9A-026: a fund's name as people write it, not the exchange's capitals ("ISHARES SEMICONDUCTOR ETF" → "iShares Semiconductor ETF"):
+ * a word of four letters or more in capitals in title case, short ones (ETF, SS, S&P) and those with digits kept; a name with lower case kept. */
+export function fundName(name: string | null | undefined): string {
+  const n = String(name ?? "");
+  if (/[a-z]/.test(n)) return n;
+  return n.split(/(\s+)/).map((w) => FUND_WORDS[w] ?? (/^[A-Z]{4,}$/.test(w) && w !== "SPDR" && w !== "BEES" ? w[0] + w.slice(1).toLowerCase() : w)).join("");
+}
+
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** LIVE9A-026: a filing quarter as "Sep 2026", never "2026-09-30"; anything else as it is. */
+export function quarterText(q: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(String(q ?? ""));
+  return m ? `${MON[Number(m[2]) - 1]} ${m[1]}` : String(q ?? "–");
+}
+
+/** LIVE11A-011: a fund that tracks the whole market (a NIFTY 50, SENSEX or S&P 500 fund) is no fund of a theme: Cement offered NIFTYBEES.
+ * The funds the theme's map names, without those, and how many were left out. */
+const BROAD_FUND = /\b(?:nifty\s*(?:50|100|200|500|next\s*50|total\s*market)|sensex|s&p\s*500|s&p\s*bse\s*500|total\s*(?:stock\s*)?market|nasdaq[-\s]?100|russell\s*(?:1000|2000|3000)|dow\s*jones\s*industrial)(?!\s*(?:equal|value|momentum|quality|low\s*vol))\b/i;
+export function themeFunds<T extends { ticker: string; name: string }>(etfs: T[]): { funds: T[]; broad: number } {
+  const funds = etfs.filter((e) => !BROAD_FUND.test(`${e.name} ${e.ticker}`));
+  return { funds, broad: etfs.length - funds.length };
+}
+
+/** LIVE11A-008: a company's EBITDA or net margin as the deck prints it: "n.m." when the server marks it beyond ±100% of revenue (Atomera
+ * "−32423.1%" on the app beside "n.m." in the deck), else `shown`. */
+export const marginCell = (row: { nm?: string[] } | null | undefined, k: "ebitda" | "net", shown: string): string => (row?.nm?.includes(k) ? "n.m." : shown);

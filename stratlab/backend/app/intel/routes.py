@@ -173,7 +173,7 @@ def _drop_finished_builds() -> None:
 
 
 def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, counted: bool = True, min_age: float = 0,
-            kind_used: str = "research_ai", cap: int | None = None, gated: bool = False):
+            kind_used: str = "research_ai", cap: int | None = None, gated: bool = False, wait_for_other: bool = True):
     """Serve an AI read from the shared cache (every user's, one read per company or market per key), or build it.
     `counted`: a fresh build counts against the person's daily cap and is refused past it; False for reads shared by
     everyone (the market mood) and a company read written as its page opens on a paid plan, which neither count nor are
@@ -184,7 +184,9 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
     R19: a read is kept in the shared store and served to everyone until someone presses Refresh. A Refresh of a read written within the
     guard window (min_age, else computed.DEFAULT_GUARD) or past the person's refreshes for the day gives the stored read with
     "refresh_state" "fresh" or "capped"; one that fails gives the stored read with "failed" (never an error while there is a read);
-    one that is written replaces the read for everyone ("done"). `gated`: the caller already passed computed.refresh_gate."""
+    one that is written replaces the read for everyone ("done"). `gated`: the caller already passed computed.refresh_gate.
+    `wait_for_other` False: while someone else's request is writing the same read, answer at once with ai_busy ("being written") instead of
+    holding this request until it is done (LIVE9A-008: Mood's headlines card said "Still loading…" for 20 minutes behind another read)."""
     from .. import computed
     if not refresh and A.peek(kind, key):
         return A.cached(kind, key, ttl, False, build)[0]
@@ -202,6 +204,8 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
     try:
         with read_slot(profile, (cap if kind_used != "research_ai" else ai_cap(profile)) if counted else None, kind_used):
             try:
+                if not wait_for_other and one.locked() and not A.peek(kind, key):
+                    raise AIBusy("The read is being written now. It fills in here in a moment.")
                 with one:                     # two people opening the same company at once: one read, written once
                     if not refresh and A.peek(kind, key):
                         return A.cached(kind, key, ttl, False, build)[0]
@@ -337,6 +341,7 @@ def page_figures(region: str, c: dict) -> dict:
 
 corp_sources = None      # the corporate actions job's sources (set by main), for a US company's dividends
 public_facts = None      # (region, symbol) -> the stored public page's facts or None (set by main), never building one
+build_page = None       # r58: (region, symbol) -> the company's page facts, built within the pages' per-minute ration (set by main), for a theme's data gaps
 filed_numbers = None     # symbol -> the company's numbers read from its filings (set by main; kept six hours), for a page stored before they were kept
 
 
@@ -773,6 +778,7 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
             read = A.filed_watch(read, results_calendar.lookup(r, s), ist_date())       # a read kept from before the filing (LIVE7B-003)
         except Exception:
             pass
+        read = A.regrounded(read, page_now(r, s))          # held to the page's figures of now (LIVE8B-009)
     except HTTPException as e:
         # the read is a nice-to-have on a page that has loaded: no AI answer today is an answer ("unavailable", and why),
         # not a failed request on every company page opened
@@ -781,6 +787,15 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
     return ok(A.clean_company(read))
+
+
+def page_now(r: str, s: str) -> dict | None:
+    """The company page's own figures now, for holding a stored read to them (LIVE8B-009); None when they can't be read (the read is
+    then served as stored)."""
+    try:
+        return page_figures(r, source_call(lambda: hub.company(r, s)))
+    except Exception:
+        return None
 
 
 def company_read_key(r: str, s: str, pro: bool) -> tuple:
@@ -855,9 +870,34 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
         # "mood": reads kept from before the mood line and main story were added are written again (DD-001)
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood2"),
-                          3600 if is_open else settle_ttl or CLOSED_MOOD_TTL, refresh, build, counted=False,
-                          min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL))
+        key = (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood2")
+        ttl = 3600 if is_open else settle_ttl or CLOSED_MOOD_TTL
+
+        def write(again: bool = False):
+            return ai_call(profile, "pulse", key, ttl, refresh and not again, build, counted=False,
+                           min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL, wait_for_other=False)
+        # fix12 (LIVE10A-010): while the market trades a read is written for each hour and each half-percent turn, and the
+        # first visit after either waited for the AI ("Reading the headlines…" for as long as the writing took, an hour when
+        # it was held up). The session's latest read is shown at once, marked as being brought up to date, while the new one
+        # is written in the background; only a session's very first read is waited for.
+        session = pulse_session(indices) if is_open else None
+        latest_key = (r, f.lower(), PULSE_LATEST)
+        if session is not None and not refresh and not A.peek("pulse", key):
+            last = A.get("pulse", latest_key)
+            if last is not None and last.get("session") == session:
+                pulse_behind(repr(key), write)
+                return ok({**last, "updating": True})
+        out = write()
+        if session is not None and out.get("generated_at"):
+            last = A.get("pulse", latest_key)
+            if last is None or (last.get("generated_at") or 0) < out["generated_at"]:
+                A.keep("pulse", latest_key, {**{k: v for k, v in out.items() if k not in ("refresh_state", "updating")}, "session": session},
+                       CLOSED_MOOD_TTL)
+            elif not refresh and last.get("session") == session and (last.get("generated_at") or 0) > out["generated_at"]:
+                # LIVE13A-028: the moves came back to a band an earlier read was written for: the session's newer read is shown, so the
+                # stamp never goes back ("14:34 IST" at 14:36, then "14:12 IST" at 14:50 over the same words)
+                return ok({k: v for k, v in last.items() if k != "session"})
+        return ok(out)
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
         # every opening of the page; the levels and headlines don't depend on it
@@ -865,6 +905,37 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
+
+
+PULSE_LATEST = "latest-open"     # the store's key for each market's latest read written during a session (fix12)
+_pulse_running: set[str] = set()
+_pulse_running_lock = threading.Lock()
+
+
+def pulse_session(indices: list[dict]) -> list:
+    """The session a read during market hours is of: each index's name and trading day, as JSON keeps it (lists, not
+    tuples), so a read kept in the store compares equal to the one asked for."""
+    return [[i.get("name"), i.get("day")] for i in indices]
+
+
+def pulse_behind(key: str, write) -> bool:
+    """Write the market's newer read in a background thread, once per key at a time (a second visit while it is being
+    written starts nothing). False when it is already being written."""
+    with _pulse_running_lock:
+        if key in _pulse_running or len(_pulse_running) >= 8:
+            return False
+        _pulse_running.add(key)
+
+    def run():
+        try:
+            write(True)
+        except Exception as e:  # noqa: BLE001  (a failed background read leaves the shown one; the next visit asks again)
+            print("pulse read: background write failed:", str(e)[:160])
+        finally:
+            with _pulse_running_lock:
+                _pulse_running.discard(key)
+    threading.Thread(target=run, daemon=True, name="pulse-read").start()
+    return True
 
 
 def before_close_at(region: str, indices: list[dict]) -> str | None:
@@ -989,6 +1060,13 @@ def theme_map(profile, region: str, q: str):
     hit = theme_library.stored(r, q)
     if hit is not None:
         return r, " ".join(q.split())[:80], {**hit["payload"], "_library": hit["name"]}, index_rows(r)
+    # r66e (LIVE12A-002): a theme stored only under older rules is served from that read at once ("_older": never kept again from it) while
+    # the re-check job checks it again, this theme first (theme_recheck.ask)
+    old = theme_library.older(r, q)
+    if old is not None:
+        from . import theme_recheck
+        theme_recheck.ask(r, old["name"])
+        return r, " ".join(q.split())[:80], {**old["payload"], "_library": old["name"], "_older": True}, index_rows(r)
     return sector_map(profile, region, q, False)
 
 
@@ -1020,12 +1098,22 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     r = region_of(region)
     hit = theme_library.stored(r, q)
     state = None
+    if hit is None and not refresh:
+        # r66e (LIVE12A-002: Semiconductors' first visit after a rules bump waited on "Checking each company against its own description…"
+        # for 90 s): the read stored under older rules is served at once, saying so, and the re-check job checks it again, this theme first
+        old = theme_library.older(r, q)
+        if old is not None:
+            from . import theme_recheck
+            return ok({**sector_served(r, old["payload"]),
+                       "older": {"at": computed._iso(old["at"]) if old.get("at") else None, "rechecking": theme_recheck.ask(r, old["name"])}})
     if hit is not None:
+        # r69e (LIVE13A-003: "Last updated 7 Nov" beside "checked on 18 Nov"): the read says when it was checked, beside when its map was made
+        checked_at = {"checked_at": computed._iso(hit["at"]) if hit.get("at") else None}
         if not refresh:
-            return ok(sector_served(r, hit["payload"]))
+            return ok({**sector_served(r, hit["payload"]), **checked_at})
         state = computed.refresh_gate(profile, "theme", hit["at"])
         if state != "go":
-            return ok({**sector_served(r, hit["payload"]), "refresh_state": state})
+            return ok({**sector_served(r, hit["payload"]), **checked_at, "refresh_state": state})
         theme_library.mark_refreshing(r, hit["name"], by=computed.plan_word(profile))
     elif refresh:
         state = computed.refresh_gate(profile, "theme", A.stored_at("sector", (r, " ".join(q.split())[:80].lower())))

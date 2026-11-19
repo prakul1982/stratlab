@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
-import { bizChange, bizValue, periodName, tidyTitle } from "../lib/biz";
+import { bizChange, bizValue, foldFilings, periodName, monthIndex, monthOf } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
-import { DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
+import { CardNote, DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
 import { PlanActions } from "./PlanInterest";
 
 /* Monthly and quarterly business updates read into numbers (biz_updates.py): the company's filed figures with the line
@@ -17,6 +17,8 @@ export interface BizMetric {
   key: string; metric: string; segment: string | null; unit: string; basis: string; span: "month" | "quarter"; headline: boolean;
   latest: BizPoint; prev: BizPoint | null; year_ago: BizPoint | null; step: "month" | "quarter";
   change_prev: number | null; change_year: number | null; points: BizPoint[];
+  /** the newest filing does not hold this figure: its month is an earlier filing's (LIVE10B-040) */
+  older?: boolean;
 }
 export interface BizFiling { id: string; at: string; title: string; url: string; read: boolean; period: string | null; problem: string | null; exchange?: Exchange }
 export interface BizView {
@@ -51,7 +53,9 @@ function day(iso: string) {
 /** "1 Oct": the day a filing was filed. */
 export function filedOn(iso: string | null | undefined) {
   if (!iso) return "Filing";
-  const s = fmtDate(iso.slice(0, 10), { year: false });
+  // the year when it isn't this year's: "27 Nov" for a filing of Nov 2025 read as a date still to come (LIVE9B-007)
+  const thisYear = iso.slice(0, 4) === String(new Date().getFullYear());
+  const s = fmtDate(iso.slice(0, 10), thisYear ? { year: false } : {});
   return s === "–" ? "Filing" : s;
 }
 
@@ -61,14 +65,20 @@ export function BizChart({ m, label }: { m: BizMetric; label?: string }) {
   const pts = m.points;
   if (pts.length < 2) return null;
   const name = `${label ? `${label}: ` : ""}${m.metric}${m.segment ? ` (${m.segment})` : ""}`;
+  const xs = pts.map((p) => monthIndex(p.period));
+  const timed = xs.every((x) => Number.isFinite(x));    // each point at its month: months not read are a stretch of the axis (LIVE8B-002)
   return (
     <LineChart lines={[{ values: pts.map((p) => p.value), color: "var(--blue)", width: 2, label: m.metric }]}
       labels={pts.map((p) => `${periodName(p.period, m.span)}${p.filed_later ? " (as stated a year later)" : ""}`)}
+      {...(timed ? { x: xs, xFormat: (x: number) => (Number.isInteger(x) ? periodName(monthOf(x), m.span) : "") } : {})}
       axisLabels={pts.map((p) => periodName(p.period, m.span))} height={200}   // VR5-012: the axis says the period; "(as stated a year later)" is for the hover, where it fits (the axis names ran into each other)
       format={(v) => bizValue(v, m.unit)} axisFormat={(v) => v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 1 })}
       ariaLabel={`${name} by ${m.span === "quarter" ? "quarter" : "month"}, ${periodName(pts[0].period, m.span)} to ${periodName(pts[pts.length - 1].period, m.span)}`} />
   );
 }
+
+/** Filing rows shown before "Show all N" (owner, 18 Nov: "show 5"). */
+const FILINGS_FIRST = 5;
 
 /** The company page's and the deep dive's panel. Nothing at all for a company that files no business updates. */
 export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body: React.ReactNode, right?: React.ReactNode) => React.ReactNode }) {
@@ -95,7 +105,9 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
   };
   const chosen = v.metrics.find((m) => m.key === pick) ?? v.metrics[0];
   const right = v.allowed ? <AlertButton region="IN" symbol={symbol} label="Alert on new updates" condition="bizupdate" /> : null;
-  const files = more ? v.filings : v.filings.slice(0, 6);
+  // one row a subject (owner, 18 Nov): a subject filed again is one row with its other days; five rows, then "Show all N"
+  const groups = foldFilings(v.filings);
+  const files = more ? groups : groups.slice(0, FILINGS_FIRST);
 
   return wrap(
     <div className="k-stack biz-updates">
@@ -109,7 +121,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
                 <><button className="link-btn" onClick={() => setPick(m.key)} aria-pressed={chosen?.key === m.key}>{m.metric}</button>
                   {m.segment && <span className="k-note"> {m.segment}</span>}
                   <span className="k-sub-line">{m.basis === "period end" ? "at the period's end" : m.basis === "quarter" ? "for the quarter" : "for the month"}</span></>) },
-              { key: "l", header: "Latest", numeric: true, cell: (m) => <>{bizValue(m.latest.value, m.unit)}<span className="k-sub-line">{periodName(m.latest.period, m.span)}</span></> },
+              { key: "l", header: "Latest", numeric: true, cell: (m) => <>{bizValue(m.latest.value, m.unit)}<span className="k-sub-line">{periodName(m.latest.period, m.span)}{m.older ? ", an earlier filing" : ""}</span></> },
               { key: "p", header: "On the previous", numeric: true, cell: (m) => <>{bizChange(m.change_prev, m.unit)}{m.prev && <span className="k-sub-line">vs {periodName(m.prev.period, m.span)}</span>}</> },
               { key: "y", header: "On the year", numeric: true, cell: (m) => <>{bizChange(m.change_year, m.unit)}{m.year_ago && <span className="k-sub-line">vs {periodName(m.year_ago.period, m.span)}</span>}</> },
               { key: "s", header: "Source", wrap: true, cell: (m) => (
@@ -127,17 +139,23 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
         </div>
       )}
       {files.length > 0 ? (
-        <ul className="k-list plain biz-filings k-small" aria-label="Business update filings">
-          {files.map((f) => (
-            <li key={f.id} className="k-spread">
-              <span><span className="k-note biz-day">{day(f.at)}</span> {tidyTitle(f.title)}</span>
-              <a className="link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
+        // date | subject (two lines at most, the whole of it in its title) | link, the link column the same on every row (owner, 18 Nov)
+        <ul className="biz-filings k-small" aria-label="Business update filings">
+          {files.map(({ title, items: [f, ...again] }) => (
+            <li key={f.id}>
+              <span className="k-note biz-day">{day(f.at)}</span>
+              <span className="biz-subject">
+                <span className="biz-title" title={title}>{title}</span>
+                {again.length > 0 && <span className="k-sub-line" data-testid="biz-also">Also filed {again.map((x, i) => (
+                  <Fragment key={x.id}>{i ? ", " : ""}<a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">{day(x.at)}</a></Fragment>))}</span>}
+              </span>
+              <a className="link biz-link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
             </li>))}
         </ul>
       ) : <EmptyState title="No business update filed">They are listed here as the company files them.</EmptyState>}
-      {v.filings.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {v.filings.length}</button>}
-      {more && v.filings.length > 6 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
+      {groups.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {groups.length}</button>}
+      {more && groups.length > FILINGS_FIRST && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
       {v.problems.length > 0 && <p className="k-note">{v.problems.slice(0, 3).join(" · ")}</p>}
-      <p className="k-note">{v.note}</p>
+      {v.note && <CardNote><p>{v.note}</p></CardNote>}
     </div>, right);
 }

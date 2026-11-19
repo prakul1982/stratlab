@@ -29,10 +29,11 @@ test("VR4-005 and VR4-013: a company page's update filings start their titles at
   await open(page, "/research/IN/RELIANCE", ADMIN);
   const days = page.locator(".biz-filings .biz-day");
   await expect(days.first()).toBeVisible({ timeout: 30_000 });
-  const widths = await days.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
-  expect(new Set(widths).size, `date widths ${widths}`).toBe(1);
-  const lefts = await page.locator(".biz-filings li > span").evaluateAll((els) => els.map((e) => { const d = e.querySelector(".biz-day")!.getBoundingClientRect(); return Math.round(d.right); }));
+  // (updated on purpose, owner 18 Nov: date | subject | link is one grid, so the subjects start at one x and the links end at one x)
+  const lefts = await page.locator(".biz-filings .biz-subject").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
   expect(new Set(lefts).size, `title starts ${lefts}`).toBe(1);
+  const rights = await page.locator(".biz-filings .biz-link").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
+  expect(new Set(rights).size, `link ends ${rights}`).toBe(1);
   const card = page.locator(".k-card", { has: page.getByRole("heading", { name: "What they do" }) });
   await expect(card).toBeVisible();
   const text = await card.innerText();

@@ -14,7 +14,30 @@ export type HeatView = {
   pending: boolean; min_cap: number | null; tiles: Tile[]; members: number; with_prices: number; matching: number; shown: number;
   /** a theme's companies with no closes drawn grey at their stored last price (LIVE6-005); absent from older answers */
   price_only?: number;
-};
+} & DayOf;
+
+/** LIVE13A-012/-029: when the figures are of. `live`: the tiles are brought to the live round's prices of a later day than `as_of` (in
+ * the session, or the day's last trades after the bell until the evening run stores its closes); `behind`: the latest session has
+ * closed and nothing of it is in yet. Both absent from older answers. */
+export type LiveOf = { day: string; time: string | null; close: boolean };
+export type DayOf = { as_of: string | null; live?: LiveOf | null; behind?: boolean };
+
+/** The facts line's lead, its bold day and its tail, and the source sentence for an info note: "Prices at 14:00 IST, 18 Nov" while
+ * live, "Last trades of 18 Nov" after the bell, "Closes of 17 Nov" with "the latest session's closes are being added" when behind
+ * (at 16:05 IST the map said only "Closes of 17 Nov" beside Mood's 18 Nov close), else closesTail. `day` formats an ISO day; `zone`
+ * is the market's clock (IST, ET). null before the first run. */
+export function dayLine(v: DayOf, open: boolean, what: "map" | "lists", day: (iso: string) => string, zone: string):
+  { lead: string; day: string; tail: string; source: string; price: string } | null {
+  const lv = v.live;
+  if (lv?.day && lv.close) return { lead: "Last trades of ", day: day(lv.day), tail: " · the official closes replace them after the evening run",
+    source: `the last trades of ${day(lv.day)}`, price: "Last price" };
+  if (lv?.day) return { lead: "Prices at ", day: `${lv.time ? `${lv.time} ${zone}, ` : ""}${day(lv.day)}`,
+    tail: ` · the market is open; the ${what} ${what === "map" ? "is" : "are"} redrawn every 15 minutes`,
+    source: `prices at ${lv.time ? `${lv.time} ${zone} on ` : ""}${day(lv.day)}`, price: "Last price" };
+  if (!v.as_of) return null;
+  const tail = v.behind ? " · the latest session's closes are being added" : open ? closesTail(open).replace("the map is", what === "map" ? "the map is" : "the lists are") : "";
+  return { lead: "Closes of ", day: day(v.as_of), tail, source: `daily closes of ${day(v.as_of)}`, price: "Last close" };
+}
 
 /** The note under the map on companies without closes (LIVE6-005): those drawn grey at their last price, and those with neither closes
  *  nor a price, which are left out. null when every company has its closes. */
@@ -26,6 +49,10 @@ export function closesNote(v: Pick<HeatView, "members" | "with_prices" | "price_
   if (gone) parts.push(`${n(gone)} of the ${n(v.members)} companies ${where} ${gone === 1 ? "has" : "have"} no closes or price on record and ${gone === 1 ? "is" : "are"} not shown.`);
   return parts.length ? parts.join(" ") : null;
 }
+
+/** LIVE9A-010: what follows "Closes of <day>" on the facts line. The map is drawn from daily closes; while the market trades it says that day is
+ * the last close and when the map is redrawn (at 14:29 ET with the NYSE open it said only "Closes of 13 Nov" beside Mood's live index levels). */
+export const closesTail = (open: boolean): string => (open ? ", the last close · the market is open; the map is redrawn after today's close" : "");
 
 export const PERIODS = ["1d", "1w", "1m", "3m", "ytd", "1y"] as const;
 export type Period = (typeof PERIODS)[number];
@@ -192,10 +219,42 @@ export function layout(tiles: Tile[], o: { size: SizeBy; color: ColorBy; period:
 /** The words a tile of `w` × `h` px has room for: the font size (15, 12 or 10px; 0 for none) and whether the figure goes under the
  * symbol. `width(text, weight)` is the text's width at 10px in the page's font; a width grows with the size. Nothing is shown
  * that its tile would cut. */
-export function tileWords(symbol: string, figure: string, w: number, h: number, width: (text: string, weight: number) => number): { px: number; fig: boolean } {
+export function tileWords(symbol: string, figure: string, w: number, h: number, width: (text: string, weight: number) => number): { px: number; fig: boolean; vert?: boolean; split?: number } {
   const room = w - 7;                                                    // the tile's padding and a pixel to spare
-  const fits = (px: number) => (width(symbol, 600) * px) / 10 + symbol.length * 0.01 * px <= room;
-  const px = w >= 120 && h >= 72 && fits(15) ? 15 : w >= 56 && h >= 28 && fits(12) ? 12 : h >= 15 && fits(10) ? 10 : 0;
-  const fig = px > 0 && h >= (px === 15 ? 46 : px === 12 ? 34 : 28) && (width(figure, 400) * px * 0.92) / 10 <= room;
+  const along = (px: number, r: number) => (width(symbol, 600) * px) / 10 + symbol.length * 0.01 * px <= r;
+  const fits = (px: number) => along(px, room);
+  // LIVE11A-023: a mid-size tile (about 70 × 50 px) too narrow for a long symbol at 10px names it at 9px rather than not at all
+  const px = w >= 120 && h >= 72 && fits(15) ? 15 : w >= 56 && h >= 28 && fits(12) ? 12 : h >= 15 && fits(10) ? 10 : w >= 44 && h >= 15 && fits(9) ? 9 : 0;
+  const fig = px > 0 && h >= (px === 15 ? 46 : px === 12 ? 34 : px === 10 ? 28 : 26) && (width(figure, 400) * px * 0.92) / 10 <= room;
+  // LIVE10A-012: a tall, narrow tile too thin for its symbol across (a large Commodities or Industrials tile was left unlabelled) names it
+  // down its length
+  if (!px && h > w) {
+    const v = w >= 20 && along(12, h - 7) ? 12 : w >= 15 && along(10, h - 7) ? 10 : 0;
+    if (v) return { px: v, fig: false, vert: true };
+  }
+  // LIVE12A-010: a tile tall enough for two lines (about 57 × 53 px) but too narrow for a long symbol in one names it over two, split at
+  // its middle (or at a hyphen or "&" near it), rather than not at all. LIVE13A-012: two lines at 10px take about 27px, so a 40-46 px tile
+  // (left blank under the old 44px floor) is named the same way
+  if (!px && h >= 30 && w >= 30 && symbol.length >= 4) {
+    const mid = Math.ceil(symbol.length / 2);
+    const mark = [mid, mid - 1, mid + 1].find((k) => k > 0 && k < symbol.length && /[-&]/.test(symbol[k - 1]));
+    const k = mark ?? mid;
+    const fitsPart = (part: string, q: number) => (width(part, 600) * q) / 10 + part.length * 0.01 * q <= room;
+    const two = (q: number) => fitsPart(symbol.slice(0, k), q) && fitsPart(symbol.slice(k), q);
+    const v = two(10) ? 10 : two(9) ? 9 : 0;
+    if (v) return { px: v, fig: false, split: k };
+  }
   return { px, fig };
+}
+
+/** LIVE10A-012: a group's short name for a head too narrow for its full one ("Fast Moving Con…" was cut); the full name stays its label. */
+const GROUP_SHORT: Record<string, string> = {
+  "Fast Moving Consumer Goods": "FMCG", "Automobile and Auto Components": "Autos", "Oil Gas & Consumable Fuels": "Oil and gas",
+  "Information Technology": "IT", "Media Entertainment & Publication": "Media", "Consumer Discretionary": "Cons. discretionary",
+  "Consumer Staples": "Cons. staples", "Communication Services": "Communication", "Construction Materials": "Building materials",
+  "Financial Services": "Financials", "Telecommunication": "Telecom", "Metals & Mining": "Metals",
+};
+export function groupWords(name: string, room: number, width: (text: string, weight: number) => number, px = 11.5): string {
+  const fits = (t: string) => (width(t, 600) * px) / 10 <= room;
+  return fits(name) || !GROUP_SHORT[name] ? name : GROUP_SHORT[name];
 }

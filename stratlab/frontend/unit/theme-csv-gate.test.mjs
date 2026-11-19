@@ -9,12 +9,13 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("the theme's CSV comes from the server and is locked on Free with the Basic plan note", () => {
   const dive = read("src/components/ThemeDive.tsx");
-  assert.match(dive, /<ThemeCsvButton region=\{region\} theme=\{theme\} dive=\{dive\} \/>/);
+  // (updated on purpose, fix13 LIVE11A-014: the row's one plan line is passed to the button)
+  assert.match(dive, /<ThemeCsvButton region=\{region\} theme=\{theme\} dive=\{dive\} locked=\{lock === "csv"\} onLock=\{\(\) => setLock\("csv"\)\} \/>/);
   assert.doesNotMatch(dive, /<CsvButton name=\{`theme /);                // no longer made in the browser for every plan
   const btn = read("src/components/ThemeChanges.tsx");
   const fn = btn.slice(btn.indexOf("export function ThemeCsvButton"));
   assert.match(fn, /features as Record<string, boolean> \| undefined\)\?\.theme_workbook === false/);
-  assert.match(fn, /if \(off\) \{ setLocked\(true\); return; \}/);             // Free: the note, no request
+  assert.match(fn, /if \(off\) \{ \(onLock \?\? \(\(\) => setOwn\(true\)\)\)\(\); return; \}/);             // Free: the note, no request (updated on purpose, fix13 LIVE11A-014)
   assert.match(fn, /\/research\/theme-dive\/companies\.csv\?region=\$\{region\}&q=\$\{encodeURIComponent\(theme\)\}/);
   assert.match(fn, /<PlanNote plan="basic">Downloading a theme's companies as a CSV is on the Basic plan/);
   // the comparison table's row for the theme's downloads says the CSV too

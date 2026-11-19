@@ -175,13 +175,18 @@ def test_a_us_company_with_no_article_gets_its_annual_reports_opening_stored_onc
 
 
 def test_a_full_article_needs_no_annual_report_and_a_wrong_article_is_replaced_by_it(store, monkeypatch):
-    full = "Marvell Technology, Inc. is an American company which develops and produces semiconductors and related technology. " * 3
+    # gl52 (R52, updated on purpose): an article that has a sentence in the company's own words about its work (an encyclopedia's opening
+    # alone is read with the annual report too: test_gl52_fixes)
+    full = "Marvell Technology, Inc. is an American company. It develops and produces semiconductors and related technology for data centers. " * 3
     myth = "In Greek mythology, ichor is the ethereal fluid making up the blood of the gods and/or immortals. " * 3
     _hub(monkeypatch, wiki={"Marvell Technology": {"title": "Marvell Technology", "extract": full}, "Ichor": {"title": "Ichor", "extract": myth}})
     reads = []
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or "We are a leader in the design and manufacturing of fluid delivery subsystems for semiconductor capital equipment.")
     got, _ = TR.evidence_reader("US", {"MRVL": "Marvell Technology, Inc.", "ICHR": "Ichor Holdings, Ltd."})(["MRVL", "ICHR"])
-    assert got["MRVL"]["about"] == C.clean_description(full) and reads == ["ICHR"]
+    # e57 (R57, updated on purpose): every US company's own annual report is read first (the report's opening here is 18 words, so the
+    # article that fits the company is added beside it); a wrong article is still never kept
+    assert sorted(reads) == ["ICHR", "MRVL"]
+    assert got["MRVL"]["about"].startswith("We are a leader") and got["MRVL"]["about"].endswith(C.clean_description(full)[-60:])
     assert got["ICHR"]["about"].startswith("We are a leader in the design and manufacturing of fluid delivery subsystems") and "mythology" not in got["ICHR"]["about"]
 
 
@@ -200,9 +205,10 @@ def test_annual_reports_are_read_a_few_a_minute_and_the_rest_are_owed_never_a_bu
     _hub(monkeypatch)
     reads = []
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or f"{sym} Corp is a maker of power chips for cars and factories, sold to makers of vehicles in thirty countries.")
-    syms = [f"S{i:02d}" for i in range(20)]
+    # e57 (R57, updated on purpose): FILING_READS_PER_MINUTE is 30 (was DESCRIBE_READS, 6), so 40 companies are asked to see the rest owed
+    syms = [f"S{i:02d}" for i in range(40)]
     got, pending = TR.evidence_reader("US", {})(syms)
-    assert len(reads) == TR.FILING_READS_PER_MINUTE == TR.DESCRIBE_READS and not pending
+    assert len(reads) == TR.FILING_READS_PER_MINUTE == 30 and not pending
     owed = [s for s in syms if json.loads(store[f"theme:evidence:US:{s}"]).get("owed")]
     assert len(owed) == len(syms) - TR.FILING_READS_PER_MINUTE and set(owed) == set(syms) - set(reads)
     assert all(TR.thin_about(json.loads(store[f"theme:evidence:US:{s}"]), "US") for s in owed)
@@ -233,7 +239,10 @@ def test_which_stored_descriptions_are_read_once_more():
     myth = "In Greek mythology, ichor is the ethereal fluid making up the blood of the gods and/or immortals. " * 3
     assert TR.thin_about({"at": now, "about": myth, "v": 2}, "US") and not TR.thin_about({"at": now, "about": myth, "v": TR.ABOUT_V}, "US")
     full = "Lam Research Corporation is an American supplier of wafer-fabrication equipment and related services to the semiconductor industry. " * 2
-    assert not TR.thin_about({"at": now, "about": full, "v": 2}, "US")
+    # gl52 (R52, updated on purpose): an encyclopedia's opening alone, kept before format 5, is read once more (its annual report added)
+    assert TR.thin_about({"at": now, "about": full, "v": 2}, "US") and not TR.thin_about({"at": now, "about": full, "v": TR.ABOUT_V}, "US")
+    own = full + "It sells etch and deposition systems to chip makers."
+    assert not TR.thin_about({"at": now, "about": own, "v": 2}, "US")
     assert TR.thin_about({"at": now, "about": "", "v": TR.ABOUT_V, "owed": True}, "US")
 
 

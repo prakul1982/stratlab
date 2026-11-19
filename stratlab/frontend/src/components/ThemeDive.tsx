@@ -4,12 +4,14 @@ import { deckFileName } from "../lib/deckName";
 import { deckWhenReady } from "../lib/deckReady";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
+import { Badge, Card, CardHead, DataTable, ShowLess, Select, Spark, Signed, Meter, PlanNote, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
 import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { deckLock } from "../lib/account";
+import { marginCell, quarterText } from "../lib/themeFormat";
+import { decksWord, useUsage } from "../lib/usage";
 import { SampleDeckLink } from "./SampleDeck";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
@@ -17,8 +19,8 @@ import { filedOn } from "./BizUpdates";
 import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
-  amount, calcOf, CALC_WORDS, layerLines, medCell, MIN_BASE, NO_WORDS, ownWords, pc, pcw, plainIndustry, points, span, times,
-  themeApi,
+  amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, noWords, ownWords, unquotedLine, pc, pcw, plainIndustry, points, span, times,
+  themeApi, EVIDENCE_ONE, evidenceLine, evidenceOf, membershipLine,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
 
@@ -54,7 +56,9 @@ export function ChainCard({ dive }: { dive: Dive }) {
     <ReportScope section="The whole chain in one table" source="The companies' reported annual results">
     <Card id="theme-chain" label="The whole chain in one table">
       <CardHead title="The whole chain in one table" info={basisWords(dive.basis)} />
-      <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
+      {/* r69e (LIVE13A-014: "Small finance banks 0 – – –" a row of the chain beside the line naming it as a layer with no listed company):
+          a layer with no company is folded into that one line, never a row of dashes */}
+      <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows.filter((x) => x.n > 0 || (x.listed ?? 0) > 0)} rowKey={(x) => x.layer} />
       {dive.chain.line && <p className="k-small">{dive.chain.line}</p>}
       {dive.chain.rows.some((x) => x.ebitda_n > 0 && x.ebitda_n < MIN_BASE) && <p className="k-note">A median is shown on {MIN_BASE} companies or more in a layer's calculations; each company's own figures are on its layer's table.</p>}
       <p className="k-note">{basisWords(dive.basis)}</p>
@@ -68,8 +72,10 @@ function Spk({ row }: { row: BizRow }) {
 }
 
 /** LIVE6-017: a long table shows its first rows and the rest a press away ("Show all N"), so the page isn't 16,000 px tall. */
-function Fold<T>({ rows, n = 10, what = "rows", children }: { rows: T[]; n?: number; what?: string; children: (shown: T[]) => ReactNode }) {
+function Fold<T>({ rows, n: wide = 10, what = "rows", children }: { rows: T[]; n?: number; what?: string; children: (shown: T[]) => ReactNode }) {
   const [all, setAll] = useState(false);
+  // LIVE11A-010: on a phone each row is a card, so a fold shows fewer (Cement was 72,468 px for 41 companies)
+  const n = usePhone() ? Math.min(wide, PHONE_FOLD) : wide;
   return (
     <>
       {children(all || rows.length <= n + 2 ? rows : rows.slice(0, n))}
@@ -77,11 +83,18 @@ function Fold<T>({ rows, n = 10, what = "rows", children }: { rows: T[]; n?: num
     </>
   );
 }
+/** r69e (LIVE13A-013: the phone Cement page 52,041 px, every layer's table, margins by year and business updates open one after another): on a
+ *  phone a layer's tables are a press away under its description and count; a desktop shows them as before. */
+function PhoneFold({ label, children }: { label: string; children: ReactNode }) {
+  if (!usePhone()) return <>{children}</>;
+  return <details className="k-phone-fold" data-testid="phone-fold"><summary className="btn quiet sm">{label}</summary>{children}</details>;
+}
 /** a row whose every figure is a dash says nothing: it is left out (LIVE6-017) */
 const isDash = (v: ReactNode) => v == null || v === "–" || v === "" || (typeof v === "object" && v !== null && (v as { props?: { children?: unknown } }).props?.children === "–");
 const said = (rows: KV[]) => rows.filter((x) => ![x.a, x.b].every(isDash));
 
 const MEMBERS_SHOWN = 12;     // a group's first rows; the rest a press away (a theme of 500 drug makers is listed in full)
+const PHONE_FOLD = 4;         // ...and on a phone, where each row is a card (LIVE11A-010)
 
 /** Every company in the theme, by layer (THEMES): the base is every listed company the exchange classifies in the theme's industries,
  * which the AI can sort into its layers but never removes; the AI's additions from other industries are marked, confirmed in their own
@@ -101,40 +114,78 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
     ...(subOnly.length ? [{ name: "Named in a sub-theme only", official: false, rows: subOnly }] : [])].filter((g) => g.rows.length > 0);
   if (groups.length === 0) return null;
   const total = p?.total ?? new Set(groups.flatMap((g) => g.rows.map((c) => c.ticker))).size;
+  const ev = evidenceOf(dive);
+  // LIVE11A-011: each group largest first by market value (ACC ₹23,442 cr sat above Shree ₹89,900 cr); a company with none goes last
+  for (const g of groups) g.rows = [...g.rows].sort((a, b) => (caps.get(b.ticker) ?? b.cap ?? -1) - (caps.get(a.ticker) ?? a.cap ?? -1));
   const named = p?.named ?? 0, base = (p?.base ?? 0) - named, added = p?.added ?? 0, inds = p?.industries ?? [];
+  // LIVE10A-040: an Industry column that says the same industry on every row (Cement's 41 cards each "Industry: Cement & Cement Products")
+  // is left out; the theme's industries are said once in the counts line
+  const indOf = (c: Co) => (region === "US" ? plainIndustry(c.industry) : c.industry) || "";
+  const oneIndustry = new Set(groups.flatMap((g) => g.rows.map(indOf))).size <= 1;
+  // LIVE11A-011: "In the theme by" saying the same on every row ("Official industry / Description-verified" on all of Cement's) is said once
+  const byOf = (c: Co) => (c.base ? `${c.basis === "list" ? "list" : "official"}|${ev ? ev(c.ticker) : ""}` : `added|${c.verified ? 1 : 0}`);
+  const allRows = groups.flatMap((g) => g.rows);
+  const sameBy = allRows.length > 1 && new Set(allRows.map(byOf)).size === 1;
+  const byWords = (c: Co) => (c.base ? `${c.basis === "list" ? "Named in the theme's list" : "Official industry"}${ev ? ` · ${EVIDENCE_ONE[ev(c.ticker)]}` : ""}`
+    : c.verified ? "Added · Description-verified" : "Added · Not yet description-verified");
+  const byOnce = sameBy && allRows[0] ? byWords(allRows[0]) : null;
+  const checkedOf = (c: Co) => (c.base ? ev?.(c.ticker) === "description_verified" : !!c.verified);
+  const unquoted = allRows.filter((c) => !ownWords(c.what, c.name));
+  const unquotedNote = unquotedLine(unquoted.filter(checkedOf).length, unquoted.filter((c) => !checkedOf(c)).length);
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
-    { key: "i", header: "Industry", wrap: true, cell: (c) => (region === "US" ? plainIndustry(c.industry) : c.industry) || dash },
+    ...(oneIndustry ? [] : [{ key: "i", header: "Industry", wrap: true, cell: (c: Co) => indOf(c) || dash } as Column<Co>]),
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
-    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
-    { key: "f", header: "In the theme by", cell: (c) => (c.base ? (c.basis === "list" ? "Named in the theme's list" : "Official industry")
-      : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Confirmed by its own words" : "Not yet confirmed"}</span></>) },
+    // LIVE11A-010: on a phone the quote runs across the card under the name, not squeezed into a half column beside an empty one
+    // r66e (LIVE12A-001): a company with no line quoted has an empty cell; how many and why is said once above the tables (unquotedLine)
+    { key: "w", header: "What it does, in its own words", wrap: true, lead: true, cell: (c) => { const w = ownWords(c.what, c.name);
+      return w ? <>“{w}”</> : <span className="k-muted" aria-label={noWords(c.base ? ev?.(c.ticker) === "description_verified" : !!c.verified)}>–</span>; } },
+    // LIVE12A-007: the column wraps (its longest words, "Industry-supported (official industry only)", held Semiconductors' table at 1,077 px in
+    // a 1,004 px card)
+    ...(sameBy ? [] : [{ key: "f", header: "In the theme by", wrap: true, cell: (c: Co) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
+      {ev && <span className="k-sub-line k-muted" data-testid="member-evidence">{EVIDENCE_ONE[ev(c.ticker)]}</span>}</>
+      : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Description-verified" : "Not yet description-verified"}</span></>) } as Column<Co>]),
   ];
+  // e54 (R54): what each company's place rests on, the same states and counts as the deck; l55 (R55): by the deck's names, the membership
+  // check's count apart from the count with figures, and each layer's companies by state
+  const evLine = membershipLine(dive, groups.flatMap((g) => g.rows.map((c) => c.ticker)));
+  const withFigures = dive?.with_figures ?? dive?.members;
   return (
     <Card id="theme-members" label="Every company in this theme">
       <CardHead title="Every company in this theme" info="The base is every listed company the exchange's own industry classification puts in the theme's industries: it is in the theme whatever the AI says. The AI sorts companies into layers and adds companies from other industries; an added company stays only while its own description doesn't show otherwise, marked confirmed when its words show the work." />
       <p className="k-small" data-testid="theme-counts">
         <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {named > 0 && `${named.toLocaleString("en-IN")} named in the theme's list, `}{added.toLocaleString("en-IN")} added
-        {added > 0 && ` (${p?.confirmed ?? 0} confirmed from ${added === 1 ? "its" : "their"} own description)`}.
+        {added > 0 && ` (${p?.confirmed ?? 0} description-verified)`}.
       </p>
+      {unquotedNote && <p className="k-small k-muted" data-testid="theme-unquoted">{unquotedNote}</p>}
+      {byOnce && <p className="k-small k-muted" data-testid="theme-by-once">Every company here is in the theme by: {byOnce}.</p>}
+      {evLine && <p className="k-small k-muted" data-testid="theme-evidence">{evLine}.{withFigures != null && <> With figures: {withFigures.toLocaleString("en-IN")} (the membership check reads no figures).</>}</p>}
       {inds.length > 0
         ? <p className="k-small k-muted">Official industries{p?.industries_by === "words" ? ", matched by the theme's own words" : p?.industries_by === "ai" ? ", picked by AI from the exchange's own list" : ""}: {inds.join(" · ")}.</p>
         : named > 0 ? <p className="k-small k-muted">No official industry is this theme's core on its own, so its companies are the theme's named list and the ones the map names.</p>
         : <p className="k-small k-muted">{p?.industries_by === "pending" ? "Until the theme's official industries are picked, its companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
       {(p?.unclassified ?? 0) > 0 && <p className="k-note">{p!.unclassified!.toLocaleString("en-IN")} US-listed companies have no industry on file yet, so they can't join a theme by industry until their SEC record is read; a few are read each time a theme is checked.</p>}
-      {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} />)}
+      {groups.map((g) => {
+        // LIVE12A-007: a layer whose companies are all in the theme the same way says it once over its table, not on every row
+        const same = !sameBy && g.rows.length > 1 && new Set(g.rows.map(byOf)).size === 1;
+        return <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={same ? cols.filter((c) => c.key !== "f") : cols}
+          evidence={evidenceLine(dive, g.rows.map((c) => c.ticker))} byOnce={same ? byWords(g.rows[0]) : null} />;
+      })}
     </Card>
   );
 }
 
-function MemberGroup({ name, official, rows, cols }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[] }) {
+function MemberGroup({ name, official, rows, cols, evidence, byOnce }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[]; evidence: string; byOnce?: string | null }) {
   const [all, setAll] = useState(false);
-  const shown = all ? rows : rows.slice(0, MEMBERS_SHOWN);
+  const first = usePhone() ? PHONE_FOLD : MEMBERS_SHOWN;
+  const shown = all ? rows : rows.slice(0, first);
   return (
     <section className="k-stack">
       <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
+      {evidence && <p className="k-small k-muted" data-testid="layer-evidence">{evidence}</p>}
+      {byOnce && <p className="k-small k-muted" data-testid="layer-by-once">Every company in this layer is in the theme by: {byOnce}.</p>}
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
-      {rows.length > MEMBERS_SHOWN && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
+      {rows.length > first && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
     </section>
   );
 }
@@ -163,17 +214,29 @@ export function memberRows(r: SectorAI, dive: Dive | null): MemberRow[] {
 export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
   const { fail, refreshMe, me } = useApp();
   const locked = me?.usage?.deck_limit === 0;      // FREE-TIER: no decks on Free: a locked button and the sample deck
+  // LIVE9A-003: the month's decks used and left beside the buttons (Basic showed no count), with a Free account's earlier count said as one
+  const { usage } = useUsage();
+  const decksNote = decksWord(me?.usage?.deck_used, me?.usage?.deck_limit, usage);
   const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
+  // LIVE10A-003: the month's decks used up, a press says so beside the buttons (a Free press after its one deck got a 402 and nothing showed)
+  const [spent, setSpent] = useState<string | null>(null);
+  // LIVE11A-014: one plan line for the whole row (a deck press, the workbook and the CSV each added their own box, and a toast repeated
+  // the first): the latest press's, and no toast while it shows
+  const [lock, setLock] = useState<"deck" | "workbook" | "csv" | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
   const deck = async (format: "pptx" | "pdf") => {
     setMaking(format);
+    setSpent(null); setLock(null);
     try {
       // R21: while the theme's AI map is being written the server answers "preparing"; the kit's bar shows and the page asks again
       const blob = await deckWhenReady(() => themeApi.deck(region, theme, format), { onWait: setPreparing });
-      download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format));
+      download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format, new Date(), region === "US" ? "America/New_York" : undefined));
       void refreshMe();                               // the deck count in Account
-    } catch (e) { fail(e); } finally { setMaking(null); setPreparing(null); }
+    } catch (e) {
+      if ((e as { status?: number })?.status === 402) { setSpent((e as Error).message || "This month's decks are used."); setLock("deck"); }
+      else fail(e);
+    } finally { setMaking(null); setPreparing(null); }
   };
   return (
     <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
@@ -182,9 +245,12 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
         <SampleDeckLink className="btn quiet sm" label="Sample deck" /></> : <>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
-      <WorkbookButton region={region} theme={theme} dive={dive} />
+      <WorkbookButton region={region} theme={theme} dive={dive} locked={lock === "workbook"} onLock={() => setLock("workbook")} />
+      {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} locked={lock === "csv"} onLock={() => setLock("csv")} />}
+      {/* the month's count after the buttons, not between two of them (LIVE11A-014) */}
+      {decksNote && <span className="k-note" data-testid="decks-left">{decksNote}</span>}
       {preparing && <Working small label={preparing} />}
-      {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} />}
+      {spent && lock === "deck" && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">{spent}</PlanNote> <SampleDeckLink className="link" label="Sample deck" /></div>}
     </div>
   );
 }
@@ -211,6 +277,7 @@ function layerColumns(r: Region, wide: Set<string>, wideOut: boolean, whole = fa
   // LIVE7A-009: an EBITDA margin filed in whole points prints as 12%, and a median or range built mostly on them in whole points too
   const fmt = (k: "ebitda" | "net" | "roce") => (v: number) => (k === "ebitda" ? pcw(v, whole) : pc(v));
   const f = (k: "ebitda" | "net" | "roce") => (x: LayerLine) => {
+    if (x.kind === "company" && k !== "roce" && x.row!.nm?.includes(k)) return <span title="Beyond ±100% of revenue: not meaningful">n.m.</span>;
     if (x.kind === "company") return <>{k === "ebitda" ? pcw(x.row![k], x.row!.ebitda_dp === 0) : pc(x.row![k])}{k === "net" && x.row!.one_off && x.row![k] != null ? " †" : ""}</>;
     if (x.kind === "median") return <MedianCell c={medCell(x.stats?.[k], x.of ?? 0, fmt(k))} />;
     return (x.stats?.[k]?.n ?? 0) >= MIN_BASE ? span(x.stats?.[k], fmt(k)) : "";
@@ -218,13 +285,13 @@ function layerColumns(r: Region, wide: Set<string>, wideOut: boolean, whole = fa
   // LIVE6-001: a company left out of the layer's calculations says so on its row, with why, as the deck's rows do
   const mark = (row: DiveRow) => {
     const c = calcOf(row);
-    if (!c.in) return <span className="k-sub-line" data-testid="calc-out">Left out of the layer's calculations: {CALC_WORDS[c.why] ?? c.why}</span>;
+    if (!c.in) return <span className="k-sub-line" data-testid="calc-out">Left out of the layer's calculations: {calcWords(c)}</span>;
     if (wideOut && wide.has(row.symbol)) return <span className="k-sub-line" data-testid="calc-out">Left out of the medians: its figures are the whole company's</span>;
     return null;
   };
   return [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => x.kind !== "company" ? <b>{x.label}</b>
-      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{ownWords(x.row!.what, x.row!.name) ? <span className="k-sub-line">In its own words: “{ownWords(x.row!.what, x.row!.name)}”</span> : <span className="k-sub-line k-muted">{NO_WORDS}</span>}</> },
+      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{ownWords(x.row!.what, x.row!.name) ? <span className="k-sub-line k-words">In its own words: “{ownWords(x.row!.what, x.row!.name)}”</span> : <span className="k-sub-line k-words k-muted">{NO_WORDS}</span>}</> },
     { key: "rev", header: "Revenue", numeric: true, cell: (x) => x.kind === "company" ? amount(x.row!.revenue, r) : "" },
     { key: "e", header: "EBITDA margin", numeric: true, cell: f("ebitda") },
     { key: "n", header: "Net margin", numeric: true, cell: f("net") },
@@ -249,28 +316,30 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
         ? <p className="k-small">No listed company is shown for this layer: none of the companies the map named has a description that shows it does this work.</p>
         : <>
           <p className="k-small k-muted" data-testid="layer-count">{listed} compan{listed === 1 ? "y" : "ies"} listed, {inCalc} in the layer's calculations{inCalc < MIN_BASE ? `: a median needs ${MIN_BASE}, so each company's own figures are shown` : ""}.</p>
+          <PhoneFold label={`Show its ${listed} compan${listed === 1 ? "y" : "ies"} and figures`}>
           <Fold rows={lines.filter((x) => x.kind === "company")} n={10} what="companies">{(shown) => (
             <DataTable label={`${layer.layer}: companies, revenue and margins`} columns={layerColumns(region, wide, layer.left_out > 0, !!layer.ebitda_whole)} rows={[...shown, ...lines.filter((x) => x.kind !== "company")]} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-kind": x.kind })} />
           )}</Fold>
+          </PhoneFold>
           {layer.line && <p className="k-small">{layer.line}</p>}
           {wide.size > 0 && <p className="k-note">"Whole-company figures": the company runs other businesses too, so its figures are the whole company's, not this layer's own.</p>}
           {layer.companies.some((c) => c.one_off && c.net != null) && <p className="k-note">†: net margin above the EBITDA margin, or unusual, that the company's own filed figures don't give; left out of the net margin's median.</p>}
         </>}
       {hist && hist.years.length >= 2 && hist.n >= MIN_BASE && (
-        <>
+        <PhoneFold label="Show its margins by year">
         <h3 className="k-sub">Margins by year, the same {hist.n} companies added together</h3>
         <DataTable label={`${layer.layer}: margin by year`} columns={[
           { key: "y", header: "Year", rowHeader: true, cell: (h: { y: string; e: number | null; n: number | null }) => h.y },
           { key: "e", header: "EBITDA margin", numeric: true, info: `The ${hist.n} companies that report every year here, added together.`, cell: (h) => pc(h.e) },
           { key: "n", header: "Net margin", numeric: true, cell: (h) => pc(h.n) },
         ]} rows={hist.years.map((y, k) => ({ y, e: hist.ebitda[k], n: hist.net[k] }))} rowKey={(h) => h.y} />
-        </>
+        </PhoneFold>
       )}
       {business && business.length > 0 && (
-        <>
+        <PhoneFold label="Show its operating figures filed between results">
           <h3 className="k-sub">Operating figures filed between results</h3>
           <BusinessTable rows={business} label={`${layer.layer}: operating figures from business updates`} />
-        </>
+        </PhoneFold>
       )}
     </Card>
     </ReportScope>
@@ -280,27 +349,29 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
 /** Sub-themes, each with the listed companies that do it. */
 export function SubThemesCard({ dive, business }: { dive: Dive; business?: Business | null }) {
   const r = dive.region;
+  // LIVE9A-022: sub-themes with no listed company are named in one line under the ones that have companies (3 of 4 Private-bank
+  // sub-themes were each a heading, a paragraph and "No listed company is shown")
+  const full = dive.subs.filter((s) => s.companies.length > 0), empty = dive.subs.filter((s) => s.companies.length === 0);
   if (dive.subs.length === 0) return null;
   const cols: Column<(typeof dive.subs)[number]["companies"][number]>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={x.company_wide} /> },
     { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => { const w = ownWords(x.what, x.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
     { key: "m", header: "Market value", numeric: true, cell: (x) => amount(x.cap, r) },
     { key: "g", header: "Revenue growth", numeric: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
-    { key: "e", header: "EBITDA margin", numeric: true, cell: (x) => pcw(x.ebitda, x.ebitda_dp === 0) },
+    { key: "e", header: "EBITDA margin", numeric: true, cell: (x) => marginCell(x, "ebitda", pcw(x.ebitda, x.ebitda_dp === 0)) },
   ];
   return (
     <Card id="theme-subs" label="Sub-themes">
       <CardHead title="Sub-themes and the companies that do them" info="Each company is shown only where its own description says it does that work." />
-      {dive.subs.map((s) => (
+      {full.map((s) => (
         <section key={s.name} className="k-stack">
           <h3 className="k-sub">{s.name}</h3>
           <p className="k-small k-muted">{s.detail}</p>
-          {s.companies.length === 0
-            ? <p className="k-small">No listed company is shown for this sub-theme.</p>
-            : <Fold rows={s.companies} n={10} what="companies">{(shown) => <DataTable label={`${s.name}: listed companies`} columns={cols} rows={shown} rowKey={(x) => x.symbol} />}</Fold>}
+          {<Fold rows={s.companies} n={10} what="companies">{(shown) => <DataTable label={`${s.name}: listed companies`} columns={cols} rows={shown} rowKey={(x) => x.symbol} />}</Fold>}
           {(business?.subs.find((x) => x.name === s.name)?.rows.length ?? 0) > 0 && <BusinessTable rows={business!.subs.find((x) => x.name === s.name)!.rows} label={`${s.name}: operating figures from business updates`} />}
         </section>
       ))}
+      {empty.length > 0 && <p className="k-small" data-testid="subs-empty">No listed company is shown for {empty.length === 1 ? "this sub-theme" : "these sub-themes"}: {empty.map((s) => s.name).join(", ")}.</p>}
     </Card>
   );
 }
@@ -461,7 +532,7 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
           { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof own.holdings)[number]) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "p", header: "Promoters", numeric: true, cell: (x) => pc(x.promoter) }, { key: "pc", header: "Change", numeric: true, cell: (x) => <Signed value={x.promoter_change}>{points(x.promoter_change)}</Signed> },
           { key: "i", header: "Named institutions", numeric: true, cell: (x) => pc(x.institutions) }, { key: "ic", header: "Change", numeric: true, cell: (x) => <Signed value={x.institutions_change}>{points(x.institutions_change)}</Signed> },
-          { key: "q", header: "Quarter", cell: (x) => x.quarter },
+          { key: "q", header: "Quarter", cell: (x) => quarterText(x.quarter) },
         ]} rows={shownH} rowKey={(x) => x.symbol} empty="No shareholding filings are stored for these companies yet." />}</Fold>
         </>}
         <h3 className="k-sub">{r === "IN" ? "Promoter and insider purchases and pledges, last 90 days" : "Insider purchases, last 90 days"}</h3>
@@ -596,8 +667,8 @@ function LeadersCard({ dive, prices }: { dive: Dive; prices: Prices | null }) {
     { key: "name", header: "Company", rowHeader: true, wrap: true, sortable: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={dive.company_wide.includes(x.symbol)} /> },
     { key: "cap", header: "Market value", numeric: true, sortable: true, cell: (x) => amount(x.cap, r) },
     { key: "sales_1y", header: "Revenue growth", numeric: true, sortable: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
-    { key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (x) => pcw(x.ebitda, x.ebitda_dp === 0) },
-    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (x) => pc(x.net) },
+    { key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (x) => marginCell(x, "ebitda", pcw(x.ebitda, x.ebitda_dp === 0)) },
+    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (x) => marginCell(x, "net", pc(x.net)) },
     { key: "roce", header: "ROCE", numeric: true, sortable: true, cell: (x) => pc(x.roce) },
     { key: "pe", header: "P/E", numeric: true, sortable: true, cell: (x) => times(x.pe) },
     { key: "pb", header: "P/B", numeric: true, sortable: true, cell: (x) => times(x.pb) },

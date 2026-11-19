@@ -199,10 +199,10 @@ def test_a_row_carries_its_kept_reason_before_the_whole_company_mark_and_a_mark_
     s = next(x for x in slides if x.title.startswith(("Layer 1 · ", deck.SMALL_TITLE)))
     tbl = next(b for b in s.blocks if b["kind"] == "table")
     name = next(c_ for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2] if str(c_).startswith(c0["name"]))
-    assert name.endswith("(left out)")
+    assert name.endswith("(insufficient evidence)")          # (updated on purpose, ex49: the mark is the reason's kind)
     notes = " ".join(p for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or [])
     whole_rows = any(str(c_).endswith("(whole company)") for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2])
-    assert "(left out):" in notes and ("(whole company):" in notes) == whole_rows          # a mark's note only with a row that carries it
+    assert "(insufficient evidence):" in notes and ("(whole company):" in notes) == whole_rows          # a mark's note only with a row that carries it
 
 
 def test_the_contents_line_for_tailwinds_and_risks_uses_the_page_s_own_counts():

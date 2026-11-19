@@ -55,7 +55,8 @@ CONTRACTED = ("software", "royalties", "services")          # models paid ahead 
 ASSETS_HEAVY = ("making", "capacity", "telecom_services", "resources", "utility", "transport", "semis", "hardware", "regulated_utility", "generation", "mining",
                 "metal_processing")
 STOCK_HOLDERS = ("making", "resale", "semis", "hardware", "mining", "metal_processing")    # companies that hold goods for sale
-RESEARCH = ("making", "semis", "hardware", "software", "royalties", "pharma")
+# m57 (R57 audit PAY-17): R&D is a line any US company outside finance may file: one that files none shows "–" (not filed), never "n/a"
+RESEARCH = ("us",)
 ORDERS = ("defence", "capital_goods", "construction")
 _BQ, _IQ, _US = "Latest quarter; exchange filing", "Latest period; exchange filing", "Latest fiscal year; SEC filing"
 
@@ -68,7 +69,7 @@ METRICS = (
     _m("ebitda", "EBITDA margin", "Operating profit before depreciation, interest and tax, over revenue", "pct", "year", _YEAR_SRC,
        "None for banks, lenders, insurers; some file whole points", "*"),
     _m("net", "Net margin", "Net profit over revenue; one above the EBITDA margin or unusual that its own filed figures don't give (†) is out of the median", "pct", "year", _YEAR_SRC,
-       "Includes items outside operations, and tax", "*"),
+       "Includes other income, exceptional items and tax", "*"),
     _m("roce", "ROCE", "Operating profit before interest and tax over equity plus debt", "pct", "year", _LAST_SRC, "None for banks, lenders, insurers", "*"),
     _m("roe", "ROE", "Net profit over shareholders' equity", "pct", "year", _LAST_SRC, "Debt raises it; lenders' and others' differ", "*"),
     _m("nii_assets", "NII / assets", "Interest earned less interest paid, over average total assets; filed results annualised where read, "
@@ -78,8 +79,13 @@ METRICS = (
     _m("nnpa", "Net NPA", "Net non-performing assets over net advances", "pct", "quarter", "Latest quarter given; results", "One quarter's end; after provisions",
        LENDING, ("IN",)),
     _m("deposit_growth", "Deposit growth", "Deposits against a year before", "chg", "year", "Reported balance sheets", "Two balance-sheet dates only", BANK, ("IN",)),
-    _m("pe", "P/E", "Market value over net profit of the last four quarters", "x", "year", "Last close; last four quarters", "None for a loss-maker", "*"),
-    _m("pb", "P/B", "Market value over shareholders' equity", "x", "year", "Last close; latest balance sheet", "Book value at the balance-sheet date", "*"),
+    # m57 (R57, the data check of the live R56 decks): the words say what is computed: the price over earnings per share of the last four
+    # quarters (market value over profit only where no quarterly EPS is filed, or where the EPS doesn't agree with it), and equity at the
+    # fiscal year's end for US companies
+    _m("pe", "P/E", "Price over earnings per share of the last four quarters; else market value over their net profit", "x", "year",
+       "Last close; last four quarters", "None for a loss-maker", "*"),
+    _m("pb", "P/B", "Market value over shareholders' equity", "x", "year", "Last close; equity at the latest year's end (US), latest balance sheet "
+       "(India)", "Book value at that date", "*"),
     _m("ev_ebitda", "EV/EBITDA", "Market value plus debt less cash, over the year's EBITDA", "x", "year", "Last close; latest full year",
        "None for banks, lenders, insurers", "*"),
     _m("cap", "Market value", "Price times shares in issue", "amt", "year", "Last close", "Moves with the price every day", "*", headline=False),
@@ -114,8 +120,15 @@ METRICS = (
        "As filed; life and general differ", INSURERS, ("IN",), group="insurer"),
     _m("claims_ratio", "Claims ratio", "Incurred claims over net premium earned, as filed for the year to date (general and health insurers)", "pct",
        "quarter", _IQ, "General and health insurers only", NON_LIFE, ("IN",), group="insurer"),
-    _m("combined_ratio", "Combined ratio", "Claims, commission and expenses over premium, as filed for the year to date (general and health insurers)",
-       "pct", "quarter", _IQ, "General insurers and health insurers; no investment income", NON_LIFE, ("IN",), group="insurer"),
+    _m("combined_ratio", "Combined ratio", "Claims, commission and expenses over premium, as filed for the year to date (general and health insurers); "
+       "a US insurer's: its loss ratio plus its expense ratio, the latest fiscal year (r62)",
+       "pct", "quarter", _IQ + "; US: annual report (10-K) facts filed with the SEC", "General insurers and health insurers; no investment income",
+       NON_LIFE + ("us",), ("IN", "US"), group="insurer"),
+    # r62 (the owner's review of the live R60 Property and casualty insurance deck, P0: no loss or combined ratios): a US P&C insurer's own
+    _m("loss_ratio", "Loss ratio", "Claims and claim expenses incurred over premiums earned, the latest fiscal year", "pct", "year", _US,
+       "As filed; reserve releases of earlier years in it", NON_LIFE + ("us",), ("US",), group="insurer"),
+    _m("expense_ratio", "Expense ratio", "Policy acquisition costs and other underwriting expenses over premiums earned, the latest fiscal year",
+       "pct", "year", _US, "Only the underwriting expense lines the company files", NON_LIFE + ("us",), ("US",), group="insurer"),
     _m("persistency_13", "13th-month persistency", "Policies still paying premium in their 13th month, as filed for the year to date (life insurers)",
        "pct", "quarter", _IQ, "Life insurers only", ("life",), ("IN",), group="insurer"),
     _m("premium_growth", "Premium growth", "Gross premium against the same quarter a year before", "chg", "quarter", _IQ, "As filed; one quarter",
@@ -139,6 +152,18 @@ METRICS = (
        "Software and licensing models only", CONTRACTED, ("US",), group="us"),
     _m("deferred_growth", "Deferred revenue growth", "Deferred revenue (contract liabilities) at the fiscal year's end against a year before", "chg",
        "year", _US, "Software and licensing models only", CONTRACTED, ("US",), group="us"),
+    # r62 (the owner's review of the live R60 REITs deck, P0: no FFO or AFFO): a property owner's funds from operations from its own lines
+    _m("ffo_share", "FFO / revenue", "Funds from operations (net income + real-estate depreciation and amortisation − gains on property sales, "
+       "from the filed lines) over revenue, the latest fiscal year", "pct", "year", _US, "Property owners only; depreciation as filed, "
+       "impairments not added back", ("us",), ("US",), group="us"),
+    _m("affo_share", "AFFO / revenue", "FFO less recurring capital spending (capital improvements, as filed) over revenue, the latest fiscal year",
+       "pct", "year", _US, "Only where recurring capital spending is filed; not filed otherwise", ("us",), ("US",), group="us"),
+    _m("p_ffo", "P/FFO", "Market value over funds from operations, the latest fiscal year's FFO (in place of P/E for a property owner)", "x",
+       "year", _US, "Property owners with a positive FFO only", ("us",), ("US",), group="us"),
+    _m("ffo", "FFO", "Funds from operations (net income + real-estate depreciation and amortisation − gains on property sales), the latest "
+       "fiscal year", "amt", "year", _US, "Filings in US dollars only", ("us",), ("US",), headline=False, group="us"),
+    _m("affo", "AFFO", "FFO less recurring capital spending, the latest fiscal year", "amt", "year", _US, "Only where recurring capital "
+       "spending is filed", ("us",), ("US",), headline=False, group="us"),
     _m("fcf_margin", "FCF margin", "Free cash flow (cash from operations less capital spending) over revenue, the latest fiscal year", "pct", "year",
        _US, "One fiscal year", ("us",), ("US",), group="us"),
     # India defence and capital goods: only where a business update the app reads states it, with its period
@@ -146,6 +171,109 @@ METRICS = (
        "Latest business update filed with the exchange", "As the company states it; not revenue", ORDERS, ("IN",), headline=False, group="orders"),
     _m("order_inflow", "Order inflow", "New orders in the period, as the company's own update states them", "amt", "quarter",
        "Latest business update filed with the exchange", "As the company states it; not revenue", ORDERS, ("IN",), headline=False, group="orders"),
+)
+# m53 (R53, the owner's review of the live R52 decks: "new sectors need operating metrics where source data supports them, never fabricated"):
+# each sector's own operating measures, read only where a company's own stored document states them (sector_ops: its investor presentation or
+# earnings release in the filings index, or its business update), each with its period and source; whom each applies to is a sector profile
+# (sector_ops.PROFILES), tagged "ops:<profile>"; "num" is a count or a per-unit price in the unit its label names
+_DOC = "Latest quarter stated; the company's investor presentation, earnings release or business update"
+_AS_AT = "Latest date stated; the company's investor presentation, earnings release or business update"
+_AIR, _HOSP, _CEM, _PWR, _PAY = ("ops:airline",), ("ops:hospital",), ("ops:cement",), ("ops:power",), ("ops:payments",)
+METRICS += (
+    _m("plf", "Passenger load factor", "Revenue passenger distance flown over available seat distance, as the airline states it for the quarter", "pct",
+       "quarter", _DOC, "As the airline states it; the consolidated figure where it gives several", _AIR, group="airline"),
+    _m("ask", "ASKs (billion)", "Available seat kilometres: seats flown times kilometres flown, as the airline states them for the quarter", "num",
+       "quarter", _DOC, "As stated; a size, never a median across airlines", _AIR, ("IN",), headline=False, group="airline"),
+    _m("rpk", "RPKs (billion)", "Revenue passenger kilometres: paying passengers times kilometres flown, as the airline states them for the quarter",
+       "num", "quarter", _DOC, "As stated; a size, never a median across airlines", _AIR, ("IN",), headline=False, group="airline"),
+    _m("asm", "ASMs (million)", "Available seat miles: seats flown times miles flown, as the airline states them for the quarter", "num", "quarter",
+       _DOC, "As stated; a size, never a median across airlines", _AIR, ("US",), headline=False, group="airline"),
+    _m("rpm", "RPMs (million)", "Revenue passenger miles: paying passengers times miles flown, as the airline states them for the quarter", "num",
+       "quarter", _DOC, "As stated; a size, never a median across airlines", _AIR, ("US",), headline=False, group="airline"),
+    _m("yield_km", "Yield (₹ per RPK)", "Passenger revenue per revenue passenger kilometre, as the airline states it for the quarter", "num", "quarter",
+       _DOC, "As stated; airlines count ancillary revenue differently", _AIR, ("IN",), group="airline"),
+    _m("yield_mile", "Passenger yield (cents per RPM)", "Passenger revenue per revenue passenger mile, as the airline states it for the quarter",
+       "num", "quarter", _DOC, "As stated; airlines count ancillary revenue differently", _AIR, ("US",), group="airline"),
+    _m("beds_op", "Operational beds", "Beds in operation (operating, operational or in-service beds) as the company states them; its consolidated "
+       "total where it gives regions or segments too", "num", "quarter", _AS_AT, "As stated; some count census beds only", _HOSP, headline=False,
+       group="hospital"),
+    _m("beds_cap", "Bed capacity", "Installed, licensed or capacity beds as the company states them", "num", "quarter", _AS_AT,
+       "As stated; includes beds not yet in operation", _HOSP, headline=False, group="hospital"),
+    _m("occupancy", "Bed occupancy", "Occupied beds over beds in operation, as the company states it for the quarter (its consolidated figure, the "
+       "one beside its total beds)", "pct", "quarter", _DOC, "As stated; bases differ (census or all operational beds)", _HOSP, group="hospital"),
+    _m("arpob", "ARPOB (₹ a day)", "Average revenue per occupied bed per day, as the company states it for the quarter", "num", "quarter", _DOC,
+       "Only where the company states ARPOB; revenue per inpatient is a different measure", _HOSP, ("IN",), group="hospital"),
+    _m("cem_capacity", "Cement capacity (MTPA)", "Installed cement capacity in million tonnes a year, as the company states it at the latest date "
+       "(capacity planned or under construction not counted)", "num", "quarter", _AS_AT, "As stated; a group's capacity where the company "
+       "consolidates its subsidiaries", _CEM, headline=False, group="cement"),
+    _m("cem_util", "Capacity utilisation", "Cement produced or sold over installed capacity, as the company states it for the quarter", "pct", "quarter",
+       _DOC, "As stated; bases differ (production or sales, cement or clinker)", _CEM, group="cement"),
+    _m("cem_volume", "Sales volume (million tonnes)", "Cement (and clinker) sold in the quarter, in million tonnes, as the company states it; "
+       "consolidated where it states both", "num", "quarter", _DOC, "As stated; some include clinker or traded volumes", _CEM, headline=False,
+       group="cement"),
+    _m("cem_realisation", "Realisation (₹ a tonne)", "Net sales realisation per tonne of cement sold, as the company states it for the quarter",
+       "num", "quarter", _DOC, "Only where stated per tonne; a price per bag is not converted", _CEM, ("IN",), group="cement"),
+    _m("mw_installed", "Installed capacity (MW)", "Generation capacity in operation, in megawatts, as the company states it at the latest date "
+       "(capacity under construction, contracted or planned not counted)", "num", "quarter", _AS_AT, "As stated; some state their share of "
+       "joint ventures, some the whole", _PWR, headline=False, group="power"),
+    _m("generation", "Generation (GWh)", "Electricity generated or sold in the quarter, in gigawatt hours (million units), as the company states it",
+       "num", "quarter", _DOC, "As stated; generated or sold as the company gives it", _PWR, headline=False, group="power"),
+    _m("cuf", "CUF / PLF", "Capacity utilisation factor (plant load factor for thermal plants): energy generated over the most the capacity could "
+       "generate in the period, as the company states it for its whole portfolio", "pct", "quarter", _DOC,
+       "As stated; solar, wind and thermal differ by nature", _PWR, group="power"),
+    _m("tpv", "Payment volume", "Total payment volume (TPV, gross dollar volume or payments GMV) processed in the quarter, as the company states it",
+       "amt", "quarter", _DOC, "As stated; definitions differ by company (gross or net, card or all)", _PAY, headline=False, group="payments"),
+    _m("txn", "Transactions (billion)", "Payment transactions processed in the quarter, in billions, as the company states them", "num", "quarter",
+       _DOC, "As stated; what counts as a transaction differs", _PAY, headline=False, group="payments"),
+    _m("take_rate", "Take rate", "Transaction revenue over payment volume, as the company states it for the quarter", "pct", "quarter", _DOC,
+       "Only where the company states it", _PAY, group="payments"),
+)
+# m57 (R57, the owner's review of the live R56 decks: "Airlines and travel: limited airline/hotel operating measures; Cement: limited capacity,
+# utilisation and volume statistics"; EPC "order book and book-to-bill"): cement's EBITDA a tonne, hotels' rooms, occupancy, room rate and
+# RevPAR, contractors' orders, each only as the company's own stored document states it
+_HOTEL, _EPC = ("ops:hotel",), ("ops:epc",)
+METRICS += (
+    _m("cem_ebitda_t", "EBITDA (₹ a tonne)", "Operating EBITDA per tonne of cement sold, as the company states it for the quarter (never worked out "
+       "from EBITDA over a volume)", "num", "quarter", _DOC, "Only where stated per tonne; bases differ (blended, cement only)", _CEM, ("IN",),
+       group="cement"),
+    _m("rooms", "Rooms in operation", "Operational rooms (keys) as the hotel company states them at the latest date, its own and managed as it "
+       "counts them (rooms signed or in the pipeline not counted)", "num", "quarter", _AS_AT, "As stated; some count managed and franchised rooms",
+       _HOTEL, headline=False, group="hotel"),
+    _m("room_occ", "Room occupancy", "Room nights sold over room nights available, as the company states it for the quarter (the figure beside its "
+       "rooms, else the one every passage agrees on)", "pct", "quarter", _DOC, "As stated; owned, managed or all hotels as the company gives it",
+       _HOTEL, group="hotel"),
+    _m("arr", "Average room rate (₹)", "Room revenue per room night sold (ARR or ADR), in rupees, as the company states it for the quarter", "num",
+       "quarter", _DOC, "As stated; portfolios differ in mix and location", _HOTEL, ("IN",), group="hotel"),
+    _m("adr", "Average daily rate ($)", "Room revenue per room night sold (ADR), in US dollars, as the company states it for the quarter", "num",
+       "quarter", _DOC, "As stated; portfolios differ in mix and location", _HOTEL, ("US",), group="hotel"),
+    _m("revpar_in", "RevPAR (₹)", "Room revenue per room night available, in rupees, as the company states it for the quarter", "num", "quarter",
+       _DOC, "As stated; comparable or all hotels as the company gives it", _HOTEL, ("IN",), group="hotel"),
+    _m("revpar_us", "RevPAR ($)", "Room revenue per room night available, in US dollars, as the company states it for the quarter", "num",
+       "quarter", _DOC, "As stated; comparable or all hotels as the company gives it", _HOTEL, ("US",), group="hotel"),
+    _m("orders_held", "Orders in hand", "Orders not yet executed (the order book; the backlog in a US release), in the theme's money, as the "
+       "company's own document states them at the latest date", "amt", "quarter", _AS_AT, "As stated; not revenue, and contracts can be cancelled",
+       _EPC, headline=False, group="epc"),
+    _m("orders_won", "Orders won in the quarter", "New orders received in the quarter (order inflow or intake), in the theme's money, as the "
+       "company's own document states them", "amt", "quarter", _DOC, "As stated; one quarter's orders are lumpy", _EPC, headline=False, group="epc"),
+    _m("book_to_bill", "Book-to-bill (times)", "Orders won over revenue billed in the period, as the company states the ratio (never worked out "
+       "here)", "num", "quarter", _DOC, "Only where the company states it", _EPC, group="epc"),
+    _m("presales", "Pre-sales (bookings)", "Value of homes and space sold (booked) in the quarter, in the theme's money, as the developer's own "
+       "document states it", "amt", "quarter", _DOC, "As stated; bookings, not revenue (recognised on completion)", ("ops:realty",), ("IN",),
+       headline=False, group="realty"),
+    _m("collections", "Collections", "Cash collected from customers in the quarter, in the theme's money, as the developer's own document states it",
+       "amt", "quarter", _DOC, "As stated; some include other income", ("ops:realty",), ("IN",), headline=False, group="realty"),
+    _m("headcount", "Headcount", "People employed at the period's end, as the IT services company states it", "num", "quarter", _AS_AT,
+       "As stated; some count contractors", ("ops:it",), headline=False, group="it"),
+    _m("attrition", "Attrition", "People who left over the average headcount, as the company states it (a rolling twelve months' where it says so)",
+       "pct", "quarter", _DOC, "As stated; voluntary or all leavers, quarterly annualised or twelve months", ("ops:it",), group="it"),
+    # m57: the page figures a layer's financial profile reads (layer_profiles.FIN), each from the company's stored annual figures
+    _m("debt_ebitda", "Debt / EBITDA", "Borrowings at the latest full year's end over that year's EBITDA (revenue times the EBITDA margin), both "
+       "from the same year's filed lines", "x", "year", _YEAR_SRC,
+       "None for a year whose EBITDA isn't positive; lease liabilities as the company files them", "*"),
+    _m("interest_cover", "Interest cover", "Profit before interest and tax over interest, the latest full year", "x", "year", _YEAR_SRC,
+       "None for banks, lenders, insurers", "*"),
+    _m("cfo_to_profit", "Cash from operations / net profit", "Cash generated by operations over net profit, the latest full year; a proxy for how "
+       "much profit turns into cash (no working-capital days are stored)", "x", "year", _YEAR_SRC, "None for a loss; one year", "*"),
 )
 BY_ID = {m.id: m for m in METRICS}
 # figures no source the app reads carries for these structures: listed so the report and the notes can say so, never filled by a proxy
