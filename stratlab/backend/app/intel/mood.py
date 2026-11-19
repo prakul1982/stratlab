@@ -401,13 +401,15 @@ def lines_of(p: dict) -> list[str]:
         out.append(("sectors", f"{s['up']} of {s['of']} sector indices rose and {s['down']} fell; {lead['label']} led ({fpct(lead['change_pct'])}) and {lag['label']} lagged ({fpct(lag['change_pct'])})."))
     m = (p.get("movers") or [None])[0]
     if m and (m["adding"] or m["taking"]):
+        # LIVE17A-003: each half a whole clause, with its unit and the index named: on a day no stock added points the card read only
+        # "Amazon.com took off about 8." (the second half of "… added about 40 points to the NIFTY 50 and … took off about 16")
         bits = []
         if m["adding"]:
             a = m["adding"][0]
             bits.append(f"{a['name']} added about {points(a['points'])} to the {m['index']}")
         if m["taking"]:
             t = m["taking"][0]
-            bits.append(f"{t['name']} took off about {points(abs(t['points'])) if fnum(abs(t['points'])) == '1' else fnum(abs(t['points']))}")
+            bits.append(f"{t['name']} took about {points(abs(t['points']))} off {'it' if bits else 'the ' + m['index']}")
         out.append(("movers", " and ".join(bits) + "."))
     f = p.get("flows")
     if f and f["rows"]:

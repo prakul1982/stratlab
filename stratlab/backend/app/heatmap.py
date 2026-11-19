@@ -142,15 +142,37 @@ def save(region: str, day: str, stocks: dict[str, list], index: dict[str, list] 
     _views.clear()
 
 
-def load(region: str) -> dict:
-    """The market's stored rows. {"day": None, "stocks": {}} before the first daily run has stored them."""
+def _raw(region: str) -> dict:
     try:
         raw = db.json_value(db.get_setting(KEY + region), {})
     except Exception:                    # storage down: nothing to show, asked again next time
         raw = {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def load(region: str) -> dict:
+    """The market's stored rows. {"day": None, "stocks": {}} before the first daily run has stored them. `unsettled`: the stored rows'
+    symbols found off the day's settled closes (breadth.Job.repair), empty when none."""
+    raw = _raw(region)
     stocks = raw.get("stocks") if isinstance(raw.get("stocks"), dict) else {}
+    uns = raw.get("unsettled") if isinstance(raw.get("unsettled"), list) else []
     return {"day": raw.get("day"), "stocks": {s: r for s, r in stocks.items() if isinstance(r, list) and len(r) == len(PERIODS) + 3},
-            "index": raw.get("index") if isinstance(raw.get("index"), dict) else {}}
+            "index": raw.get("index") if isinstance(raw.get("index"), dict) else {}, "unsettled": [str(x) for x in uns][:20]}
+
+
+def mark_unsettled(region: str, symbols: list[str]) -> None:
+    """LIVE17A-001: the stored day's rows found off its settled closes (a copy read in the session): marked so the heatmap and movers say
+    the prices were read in the session rather than call them closes, until a run stores the closes (save clears it). [] clears the mark."""
+    raw = _raw(region)
+    if not raw.get("stocks"):
+        return
+    raw["unsettled"] = list(symbols)[:20]
+    if not symbols:
+        raw.pop("unsettled", None)
+    db.set_setting(KEY + region, json.dumps(raw, separators=(",", ":")))
+    _views.clear()
+    from . import movers
+    movers._views.clear()
 
 
 def clear() -> None:
@@ -339,7 +361,7 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     g = breadth.GROUPS[group]
     out = {"market": region, "universe": None if symbols is not None else group, "universe_name": None if symbols is not None else g["name"],
            "universes": universes(region), "periods": list(PERIODS), "as_of": doc.get("day"), "cap_unit": CAP_UNIT[region],
-           "index": {"name": g["index_name"], "r": index.get(group)}, "pending": not stocks,
+           "index": {"name": g["index_name"], "r": index.get(group)}, "pending": not stocks, "unsettled": bool(doc.get("unsettled")),
            "live": {k: v for k, v in live.items() if k != "quoted"} if live else None, "behind": not live and behind(region, doc.get("day")),
            "min_cap": min_cap, "tiles": [], "members": 0, "with_prices": 0, "price_only": 0, "matching": 0, "shown": 0}
     if not stocks:

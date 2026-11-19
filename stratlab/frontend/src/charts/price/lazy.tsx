@@ -55,6 +55,13 @@ export function companyLoader(region: string, symbol: string, reading?: QuoteRea
   };
 }
 
+/** LIVE17B-003: a company page's chart, asked for with the page's first call instead of after the page and the chart's code are in (the
+ * candles came at 9.5-11.3 s behind "Loading prices…"): the year of daily candles the chart opens on (PriceChart: 1Y, daily), kept where
+ * the chart's own first read finds it. */
+export function prefetchCompanyChart(region: string, symbol: string): void {
+  companyLoader(region, symbol)("1d", { range: "1y" }).catch(() => undefined);      // the chart reports its own failure when it reads
+}
+
 /** Candles of any instrument the app trades on (notebooks, backtests, paper trading). */
 export function instrumentLoader(instId: string): Loader {
   return (tf: BaseTf, o) => api<Answer>(`/chart/candles/${encodeURIComponent(instId)}?tf=${tf}&range=${(o.range ?? "1y").toLowerCase()}${o.before ? `&before=${encodeURIComponent(o.before)}` : ""}`);

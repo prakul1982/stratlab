@@ -98,6 +98,12 @@ h1.eyebrow { font-weight: 400; }
 .btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: var(--chip); border: 1px solid var(--line-2); color: var(--muted); }
 /* LIVE1B-016, 047: a button that is working (it says "Adding…") keeps its fill, dimmed: the dashed outline is for one that cannot be pressed yet */
 .btn:disabled[aria-busy="true"]:not(.quiet):not(.blue):not(.outline):not(.danger) { opacity: .6; background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); cursor: progress; }
+/* LIVE17B-001: the sign-in page's start-up frame (scripts/seoPages.mjs loginFrame) holds its two buttons disabled only until its small
+   script has its handlers in (a press before it would be a plain form submit that loses the address): they look as they will, never the
+   grey of a button that can't be pressed, with a working cursor meanwhile */
+.boot-login [data-boot-google]:disabled, .boot-login [data-boot-email] .btn:disabled { opacity: 1; cursor: progress; }
+.boot-login.boot-login .btn.lp-cta[data-boot-google]:disabled { background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); }      /* over .btn:disabled's grey */
+.boot-login [data-boot-email] .btn.outline:disabled { background: transparent; border: 1px solid var(--ink); color: var(--ink); }
 .btn.blue { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
 .btn.outline { background: transparent; color: var(--ink); }
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
@@ -1211,6 +1217,13 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 .space-home .k-card-head:has(> .k-card-actions > a.link:only-child) { flex-wrap: nowrap; align-items: flex-start; }
 .space-home .k-card-head:has(> .k-card-actions > a.link:only-child) > .k-card-actions { flex: none; white-space: nowrap; }
 .space-home .k-card-head:has(> .k-card-actions > a.link:only-child) .k-card-title { min-width: 0; }
+/* LIVE17B-005: Money home on a phone: the cards' titles are short names ("My Holdings", "Tax, FY 2026-27") that broke over two lines beside
+   their long links ("My" / "Holdings"); there the link is a line of its own under the title, which stays whole */
+@media (max-width: 640px) {
+  .space-home .k-card-head:has(> .k-card-actions > a.link[data-money]:only-child) { flex-wrap: wrap; row-gap: 4px; }
+  .space-home .k-card-head:has(> .k-card-actions > a.link[data-money]:only-child) > .k-card-actions { order: 3; flex: 1 1 100%; height: auto; }
+  .space-home .k-card-head:has(> .k-card-actions > a.link[data-money]:only-child) .k-card-title { white-space: nowrap; }
+}
 .space-flag > :first-child { min-width: 110px; }   /* red flags across the page: the symbols make a column and the sentences line up after them */
 .space-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }   /* two short cards stacked in one column of a panel row (VR1-010) */
 .space-next { display: flex; flex-direction: column; gap: 14px; }
@@ -1361,6 +1374,14 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .pos-source { margin-top: -6px; }   /* VR2-022: the intro runs the card's width (it was held to 80ch, 60% of a wide card, with the right 40% empty) */
 /* long against short: the long side dark, the short side the line colour; the shares are written out beside it */
 .pos-split { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+/* LIVE17B-007: on a phone the participant cards are two figures across: the shares go under their bar, inside the card ("59.2% / 40.8%"
+   ran past its edge), and the card head's switches and button are one width */
+@media (max-width: 640px) {
+  .pos-split { display: flex; flex-wrap: wrap; row-gap: 4px; max-width: 100%; }
+  .pos-split > .pos-bar { flex: 1 1 100%; }
+  #pos-part > .k-card-head > .k-card-actions { flex: 1 1 100%; }
+  #pos-part > .k-card-head > .k-card-actions > .k-seg, #pos-part > .k-card-head > .k-card-actions > .btn { width: 100%; box-sizing: border-box; }
+}
 
 /* ---------- trade journal ---------- */
 .j-bar { position: relative; height: 12px; min-width: 80px; }
@@ -1671,6 +1692,14 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* LIVE14B-008: the year's tax figure's place, held while the tax report loads (its one-row table's height), so the upload card doesn't move */
 .tax-head-hold { min-height: 85px; }
 @media (max-width: 640px) { .tax-head-hold { min-height: 145px; } }
+/* LIVE17B-004: the tax report on a phone: its controls one width, the card's (a switch, the upload button, the year, the downloads), not four */
+.tax-head-one { display: flex; flex-direction: column; gap: 2px; }
+.tax-head-fig { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .tax-controls > .k-card-head > .k-card-actions { flex: 1 1 100%; }
+  .tax-controls > .k-card-head > .k-card-actions > .k-seg, .tax-controls > .k-card-head > .k-card-actions > select.k-input,
+  .tax-controls > .k-card-head > .k-card-actions > .btn, .tax-controls .k-row > .k-upload { width: 100%; box-sizing: border-box; }
+}
 /* a table in a compact card (a strip of a few figures) fills the card's width, not the width of its words (owner, 5 Nov: the tax
    report's two-figure table stopped two thirds of the way across its card) */
 .k-card.compact > :is(.k-facts, .k-tbl-wrap) { flex: 1 1 100%; min-width: 0; }
@@ -2852,6 +2881,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
 .lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
+/* LIVE15B-012 / LIVE17B: Free's price has no line under it (no dollar or rupee figure beside ₹0): its placeholder is the price line alone, so
+   Free's card doesn't shrink and pull the cards under it up when the prices arrive (visitor phone CLS 0.045) */
+.lp-skel-amount.lp-skel-amount-one { height: calc(44px * 1.05); }      /* .lp-amount: 44px at line-height 1.05 */
 .lp-skel-fine { height: calc(13.5px * 1.5 * 4); width: min(80ch, 100%); }   /* su1's US dollar note makes the fine print four lines (ci60) */
 /* a phone wraps the lede to four lines and the fine print to six, and its switch is a touch-sized 50px: the placeholders keep
    that room so the page below doesn't jump when the prices arrive (the FAQ moved 122px on a 412px phone) */

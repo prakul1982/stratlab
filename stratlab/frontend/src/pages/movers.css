@@ -7,6 +7,10 @@
 .mv-wait { min-height: 520px; }
 /* LIVE13A-019: on a phone the six lists are three rows of two, never "52-week lows" alone on a third row */
 @media (max-width: 640px) {
+  /* LIVE17A-010: one setting a row, each the card's width: the "Stocks" field drawn while the first read is out ("Reading…") fitted beside
+     the market switch, the real one (its longer names) didn't, and the list under them moved 88 px down (CLS 0.062) */
+  .mv-controls > .k-field { flex: 1 1 100%; }
+  .mv-controls > .k-field select.k-input { width: 100%; }
   .mv-page .k-chiprow.wrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .mv-page .k-chiprow.wrap .k-chip { width: 100%; justify-content: center; }
 }

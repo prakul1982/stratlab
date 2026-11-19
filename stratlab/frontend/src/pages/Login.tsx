@@ -23,6 +23,7 @@ import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeU
 import type { LibEntry } from "../components/LibraryBits";
 import { exampleEyebrow, pickExamples } from "../lib/landingExamples";
 import { importWithRetry } from "../lib/lazyRetry";
+import { emailFormNow, loadEmailForm } from "../lib/emailForm";
 import { adsLive } from "../lib/ads";
 import { CONFIG } from "../lib/adsConfig";
 
@@ -40,10 +41,9 @@ import { EmailWay } from "../components/EmailWay";
 import { SampleDeckLink, useSampleDeck } from "../components/SampleDeck";
 // LIVE16B-001: on the sign-in page itself the email form's code is asked for as this file runs, and drawn straight away once here, so the form
 // the start-up frame shows is never swapped for an empty slot while it downloads
-let emailMod: typeof import("../components/EmailSignIn") | null = null;
-const loadEmail = () => importWithRetry(() => import("../components/EmailSignIn")).then((m) => { emailMod = m; return { default: m.EmailSignIn }; });
-const EmailSignIn = lazy(loadEmail);
-if (/^\/(login|signup)\/?$/.test(location.pathname)) loadEmail().catch(() => undefined);
+// (LIVE17B-002: lib/emailForm, so a plan card's email button asks for it before it opens this page)
+const EmailSignIn = lazy(() => loadEmailForm().then((m) => ({ default: m.EmailSignIn })));
+if (/^\/(login|signup)\/?$/.test(location.pathname)) loadEmailForm().catch(() => undefined);
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). Every button that signs in
@@ -280,7 +280,13 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
   // LIVE7B-008: /login and /signup are one sign-in panel: the heading, one line, one Google button and what signing in reads (a dialog
   // with the same heading and button over the page, and a second band with a third button, said it all three times)
   const login = slim === "login";
+  const EmailNow = emailFormNow()?.EmailSignIn;     // the email form's code, once here (LIVE17B-002: a plan card asks for it before it opens this page)
   const signup = login && location.pathname === "/signup";   // LIVE10B-003: "Sign up for StratLab" over "Sign in with…" lines
+  // LIVE17B-002: the sign-in panel opened from another page (a plan card at /plans' foot) starts at its top, not at that page's scroll
+  // position; with its email form here and #email asked, the form has already put itself in view (EmailSignIn, drawn before this runs)
+  useLayoutEffect(() => {
+    if (login && !(location.hash === "#email" && emailFormNow() && emailSignInOn()) && window.scrollY > 0) window.scrollTo(0, 0);
+  }, [login]);     // the same page as /plans (VisitorApp draws one Login for both): asked again when it becomes the sign-in panel
   useLayoutEffect(() => {
     if (!section) return;
     const go = () => document.getElementById(section)?.scrollIntoView({ behavior: "instant" });
@@ -367,7 +373,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
               {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
             </div>
             {/* its place held from the first frame (LIVE12B-008: the form arrived after it and pushed the small print 208 px down on a phone) */}
-            {login && emailSignInOn() && (emailMod ? <emailMod.EmailSignIn signup={signup} /> : <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>)}
+            {login && emailSignInOn() && (EmailNow ? <EmailNow signup={signup} /> : <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>)}
             {error && <p className="banner" role="alert">{error}</p>}
             {login ? <p className="small muted">Google sign-in reads only your name and email address{emailSignInOn() ? "; email sign-in reads only your email address" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
           </div>
@@ -621,7 +627,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   <span className="small muted">{WHO[p]}</span>
                 </div>
                 <div className="stack g2">
-                  {loading ? <span className="lp-skel lp-skel-amount" role="img" aria-label="Loading the price" /> : (
+                  {loading ? <span className={`lp-skel lp-skel-amount${p === "free" ? " lp-skel-amount-one" : ""}`} role="img" aria-label="Loading the price" /> : (
                     <div className="lp-amount-row">
                       <div className="serif lp-amount">{price ? price.shown : freePrice(cur, usd)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}

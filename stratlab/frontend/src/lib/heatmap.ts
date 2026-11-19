@@ -20,7 +20,9 @@ export type HeatView = {
  * the session, or the day's last trades after the bell until the evening run stores its closes); `behind`: the latest session has
  * closed and nothing of it is in yet. Both absent from older answers. */
 export type LiveOf = { day: string; time: string | null; close: boolean };
-export type DayOf = { as_of: string | null; live?: LiveOf | null; behind?: boolean };
+export type DayOf = { as_of: string | null; live?: LiveOf | null; behind?: boolean;
+  /** LIVE17A-001: the stored day's prices were found off its settled closes (a copy read in the session) and are being read again */
+  unsettled?: boolean };
 
 /** The facts line's lead, its bold day and its tail, and the source sentence for an info note: "Prices at 14:00 IST, 18 Nov" while
  * live, "Last trades of 18 Nov" after the bell, "Closes of 17 Nov" with "the latest session's closes are being added" when behind
@@ -35,6 +37,9 @@ export function dayLine(v: DayOf, open: boolean, what: "map" | "lists", day: (is
     tail: ` · the market is open; the ${what} ${what === "map" ? "is" : "are"} redrawn every 15 minutes`,
     source: `prices at ${lv.time ? `${lv.time} ${zone} on ` : ""}${day(lv.day)}`, price: "Last price" };
   if (!v.as_of) return null;
+  // LIVE17A-001: never "Closes of 18 Nov" over prices read in that session (TJX +10.20% for a close of +8.05%)
+  if (v.unsettled) return { lead: "Prices read during the session of ", day: day(v.as_of), tail: " · the day's closes are being read again and replace them",
+    source: `prices read during the session of ${day(v.as_of)}`, price: "Last price" };
   const tail = v.behind ? " · the latest session's closes are being added" : open ? closesTail(open).replace("the map is", what === "map" ? "the map is" : "the lists are") : "";
   return { lead: "Closes of ", day: day(v.as_of), tail, source: `daily closes of ${day(v.as_of)}`, price: "Last close" };
 }

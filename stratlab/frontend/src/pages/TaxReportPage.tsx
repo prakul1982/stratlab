@@ -10,7 +10,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, ShowLess, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, ShowLess, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
@@ -303,10 +303,10 @@ export function TaxReportPage() {
       {/* LIVE1B-010: the note is one sentence; what the estimate covers is said once, in the total's card */}
       <Notice label="Estimate only"><b>Estimate only.</b> An estimate from the files you uploaded and the income you entered, not tax advice. Check it with a chartered accountant (CA) before you file or pay tax.</Notice>
 
-      <Card>
+      <Card className="tax-controls">
         <CardHead title="Upload your trades"
           info={<>Download the equity tradebook (every trade) or the tax P&amp;L as Excel, CSV or ZIP from {BROKERS}, then upload it here. You can pick several files, from several brokers, at once (up to {MAX_MB} MB each, {FNO_MB} MB for an F&amp;O file on its own); trades already uploaded are skipped. Any other CSV works with the columns Date, Symbol (or ISIN), Type (buy or sell), Quantity and Price. F&amp;O, commodity and currency results are read from Zerodha's tax P&amp;L for now (the ZIP, or its "Tradewise Exits" files), or a P&amp;L file with the contract, exit date and profit.</>}
-          actions={has ? <Seg label="What the file does" options={[{ value: "add", label: "Add to my trades" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
+          actions={has ? <Seg label="What the file does" options={[{ value: "add", label: "Add to my trades" }, { value: "replace", label: "Start again with this file", short: "Start again" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
         <div className="k-row">
           <UploadButton label="Upload tradebook or tax P&L" busy={busy} multiple accept=".csv,.xlsx,.xls,.txt,.zip,text/csv,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Tradebook or tax P&L file" onFiles={pick} />
           <span className="k-note">Excel, CSV or ZIP, from any broker.</span>
@@ -368,7 +368,7 @@ export function TaxReportPage() {
 
       {rep && has && y && (
         <>
-          <Card compact>
+          <Card compact className="tax-controls">
             <CardHead title="Financial year" actions={<>
               <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
                 options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}${hasTrades(x) ? "" : " · no trades"}` }))} />
@@ -518,11 +518,25 @@ const FIRST_UNDERLYINGS = 5;
 /** DH-006: the year's total, and what is payable with the interest, at the top of the page, not under the upload. */
 function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
   const t = y.total;
+  const phone = usePhone();
   if (!t.available) return null;
   // RC2B-004: the figure once, in the same plain style as the payable one; the rounded line only when the return rounds it to
   // something else, and the links sit inside the notes, not on lines of their own
   const rounds = t.rounded != null && t.rounded.tax !== Math.round(t.total);
   const toolsLink = <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link>;
+  const one = !(payable && !payable.locked && payable.total != null);
+  // LIVE17B-004: one figure on a phone is the figure with its name and note, not a one-row table under a header row
+  if (phone && one) return (
+    // the placeholder's own height (tax-head-hold), so nothing under it moves when the figure comes (LIVE14B-008)
+    <Card compact label="The year's tax" className="tax-head-hold">
+      <div className="tax-head-one" data-testid="tax-head-one">
+        <span className="k-small k-muted">Estimated tax for <span className="nowrap">{y.label}</span></span>
+        <span className="tax-head-fig" aria-label="Total tax estimate">{inr(t.total)}</span>{/* a span, as on the table: the page names its total one way */}
+        <span className="k-small">{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B${t.sections ? " of the 1961 Act" : ""}). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></span>
+      </div>
+      {payable?.locked && <p className="k-small k-muted" data-testid="tax-payable-locked">What is still payable, with your TDS and payments taken off and the interest under sections 234A, 234B and 234C added, is in <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link> on the {payable.plan ?? "Pro"} plan.</p>}
+    </Card>
+  );
   return (
     <Card compact label="The year's tax">
       {/* RC2B-042 and TABLE-SWEEP: the year's two figures as rows of one table, each with its note beside it, not two tiles across a
@@ -563,7 +577,7 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
   ];
   return (
     <Card id="tax-total" label="Total tax estimate">
-      <CardHead title={`Total tax estimate, ${y.label}`} infoLabel="What the total covers"
+      <CardHead title={<>Total tax estimate, <span className="nowrap">{y.label}</span></>} infoLabel="What the total covers"
         info="Slab tax on your other income, intraday and F&O results, plus tax on share gains at the special rates, less the section 87A rebate where it applies, plus surcharge and 4% cess. It is worked out for an individual of the age band and residency you choose below. Advance tax and TDS already paid aren't taken off." />
       <p className="k-small k-muted">Covers only the income you enter or import here: the trades in your files and the other income you type below, for an individual of the age band and residency you choose. House property, foreign income, other capital assets and anything else left out aren't counted, and advance tax and TDS already paid aren't included.{filing && <> <a className="link" href="#tax-filing">Which return and whether a tax audit applies</a>.</>}</p>
       {(y.dividends_left_out ?? 0) > 0 && (

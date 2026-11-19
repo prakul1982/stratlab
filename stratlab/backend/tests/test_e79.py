@@ -139,7 +139,7 @@ def test_e79_a_us_piece_read_on_another_revenue_is_read_again_and_its_shares_wit
            "sector_src": {"sbc_share": {}}}
     assert SM.stale_for_revenue(row, old) and not SM.fresh_piece(old)
     assert SM.withhold_shares(row) == ["sbc_share"] and "sbc_share" not in row and "sbc_share" not in row["sector_src"]
-    new = {**old, "rev": 1573.544, "rev_v": SM.REV_V}
+    new = {**old, "rev": 1573.544, "rev_v": SM.REV_V, "reit_v": SM.REIT_V}          # (updated on purpose, e81: REIT_V 2, Camden's FFO read again)
     assert not SM.stale_for_revenue(row, new) and SM.fresh_piece(new)
     assert SM.stale_for_revenue(row, {**new, "rev": 12.967})          # a piece kept on another revenue for the same year
     # (guard) an old piece of a company whose revenue is its top line stands
@@ -256,6 +256,6 @@ def test_e79_a_layer_with_members_and_no_figures_says_how_many_it_lists(monkeypa
 
 
 def test_e79_versions():          # e80 (LIVE16A, the R78 decks): RULES 75, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose)
-    assert B.RULES == 75 and TR.PLACE_CARRY[75] == 74 and TR.PLACE_CARRY[74] == 73 and TR.EARLIER_MAX == 30
-    assert D.DIVE_TEXT == 46 and deck.THEME_DECK_VERSION == 86 and SM.VERSION == 3
+    assert B.RULES == 76 and TR.PLACE_CARRY[76] == 75 and TR.PLACE_CARRY[75] == 74 and TR.PLACE_CARRY[74] == 73 and TR.EARLIER_MAX == 31          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
+    assert D.DIVE_TEXT == 47 and deck.THEME_DECK_VERSION == 87 and SM.VERSION == 3          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
     assert json and computed and time        # (imports kept for the replays above)

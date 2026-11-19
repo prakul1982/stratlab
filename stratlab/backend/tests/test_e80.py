@@ -255,7 +255,9 @@ def test_e80_layers_of_one_profile_that_state_none_of_its_measures_are_said_once
     pid = next(iter(sector_ops.BY_PROFILE))
     rows = [{"layer": f"Layer {i}", "ops": {"profile": pid, "measures": [], "none": ["a", "b"]}} for i in range(5)]
     got = deck.profile_summary(rows)
-    assert got.count("none of their 2 measures stated") == 1 and "none of its" not in got and "Layer 0" in got and "Layer 4" in got
+    # (updated on purpose, e81: the R79 decks' "profile unsaid": each layer still names itself, briefly after the first)
+    assert got.count("none of its 2 measures stated") == 1 and got.count("none of them either") == 4
+    assert all(f"Layer {i}" in got for i in range(5))
 
 
 def test_e80_a_layer_name_that_only_changes_case_is_no_rename():
@@ -283,6 +285,6 @@ def test_e80_an_older_entry_of_a_theme_kept_now_under_another_name_is_no_page_of
 def test_e80_versions():
     from app import deck
     from app.intel import sector_metrics, theme_base
-    assert theme_base.RULES == 75 and theme_routes.PLACE_CARRY[75] == 74 and theme_routes.EARLIER_MAX == 30
-    assert theme_data.DIVE_TEXT == 46 and deck.THEME_DECK_VERSION == 86 and sector_metrics.VERSION == 3
+    assert theme_base.RULES == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.PLACE_CARRY[75] == 74 and theme_routes.EARLIER_MAX == 31          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
+    assert theme_data.DIVE_TEXT == 47 and deck.THEME_DECK_VERSION == 87 and sector_metrics.VERSION == 3          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
     assert computed.entry_max(theme_library.DIVE) >= 4 * 1024 * 1024 and computed.entry_max("theme") == computed.ENTRY_MAX

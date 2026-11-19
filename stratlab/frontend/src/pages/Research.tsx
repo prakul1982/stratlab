@@ -20,7 +20,7 @@ import {
   AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteTable, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
-import { preloadPriceChart } from "../charts/price/lazy";
+import { prefetchCompanyChart, preloadPriceChart } from "../charts/price/lazy";
 import { loadSurveillance } from "../lib/surveillance";
 import { loadEtfGaps } from "../lib/etfGaps";
 import { loadFoChanges } from "../lib/foChanges";
@@ -286,6 +286,8 @@ function CompanyView() {
   useEffect(() => {
     let live = true;
     setC(null); setError(null); setResults(null);
+    // LIVE17B-003: the chart's candles are asked for beside the page's own first call, not after it and the chart's code
+    prefetchCompanyChart(region, sym);
     // the price, header and tables first (lean); the news, the encyclopedia entry and the peers come from slower sources and
     // fill in behind them, so a slow one holds up only its own card (R10O-009: company pages settled in 9 to 30 s)
     researchApi.company(region, sym, true).then((x) => {

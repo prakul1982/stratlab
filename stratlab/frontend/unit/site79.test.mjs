@@ -21,7 +21,8 @@ test("LIVE16B-001: /login and /signup's own HTML draws both ways in, with true w
     assert.match(html, /<button type="button" class="btn lp-cta" data-boot-google disabled><svg[^]*?<\/svg>Continue with Google<\/button>/);
     assert.match(html, new RegExp(`<label for="boot-email" class="email-signin-label">${verb} with email</label>`));
     assert.match(html, /<button type="submit" class="btn outline" disabled>Email me a code<\/button>/);   // updated on purpose: disabled until signin-early.js has run (rel79)
-    assert.match(html, /<script src="\/signin-early\.js" async><\/script>\n<\/body>/);
+    // updated on purpose (site80, LIVE17B-001): read from the head at high priority and run before the app's module, not async at the body's end
+    assert.match(html, /<script src="\/config\.js"><\/script>\n<script src="\/signin-early\.js" defer fetchpriority="high"><\/script>/);
     // the classes the app draws on the same page, so nothing moves when it takes over
     assert.match(html, /class="lp-wrap lp-hero-grid lp-hero-solo lp-hero-login"/);
     assert.match(html, /<header class="lp-nav" data-boot-head>/);

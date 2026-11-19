@@ -273,6 +273,95 @@ def _evidence(dive: dict):
     return lambda sym: inner.get(sym) or outer.get(sym) or "membership_unverified"
 
 
+# e81 (LIVE17A-005: 7 of 50 /themes cards differing from their pages, Electric utilities 126 on the card and 118 on its page; the Semiconductors
+# post "104 listed US companies ... 9 layers" beside its page's "102 companies in 10 layers"; Space and satellites "19 companies (5 more of the
+# theme's 24 not listed: not confirmed by their own words or official industry yet)" while 23 of its 24 were confirmed): one count of a theme's
+# companies for every surface, worked out here from the stored read and its dive: the companies the page lists (shown on their official
+# industry or confirmed by their own words, the map's check or the dive's evidence: SHOWN_STATES), one listed under two symbols counted once,
+# in how many layers, of how many in the theme, and why each one not listed is not (UNLISTED_SAID)
+SHOWN_STATES = ("description_verified", "industry_code_supported", "list_supported")
+UNLISTED_SAID = (("membership_unverified", "not checked yet"), ("not_confirmed", "whose own words describe other work"),
+                 ("", "not confirmed by their own words or official industry yet"))
+
+
+def public_layers(p: dict, dive: dict | None = None) -> list[dict]:
+    """e81: each layer of the stored read with the companies its public page lists (share.checked, or a dive evidence state in SHOWN_STATES),
+    a company the dive lists once under another symbol left out; layers with none left out."""
+    dive = dive if isinstance(dive, dict) else {}
+    ev = _evidence(dive)
+    twice = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+    out = []
+    for v in (p or {}).get("value_chain") or []:
+        if not isinstance(v, dict):
+            continue
+        cos, seen = [], set()
+        for c in v.get("companies") or []:
+            if not isinstance(c, dict) or not c.get("ticker") or c["ticker"] in seen or c["ticker"] in twice:
+                continue
+            if checked(c) or (ev is not None and ev(c["ticker"]) in SHOWN_STATES):
+                seen.add(c["ticker"])
+                cos.append(c)
+        name = public_words(v.get("layer"), 80)
+        if cos and name:
+            out.append({"name": name, "companies": cos})
+    return out
+
+
+def counts(p: dict, dive: dict | None = None) -> dict:
+    """e81: the theme's one count, as its card, its page and its post say it: {"listed": companies its page lists, "layers": layers its page
+    shows, "all": companies in the theme (the dive's tally, the app's and the deck's; else the read's own, each once), "unlisted": [[why, n]]
+    for those not listed, adding up to all - listed}."""
+    dive = dive if isinstance(dive, dict) else {}
+    layers = public_layers(p, dive)
+    listed = {c["ticker"] for v in layers for c in v["companies"]}
+    twice = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+    every = {c.get("ticker") for v in (p or {}).get("value_chain") or [] if isinstance(v, dict) for c in v.get("companies") or []
+             if isinstance(c, dict) and c.get("ticker")} - twice
+    dt = dive.get("tally") if isinstance(dive.get("tally"), dict) else None
+    total = int(dt["total"]) if dt and dt.get("total") else len(every)
+    total = max(total, len(listed))
+    ev = _evidence(dive)
+    rest = Counter()
+    for s_ in sorted(every - listed):
+        st = ev(s_) if ev is not None else ""
+        rest[st if st in ("membership_unverified", "not_confirmed") else ""] += 1
+    unlisted = [[said, rest[k]] for k, said in UNLISTED_SAID if rest[k]]
+    if sum(n for _, n in unlisted) != total - len(listed):
+        unlisted = [[UNLISTED_SAID[-1][1], total - len(listed)]] if total > len(listed) else []
+    return {"listed": len(listed), "layers": len(layers), "all": total, "unlisted": unlisted}
+
+
+def unlisted_said(c: dict) -> str:
+    """e81: the page's line on the theme's companies it doesn't list, each reason with its count ("2 more of the theme's 104 not listed: 1 not
+    checked yet, 1 whose own words describe other work"); "" when it lists them all."""
+    more = int(c.get("all") or 0) - int(c.get("listed") or 0)
+    if more <= 0:
+        return ""
+    parts = [f"{n} {why}" if len(c.get("unlisted") or []) > 1 else why for why, n in c.get("unlisted") or []]
+    return f"{more} more of the theme's {c['all']} not listed" + (f": {', '.join(parts)}" if parts else "")
+
+
+def stored_counts(region: str, name: str, p: dict) -> dict | None:
+    """e81: the theme's count kept with its newest dive (computed index meta "pub", written when the dive was kept: theme_routes.dive_of), so a
+    /themes card says its page's numbers without reading the dive; None when no dive kept with it."""
+    try:
+        from .intel import theme_routes
+        hk = computed.hkey(computed._keyed(theme_library.DIVE, theme_routes.dive_key(region, name, {**p, "_library": name})))
+        entries = computed.index(theme_library.DIVE).get("entries") or {}
+    except Exception:
+        return None
+    e = entries.get(hk)
+    if not (isinstance(e, dict) and isinstance((e.get("meta") or {}).get("pub"), dict)):
+        best = None                     # (r66e: none under today's versions yet: the newest one kept, as the page serves it)
+        for x in entries.values():
+            if isinstance(x, dict) and x.get("region") == region and (x.get("meta") or {}).get("q") == name:
+                if best is None or float(x.get("at") or 0) > float(best.get("at") or 0):
+                    best = x
+        e = best
+    got = ((e or {}).get("meta") or {}).get("pub")
+    return got if isinstance(got, dict) and isinstance(got.get("listed"), int) else None
+
+
 def _revenues(region: str, name: str, p: dict, dive: dict | None = None) -> dict:
     """{symbol: (revenue, year, unit)} from the theme's stored dive, only where the figure is the company's own reported revenue in
     the market's reporting unit (a figure turned from another currency is left out: that conversion is StratLab's)."""
@@ -326,7 +415,7 @@ def view(entry: dict, p: dict) -> dict:
     # dive found listed under two symbols (theme_data.same_company) is listed once, under the symbol the dive keeps
     twice = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
     layers = []
-    for v in theme_layers(p):
+    for v in public_layers(p, dive):          # e81: the companies every surface counts (counts)
         rows = []
         for c in v["companies"]:
             sym = c["ticker"]
@@ -355,6 +444,7 @@ def view(entry: dict, p: dict) -> dict:
     dt = dive.get("tally") if isinstance(dive.get("tally"), dict) else None
     if dt and dt.get("total"):
         tally = {k: int(dt.get(k) or 0) for k in EVIDENCE_PUBLIC}
+    cn = counts(p, dive)                      # e81: the one count (its card's and its post's)
     older = isinstance(entry.get("rules"), int) and entry["rules"] < theme_base.RULES
     rechecking = False
     if older:
@@ -369,8 +459,7 @@ def view(entry: dict, p: dict) -> dict:
             "summary": public_words(p.get("summary"), 700), "layers": layers, "members": n,
             # r64e (LIVE11A-015: Semiconductors "102 companies" here, 104 in the app, deck and blog): the theme's companies, those not
             # confirmed yet not listed here, so the page says how many it leaves out
-            "all": int(dt["total"]) if dt and dt.get("total") else len({c.get("ticker") for v_ in p.get("value_chain") or [] if isinstance(v_, dict)
-                                                                       for c in v_.get("companies") or [] if isinstance(c, dict) and c.get("ticker")}),
+            "all": cn["all"], "counts": cn,
             "tally_at": str(dive.get("tally_at") or "")[:10] if dt else None,
             # (the close most of its market values are at: each company's own, the index's later one or the dive's)
             "prices": (Counter(newer[k][1] if k in newer else dive_day for k in once if caps.get(k)).most_common(1)[0][0]
@@ -446,7 +535,7 @@ def render(v: dict) -> str:
     app = _app(r, v["name"])
     body = (crumbs_html + f"<h1>{e(label)} <span class=\"muted\">{e(_where(v))}</span></h1>"
             f'<p class="muted">{v["members"]} {word}compan{"y" if v["members"] == 1 else "ies"} in {len(v["layers"])} layer{"" if len(v["layers"]) == 1 else "s"}'
-            + (f" ({v['all'] - v['members']} more of the theme's {v['all']} not listed: not confirmed by their own words or official industry yet)"
+            + (f" ({unlisted_said({**(v.get('counts') or {}), 'listed': v['members'], 'all': v.get('all') or 0})})"
                if (v.get("all") or 0) > v["members"] else "")
             + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "")
             # LIVE9A-011: the close the market values are at, said once
@@ -539,7 +628,9 @@ def card_line(x: dict) -> str:
     p = None
     try:
         p = payload(x)
-        n = len({c["ticker"] for v in theme_layers(p) for c in v["companies"]}) if p else 0
+        # e81 (LIVE17A-005): its page's own count, as kept with its dive (stored_counts), never a count of its own
+        got = stored_counts(x["region"], x["name"], p) if p and x.get("name") else None
+        n = got["listed"] if got else (counts(p)["listed"] if p else 0)
     except Exception:
         n = 0
     if n:
