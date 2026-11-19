@@ -132,3 +132,35 @@ test("signed in, /plans?plan=basic marks the Basic card as the plan picked befor
   await expect(page.getByTestId("plan-card-pro")).not.toHaveClass(/\bpicked\b/);
   await expect(page.getByTestId("plan-card-basic").getByTestId("plan-picked")).toHaveCount(1);
 });
+
+// LIVE16B-004: on a phone the Money home's tax card does not move when the figures arrive on a later visit (each card's body keeps its last
+// height on the device while it loads), and its title is one title from the first paint, the year unbroken
+test("Money home: the cards keep their place while the figures load on a later visit, and the tax title never changes its words' shape", async ({ page }, info) => {
+  test.skip(info.project.name !== "phone", "the phone's stacked cards");
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("sb-demo-auth-token", JSON.stringify({ access_token: "free-token", token_type: "bearer", expires_in: 86400, expires_at: 4102444800, refresh_token: "r",
+        user: { id: "u-free", aud: "authenticated", email: "free@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } }));
+      localStorage.setItem("stratlab.tour.v1", "1");
+    } catch { /* none */ }
+    const w = window as unknown as { __moves: number };
+    w.__moves = 0;
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.__moves += e.value;
+    }).observe({ type: "layout-shift", buffered: true });
+  });
+  await page.route(`${API}/me`, async (r) => { const res = await r.fetch(); await r.fulfill({ response: res, json: { ...(await res.json()), established: true } }); });
+  await page.goto("/money");
+  const tax = page.getByRole("heading", { name: /^Tax, FY \d{4}-\d{2}$/ });
+  await expect(tax).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Upload your broker's tradebooks").or(page.getByTestId("tax-summary"))).toBeVisible({ timeout: 30_000 });
+  // the year on one line
+  const lines = await tax.evaluate((h) => { const s = h.querySelector(".nowrap")!; return s.getClientRects().length; });
+  expect(lines).toBe(1);
+  // the answers slowed on the second visit, so the cards are drawn loading first, then filled
+  await page.route(/\/(holdings|tax)(\?|$)/, async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue(); });
+  await page.reload();
+  await expect(page.getByText("Upload your broker's tradebooks").or(page.getByTestId("tax-summary"))).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as unknown as { __moves: number }).__moves)).toBeLessThan(0.002);
+});

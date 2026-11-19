@@ -30,7 +30,7 @@ export function PlansPage() {
   const [busy, setBusy] = useState<string | null>(null);
   // rupees with "about $" beside each price (item 34), or US dollars on the "Prices in" switch (owner, 16 Nov): dollars for the US
   // region until the visitor picks, and a dollar price that checkout still charges in rupees says the rupee amount beside it
-  const { pricing, rate } = usePricing();
+  const { pricing, rate, status: pricingStatus } = usePricing();
   const pc = usePriceCur();
   const usd = usdRowOf(pricing), cur = usd ? pc.cur : "INR", usdOn = usdCheckoutOn();
   // one answer for what's on sale today (plans.offer_state): /me's, else the public one the landing page reads
@@ -151,13 +151,15 @@ export function PlansPage() {
           Press the button and we'll tell you the day they open.
         </Notice>
       )}
-      {((billing && yearlyOk) || usd) && (
+      {/* LIVE15B-012 / LIVE16B: the "Prices in" switch holds its place while the public prices are on their way, so the plan cards under it
+          never move down when they come (phone CLS 0.045-0.050) */}
+      {((billing && yearlyOk) || usd || pricingStatus === "loading") && (
         <FormGrid label="Price options">
           {billing && yearlyOk && <FieldGroup label="Billed">
             <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
           </FieldGroup>}
-          {usd && <FieldGroup label="Prices in"><CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} /></FieldGroup>}
+          {(usd || pricingStatus === "loading") && <FieldGroup label="Prices in"><CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} /></FieldGroup>}
         </FormGrid>
       )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}

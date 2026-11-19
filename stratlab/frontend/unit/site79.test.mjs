@@ -70,3 +70,9 @@ test("LIVE16A-014: Mood's breadth count on a phone keeps its day beside the main
   assert.match(read("src/components/kit/DataTable.tsx"), /c\.brief && c\.briefLabel && "k-brief-label"/);
   assert.match(read("src/styles.css"), /\.k-tbl-wrap\.stack\.compact \.k-table td\.k-brief\.k-brief-label::before \{ display: inline; margin-right: 4px; \}/);
 });
+
+test("LIVE15B-012 / LIVE16B: the signed-in plans page holds the 'Prices in' switch's place while the prices load", () => {
+  const src = read("src/pages/PlansPage.tsx");
+  assert.match(src, /\(\(billing && yearlyOk\) \|\| usd \|\| pricingStatus === "loading"\) && \(/);
+  assert.match(src, /\{\(usd \|\| pricingStatus === "loading"\) && <FieldGroup label="Prices in"><CurrencySwitch/);
+});

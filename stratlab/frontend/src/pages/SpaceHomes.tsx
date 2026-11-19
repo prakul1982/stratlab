@@ -1,5 +1,5 @@
 import { NoBreak } from "../components/NoBreak";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { vixChange, type VixQuote } from "../lib/vix";
@@ -28,7 +28,7 @@ import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../comp
 // (from the small rows module, not the Research page: LIVE13B-004, the homes' file downloaded every Research page for this one line)
 import { resultDay } from "../lib/resultDay";
 import type { ResultRow } from "./ResultsPage";
-import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
+import { fyLabel, fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
 import { nextExpiry } from "../lib/expiry";
@@ -468,6 +468,25 @@ type TaxYear = { fy: number; label: string; count: number; intraday: { count: nu
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; last_trade?: string | null; prices_at: string | null; trades: number; business_lines?: number; mf?: { count: number } | null; us_trades?: number };
 
 
+/** LIVE16B-004: a Money home card's body keeps the height it had last time on this device (a phone or a wider screen) while its figures
+ * load, so the card under it does not jump when they arrive (phone CLS 0.048: My Holdings grew ~120 px at 6.6 s and pushed the tax card).
+ * Per-viewer convenience only (browser storage): with none kept, the placeholder's own height, as before. */
+function useKeptHeight(key: string, ready: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const k = `stratlab.h.${key}.${typeof window !== "undefined" && window.innerWidth < 720 ? "p" : "w"}`;
+  const [kept] = useState(() => { try { return Number(localStorage.getItem(k)) || 0; } catch { return 0; } });
+  useEffect(() => {
+    if (!ready || !ref.current) return;
+    try { localStorage.setItem(k, String(Math.round(ref.current.getBoundingClientRect().height))); } catch { /* storage off */ }
+  }, [ready, k]);
+  return { ref, style: !ready && kept ? { height: kept, overflow: "hidden" as const } : undefined };
+}
+
+/** This financial year in India (April to March), as the tax card's title before its years have loaded: the same width as the year it then
+ * shows, so the title never re-wraps (LIVE16B-004: "Tax this year" turned into "Tax, FY 2026-" / "27"). */
+const thisFy = (): number => { const d = istToday(); const y = Number(d.slice(0, 4)), m = Number(d.slice(5, 7)); return m >= 4 ? y : y - 1; };
+const taxTitle = (fy: number) => <>Tax, <span className="nowrap">{fyLabel(fy)}</span></>;
+
 export function MoneyHome() {
   return (
     <div className="space-home">
@@ -501,8 +520,10 @@ function HoldingsSummary() {
   // value, gain or loss and Today again each minute while the stocks' markets trade; the tax card beside it is not read again (LIVE-1)
   useMarketRefresh(["IN", "US"], () => { api<Holdings>("/holdings").then(setH).catch(() => undefined); }, h !== null && h !== "error" && h.rows.length > 0);
   const usNote = h && h !== "error" ? usTodayNote(markets, h.us, h.usd_inr) : null;
+  const kept = useKeptHeight("money-holdings", h !== null);
   return (
     <Panel title="My Holdings" right={<Link to="/holdings" className="link" data-money="/holdings">Open My Holdings →</Link>}>
+      <div ref={kept.ref} style={kept.style}>
       {h === null ? <PanelSkel figs label="Adding up your holdings" />
         : h === "error" ? <p className="small muted">Your holdings couldn't be opened just now. <Link className="link" to="/holdings">Try the page</Link>.</p>
         : !h.rows.length ? (
@@ -535,6 +556,7 @@ function HoldingsSummary() {
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
           </div>
         )}
+      </div>
     </Panel>
   );
 }
@@ -548,9 +570,11 @@ function TaxSummary() {
   const open = ok ? openFy(ok.years.map((x) => x.fy), ok.current_fy, (fy) => ok.years.some((x) => x.fy === fy && yearHasTrades(x))) : null;
   const year = ok && open ? ok.years.find((y) => y.fy === open.fy) ?? null : null;
   // CK-2 (R1/R13): what the estimate assumes is behind the card's (i), not a three-line paragraph that made this card taller than My Holdings beside it
+  const kept = useKeptHeight("money-tax", t !== null);
   const how = year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge.";
   return (
-    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} info={how} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Tax report →</Link>}>
+    <Panel title={taxTitle(year ? year.fy : thisFy())} info={how} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Tax report →</Link>}>
+      <div ref={kept.ref} style={kept.style}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !taxHasData(t) ? (
@@ -577,6 +601,7 @@ function TaxSummary() {
             {/* no "Prices as of": nothing on this card is at today's price, only sales already made (R66-008) */}
           </div>
         )}
+      </div>
     </Panel>
   );
 }
