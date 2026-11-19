@@ -186,3 +186,26 @@ def test_live15a_003_the_link_to_the_last_good_deck_downloads_it(monkeypatch):
     info = c.get("/pricing/sample-deck/info").json()
     assert info == {"available": True, "theme": "India IT services", "region": "IN", "id": "old"}
     assert c.get("/pricing/sample-deck", params={"id": "old"}).content == b"%PDF-old"
+
+
+# ---------- LIVE15A-010: Results never shows growth of a quarter older than the last two ----------
+def test_live15a_010_growth_of_a_quarter_older_than_the_last_two_says_not_reported(monkeypatch):
+    from app import results as R
+    assert R.too_old("Dec 2020 vs Dec 2019", "2026-11-19") and R.too_old("Jun 2014 vs Jun 2013", "2026-11-19")
+    assert not R.too_old("Sep 2026 vs Sep 2025", "2026-11-19")                # the quarter being reported
+    assert not R.too_old("Jul 2026 vs Jul 2025", "2026-11-19")                # the one before it ("previous quarter")
+    assert R.too_old("Mar 2026 vs Mar 2025", "2026-11-19")                    # three quarters back
+    assert not R.too_old(None, "2026-11-19") and not R.too_old("soon", "2026-11-19")
+    rows = [R.row("US", "PDD", date(2026, 11, 19), "Quarterly results"), R.row("US", "WMT", date(2026, 11, 19), "Quarterly results")]
+    monkeypatch.setattr(R, "load", lambda region: {"rows": rows, "v": R.CAL_VERSION, "at": "2026-11-19T04:00:00+00:00"})
+    snaps = {"PDD": {"market_cap": 1e11, "q_sales": 146.0, "q_profit": 10.0, "q_of": "Dec 2020 vs Dec 2019"},
+             "WMT": {"market_cap": 7e11, "q_sales": 4.8, "q_profit": 1.2, "q_of": "Jul 2026 vs Jul 2025"}}
+    monkeypatch.setattr(R, "_snap", lambda region: snaps)
+    monkeypatch.setattr(R, "index_sets", lambda region: {})
+    monkeypatch.setattr(R, "load_moves", lambda region: {})
+    monkeypatch.setattr(R, "my_stocks", lambda uid, region: [])
+    monkeypatch.setattr(R, "alerts_on", lambda uid: False)
+    v = R.view("US", "u-pro", "all", today=date(2026, 11, 19))
+    got = {r["symbol"]: r["q"] for wk in v["weeks"] for r in wk["rows"]}
+    assert got["PDD"] == {"sales": None, "profit": None, "of": "Dec 2020 vs Dec 2019", "unreported": True}
+    assert got["WMT"]["sales"] == 4.8 and not got["WMT"].get("unreported")

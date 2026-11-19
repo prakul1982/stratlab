@@ -37,7 +37,8 @@ function capCell(r: ResultRow, live: number | null | undefined, fmt: (v: number)
 
 interface ResultNumber { label: string; value: string }
 export interface Moves { avg: number; n: number; last: number[]; dates: string[] }
-interface Quarter { sales: number | null; profit: number | null; of: string | null }
+/** `unreported` (LIVE15A-010): the latest quarter kept is older than the one this day reports and the one before it, so no growth is shown */
+interface Quarter { sales: number | null; profit: number | null; of: string | null; unreported?: boolean }
 export interface ResultRow {
   region: Region; symbol: string; name: string | null; date: string; when: string | null; purpose: string; url: string | null;
   mine?: boolean; out?: { at: string; title: string; url: string | null; numbers: ResultNumber[] } | null;
@@ -253,6 +254,7 @@ export function ResultsPage() {
     // LIVE5-002: revenue and profit growth share one column, a line each (two columns of one figure each pushed "Options imply" off a 1280 screen);
     // the CSV keeps them apart
     { key: "q", header: "Quarter", cardLabel: "Latest quarter", phone: false, tight: false, csv: null, info: "Year on year (YoY): the latest reported quarter's revenue and net profit against the same quarter a year before, from the company's results as the app keeps them. Hover a figure for the quarters compared. A quarter that came after a loss has no profit growth figure.", cell: (r) => (
+      r.q?.unreported ? <span className="k-muted" data-testid="res-q-unreported" title={r.q.of ? `The latest quarter kept is ${r.q.of.replace(/ vs .*/, "")}` : undefined}>Not reported</span> :
       <span className="res-q"><span><span className="k-muted">Rev </span><Growth v={r.q?.sales} of={r.q?.of} /></span><span><span className="k-muted">Profit </span><Growth v={r.q?.profit} of={r.q?.of} /></span>
         {/* LIVE14A-009: the quarter before the one this day reports says so (PANW's figures to Jul 2026 on its 18 Nov row) */}
         {(() => { const p = r.q && !r.out ? priorQuarter(r.q.of, r.date) : null; return p && <span className="k-note k-muted" data-testid="res-q-prior">previous quarter, to {p}</span>; })()}</span>) },

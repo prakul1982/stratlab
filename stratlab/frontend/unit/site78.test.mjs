@@ -43,3 +43,9 @@ test("LIVE15A-003 / LIVE15B-001: with no sample deck on the server, the table an
   assert.match(deck, /asked \?\?= publicGet/);
   assert.equal((deck.match(/\/pricing\/sample-deck\/info/g) || []).length, 1);
 });
+
+test("LIVE15A-010: a row whose latest kept quarter is older than the last two says 'Not reported', never years-old growth", () => {
+  const page = read("src/pages/ResultsPage.tsx");
+  assert.match(page, /r\.q\?\.unreported \? <span className="k-muted" data-testid="res-q-unreported"[^>]*>Not reported<\/span> :/);
+  assert.match(page, /unreported\?: boolean/);
+});
