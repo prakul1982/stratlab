@@ -277,7 +277,9 @@ def test_the_dive_carries_the_log_as_the_plan_shows_it(api, monkeypatch):
              "counts": {"removed": 7, "added": 0, "moved": 0, "layers": 0, "restated": 0},
              "removed": [{"symbol": f"S{i}", "name": f"S{i}", "layer": "Chips", "why": "no longer in the theme's map"} for i in range(7)],
              "added": [], "moved": [], "layers": [], "restated": []}
-    kept = {TC.key_of("US", "AI data centers"): json.dumps({"snap": None, "log": [copy.deepcopy(entry), entry], "since": "2026-10-01"})}
+    # e79 (LIVE15A-013, updated on purpose): the earlier entry a day before, as two entries of one day and cause are now shown as one
+    kept = {TC.key_of("US", "AI data centers"): json.dumps({"snap": None, "log": [{**copy.deepcopy(entry), "at": "2026-10-03T06:00:00+00:00",
+                                                                                   "d": "2026-10-03"}, entry], "since": "2026-10-01"})}
     real = db.get_setting
     monkeypatch.setattr(db, "get_setting", lambda k: kept[k] if k in kept else real(k))
     d = api.get("/research/theme-dive?q=AI%20data%20centers&region=US").json()

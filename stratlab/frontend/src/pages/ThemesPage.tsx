@@ -15,7 +15,7 @@ import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, CardNote, DataTable, Disclosure, ErrorState, Notice, PageHeader, PageNav, ShowLess, Skeleton, Working } from "../components/kit";
 import { watchSize } from "../lib/resize";
-import { fundName, themeFunds } from "../lib/themeFormat";
+import { emptyLayerLines, fundName, themeFunds } from "../lib/themeFormat";
 
 /* ================= Themes: a theme deep dive =================
  * Who is in the theme: every company the exchange classifies in its official industries, sorted into layers by AI, with the AI's additions
@@ -184,7 +184,7 @@ export function ThemesPage() {
         <>
           <Card>
             <CardHead title={r.sector} actions={<><StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh}
-              label={mapStamp(r.generated_at > 0 ? r.generated_at : null, r.older?.at ?? r.checked_at, writtenAt(r.generated_at, marketTz(region)), fmtDate)} />
+              label={mapStamp(r.generated_at > 0 ? r.generated_at : null, r.older?.at ?? r.checked_at, writtenAt(r.generated_at, marketTz(region)), fmtDate, marketTz(region))} />
               <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} />
               {themeReady(r) && <ShareResearchButton kind="theme" region={region} target={q} label="this theme" />}</>} />
             <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />
@@ -244,7 +244,7 @@ export function ThemesPage() {
               {biz && !biz.allowed && dive.region === "IN" && <p className="k-note">Operating figures that companies file between results (monthly sales, output, traffic) are on the Basic plan.</p>}
               {/* LIVE9A-022: a layer with no listed company is named in one line, not a card of its own that says it is empty */}
               {dive.layers.filter((l) => l.companies.length > 0).map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={bizFor(biz, l)} />)}
-              {dive.layers.some((l) => l.companies.length === 0) && <p className="k-note" data-testid="layers-empty">No listed company is shown for {emptyNames(dive.layers.filter((l) => l.companies.length === 0).map((l) => l.layer))}: none of the companies the map named has a description that shows it does this work.</p>}
+              {emptyLayerLines(dive.layers).map((t) => <p key={t} className="k-note" data-testid="layers-empty">{t}</p>)}
               <SubThemesCard dive={dive} business={biz} />
               <ThemeLinksCard region={dive.region} theme={q} />
             </>

@@ -742,7 +742,68 @@ def net_by_day(log: list) -> list:
             if isinstance(counts.get("moved"), int):
                 counts["moved"] = max(0, counts["moved"] - (n_was - n_now))
             e["counts"] = counts
-    return [e for e in out if any((e.get("counts") or {}).values()) or any(e.get(k) for k in KINDS)]
+    return one_a_day([e for e in out if any((e.get("counts") or {}).values()) or any(e.get(k) for k in KINDS)])
+
+
+def one_a_day(log: list) -> list:
+    """e79 (LIVE15A-013: Software's log with five "18 Nov 2026 · Re-checked under new placement rules" entries, IT services three on 18 Nov
+    and four on 16 Nov, Cement three on 16 Nov): the entries of one day and one cause (oldest first) as one entry, the day's last, with the day's net
+    change: a company added and removed the same day (or removed and added) in neither list, a restated figure from the day's first value to
+    its last, each company's net move (net_by_day) once, layer changes in order; "entries" says how many it stands for."""
+    out, by_day = [], {}
+    for e in log:
+        d = (_day_of(e), str(e.get("cause") or ""))          # (a Refresh or a new map stays an entry of its own beside the day's re-checks)
+        if d in by_day:
+            by_day[d].append(e)
+        else:
+            by_day[d] = [e]
+            out.append(d)
+    merged = []
+    for d in out:
+        es = by_day[d]
+        if len(es) == 1:
+            merged.append(es[0])
+            continue
+        seen: dict = {}
+        for e in es:
+            for k in ("added", "removed"):
+                for r in e.get(k) or []:
+                    sym = r.get("symbol") if isinstance(r, dict) else None
+                    seen.setdefault(sym, []).append((k, r))
+        added, removed = [], []
+        for sym, evs in seen.items():
+            if sym is None:
+                for k, r in evs:
+                    (added if k == "added" else removed).append(r)
+                continue
+            if evs[0][0] != evs[-1][0]:
+                continue                     # added and removed within the day (or the other way round): no net change
+            (added if evs[-1][0] == "added" else removed).append(evs[-1][1])
+        moved: dict = {}
+        for e in es:
+            for r in e.get("moved") or []:
+                sym = r.get("symbol") if isinstance(r, dict) else None
+                moved[sym if sym else id(r)] = r
+        rest: dict = {}
+        for e in es:
+            for r in e.get("restated") or []:
+                sym = r.get("symbol") if isinstance(r, dict) else None
+                if sym in rest:
+                    first = rest[sym]
+                    r = {**r, **{k: [first[k][0], r[k][1]] for k in ("revenue", "margin")
+                                 if isinstance(first.get(k), list) and isinstance(r.get(k), list) and len(first[k]) == 2 and len(r[k]) == 2}}
+                rest[sym if sym else id(r)] = r
+        layers = [x for e in es for x in e.get("layers") or []]
+        last = dict(es[-1])
+        last.update({"added": added, "removed": removed, "moved": list(moved.values()), "layers": layers, "restated": list(rest.values()),
+                     "entries": sum(int(e.get("entries") or 1) for e in es)})
+        counts = dict(last.get("counts") or {})
+        for k in KINDS:
+            counts[k] = len(last[k])
+        last["counts"] = counts
+        if any(counts.values()) or any(last.get(k) for k in KINDS):
+            merged.append(last)
+    return merged
 
 
 def view(region: str, name: str, full: bool, words_of=None, industry_of=None) -> dict:
