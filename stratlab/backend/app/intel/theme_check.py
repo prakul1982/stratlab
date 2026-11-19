@@ -1290,6 +1290,8 @@ OUTSOURCED = (r"fabless|without (?:its own )?fab|outsourc(?:es|ed|ing) (?:its |t
 # R32: a chip designer's own words, and what is never one (design software and IP licensors, equipment makers)
 CHIP_NOUNS = (r"semiconductors?|\bchips?\b|chipsets?|\bgpus?\b|graphics processors?|\bcpus?\b|\bsocs?\b|systems?[- ]on[- ](?:a[- ])?chips?|"
               r"(?:micro)?processors?|microcontrollers?|integrated circuits?|\bics\b|\basics?\b|\bfpgas?\b")
+# e77: what a way of earning is of, in any theme: a fabless company designs chips, so words naming its chips bear out "fabless" (theme_base.model_said)
+MODEL_OF = {"fabless": CHIP_NOUNS}
 DESIGN_VERB = r"\b(?:designs?|develops?|designing|developing|designers?|developers?)\b"
 DESIGN_CHIP = DESIGN_VERB + r"[^.;]{0,60}?(?:" + CHIP_NOUNS + ")"
 CHIP_ONLY = r"\bgpus?\b|\bsocs?\b|\basics?\b|\bfpgas?\b|microcontrollers?|microprocessors?"

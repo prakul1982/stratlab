@@ -96,6 +96,20 @@ export function unquotedLine(checked: number, none: number): string | null {
     none > 0 ? `${none} with no description in their own words yet` : ""].filter(Boolean);
   return `No line of their own words is quoted for ${n} ${n === 1 ? "company" : "companies"} here: ${parts.join("; ")}.`;
 }
+/** e77 (LIVE14A-004: "584 companies: 588 from the official industry list, 2 added" and "195 companies: 199 from the official industry list,
+ *  0 added"): the members card's count line, its sources adding up to the companies as the deck's say them (deck universe line): one company
+ *  listed under two symbols is counted once (its other listing left out, `same_company`), and so said; any rest said apart. */
+export function countsLine(total: number, p: { base?: number; named?: number; added?: number; confirmed?: number; same_company?: unknown[] } | null | undefined): string {
+  const n = (v: number) => v.toLocaleString("en-IN");
+  const named = p?.named ?? 0, base = Math.max(0, (p?.base ?? 0) - named), added = p?.added ?? 0;
+  const twice = (p?.same_company ?? []).filter((x) => x && typeof x === "object").length;
+  const rest = total - base - named - added + twice;
+  const parts = [`${n(base)} from the official industry list`, ...(named > 0 ? [`${n(named)} named in the theme's list`] : []),
+    `${n(added)} added${added > 0 ? ` (${p?.confirmed ?? 0} description-verified)` : ""}`,
+    ...(rest > 0 ? [`${n(rest)} more, neither on the official list nor added by the AI`] : []),
+    ...(twice > 0 ? [`less ${n(twice)} listed twice under another symbol, counted once`] : [])];
+  return `${n(total)} compan${total === 1 ? "y" : "ies"}: ${parts.join(", ")}.`;
+}
 export const DIVE_UPDATING = "These figures are from the theme's last stored read; the new read is being worked out and takes their place here when it is done.";
 const WORK = /\b(?:provid\w*|produc(?:es|ers?|ing|ts?|tion)|manufactur\w*|makes?|making|makers?|sells?|selling|suppl(?:y|ies|ying|iers?)|designs?|designing|develop(?:s|ing|ers?)|operat(?:es|ing|ors?)|offers?|offering|distribut\w*|retail\w*|services?|servic(?:es|ing)|foundr(?:y|ies)|licens\w*|leases?|leasing|lend(?:s|ing|ers?)|insur\w*|earns?|revenues?|customers?|clients?|subscri\w*|platforms?|stores?|brands?|engag(?:ed|es)|build(?:s|ing|ers?)|construct\w*|mines?|mining|miners?|refin\w*|generat(?:es|ing|ors?)|transmi\w*|explor(?:es|ing|ation)|invest(?:s|ing|ments?)|manag(?:es|ing)|deliver\w*|software|hardware|solutions?|products?|systems?|equipment|devices?|vehicles?|drugs?|medicines?|banking|bank|loans?|chemicals?|steel|cement|power|electricity|specializ\w*|specialis\w*|focus(?:es|ed) on|helps?|enables?|protect\w*|secur(?:es|ing))\b/i;
 const FILING_TITLE = /^(?:annual|quarterly|current|interim|half[- ]yearly)\s+report\b|^(?:form\s+)?(?:10-[kq]|20-f|40-f|8-k|6-k|def\s*14a)\b|^(?:press release|investor presentation|board meeting|outcome of board meeting|shareholding pattern|financial results)\b/i;

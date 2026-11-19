@@ -1347,6 +1347,29 @@ def earnings_hits(raw: dict) -> list[dict]:
     return out
 
 
+SUCCESSOR_FORMS = ("8-K12B", "8-K12G3")          # a listed company put under a new holding company (its shares now the new one's)
+
+
+def successor_hits(raw: dict) -> list[dict]:
+    """e77: the filers of a holding-company succession (8-K12B, 8-K12G3) in one page of the SEC's filing search: [{symbol, cik}], each
+    filer with a common-stock ticker as the SEC lists it (the new holding company), once each."""
+    out, seen = [], set()
+    for h in (((raw or {}).get("hits") or {}).get("hits")) or []:
+        s = (h or {}).get("_source") or {}
+        if str(s.get("file_type") or s.get("form") or "") not in SUCCESSOR_FORMS:
+            continue
+        for d in s.get("display_names") or []:
+            m = _DISPLAY.match(str(d or ""))
+            if not m:
+                continue
+            tickers = [t.strip().upper() for t in m.group(2).split(",") if re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,11}", t.strip().upper())]
+            common = [t for t in tickers if not non_common(t)]
+            if common and int(m.group(3)) not in seen:
+                seen.add(int(m.group(3)))
+                out.append({"symbol": price_symbol(common[0]), "cik": int(m.group(3))})
+    return out
+
+
 class SEC(Source):
     name = "The SEC"
 
@@ -1567,6 +1590,71 @@ class SEC(Source):
                 return other, old
         return None
 
+    REPORTING_TTL = 7 * 86400
+
+    def reporting_name(self, symbol: str) -> str:
+        """e77 (owner, 18 Nov: "Exxon Mobil Corporation"; the R76 US Oil and gas deck still printed "ExxonMobil Holdings Corp" from a page
+        stored before r69e kept the registrant): the name of the registrant whose reports a company's figures are, when the listed company
+        is a new holding company put over it (8-K12B, 8-K12G3: see predecessor), as that registrant's filings name it (company facts'
+        entityName, the name company() gives the page); "" for any other company. Cached a week, a company with none too, and shared with
+        company(), so a page build and this read ask the SEC once."""
+        cik = self.cik(symbol)
+        key = ("reporting", cik)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        subs = self.submissions(cik)
+        name = ""
+        before = self.predecessor(cik, subs) if _forms(subs) & set(SUCCESSOR_FORMS) else None
+        if before:
+            old = self._json(f"/api/xbrl/companyfacts/CIK{before[0]:010d}.json")
+            name = str(old.get("entityName") or (before[1] or {}).get("name") or "").strip()
+        self.cache.set(key, name, self.REPORTING_TTL)
+        return name
+
+    SUCCESSION_DAYS = 3 * 366         # how far back a holding-company succession is looked for
+    SUCCESSION_MOST = 40              # successions worked out in one call (each kept a week): the rest on the next day's
+
+    def successor_names(self, listed: dict | None = None, today: date | None = None, skip=()) -> dict[str, dict]:
+        """e77: {symbol: {"name": the reporting registrant's name, "" for none, "listed": the listed name}} of the listed companies put
+        under a new holding company in the last SUCCESSION_DAYS, from the SEC's filing search for the succession forms (a page or a few)
+        and, for each such filer, reporting_name: at most SUCCESSION_MOST not yet kept here are asked in one call, so a day's read is
+        bounded. `listed`: {symbol: listed name} (the SEC's ticker list when not given); a filer not on it is left out, and so is one in
+        `skip` (checked lately, its answer kept by the caller)."""
+        today = today or date.today()
+        listed = listed if listed is not None else {t: v.get("name") for t, v in self.tickers().items()}
+        start = (today - timedelta(days=self.SUCCESSION_DAYS)).isoformat()
+        hits, asked, out = [], 0, {}
+        for page in range(self.SEARCH_PAGES):
+            raw = self._json(f"{self.SEARCH}?forms={','.join(SUCCESSOR_FORMS)}&dateRange=custom&startdt={start}"
+                             f"&enddt={today.isoformat()}&from={page * 100}")
+            hits += successor_hits(raw)
+            got = ((raw or {}).get("hits") or {}) if isinstance(raw, dict) else {}
+            total = ((got.get("total") or {}).get("value")) or 0
+            if len(got.get("hits") or []) < 100 or (page + 1) * 100 >= total:
+                break
+        for h in {h["symbol"]: h for h in hits}.values():
+            s = h["symbol"]
+            if s not in listed or s in skip:
+                continue
+            try:
+                kept = self.cache.get(("reporting", self.cik(s)))
+            except SourceError:
+                continue
+            if kept is None:
+                if asked >= self.SUCCESSION_MOST:
+                    continue
+                asked += 1
+                try:
+                    kept = self.reporting_name(s)
+                except SourceError as e:
+                    if e.busy:
+                        break
+                    continue
+            same = " ".join(str(kept).split()).lower() == " ".join(str(listed.get(s) or "").split()).lower()
+            out[s] = {"name": "" if same else str(kept or ""), "listed": str(listed.get(s) or "")}
+        return out
+
     def ads(self, subs: dict) -> dict | None:
         """{"ratio", "ads", "form", "url"} from the latest annual report of a foreign company, whose US shares may be
         depositary shares (see ads_ratio); None for a US company or when the report can't be read. Cached a month."""
@@ -1690,6 +1778,7 @@ class SEC(Source):
                     # registrant that still files them, named as its own filings name it (dei EntityRegistrantName: "Exxon Mobil
                     # Corporation"), never the new holding company's interim name
                     reporting_name = str(old.get("entityName") or (before[1] or {}).get("name") or "").strip()
+                    self.cache.set(("reporting", cik), reporting_name, self.REPORTING_TTL)      # e77: reporting_name's, asked once
                     facts = merge_facts(old, facts) if facts else old
                 except SourceError as e:
                     if e.busy:
