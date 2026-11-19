@@ -157,7 +157,8 @@ def current(region: str, name: str) -> bool:
     from . import theme_library
     from . import theme_routes
     key = page_key(region, name)
-    return key is not None and (computed.get(theme_library.DIVE, key, count=False) is not None or theme_routes.unkept_dive(key) is not None)
+    # e81 (item 6): the store's index says whether the dive is kept; the dive itself (up to 4 MB) is not read for that
+    return key is not None and (computed.has(theme_library.DIVE, key) or theme_routes.unkept_dive(key) is not None)
 
 
 class NotDone(Exception):
@@ -235,6 +236,19 @@ def rebuild(region: str, name: str) -> None:
     return theme_routes.dive_key(r, theme, m)
 
 
+def release() -> None:
+    """e81 (item 6, the live R79 re-check peaking at 1.92 GB of a 2 GB limit): after each theme, the objects its rebuild freed are collected
+    and the C heap's free pages returned to the system (glibc's malloc_trim), so one theme's dive (a few MB of JSON, tens of MB as objects)
+    is never still held by the process while the next is built. Nothing else is touched; a system without it does nothing."""
+    import gc
+    gc.collect()
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
+
 def _due(st: dict, now: float) -> list | None:
     """The first theme of the queue not waiting for its checks (r69e), or None."""
     wait = st.get("wait") or {}
@@ -263,7 +277,7 @@ def step(work=None, now: float | None = None) -> dict | None:
         else:
             key = (work or rebuild)(region, name)
             from . import theme_library
-            kept = isinstance(key, list) and computed.get(theme_library.DIVE, key, count=False) is not None
+            kept = isinstance(key, list) and computed.has(theme_library.DIVE, key)          # e81: from the index, never the dive read
             outcome = "rebuilt" if kept or current(region, name) else "failed"
             big = computed.last_unkept.get(theme_library.DIVE)
             # e80 (LIVE16A-003): why it was not kept, when the store refused it as too big
@@ -278,6 +292,7 @@ def step(work=None, now: float | None = None) -> dict | None:
     finally:
         _running.pop("theme", None)
         _force.pop("on", None)
+        release()               # e81 (item 6): what the theme's rebuild left freed is given back before the next one
     with _lock:
         st = _load()                 # a page may have asked meanwhile
         if outcome == "yielded":     # its place kept at the front, nothing counted (fix20: its yields in a row counted)

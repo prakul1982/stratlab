@@ -70,6 +70,14 @@ def clip_words(text, n: int) -> str:
     if sp > n // 2:
         cut = cut[:sp]
     cut = cut.rstrip(" ,;:(“‘—-")
+    # e81 (the R79 decks' "mid-word" quotes: Gouverneur Bancorp "… located to the south…”", Alexandria "… ecosystems in AAA life…”"): a quote
+    # the cut falls inside ends at its last clause (a comma, a semicolon, a colon or a dash), when one is far enough into it, never inside one
+    qa = cut.rfind("“")
+    if qa >= 0 and cut.count("“") > cut.count("”"):
+        ends = [m.start() for m in re.finditer(r"[,;:]\s|\s[–—]\s", cut[qa:])]
+        good = [x for x in ends if x >= 25]
+        if good:
+            cut = cut[:qa + good[-1]].rstrip(" ,;:(“‘—–-")
     # r66e (the live R65 US metals deck, p.11: "“ready-mix concrete and asphalt) and…”"): never ended on a joining word
     while (j := _JOINS.search(cut)):
         cut = cut[:j.start()].rstrip(" ,;:(“‘—-")
@@ -151,6 +159,8 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
     # (population_change); a dive of an older engine keeps none
     adj = {str(x["symbol"]): str(x.get("kind") or "") for x in dive.get("adjacent") or [] if isinstance(x, dict) and x.get("symbol")}
     pop = {"pop": dive["population_rule"], "adj": adj} if isinstance(dive.get("population_rule"), int) else {}
+    if pop:
+        pop["core"] = core_members(dive)          # e81: who the core members with figures are, so each that crosses is named
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0), **pop,
             **({"rest": rest, "rest_layers": rest_layers} if everyone is not None else {}), **({"rest_why": rest_why} if rest_why else {}),
             **({"rest_mwhy": rest_mwhy} if rest_mwhy else {}),
@@ -439,7 +449,8 @@ def diff(was: dict, now: dict) -> dict:
             added.append({"symbol": s_, "name": c[0], "layer": lay_n[c[1]], **({"why": why} if why else {})})
             continue
         a, b = lay_w[old[1]], lay_n[c[1]]
-        if a != b and (a, b) not in pairs:
+        # e81 (LIVE17A-008): from one half of a layer split by market value to the other is no move
+        if a != b and (a, b) not in pairs and _HALF_NAME.sub("", a) != _HALF_NAME.sub("", b):
             mw = (now.get("mwhy") or {}).get(s_)          # c54: the placement's reason for where it is, when it gave one
             moved.append({"symbol": s_, "name": c[0], "from": a, "to": b, **({"why": mw} if mw else {})})
         if old[2] and old[2] == c[2]:
@@ -494,6 +505,7 @@ def diff(was: dict, now: dict) -> dict:
             moved.append({"symbol": r["symbol"], "name": r["name"], "from": twin["layer"], "to": r["layer"],
                           "why": f"listed under {r['symbol']} now, {twin['symbol']} before"})
     by_name = lambda r: str(r.get("name") or "").lower()          # noqa: E731
+    moved = [r for r in moved if _HALF_NAME.sub("", str(r.get("from") or "")) != _HALF_NAME.sub("", str(r.get("to") or ""))]     # e81
     out = {"removed": sorted(removed, key=by_name), "added": sorted(added, key=by_name), "moved": sorted(moved, key=by_name),
            "layers": events, "restated": sorted(restated, key=by_name)}
     out["counts"] = {k: len(out[k]) for k in KINDS}
@@ -655,9 +667,39 @@ def work_sentence(words) -> str:
     return ""
 
 
+def layer_quote(words, name: str, layer: str, line: str = "") -> tuple[str, bool]:
+    """e81: (the line of a company's own words a move into `layer` quotes, whether there is one): its work sentence (work_sentence) when it
+    says a word of the layer's name, else the first sentence of its words about its work that does (theme_base.layer_line), else its work
+    sentence. A move into "Other" quotes its work sentence."""
+    from .theme_base import _line_says, layer_line, layer_words, name_aside
+    q = line if line else work_sentence(words)
+    ws = layer_words(layer) if layer and not str(layer).startswith("Other ") else set()
+    if not ws:
+        return q, True
+    says = lambda t: any(_line_says(name_aside(t, name), w) for w in ws)         # noqa: E731
+    if q and says(q):
+        return q, True
+    text = re.sub(r"^\s*Industry:[^.]*\.\s*", "", str(words or "")).strip()
+    alt = layer_line("", text, name, layer) if text and not text.startswith("From its own filings:") else ""
+    if alt and says(alt) and not _MANAGED.search(alt):
+        from .sec import reit_tax_said, structure_only
+        if not structure_only(alt) and not reit_tax_said(alt):
+            return first_sentence(alt), True
+    # (a work line in other words than the name's, General Dynamics' "a developer and producer of advanced military equipment" of "Defense
+    # prime contracting", is still its reason; none at all is said so)
+    return q, bool(q)
+
+
 # e80: a sentence of who a company is a subsidiary of, who manages or advises it, or its REIT election, is no line of its work
+# e81 (LIVE17A-004: InPoint's move "its own words say “Among other duties, the Sub-Advisor has the authority to identify, negotiate, acquire
+# and originate our investments…”", Medalist's "“On July 18, 2025, we closed on the acquisition of a Tesla sales, service and delivery
+# facility…”"): a sentence of what an adviser or sub-adviser does, or a dated transaction (a day's deal, never the work it does), is no line
+# of its work either
 _MANAGED = re.compile(r"\b(?:is|are)\s+(?:a|an|the)\s+(?:wholly[- ]owned\s+)?subsidiary\s+of\b|\b(?:externally|internally)\s+managed\b|"
-                      r"\b(?:our|its)\s+(?:adviser|advisor|sponsor|manager)\b|\bREIT\s+election\b|\bsole\s+general\s+partner\b", re.I)
+                      r"\b(?:our|its)\s+(?:adviser|advisor|sponsor|manager)\b|\bREIT\s+election\b|\bsole\s+general\s+partner\b|"
+                      r"\b(?:sub-?)?advis[eo]r\s+(?:has|have|is|will|shall|may|must|provides|manages|performs)\b|\bsub-?advis[eo]r\b|"
+                      r"^(?:on|in|during|as\s+of|effective)\s+(?:(?:january|february|march|april|may|june|july|august|september|october|november|"
+                      r"december)\b[^.;]{0,12}?\d{4}|\d{4}\b)\s*,", re.I)
 _POSITIVE_LAYER = re.compile(r"(?:its own words say it sells what|its official industry or way of earning says it sells what|its own words say what|"
                              r"the map placed it in|its own words were checked to show it is of|its official industry is what|by how it earns:|"
                              r"of its official industry, the one|the theme's map places it in)\s+“([^”]+)”")
@@ -702,14 +744,41 @@ def unnamed_why(why: str, words=None, industry: str = "", theme_words: set | Non
 def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | None = None) -> list:
     """r572: the log's entries with each removal whose only reason is the map's no longer naming it said with its own words (unnamed_why)."""
     # (r67e: with no reader of its words, each move still gets a reason, below; a removal's stands as kept)
+    # e81 (LIVE17A-009: first opens of Semiconductors and REITs 14-15 s): each company's words and industry read once for the whole log (a
+    # company moved in several entries was read again for each), its industry only where no line of its words gives the reason
+    words_seen: dict = {}
+    ind_seen: dict = {}
+    raw_words, raw_industry = words_of, industry_of
+
+    def _words(sym):
+        if sym not in words_seen:
+            try:
+                words_seen[sym] = raw_words(sym) if raw_words is not None else None
+            except Exception:
+                words_seen[sym] = None
+        return words_seen[sym]
+
+    def _industry(sym):
+        if sym not in ind_seen:
+            try:
+                ind_seen[sym] = (raw_industry(sym) if raw_industry is not None else "") or ""
+            except Exception:
+                ind_seen[sym] = ""
+        return ind_seen[sym]
+    words_of = _words if raw_words is not None else None
+    industry_of = _industry if raw_industry is not None else None
+    if callable(getattr(raw_words, "prefetch", None)):
+        try:
+            raw_words.prefetch(sorted({r["symbol"] for e in entries if isinstance(e, dict) for k in ("moved", "removed")
+                                       for r in e.get(k) or [] if isinstance(r, dict) and r.get("symbol")}))
+        except Exception as e:
+            print("theme changes: records not read ahead:", type(e).__name__, str(e)[:100])
+
     def why(r):
         if (words_of is None and industry_of is None) or not isinstance(r, dict) or r.get("why") not in UNNAMED or not r.get("symbol"):
             return r
-        try:
-            w = words_of(r["symbol"]) if words_of is not None else None
-            ind = (industry_of(r["symbol"]) if industry_of is not None else "") or ""
-        except Exception:
-            w, ind = None, ""
+        w = words_of(r["symbol"]) if words_of is not None else None
+        ind = "" if first_sentence(w) else (industry_of(r["symbol"]) if industry_of is not None else "")
         return {**r, "why": unnamed_why(r["why"], w, ind, theme_words)}
 
     def move_why(r):
@@ -728,13 +797,17 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
         a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))
         if a == b:
             return {**r, "why": "the same layer, split into halves by market value"}
-        try:
-            w = words_of(r["symbol"]) if words_of is not None else None
-            ind = (industry_of(r["symbol"]) if industry_of is not None else "") or ""
-        except Exception:
-            w, ind = None, ""
+        w = words_of(r["symbol"]) if words_of is not None else None
         q = work_sentence(w)          # e80: a line of its work, never one of how it is held or taxed
-        said = f"its own words say “{q}”" if q else f"filed under {ind}" if ind else ""
+        ind = "" if q else (industry_of(r["symbol"]) if industry_of is not None else "")
+        # e81 (the R79 Capital markets deck: Mefcom "→ Proprietary investing and small financial firms: its own words say “Mefcom Capital
+        # Markets Ltd is engaged in capital market operations and merchant banking”", Motilal Oswal "→ Stock broking: “The company offers
+        # diversified financial services”"): a move into a named layer quotes the line of its work that says that layer's words, never one
+        # that says none of them
+        q, says = layer_quote(w, r.get("name") or "", b, q)
+        said = f"its own words say “{q}”" if q and says else f"filed under {ind}" if ind and not q else ""
+        if not said and q:
+            said = f"no line of its own words says a word of “{b}”; the theme's map places it in “{b}”"
         if not said and w:
             said = (f"no line of its own words says a named layer's work" if str(b).startswith("Other ") else
                     f"no line of its own words says a layer's work; the theme's map places it in “{b}”")
@@ -819,6 +892,53 @@ def net_by_day(log: list) -> list:
     return one_a_day([e for e in out if any((e.get("counts") or {}).values()) or any(e.get(k) for k in KINDS)])
 
 
+def _layer_of(name) -> str:
+    return _HALF_NAME.sub("", str(name or ""))
+
+
+def net_moves(log: list) -> list:
+    """e81 (LIVE17A-008: US Oil and gas "39 companies moved between layers" on 19 Nov, most "(larger) -> (smaller): the same layer, split into
+    halves by market value"; Cement's BigBloc "Other cement companies -> Cement integrated producers (smaller)" on 17 Nov and back on 18 Nov on
+    the same quoted sentence; OSI Systems Fabless -> Other -> Fabless -> Makers over 15-19 Nov): the log (oldest first) with a re-split of one
+    layer by market value said as no move (a company in the same layer is where it was), and a move that a later one undoes (back to the layer
+    it left, with no other change of the company between) said as neither: a placement changes only when where it is changes. The counts
+    follow the rows dropped; an entry left with nothing is not shown."""
+    out = [dict(e) for e in log]
+    drop: dict[int, set] = {}
+    for i, e in enumerate(out):
+        for k, r in enumerate(e.get("moved") or []):
+            if isinstance(r, dict) and r.get("from") is not None and _layer_of(r.get("from")) == _layer_of(r.get("to")):
+                drop.setdefault(i, set()).add(k)
+    seq: dict = {}
+    for i, e in enumerate(out):
+        for kind in ("added", "removed", "moved"):
+            for k, r in enumerate(e.get(kind) or []):
+                if not isinstance(r, dict) or not r.get("symbol") or (kind == "moved" and k in drop.get(i, set())):
+                    continue
+                seq.setdefault(r["symbol"], []).append((kind, i, k, r))
+    for sym, evs in seq.items():
+        stack: list = []
+        for kind, i, k, r in evs:
+            if kind != "moved":
+                stack = []                       # an addition or removal between: what came before stands
+                continue
+            if stack and _layer_of(stack[-1][2].get("to")) == _layer_of(r.get("from")) and _layer_of(stack[-1][2].get("from")) == _layer_of(r.get("to")):
+                pi, pk, _ = stack.pop()
+                drop.setdefault(pi, set()).add(pk)
+                drop.setdefault(i, set()).add(k)
+                continue
+            stack.append((i, k, r))
+    for i, ks in drop.items():
+        e = out[i]
+        n_was = len(e.get("moved") or [])
+        e["moved"] = [r for k, r in enumerate(e.get("moved") or []) if k not in ks]
+        counts = dict(e.get("counts") or {})
+        if isinstance(counts.get("moved"), int):
+            counts["moved"] = max(0, counts["moved"] - (n_was - len(e["moved"])))
+        e["counts"] = counts
+    return [e for e in out if any((e.get("counts") or {}).values()) or any(e.get(k) for k in KINDS)]
+
+
 def one_a_day(log: list) -> list:
     """e79 (LIVE15A-013: Software's log with five "18 Nov 2026 · Re-checked under new placement rules" entries, IT services three on 18 Nov
     and four on 16 Nov, Cement three on 16 Nov): the entries of one day and one cause (oldest first) as one entry, the day's last, with the day's net
@@ -885,7 +1005,7 @@ def view(region: str, name: str, full: bool, words_of=None, industry_of=None) ->
     how many older entries there are. "since": the day the theme's first read was kept. r572: `words_of` / `industry_of`, a company's stored
     words and official industry, say why a company the map no longer names left (reasoned)."""
     got = stored(region, name)
-    log = net_by_day([e for e in got.get("log") or [] if isinstance(e, dict)])[::-1]          # e77: one net move a company a day
+    log = net_moves(net_by_day([e for e in got.get("log") or [] if isinstance(e, dict)]))[::-1]   # e77: one net move a company a day; e81: none undone
     tw = None
     if words_of is not None or industry_of is not None:
         from .theme_base import kind_stems
@@ -1074,9 +1194,46 @@ def population_change(snap: dict | None, dive: dict | None) -> dict | None:
                                      "name no other kind of business than the theme's")
         joined.append({"symbol": s_, "name": str(c.get("name") or s_), "was": kind, "why": why + ruled})
     joined.sort(key=lambda r: r["name"].lower())
-    if not left and not joined:
+    # e81 (the owner's review of the R79 Payments deck, P0: "core 16 -> 17, P/E sample 12 -> 13", no company named): every company that entered
+    # or left the core members with figures, whatever moved it (new to the theme, its figures stored or gone, its membership confirmed or
+    # not), each with why; a move between core and adjacent is said above (joined, left)
+    core_in, core_out = [], []
+    if isinstance(snap.get("core"), list):
+        was_core, now_core = set(snap["core"]), set(core_members(dive))
+        said_ = {x["symbol"] for x in left + joined}
+        was_figs = set(snap.get("cos") or {})
+        for s_ in sorted(now_core - was_core - said_):
+            c = rows.get(s_) or {}
+            prev = (snap.get("cos") or {}).get(s_)
+            no_figs_was = s_ not in was_figs or (isinstance(prev, list) and len(prev) > 4 and prev[3] is None and prev[4] is None)
+            why = ("it is new to the theme" if s_ not in members_was else
+                   "its figures are stored now (it had none in the previous version)" if no_figs_was else
+                   "its membership is confirmed now (its own words or official industry, as read now)")
+            core_in.append({"symbol": s_, "name": str(c.get("name") or s_), "why": why})
+        for s_ in sorted(was_core - now_core - said_):
+            c = rows.get(s_)
+            why = ("it is no longer in the theme's figures" if c is None else
+                   "its membership is not confirmed now" if c.get("status") == "unverified" else
+                   "no figure of it is stored now" if c.get("revenue") is None and c.get("profit") is None else "it left the core members")
+            core_out.append({"symbol": s_, "name": str((c or {}).get("name") or (snap.get("cos") or {}).get(s_, [s_])[0]), "why": why})
+    if not left and not joined and not core_in and not core_out:
         return None
-    return {**({"rule": rule} if rule else {}), "left": left, "joined": joined}
+    return {**({"rule": rule} if rule else {}), "left": left, "joined": joined,
+            **({"core": [len(snap["core"]), len(core_members(dive))], "core_in": core_in, "core_out": core_out} if core_in or core_out else {})}
+
+
+def core_members(dive: dict) -> list[str]:
+    """e81: the theme's core members with figures as the deck counts them (deck.population): each company once, its membership confirmed, a
+    revenue or a profit stored, not an adjacent participant."""
+    adj = {str(x.get("symbol")) for x in dive.get("adjacent") or [] if isinstance(x, dict) and x.get("symbol")}
+    out = set()
+    for b in dive.get("layers") or []:
+        for c in b.get("companies") or []:
+            s_ = c.get("symbol")
+            if s_ and s_ not in adj and not c.get("adjacent") and c.get("status") != "unverified" \
+                    and (c.get("revenue") is not None or c.get("profit") is not None):
+                out.add(str(s_))
+    return sorted(out)
 
 
 def moved_out_why(dive: dict | None) -> dict:

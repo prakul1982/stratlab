@@ -178,10 +178,11 @@ def test_8_a_member_beyond_the_figures_window_whose_words_say_its_layer_stays_in
     words = {**{f"S{i}": f"S{i} {say}" for i in range(6)}, "W": f"W {say}", **{f"L{i}": f"L{i} sells approved medicines." for i in range(B.FIGURES_MAX)}}
     figs = {f"L{i}": {"revenue": 900.0} for i in range(B.FIGURES_MAX)}       # the window read; the layer's members beyond it never read
     vc, rows = B.listed_out([big, lay, rest], words.get, "Biotech", {}, figs.get, {})
-    assert sorted(c["ticker"] for c in lay["companies"]) == ["S0", "S1", "S2", "S3", "S4", "S5"]
-    # in the window with no figure stored (r62's case, kept), and beyond it with no words: listed in "Other" until read
-    assert sorted(c["ticker"] for c in rest["companies"]) == ["N", "W"]
-    assert all("no figure stored" in r["why"] for r in rows)
+    # (updated on purpose, e81: the owner's review of the R79 decks, P0 "business classification apart from financial-data availability": a
+    # member with no figure stored keeps its layer, marked out of its calculations; W and N, in "Other" for no figure stored before, stay)
+    assert sorted(c["ticker"] for c in lay["companies"]) == ["N", "S0", "S1", "S2", "S3", "S4", "S5", "W"]
+    assert rest["companies"] == [] and not any("no figure stored" in r["why"] for r in rows)
+    assert all(c.get("fig_unread") for c in lay["companies"] if c["ticker"] in ("N", "W"))
 
 def test_9_one_company_added_and_removed_under_two_symbols_in_one_change_is_neither():
     """The live R62 Biotech deck (deck_check "added unexplained", p.11): "added 1: InMed Pharmaceuticals Inc. ...; removed 1: InMed

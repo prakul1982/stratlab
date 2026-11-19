@@ -618,10 +618,10 @@ def listed_as(name, symbol):
     return grounding.listed_name(name, symbol, symbol)
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73, 75: 74}  # rules versions whose change only adds to a kept placement (e80, R75: the answers unchanged, encyclopedia sentences no line of own words; e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73, 75: 74, 76: 75}  # rules versions whose change only adds to a kept placement (e80, R75: the answers unchanged, encyclopedia sentences no line of own words; e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 30                # (e80: 30, one more for the version R75 carries; e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 31                # (e81: 31, one more for the version R76 carries; e80: 30, one more for the version R75 carries; e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1606,8 +1606,22 @@ def sources(region: str, theme: str, fresh: bool = False):
 def removal_words(region: str) -> dict:
     """r572: a company's stored words and official industry, for the change log's reason why a company the map no longer names left
     (theme_changes.reasoned): stored only, nothing read from a page."""
-    facts = _facts_reader(region)
-    return {"words_of": kept_about(region), "industry_of": lambda s_: str((facts(s_) or {}).get("industry") or "").split(">")[-1].strip()}
+    # e81 (LIVE17A-009: first opens of Semiconductors and REITs 14-15 s): a company's official industry from its stored description's record
+    # alone, never its whole stored facts (the deep dive's business read and its filings' titles, two more reads a company of the log)
+    def industry_of(s_):
+        k = f"theme:evidence:{region}:{s_}"
+        hit = EVIDENCE_CACHE.get(k)
+        if hit is None:
+            try:
+                hit = db.json_value(db.get_setting(k), {}) or {}
+            except Exception:
+                hit = {}
+        return str((hit or {}).get("industry") or "").split(">")[-1].strip()
+    words = kept_about(region)
+    # e81: the log's companies' records read in one database call a hundred (db.prefetch_settings), never one round trip each
+    words.prefetch = lambda syms: db.prefetch_settings([f"theme:evidence:{region}:{s_}" for s_ in syms
+                                                        if EVIDENCE_CACHE.get(f"theme:evidence:{region}:{s_}") is None])
+    return {"words_of": words, "industry_of": industry_of}
 
 
 @router.get("/theme-dive")
@@ -1822,7 +1836,7 @@ def stale_marks(r: str, dive: dict) -> dict:
 
 # e80 (LIVE16A-003): a dive the store refused to keep (computed.put None) is served from this process until a kept one replaces it, never
 # the last dive that had been kept (the 13 Nov Semiconductors dive under "being worked out", 19 Nov)
-UNKEPT_MAX = 6
+UNKEPT_MAX = 2                  # e81 (item 6): at most two dives the store refused held here (each up to several MB)
 _UNKEPT: dict = {}
 
 
@@ -1849,11 +1863,26 @@ def dive_duplicates(r: str, name: str, label: str = "") -> set:
     hit = _DUPS.get(k)
     if hit and time.time() - hit[0] < DUPS_EVERY:
         return hit[1]
+    # e81 (item 6, the R79 re-check's 1.92 GB peak): the symbols kept in the store's index beside the newest dive ("dups"), never the whole
+    # dive (up to 4 MB) read for them; a dive kept before they were is read as before
+    got = None
     try:
-        dive = (latest_dive(r, name, label) or {}).get("dive") or {}
+        best = None
+        for e in (computed.index(theme_library.DIVE).get("entries") or {}).values():
+            if isinstance(e, dict) and e.get("region") == r and (e.get("meta") or {}).get("q") == name:
+                if best is None or float(e.get("at") or 0) > float(best.get("at") or 0):
+                    best = e
+        if best is not None and isinstance((best.get("meta") or {}).get("dups"), list):
+            got = {str(x) for x in best["meta"]["dups"]}
     except Exception:
-        dive = {}
-    got = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+        got = None
+    if got is None:
+        try:
+            dive = (latest_dive(r, name, label) or {}).get("dive") or {}
+        except Exception:
+            dive = {}
+        got = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+        dive = None
     _DUPS[k] = (time.time(), got)
     if len(_DUPS) > 200:
         _DUPS.clear()
@@ -1968,8 +1997,18 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         value = {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces)), "seen": stale_marks(r, hit)}
         _DUPS[(r, m.get("_library") or theme_library.normalise(theme, r))] = (time.time(), {str(x.get("symbol")) for x in hit.get("duplicates") or []
                                                                                            if isinstance(x, dict) and x.get("symbol")})
+        # e81 (LIVE17A-005): the theme's one count, as its public page works it out (public_themes.counts), and the symbols listed twice,
+        # kept in the store's index beside the dive: a /themes card and the members table read them without reading the dive itself
+        try:
+            from .. import public_themes
+            pub = public_themes.counts(m, hit)
+        except Exception as e:
+            print("theme dive: count not kept:", type(e).__name__, str(e)[:100])
+            pub = None
+        dups = sorted({str(x.get("symbol")) for x in hit.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")})
         if computed.put(theme_library.DIVE, key, value, label=m.get("sector") or theme,
-                        region=r, by=by, meta={"q": m.get("_library") or theme_library.normalise(theme, r), "rules": theme_base.RULES}) is None:
+                        region=r, by=by, meta={"q": m.get("_library") or theme_library.normalise(theme, r), "rules": theme_base.RULES,
+                                               "dups": dups, **({"pub": pub} if pub else {})}) is None:
             keep_unkept(key, value)          # e80: not kept (the store refused it): served from here, never the older dive, until it is
         else:
             _UNKEPT.pop(json.dumps(key, default=str), None)

@@ -18,7 +18,7 @@ import re
 from datetime import date
 
 from app import deck, public_themes
-from app.intel import theme_changes as TC, theme_data as D, theme_routes as TR
+from app.intel import theme_base, theme_changes as TC, theme_data as D, theme_routes as TR
 from tests.test_d53_fixes import DC, inputs, replay, synthetic_deck
 
 WORDS = D._stems("Medical devices implants catheters surgical instruments")
@@ -88,8 +88,11 @@ def test_on_the_live_r52_medical_devices_inputs_no_company_without_words_is_coun
     # r62 (updated on purpose, LIVE10A-004: an encyclopedia's ranking or a cut sentence is never printed as a company's own words; HCA's stored
     # text is an encyclopedia's, "As of 2024, HCA Healthcare is ranked #61 on the Fortune 500"): a company confirmed by its own description
     # shows those words, or, with no sentence of its own work a table can show, is said so on the deck (r60a), never quoted with another text
-    short = sum(1 for c in every.values() if c.get("evidence") == "description_verified" and not c.get("what"))
-    assert short <= 1
+    # (updated on purpose, e81, LIVE17A-002: a US record whose stored words are an encyclopedia's (read before the extract was kept apart:
+    # Boston Scientific's "... is an American biotechnology and biomedical engineering firm ...", Stryker's, Edwards') quotes none of them;
+    # every other one is quoted)
+    short = [c for c in every.values() if c.get("evidence") == "description_verified" and not c.get("what")]
+    assert len([c for c in short if theme_base.quotable(d["evidence"].get(c["symbol"]) or "", "US")]) <= 1
     for c in every.values():
         if c.get("evidence") == "description_verified" and c.get("what"):
             assert "Fortune 500" not in c["what"], c["name"]

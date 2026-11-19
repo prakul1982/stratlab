@@ -40,7 +40,7 @@ MAX_QUEUE = 200
 # r69e (the live REITs theme: FFO and P/FFO missing for most property owners, their US pieces read before a property owner's FFO lines were
 # part of the read, kept under VERSION 3 and never read again): the lines a US piece's read holds, kept with it; a property owner's piece
 # read before them is read once more (stale_for_property), within the memory guard's turn, never the whole sector's figures (VERSION stays)
-REIT_V = 1
+REIT_V = 2                      # e81: 2, disposition gains deducted and the FFO the company reports read from its annual report
 # e79 (LIVE15A-008, the live R77 REITs deck: Camden Property Trust "SBC / revenue 130.8%", its stock pay over the $13 m of fee income its
 # piece was read on, beside the $1.57 bn of property revenue its rebuilt page and the appendix give): a US piece keeps the revenue its shares of
 # revenue were worked out on ("rev", USD million, REV_V); a piece whose revenue is not the row's own, or one read before it was kept for a
@@ -371,8 +371,12 @@ RD = ("ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAc
 PROPERTY = ("RealEstateInvestmentPropertyNet", "RealEstateInvestmentPropertyAtCost", "RealEstateGrossAtCarryingValue")
 RE_DEPRECIATION = ("RealEstateDepreciationAndAmortization", "DepreciationAndAmortizationRealEstate", "DepreciationDepletionAndAmortization",
                    "DepreciationAndAmortization", "DepreciationAmortizationAndAccretionNet")
+# e81 (the owner's review of the R79 REITs deck, P0: Camden's derived FFO $996 m against its reported Nareit FFO $744.8 m): Camden files its
+# $260.9 m of gains on property sales as "GainLossOnDispositionOfAssets", a tag the read did not know, so no gain was deducted; a property
+# owner's disposition gains are its property sales' (the read runs only for a filer holding real-estate property)
 PROPERTY_GAINS = ("GainsLossesOnSalesOfInvestmentRealEstate", "GainLossOnSaleOfRealEstateInvestmentProperty", "GainLossOnSaleOfProperties",
-                  "GainLossOnDispositionOfRealEstate", "GainLossOnSaleOfPropertyPlantEquipment")
+                  "GainLossOnDispositionOfRealEstate", "GainLossOnSaleOfPropertyPlantEquipment", "GainLossOnDispositionOfAssets",
+                  "GainLossOnDispositionOfAssets1")
 RECURRING_CAPEX = ("PaymentsForCapitalImprovements", "PaymentsToDevelopRealEstateAssetsRecurring")
 PREMIUMS_EARNED = ("PremiumsEarnedNet",)
 CLAIMS_INCURRED = ("PolicyholderBenefitsAndClaimsIncurredNet", "LiabilityForClaimsAndClaimsAdjustmentExpenseIncurredClaims1")
@@ -509,11 +513,80 @@ def us_revenue(facts: dict, end: str | None) -> float | None:
     return round(r / MILLION, 3) if r else None
 
 
+# e81 (the owner's review of the R79 REITs deck, P0 "reported Nareit FFO first"): the FFO a property owner reports, from its annual report's
+# reconciliation (Item 7: "FFO attributable to common shareholders ... $ 744,814", "Funds from operations (as defined by Nareit) ..."), the
+# fiscal year's column first; never a Core, Normalized, Adjusted or per-share line. Amounts in thousands unless the text says millions
+_FFO_LINE = re.compile(r"(?<![A-Za-z])(?:Nareit\s+)?(?:funds\s+from\s+operations|FFO)(?:\s*\((?:as\s+defined\s+by\s+)?(?:Nareit|NAREIT|FFO)\)|\s*-\s*Nareit|"
+                       r"\s*\(Nareit\s+defined\))?(?:\s+attributable\s+to\s+(?:common\s+)?(?:shareholders|stockholders|unitholders)"
+                       r"(?:\s+and\s+(?:common\s+)?(?:unitholders|noncontrolling\s+interests))?)?\s*[:\-–]?\s*\$?\s*(\(?[\d,]{3,}(?:\.\d+)?\)?)", re.I)
+_FFO_NOT = re.compile(r"\b(?:core|normali[sz]ed|adjusted|as\s+adjusted|per\s+(?:diluted\s+)?(?:share|unit)|AFFO|modified|recurring)\b", re.I)
+
+
+def reported_ffo(text: str) -> float | None:
+    """e81: a property owner's FFO as its annual report states it ($ million), or None: the first FFO line of its reconciliation (not a
+    Core, Normalized or Adjusted one, nor a per-share one) with its amount in thousands (or in millions where the text says so)."""
+    t = " ".join(str(text or "").split())
+    for m in _FFO_LINE.finditer(t):
+        before = t[max(0, m.start() - 40):m.start()]
+        if _FFO_NOT.search(before) or _FFO_NOT.search(m.group(0)):
+            continue
+        raw = m.group(1).strip("()").replace(",", "")
+        try:
+            v = float(raw)
+        except ValueError:
+            continue
+        near = t[max(0, m.start() - 4000):m.start()].lower()
+        if "in millions" in near[-1500:] or "(millions" in near[-1500:]:
+            mn = v
+        elif v >= 1000:
+            mn = v / 1000.0                           # "(in thousands)", the usual table
+        else:
+            continue
+        if 1 <= mn <= 50000:
+            return round(mn, 1)
+    return None
+
+
+def with_reported_ffo(got: dict, text: str, r_million: float | None) -> dict:
+    """e81: a US piece's figures with the FFO its annual report states in place of the derived one (kept as "ffo_derived"), each FFO marked by
+    its basis ("reported" or "derived"); the figures as they are with no FFO."""
+    if not isinstance(got.get("ffo"), dict):
+        return got
+    rep = reported_ffo(text) if text else None
+    if rep is None:
+        return {**got, "ffo": {**got["ffo"], "basis": "derived"}}
+    period = got["ffo"].get("period")
+    out = {**got, "ffo_derived": {**got["ffo"], "basis": "derived"},
+           "ffo": {"v": rep, "period": period, "source": "Annual report (10-K): FFO as the company reports it (Nareit's definition)", "basis": "reported"}}
+    if r_million and r_million > 0:
+        out["ffo_share"] = {"v": _within(round(rep / r_million * 100, 1), -200, 300), "period": period,
+                            "source": "Annual report (10-K): FFO as the company reports it, over revenue", "basis": "reported"}
+        if out["ffo_share"]["v"] is None:
+            out.pop("ffo_share")
+    return out
+
+
+def annual_report_text(sec_client, cik: int) -> str:
+    """e81: the text of the company's latest annual report (10-K), "" when it can't be read."""
+    from . import sec
+    try:
+        f = sec.latest_filing(sec_client.submissions(cik), ("10-K",))
+        if not f or not f.get("doc"):
+            return ""
+        url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{f['accn'].replace('-', '')}/{f['doc']}"
+        return sec.html_text(sec_client.document(url))
+    except Exception as e:
+        print("sector metrics: annual report not read for FFO:", cik, type(e).__name__, str(e)[:100])
+        return ""
+
+
 def read_us(symbol: str, sec_client) -> dict:
     cik = sec_client.cik(symbol)
     facts = sec_client._json(f"/api/xbrl/companyfacts/CIK{cik:010d}.json")
     got = us_figures(facts or {})
     end = got.pop("_end", None)
+    if isinstance(got.get("ffo"), dict):          # e81: a property owner: the FFO it reports first
+        got = with_reported_ffo(got, annual_report_text(sec_client, cik), us_revenue(facts or {}, end) if end else None)
     rev = us_revenue(facts or {}, end) if got and not got.get("_stale") else None
     if got.get("_stale"):
         return {"family": "us", "metrics": {}, "end": None, "none": f"latest figures are for FY {_label(got['_stale'])}"}
@@ -704,9 +777,13 @@ def apply(row: dict, piece: dict | None) -> None:
                 row.setdefault("filed_basis", []).append(REPLACES[k])
     # r62: a property owner's price to its funds from operations (market value and FFO both in USD million), in place of its P/E
     ffo, cap = row.get("ffo"), row.get("cap")
+    if "ffo" in got and isinstance(got["ffo"], dict):
+        row["ffo_basis"] = got["ffo"].get("basis") or "derived"          # e81: reported (the company's own Nareit FFO) or derived
     if isinstance(ffo, (int, float)) and ffo > 0 and isinstance(cap, (int, float)) and cap > 0 and "ffo" in got:
         row["p_ffo"] = round(cap / ffo, 1)
-        row["sector_src"]["p_ffo"] = {"period": (got["ffo"] or {}).get("period"), "source": "market value over FFO"}
+        row["sector_src"]["p_ffo"] = {"period": (got["ffo"] or {}).get("period"),
+                                      "source": "market value over FFO as the company reports it" if row.get("ffo_basis") == "reported"
+                                      else "market value over derived FFO"}
 
 
 INSURER_TYPES = ("life", "general", "health", "reinsurance")
