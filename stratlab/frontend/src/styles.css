@@ -1694,7 +1694,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (max-width: 640px) { .tax-head-hold { min-height: 145px; } }
 /* LIVE17B-004: the tax report on a phone: its controls one width, the card's (a switch, the upload button, the year, the downloads), not four */
 .tax-head-one { display: flex; flex-direction: column; gap: 2px; }
-.tax-head-fig { font-size: 22px; font-variant-numeric: tabular-nums; }
+.tax-head-fig { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
   .tax-controls > .k-card-head > .k-card-actions { flex: 1 1 100%; }
   .tax-controls > .k-card-head > .k-card-actions > .k-seg, .tax-controls > .k-card-head > .k-card-actions > select.k-input,

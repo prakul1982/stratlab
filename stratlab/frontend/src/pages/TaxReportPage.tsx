@@ -531,7 +531,7 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
     <Card compact label="The year's tax" className="tax-head-hold">
       <div className="tax-head-one" data-testid="tax-head-one">
         <span className="k-small k-muted">Estimated tax for <span className="nowrap">{y.label}</span></span>
-        <b className="tax-head-fig" aria-label="Total tax estimate">{inr(t.total)}</b>
+        <span className="tax-head-fig" aria-label="Total tax estimate">{inr(t.total)}</span>{/* a span, as on the table: the page names its total one way */}
         <span className="k-small">{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B${t.sections ? " of the 1961 Act" : ""}). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></span>
       </div>
       {payable?.locked && <p className="k-small k-muted" data-testid="tax-payable-locked">What is still payable, with your TDS and payments taken off and the interest under sections 234A, 234B and 234C added, is in <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link> on the {payable.plan ?? "Pro"} plan.</p>}
