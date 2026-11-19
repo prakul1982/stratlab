@@ -110,11 +110,12 @@ def test_3_a_member_whose_words_say_its_layer_is_never_sent_out_for_a_figure_not
 
 
 def test_3b_a_member_with_no_figure_whose_words_say_nothing_of_its_layer_still_goes():
-    # (guard) r62's rule stands for a member whose words say no word of the layer (a member in the window with no page read: r63e's test 8)
+    # (updated on purpose, e81: the owner's review of the R79 decks, P0 "business classification apart from financial-data availability": no
+    # stored figure moves a member out of its layer; it stays, marked out of the layer's calculations, and no reason says "no figure stored")
     vc, rows = _bio()
     got = _rows(vc)
-    assert got["Q"][0] == "Other biotech companies", got["Q"]
-    assert "no figure stored" in got["Q"][1]["refit"]["why"]
+    assert got["Q"][0] == "Specialty and clinical-stage biotechs", got["Q"]
+    assert got["Q"][1].get("fig_unread") and not any("no figure stored" in str(r.get("why")) for r in rows)
 
 
 def test_3c_a_page_read_with_no_revenue_is_a_page_read(monkeypatch):

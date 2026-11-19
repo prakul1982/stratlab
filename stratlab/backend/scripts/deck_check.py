@@ -457,7 +457,9 @@ _CONSIDERED = re.compile(r"(\d[\d,]*) companies \(|(\d[\d,]*) in the exchange's 
 _PARTIAL = "A partial map"
 _BIG = re.compile(r"(?<![\w.,])[−-](\d[\d,]*(?:\.\d+)?)%|(?<![\w.,−-])(\d[\d,]*(?:\.\d+)?)%")
 _RANGE_LINE = re.compile(r"(?:^|\s)(?:Range|range|median|Median)\b|[−-]?\d[\d,]*(?:\.\d+)?% to [−-]?\d")
-_ADDED = re.compile(r"added (\d[\d,]*): ([^;.]*(?:\.[^;.\s][^;.]*)*)(?=;|\.(?:\s|$))")
+# e81 (the R79 US Media deck: "added 4: ..., Unity Software Inc. (filed under an official industry of the theme)" read as unexplained, the
+# last name's own "Inc." taken for the list's end): a full stop right before the reason's bracket is a name's
+_ADDED = re.compile(r"added (\d[\d,]*): ([^;.]*(?:\.(?:[^;.\s]|\s\()[^;.]*)*)(?=;|\.(?:\s|$))")
 _SOURCES_HEAD = re.compile(r"(\d[\d,]*) checked figures?, (\d[\d,]*) verified(?!, \d)")
 _ADJ = re.compile(r"([A-Z][^.;:]{3,90}?) \(\d[^)]*\), adjacent participants")
 _WITH_BASE = re.compile(r",?\s*from [−-]?[$₹]?\s?[\d,.]+ ?(?:m|bn|cr|k|lakh(?: cr)?)? to [−-]?[$₹]?\s?[\d,.]")     # r62: "+1177.3%, from $6 m to $76 m"

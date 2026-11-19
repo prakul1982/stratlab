@@ -22,7 +22,7 @@ from . import blog, db, email_kit as kit
 IST = ZoneInfo("Asia/Kolkata")
 STATE_KEY = "blog:research:state"
 MONTH_KEY = "blog:research:month"
-GEN = 8                             # 8: a theme post follows its deck: medians on 3 companies or more with their counts, the chain's own comparison, each company's own words, the theme page and deck linked (blog2); 7: a theme post says the day of the theme's read it was worked out from (LIVE7A-017); 6: theme posts with no layers, a headline for a name or a same-day twin are hidden (LIVE6-003); the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
+GEN = 9                             # 9: a theme post's counts of companies and layers as its public page and card say them (e81, LIVE17A-005); 8: a theme post follows its deck: medians on 3 companies or more with their counts, the chain's own comparison, each company's own words, the theme page and deck linked (blog2); 7: a theme post says the day of the theme's read it was worked out from (LIVE7A-017); 6: theme posts with no layers, a headline for a name or a same-day twin are hidden (LIVE6-003); the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
 GEN_KEY = "blog:research:gen"       # {"gen", "ok", "tries", "at"} of the last run made for a version
 SIP_AMOUNT = 10000
 SIP_HORIZONS = (3, 5)
@@ -646,10 +646,23 @@ def theme_source(dive: dict, theme: str, region: str) -> dict:
     pop = population(dive)
     listed = len({c.get("symbol") for x in layers for c in x.get("companies") or [] if c.get("symbol")})
     figs = dive.get("figures") or {}
+    # e81 (LIVE17A-005: the Semiconductors post "104 listed US companies ... 9 layers" beside its page's "102 companies in 10 layers"): the
+    # theme's count as its public page and its /themes card say it (public_themes.counts, from the stored read and this dive)
+    page_counts = None
+    try:
+        from . import public_themes
+        from .intel import theme_library
+        nm = theme_library.normalise(theme, region) or theme
+        ent = next((x for x in public_themes.entries(region) if x["name"] == nm), None)
+        pl = public_themes.payload(ent) if ent else None
+        page_counts = public_themes.counts(pl, dive) if pl else None
+    except Exception:
+        page_counts = None
     return {"v": THEME_SRC_V, "theme": theme, "region": region, "sector": dive.get("sector") or theme, "unit": dive.get("unit"),
             "basis": dive.get("basis") or "", "rows": rows, "notable": [n for n in dive.get("notable") or [] if n.get("kind") == "move"],
             "members": dive.get("members") if dive.get("members") is not None else pop["core"], "adjacent_n": pop["adjacent"],
-            "total": p.get("total") or listed, "listed": listed, "window": {"shown": figs.get("shown"), "of": figs.get("of")} if figs.get("of") else None,
+            "total": (page_counts or {}).get("all") or p.get("total") or listed, "listed": listed,
+            **({"page_counts": {k: page_counts[k] for k in ("listed", "layers", "all")}} if page_counts else {}), "window": {"shown": figs.get("shown"), "of": figs.get("of")} if figs.get("of") else None,
             "unplaced": sum(1 for x in unplaced for c in x.get("companies") or [] if c.get("status") != "unverified"),
             "chain": {k: chain.get(k) for k in ("line", "highest", "lowest", "measure", "compared", "unranked")},
             "lender": lender, "whole": td.mostly_whole(checks.get("whole_points"), checks.get("with_ebitda")),
@@ -658,6 +671,19 @@ def theme_source(dive: dict, theme: str, region: str) -> dict:
             # r64e (LIVE11A-020: "read of the theme on 17 Nov 2026" for a map made 7 Nov): the day the theme's map was made, said beside
             **({"map_on": datetime.fromtimestamp(float(dive["map_at"]), timezone.utc).date().isoformat()}
                if isinstance(dive.get("map_at"), (int, float)) and dive["map_at"] > 0 else {})}
+
+
+def _page_counts(theme: str, region: str) -> dict | None:
+    """e81: the theme's count as its public page's dive keeps it (public_themes.stored_counts), or None."""
+    try:
+        from . import public_themes
+        from .intel import theme_library
+        nm = theme_library.normalise(theme, region) or theme
+        ent = next((x for x in public_themes.entries(region) if x["name"] == nm), None)
+        pl = public_themes.payload(ent) if ent else None
+        return public_themes.stored_counts(region, nm, pl) if pl else None
+    except Exception:
+        return None
 
 
 def theme_page_path(theme: str, region: str) -> str:
@@ -821,9 +847,16 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
     members = src.get("members") if src.get("members") is not None else total
     where = {"IN": "Indian", "US": "US"}.get(region, "")
     named = _lower_first(sector) + ("" if sector.lower().endswith("theme") else " theme")
+    # e81 (LIVE17A-005): the theme's layers as its page counts them; the layers with figures said apart when fewer. A post kept before its
+    # source held them reads them where its page's are kept (public_themes.stored_counts)
+    pc = src.get("page_counts") or _page_counts(src.get("theme") or sector, region)
+    if pc and pc.get("all"):
+        total = int(pc["all"])
+    n_layers = int((pc or {}).get("layers") or len(rows))
     intro = (f"{total:,} listed {where + ' ' if where else ''}compan{'y is' if total == 1 else 'ies are'} in the {named}; StratLab's map sorts them into "
-             f"{len(rows)} {'layer' if len(rows) == 1 else 'layers'} of its value chain by what each company's own description says it does. "
-             f"The figures below are of its {members:,} core member{'' if members == 1 else 's'} with figures")
+             f"{n_layers} {'layer' if n_layers == 1 else 'layers'} of its value chain by what each company's own description says it does. "
+             f"The figures below are of its {members:,} core member{'' if members == 1 else 's'} with figures"
+             + (f", in the {len(rows)} {'layer' if len(rows) == 1 else 'layers'} that have them" if len(rows) < n_layers else ""))
     if src.get("adjacent_n"):
         intro += f"; {src['adjacent_n']:,} adjacent participant{' is' if src['adjacent_n'] == 1 else 's are'} shown apart, in no theme figure"
     intro += "."

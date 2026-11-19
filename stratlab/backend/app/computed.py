@@ -124,6 +124,15 @@ def get(kind: str, key, count: bool = True) -> dict | None:
     return {**e, "hk": hk} if ok else None
 
 
+def has(kind: str, key) -> bool:
+    """e81 (item 6): whether a result is kept under (kind, key), from the kind's index alone: a theme's dive (up to 4 MB) is never read
+    whole to learn that it is there."""
+    try:
+        return hkey(_keyed(kind, key)) in (index(kind).get("entries") or {})
+    except Exception:
+        return False
+
+
 def get_hk(kind: str, hk: str) -> dict | None:
     """An entry by its short name (Admin's "Open"), not counted as a hit."""
     try:
@@ -190,8 +199,10 @@ def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | N
     if v is not None:
         meta = {**(meta or {}), "versions": v}
     try:
+        # e81 (item 6, the R79 re-check's 1.92 GB peak): a kind of large results (a theme's dive, up to 4 MB) is kept as ASCII JSON: one byte a
+        # character in memory on every write and read (a text with one "₹" or "“" is two bytes a character in Python), 1% longer on disk
         text = json.dumps({"value": value, "at": at, "label": str(label)[:120], "region": region, "meta": meta or {}},
-                          ensure_ascii=False, default=str, separators=(",", ":"))
+                          ensure_ascii=kind in KIND_MAX, default=str, separators=(",", ":"))
     except (TypeError, ValueError) as ex:
         print("computed: not kept (not JSON):", kind, str(ex)[:100])
         return None
@@ -208,7 +219,7 @@ def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | N
         old = ix["entries"].get(hk) or {}
         entry = {"label": str(label)[:120], "region": region, "size": len(text), "at": at, "first": old.get("first") or at,
                  "hits": old.get("hits", 0), "last": old.get("last") or at, "refreshes": old.get("refreshes", 0) + (1 if by else 0),
-                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate", "versions")}}
+                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate", "versions", "pub", "dups")}}
         ix["entries"][hk] = entry
         if by:
             ix["refreshes"] += 1
