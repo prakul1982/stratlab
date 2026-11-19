@@ -2008,6 +2008,7 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
   .k-tbl-wrap.stack.compact .k-table td[data-label]::before { display: inline; margin-right: 4px; }
   .k-tbl-wrap.stack.compact .k-table td.k-brief { font-size: var(--t-label); }
   .k-tbl-wrap.stack.compact .k-table td.k-brief::before { display: none; }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief.k-brief-label::before { display: inline; margin-right: 4px; }
   .k-tbl-wrap.stack.compact .k-table td.k-phone-off { display: none; }
   .k-tbl-wrap.stack.compact .k-table td.k-wrap { flex: 1 1 auto; min-width: 0; white-space: normal; }   /* a column of words (an event's details) may wrap, and takes the rest of its line */
   .k-tbl-wrap.stack.compact .k-table td.k-act, .k-tbl-wrap.stack.compact .k-table td.k-row-note, .k-tbl-wrap.stack.compact .k-table td.k-empty-row { flex: 1 1 100%; white-space: normal; }

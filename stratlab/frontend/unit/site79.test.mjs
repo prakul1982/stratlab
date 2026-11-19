@@ -64,3 +64,9 @@ test("LIVE16B-003: Trade home's next F&O expiry is never one that ended earlier 
   assert.equal(nextExpiry(ev, "2026-11-19")?.title, "SENSEX weekly expiry");          // no clock given: as before
   assert.match(read("src/pages/SpaceHomes.tsx"), /nextExpiry\(ev\?\.events, today, istHm\(\)\)/);
 });
+
+test("LIVE16A-014: Mood's breadth count on a phone keeps its day beside the main figure", () => {
+  assert.match(read("src/pages/PulseMood.tsx"), /numeric: true, brief: true, briefLabel: true, cell: \(r\) => \(r\.now == null/);
+  assert.match(read("src/components/kit/DataTable.tsx"), /c\.brief && c\.briefLabel && "k-brief-label"/);
+  assert.match(read("src/styles.css"), /\.k-tbl-wrap\.stack\.compact \.k-table td\.k-brief\.k-brief-label::before \{ display: inline; margin-right: 4px; \}/);
+});

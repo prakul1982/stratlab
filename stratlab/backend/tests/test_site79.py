@@ -182,3 +182,28 @@ def test_live16b_002_a_page_from_before_the_share_count_rules_is_not_served_as_f
     assert not SP.cap_rule_due(stored["facts"])
     small = {**facts, "market_cap": 1200.0}          # a small company waits for its turn, as before
     assert not SP.cap_rule_due(small)
+
+
+# ---------- LIVE16A-014: Mood in session words no earlier count; the other market's index at its own latest level ----------
+def test_live16a_014_a_session_read_words_an_earlier_count_as_that_close():
+    from app.intel import mood
+    b = {"group": "S&P 500", "adv": 186, "dec": 312, "stocks": 500, "day": "2026-11-18", "live": False}
+    p = {"region": "US", "is_open": True, "session": "2026-11-19", "breadth": b}
+    lines = [x for x in mood.lines_of(p) if "186 of 500" in x]
+    assert lines == ["At the 18 Nov close, before today's session: 186 of 500 S&P 500 stocks rose and 312 fell."]
+    p["is_open"] = False
+    p["session"] = "2026-11-18"
+    assert any("186 of 500" in x for x in mood.lines_of(p))
+
+
+def test_live16a_014_the_us_cards_nifty_row_is_indias_own_latest_level():
+    from app.intel import mood
+    p = {"today": "2026-11-19", "global": {"rows": [{"label": "NIFTY 50", "symbol": "^NSEI", "tag": "India", "price": 25227.95, "change_pct": -0.63,
+                                                     "day": "2026-11-18", "same_day": False},
+                                                    {"label": "DAX", "symbol": "^GDAXI", "tag": "Europe", "price": 1, "change_pct": 0.1, "day": "2026-11-19"}]}}
+    lv = [{"name": "NIFTY 50", "price": 25514.3, "change_pct": 1.135, "day": "2026-11-19"}]
+    got = mood.other_index_rows(p, "US", lv)
+    nifty = got["global"]["rows"][0]
+    assert (nifty["price"], nifty["change_pct"], nifty["day"], nifty["same_day"]) == (25514.3, 1.14, "2026-11-19", True)
+    assert got["global"]["rows"][1] == p["global"]["rows"][1]
+    assert mood.other_index_rows(p, "US", [{**lv[0], "day": "2026-11-17"}]) is p          # never an older day

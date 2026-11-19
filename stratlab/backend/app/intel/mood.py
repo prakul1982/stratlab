@@ -388,7 +388,13 @@ def lines_of(p: dict) -> list[str]:
         when = (f"so far today{at}" if p.get("is_open", True) else f"on {day_words(b.get('day'))}{shut}" if b.get("day") else "") if b.get("live") \
             else f"on {day_words(b.get('day'))}" if b.get("day") else ""
         tail = f"; {fpct(b['pct50'], 1, sign=False)} are above their 50-day average" if b.get("pct50") is not None else ""
-        out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))
+        if p.get("is_open") and not b.get("live") and b.get("day") and p.get("session") and str(b["day"]) < str(p["session"]):
+            # LIVE16A-014: a read during the session carries an earlier session's count only as that close's, said first ("186 of 500 … on
+            # 18 Nov" in the 09:38 ET read of 19 Nov read as the day's count)
+            out.append(("breadth", f"At the {day_words(b['day'])} close, before today's session: {fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} "
+                                   f"stocks rose and {fnum(b['dec'])} fell{tail}."))
+        else:
+            out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))
     s = p.get("sectors")
     if s:
         lead, lag = s["rows"][0], s["rows"][-1]
@@ -542,6 +548,26 @@ def newest_rows(p: dict, other: dict | None) -> dict:
         if rows != mine:
             out = {**out, blk: {**p[blk], "rows": rows}}
     return out
+
+
+def other_index_rows(p: dict, region: str, other_levels: list[dict] | None) -> dict:
+    """LIVE16A-014: the other market's main index under "Markets overseas" at that market's own latest level, the app's own reading (the
+    US card said "NIFTY 50 ▼ −0.63% on 18 Nov" at 19:56 IST, hours after India closed 19 Nov up 1.14%). A row is replaced only by a newer
+    day's level."""
+    if not p or not other_levels or not (p.get("global") or {}).get("rows"):
+        return p
+    name, sym = INDEX_SYMBOL["IN" if region == "US" else "US"]
+    lvl = next((i for i in other_levels if i.get("name") == name and i.get("day") and num(i.get("price")) is not None), None)
+    if not lvl:
+        return p
+    day, rows, changed = str(lvl["day"])[:10], [], False
+    for r in p["global"]["rows"]:
+        if r.get("symbol") == sym and day > str(r.get("day") or ""):
+            c = num(lvl.get("change_pct"))
+            r = {**r, "price": num(lvl["price"]), "change_pct": round(c, 2) if c is not None else None, "day": day, "same_day": day == p.get("today")}
+            changed = True
+        rows.append(r)
+    return {**p, "global": {**p["global"], "rows": rows}} if changed else p
 
 
 def session_of(levels: list[dict], name: str) -> str | None:
@@ -946,6 +972,10 @@ class Mood:
         if value:
             other = self.payloads.kept("US" if region == "IN" else "IN")
             value = newest_rows(value, other[1] if other else None)
+            try:
+                value = other_index_rows(value, region, self.hub.indices_now("US" if region == "IN" else "IN", wait=0.0)[0])
+            except Exception:
+                pass
         return value, at
 
     def _get(self, region: str, wait: float = 20.0) -> tuple[dict | None, float | None]:
