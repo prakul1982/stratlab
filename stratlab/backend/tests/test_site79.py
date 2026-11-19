@@ -167,3 +167,18 @@ def test_live16a_005_the_results_page_converts_stored_rows_and_the_screener_row_
     assert "report_currency" not in screens.row("US", "AAPL", {"name": "Apple", "price": 200.0})
     assert "report_currency" not in screens.row("IN", "TCS", {"name": "TCS", "price": 2342.7, "report_currency": "INR"})
     assert R._report_currency("BABA", {"BABA": row}) == ("CNY", 0.14)
+
+
+# ---------- LIVE16B-002: a page built before today's share-count rules is built again when opened ----------
+def test_live16b_002_a_page_from_before_the_share_count_rules_is_not_served_as_fresh():
+    from app import stock_pages as SP
+    from app.intel.screener import CAP_RULE
+    now = time.time()
+    facts = {"v": SP.FACTS_VERSION, "region": "IN", "market_cap": 835000.0, "price": 2342.7}
+    stored = {"ts": now - 60, "price_ts": now - 60, "facts": facts}
+    assert SP.cap_rule_due(facts)
+    assert not SP.fresh(stored, "IN", now)
+    stored["facts"] = {**facts, "cap_rule": CAP_RULE}
+    assert not SP.cap_rule_due(stored["facts"])
+    small = {**facts, "market_cap": 1200.0}          # a small company waits for its turn, as before
+    assert not SP.cap_rule_due(small)
