@@ -22,7 +22,8 @@ export const fontSource = (file, pkg) => path.join(root, "node_modules", pkg, "f
 
 /** The app's own fonts the first screen draws with, asked for by index.html straight away: they arrived after the landing
  * page had drawn in the stand-in serif, and the 80 px heading re-wrapped and pushed the hero down (R80-007, CLS 0.13). */
-const FIRST_SCREEN = /^assets\/(fraunces-latin-400-normal|fraunces-latin-600-normal|ibm-plex-sans-latin-400-normal|ibm-plex-sans-latin-600-normal)-[\w-]+\.woff2$/;
+// (site78: and the hero eyebrow's mono face, which the landing's hero words now wait for too: public/boot.js)
+const FIRST_SCREEN = /^assets\/(fraunces-latin-400-normal|fraunces-latin-600-normal|ibm-plex-sans-latin-400-normal|ibm-plex-sans-latin-600-normal|ibm-plex-mono-latin-400-normal)-[\w-]+\.woff2$/;
 
 export function publicFonts() {
   return {
