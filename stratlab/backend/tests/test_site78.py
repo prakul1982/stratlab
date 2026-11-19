@@ -209,3 +209,24 @@ def test_live15a_010_growth_of_a_quarter_older_than_the_last_two_says_not_report
     got = {r["symbol"]: r["q"] for wk in v["weeks"] for r in wk["rows"]}
     assert got["PDD"] == {"sales": None, "profit": None, "of": "Dec 2020 vs Dec 2019", "unreported": True}
     assert got["WMT"]["sales"] == 4.8 and not got["WMT"].get("unreported")
+
+
+# ---------- LIVE15A-015: an IPO's issue size that changes says what it was and when ----------
+def test_live15a_015_a_changed_issue_size_keeps_what_it_was_and_the_day(monkeypatch):
+    from app import db, ipo
+    old = [{"id": "in-mcl", "market": "IN", "fresh_cr": None, "ofs_cr": 9001.0}]
+    new = [{"id": "in-mcl", "market": "IN", "fresh_cr": None, "ofs_cr": 6706.0}, {"id": "in-new", "market": "IN", "ofs_cr": 500.0}]
+    at = datetime(2026, 11, 19, 3, 0, tzinfo=timezone.utc)
+    assert ipo.note_size_changes(old, new, at) == 1
+    assert new[0]["size_was"] == {"amount": 9001.0, "on": "2026-11-19"} and "size_was" not in new[1]
+    same = [{"id": "in-mcl", "market": "IN", "ofs_cr": 6706.0}]
+    assert ipo.note_size_changes([{"id": "in-mcl", "market": "IN", "ofs_cr": 6706.0}], same, at) == 0 and "size_was" not in same[0]
+    # every save compares with the stored rows; the pages carry it
+    store = {ipo.ROWS_KEY + "IN": json.dumps({"rows": old, "checked": {}})}
+    monkeypatch.setattr(db, "get_setting", store.get)
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    rows = [{"id": "in-mcl", "market": "IN", "name": "Mahanadi", "ofs_cr": 6706.0, "open": "2026-11-19", "close": "2026-11-23"}]
+    ipo.save("IN", rows, {})
+    kept = json.loads(store[ipo.ROWS_KEY + "IN"])["rows"][0]
+    assert kept["size_was"]["amount"] == 9001.0
+    assert ipo.list_row(kept, at)["size_was"]["amount"] == 9001.0

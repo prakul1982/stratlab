@@ -49,3 +49,11 @@ test("LIVE15A-010: a row whose latest kept quarter is older than the last two sa
   assert.match(page, /r\.q\?\.unreported \? <span className="k-muted" data-testid="res-q-unreported"[^>]*>Not reported<\/span> :/);
   assert.match(page, /unreported\?: boolean/);
 });
+
+test("LIVE15A-015: an issue size that changed between two reads says what it was and when", async () => {
+  const { sizeWasText } = await import("../src/lib/ipoText.ts");
+  assert.equal(sizeWasText({ market: "IN", currency: "INR", size_was: { amount: 9001, on: "2026-11-19" } }), "Changed on 19 Nov from ₹9,001 cr");
+  assert.equal(sizeWasText({ market: "IN", currency: "INR" }), null);
+  assert.match(read("src/pages/IposPage.tsx"), /data-testid="ipo-size-was">\{sizeWasText\(r\)\}/);
+  assert.match(read("src/pages/IpoPage.tsx"), /        sizeWasText\(r\),\n/);
+});

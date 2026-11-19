@@ -160,8 +160,31 @@ def load(market: str) -> dict:
     return {"as_of": got.get("as_of"), "rows": rows, "checked": got.get("checked") if isinstance(got.get("checked"), dict) else {}}
 
 
+SIZE_MOVE = 0.005                     # an issue's size that moves more than this (a share) between two reads is a change the row says
+
+
+def note_size_changes(old_rows: list[dict], rows: list[dict], now: datetime | None = None) -> int:
+    """LIVE15A-015: Mahanadi Coalfields' size read ₹9,001 cr on 18 Nov and ₹6,706 cr on 19 Nov with no word of a change. A row whose
+    size (sizes) moves by more than SIZE_MOVE from the stored row's keeps what it was and when it changed ("size_was": {"amount", "on"}),
+    the latest change only; an issue first given a size has nothing to compare. Returns how many rows changed."""
+    now = now or _now()
+    day = now.astimezone(IST if (rows and rows[0].get("market") == "IN") else NY).date().isoformat()
+    before = {r["id"]: sizes(r)["amount"] for r in old_rows if r.get("id")}
+    n = 0
+    for r in rows:
+        was, new = before.get(r.get("id")), sizes(r)["amount"]
+        if was and new and abs(new / was - 1) > SIZE_MOVE:
+            r["size_was"] = {"amount": was, "on": day}
+            n += 1
+    return n
+
+
 def save(market: str, rows: list[dict], checked: dict, as_of: str | None = None) -> None:
     with _lock:
+        try:
+            note_size_changes(load(market)["rows"], rows)
+        except Exception as e:                # the rows are kept whatever the comparison does
+            print("ipo: size change not noted:", str(e)[:120])
         db.set_setting(ROWS_KEY + market, json.dumps({"as_of": as_of or _now().isoformat(timespec="seconds"), "rows": rows, "checked": checked},
                                                      separators=(",", ":"), ensure_ascii=False))
         forget()
@@ -1911,7 +1934,7 @@ def list_row(row: dict, now: datetime) -> dict:
     perf = official_perf(row, row.get("perf"), now)
     keys = ("id", "market", "segment", "name", "symbol", "stage", "open", "close", "close_time", "allotment", "allotment_expected", "listing", "listing_expected",
             "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_base", "size_parts", "issue_status", "exchanges", "exchange",
-            "expected", "priced", "filed", "shares", "currency")
+            "expected", "priced", "filed", "shares", "currency", "size_was")
     out = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     out["docs"] = sorted({d["kind"] for d in doc_links(row) if d["kind"]})
     if sub.get("times") is not None:
@@ -2076,7 +2099,7 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
     keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "close_time", "hours", "allotment", "allotment_expected",
             "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_base", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
-            "shares", "amount", "currency", "industry", "credit", "credit_expected", "size_in_bids", "anchor_shares")
+            "shares", "amount", "currency", "industry", "credit", "credit_expected", "size_in_bids", "anchor_shares", "size_was")
     ipo = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     if row["market"] == "IN" and row.get("symbol"):
         ipo["company_link"] = f"/research/IN/{row['symbol']}"
