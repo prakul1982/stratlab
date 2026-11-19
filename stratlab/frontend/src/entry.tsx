@@ -53,20 +53,6 @@ async function readConfig(): Promise<boolean> {
   return !!window.STRATLAB_CONFIG;
 }
 
-/** LIVE14A-014 / LIVE14B-003: the home page's hero words wait, hidden, for their own faces (public/boot.js sets data-faces; index.html, at
- * most 3 s), and the app's hero, drawn over them, waits as long (at most 1.5 s more): drawn in a stand-in with its faces a moment behind,
- * its words re-wrapped and the example card beside them moved (CLS 0.07). Another page, or the faces already here: at once. */
-function heroFaces(): Promise<void> {
-  const html = document.documentElement;
-  if (!html.hasAttribute("data-home") || html.hasAttribute("data-faces")) return Promise.resolve();
-  return new Promise((ok) => {
-    const done = () => { seen.disconnect(); ok(); };
-    const seen = new MutationObserver(() => { if (html.hasAttribute("data-faces")) done(); });
-    seen.observe(html, { attributes: true, attributeFilter: ["data-faces"] });
-    window.setTimeout(done, 1500);
-  });
-}
-
 async function start() {
   const root = document.getElementById("root");
   if (!root) return;
@@ -90,7 +76,7 @@ async function start() {
   // and then again in its own: the swap moved /library's chips and cards sideways (0.106) whenever its list arrived first
   const fonts = account ? null : Promise.race([new Promise((ok) => window.setTimeout(ok, 1500)),
     Promise.all(["300 1em Montserrat", "800 1em Montserrat", "1em Fraunces", "600 1em Fraunces", "1em IBM Plex Sans", "500 1em IBM Plex Sans", "600 1em IBM Plex Sans"]
-      .map((f) => document.fonts.load(f)))]).then(heroFaces).catch(() => undefined);
+      .map((f) => document.fonts.load(f)))]).catch(() => undefined);
   const visitorCode = account ? null : import("./visitor/visitorMain");
   visitorCode?.catch(() => undefined);
   const [{ captureRef }, { startErrorReports }] = await Promise.all([import("./lib/share"), import("./lib/sentry")]);

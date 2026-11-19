@@ -94,30 +94,6 @@
       document.documentElement.setAttribute("data-home", "1");
   } catch (e) {}
 
-  // LIVE14A-014 / LIVE14B-003: the landing's hero words wait, hidden, for the faces they are drawn in (index.html), then show: once, at their
-  // final size and place. The faces are the ones index.html preloads (publicFonts.mjs, seoPages.mjs heroFrame); their @font-face rules come
-  // with the stylesheet, after this script, so they are looked for again as each stylesheet arrives. A browser with no font loading API, or
-  // a page without those faces (once it has loaded), shows the words at once; index.html shows them after 3 s whatever happens.
-  try { (function () {
-    var html = document.documentElement, fonts = document.fonts;
-    if (!html.hasAttribute("data-home")) return;
-    function show() { html.setAttribute("data-faces", "1"); }
-    if (!fonts || typeof fonts.load !== "function" || typeof Promise === "undefined") return show();
-    var FACES = ["400 1em Fraunces", "italic 400 1em Fraunces", '400 1em "IBM Plex Sans"', '600 1em "IBM Plex Sans"'];
-    var loaded = false;
-    function look() {
-      if (html.hasAttribute("data-faces")) return;
-      Promise.all(FACES.map(function (f) { return fonts.load(f); })).then(function (got) {
-        for (var i = 0; i < got.length; i++) if (!got[i].length) { if (loaded) show(); return; }      // not here yet: the next stylesheet
-        show();
-      }, show);       // a face that failed to download: the stand-in, now
-    }
-    document.addEventListener("load", function (e) { if (e.target && e.target.tagName === "LINK") look(); }, true);
-    document.addEventListener("DOMContentLoaded", look);
-    window.addEventListener("load", function () { loaded = true; look(); });
-    look();
-  })(); } catch (e) { try { document.documentElement.setAttribute("data-faces", "1"); } catch (x) {} }
-
   // LIVE14B-001: a saved sign-in's account (/me) asked for the moment /config.js says where the server is, before the page's stylesheet
   // and its code have arrived: the first signed-in page of a browser asked for it only once a file of the app's code had come (lib/
   // accountEarly.ts), behind the stylesheet and ~40 other files (the page drew its heading at 7.9 s live). The app's first /me takes this
