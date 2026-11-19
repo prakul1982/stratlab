@@ -27,3 +27,19 @@ test("LIVE15A-002: a session read over 20 minutes old is labelled with its time,
   assert.match(card, /oldAt \? `Move at \$\{oldAt\}`/);
   assert.match(read("src/pages/Research.tsx"), /<SectorsTable s=\{mood\.sectors\} closedDay=\{moodDay\(mood, pulseClosedDay\(data\?\.indices\)\)\} oldAt=\{moodOldTime\(mood, region\)\} \/>/);
 });
+
+test("LIVE15A-003 / LIVE15B-001: with no sample deck on the server, the table and Free's list promise none", async () => {
+  const { featuresNow, FEATURES } = await import("../src/lib/planFeatures.ts");
+  assert.match(FEATURES.free.join(" "), /and the sample deck to download/);
+  assert.equal(featuresNow(true), FEATURES);
+  const none = featuresNow(false).free.join(" ");
+  assert.doesNotMatch(none, /sample deck/);
+  assert.match(none, /fresh AI reads a day; 1 share link/);
+  const cmp = read("src/components/PlanCompare.tsx");
+  assert.match(cmp, /sample === null \? "0" : "0 \(a sample deck to download\)"/);
+  assert.match(read("src/pages/Login.tsx"), /const all = lists\?\.featuresNow\(sample !== null\);/);
+  // one read of /info a page load, shared by the link, the table and the list
+  const deck = read("src/components/SampleDeck.tsx");
+  assert.match(deck, /asked \?\?= publicGet/);
+  assert.equal((deck.match(/\/pricing\/sample-deck\/info/g) || []).length, 1);
+});

@@ -155,3 +155,34 @@ def test_live15a_002_the_mood_card_is_read_again_every_quarter_hour_while_the_ma
 def test_live15a_002_the_clock_job_reads_the_card_in_session():
     from app import mood_job
     assert mood_job.job.session is mood_job._mood_open
+
+
+# ---------- LIVE15A-003 / LIVE15B-001: a sample deck stays available across a release ----------
+def test_live15a_003_the_last_deck_that_passed_stays_the_sample_until_a_deck_of_todays_versions_passes():
+    """Fails before: Release 77 changed the deck's versions, every kept PDF stopped being current and /info said available:false (the
+    Plans table and the Free list still promised a sample) until someone made a deck again."""
+    from app import sample_deck as S
+    ok = {"items": [{"id": "a", "ok": True}]}
+    bad = {"items": [{"id": "a", "ok": False}]}
+    old_good = {"id": "old", "label": "India IT services (PDF, 2026-11-18)", "region": "IN", "meta": {"versions": [1], "gate": ok}}
+    assert S.pick([old_good], [2])["id"] == "old"                                     # after the release: the last good one
+    new_bad = {"id": "nb", "label": "Cement (PDF, 2026-11-19)", "region": "IN", "meta": {"versions": [2], "gate": bad}}
+    assert S.pick([new_bad, old_good], [2])["id"] == "old"                            # a new deck that failed its gate doesn't replace it
+    new_good = {"id": "ng", "label": "Consumer durables (PDF, 2026-11-19)", "region": "IN", "meta": {"versions": [2], "gate": ok}}
+    assert S.pick([new_good, new_bad, old_good], [2])["id"] == "ng"                   # one of today's versions passed: it is the sample
+    assert S.pick([new_bad], [2])["id"] == "nb"                                       # nothing ever passed: as fix20 had it
+    assert S.pick([{**old_good, "meta": {"versions": [1]}}], [2]) is None             # an older release's deck with no gate: never
+
+
+def test_live15a_003_the_link_to_the_last_good_deck_downloads_it(monkeypatch):
+    import base64
+    from fastapi.testclient import TestClient
+    from app import computed
+    rows = [{"id": "old", "label": "India IT services (PDF, 2026-11-18)", "region": "IN",
+             "meta": {"versions": ["an earlier release"], "gate": {"items": [{"id": "a", "ok": True}]}}}]
+    monkeypatch.setattr(computed, "entries", lambda kind, q="", region="", limit=500: rows if kind == "deck:theme" else [])
+    monkeypatch.setattr(computed, "get_hk", lambda kind, hk: {"value": base64.b64encode(b"%PDF-old").decode()} if hk == "old" else None)
+    c = TestClient(main.app)
+    info = c.get("/pricing/sample-deck/info").json()
+    assert info == {"available": True, "theme": "India IT services", "region": "IN", "id": "old"}
+    assert c.get("/pricing/sample-deck", params={"id": "old"}).content == b"%PDF-old"

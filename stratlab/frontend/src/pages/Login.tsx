@@ -36,7 +36,7 @@ const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></S
 const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
 // sign-in by email (owner, 16 Nov): on the sign-in page only while /config.js switches it on; its code loads only then
 import { EmailWay } from "../components/EmailWay";
-import { SampleDeckLink } from "../components/SampleDeck";
+import { SampleDeckLink, useSampleDeck } from "../components/SampleDeck";
 const EmailSignIn = lazy(() => importWithRetry(() => import("../components/EmailSignIn")).then((m) => ({ default: m.EmailSignIn })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
@@ -650,10 +650,12 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
 /** Every feature of each plan, one fold under the even cards (the cards say the five main points: LIVE4-020). The lists load when the
  * fold is first opened, so the landing page's JavaScript stays under its 450 KB (R5V-020). */
 function AllFeatures() {
-  const [all, setAll] = useState<Record<PlanId, string[]> | null>(null);
+  const [lists, setAll] = useState<typeof import("../lib/planFeatures") | null>(null);
+  const sample = useSampleDeck();
+  const all = lists?.featuresNow(sample !== null);
   const load = (e: SyntheticEvent<HTMLDetailsElement>) => {
     if (all || !e.currentTarget.open) return;
-    void import("../lib/planFeatures").then((m) => setAll(m.FEATURES)).catch(() => undefined);
+    void import("../lib/planFeatures").then(setAll).catch(() => undefined);
   };
   return (
     <div className="lp-faq lp-all-features"><details onToggle={load} data-testid="all-features">
