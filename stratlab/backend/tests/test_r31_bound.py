@@ -267,7 +267,10 @@ def test_the_coverage_table_says_once_which_model_figures_the_sources_don_t_hold
     assert "Property and leasing: occupancy" in gone and gone.count("Property developers") == 1
     assert deck.coverage_table_flags(rows, view, deck.coverage(view)) == []
     # an insurer's: on the coverage table only when no sector table says it already
-    ins = {"layers": [{"model": {"family": "life_insurance"}, "companies": []}]}
+    # (updated on purpose, e78: the owner's R76 review, Fertilizers' "Property developers" lines from a realty layer with no figures: a way of
+    # earning's terms are said only of a layer with a company the deck has figures for; a layer listed with none says nothing)
+    assert deck.not_in_sources({"layers": [{"model": {"family": "life_insurance"}, "companies": []}]}) == ""
+    ins = {"layers": [{"model": {"family": "life_insurance"}, "companies": [{"ticker": "LICI", "revenue": 8.5e12}]}]}
     assert "VNB, APE and embedded value" in deck.not_in_sources(ins)
     assert deck.not_in_sources({**ins, "sections": {"sector": {"families": {"insurer": {"not_filed": "said"}}}}}) == ""
     # a theme of other models: no row

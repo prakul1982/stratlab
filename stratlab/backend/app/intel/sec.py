@@ -397,6 +397,7 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     cost = read(COST_OF_SALES)
     for end, vs in seen.items():
         out[end] = top_line(vs, cost.get(end))
+    principal_lines(read, out)
     for c in REVENUE_ELSE:
         for end, v in read((c,)).items():
             if v >= 0:              # a narrower line below nil is a deduction (grants netted off research costs), not sales
@@ -430,6 +431,37 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     for end in [e for e in out if out[e] and no_sales_in_statement(op, op_costs, e)]:      # a nil stays: it is the right figure
         del out[end]
     return out
+
+
+# e78 (the owner's review of the live R76 REITs deck, P0: Camden Property Trust's FY2025 revenue shown as $13 m, its "fee and asset management"
+# income, tagged as contract revenue, its only top-line concept; its property revenues, $1,573.5 m, are tagged as lease income, a narrower line
+# read only when no top-line concept is filed): a company's principal revenue line beside a top-line figure that is a part of it. Lease income
+# (ASC 842) is never in revenue from contracts with customers (ASC 606), so a top-line figure below the lease income of the same period, with no
+# total revenues line filed for it, is a part; so is any top-line figure under a tenth of such a line (Triton International: Revenues of $59.5 m
+# beside $1,221.5 m of leasing revenue). The period's revenue is then the income statement's own total (operating profit plus total costs) when
+# it is at least that line, else that line, as filed: never a sum the filing doesn't state
+PRINCIPAL = ("OperatingLeaseLeaseIncome", "OperatingLeasesIncomeStatementLeaseRevenue", "RealEstateRevenueNet",
+             "RegulatedAndUnregulatedOperatingRevenue")
+PRINCIPAL_RULE = 1               # the version of that rule a page is built with (stock_pages.revenue_part_due)
+PART_SHARE = 0.10                # a top-line figure under this share of a principal line of its period is a part, total line or not
+
+
+def principal_lines(read, out: dict[str, float]) -> dict[str, str]:
+    """e78: the periods whose top-line figure in `out` is a part of the company's principal revenue line (PRINCIPAL), given that line (or the
+    income statement's total, operating profit plus total costs, when it is at least the line) in place; changes `out` in place and returns
+    {period end: the line it was read from}. `read` reads a tuple of concepts by period."""
+    lines = {c: read((c,)) for c in PRINCIPAL}
+    if not any(lines.values()):
+        return {}
+    total, op, costs = read(("Revenues",)), read(OPERATING), read(TOTAL_COSTS)
+    done: dict[str, str] = {}
+    for end, v in list(out.items()):
+        best = max(((x[end], c) for c, x in lines.items() if (x.get(end) or 0) > 0), default=None)
+        if best is None or v >= best[0] or not (end not in total or v < PART_SHARE * best[0]):
+            continue
+        whole = op[end] + costs[end] if end in op and end in costs else None
+        out[end], done[end] = (whole, "operating profit plus total costs") if whole is not None and whole >= best[0] else best
+    return done
 
 
 def sector_revenue(read) -> dict[str, float]:
@@ -1265,6 +1297,8 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "capex_untagged": capex_untagged,
            # r60b: the lines the latest year's revenue is read from, named, with its standard (revenue_parts)
            # (None when the year has no revenue read: the key itself says the page was built with this rule, stock_pages.basis_missing)
+           # e78: built with the principal revenue line read beside a part of it (principal_lines), so a page built before is built once more
+           "rev_rule": PRINCIPAL_RULE,
            "revenue_basis": {**revenue_parts(facts, ends[-1], rev_a[ends[-1]], cur), "year": _label(ends[-1]),
                              "filer": financial_filer(facts, subs) or ""} if rev_a.get(ends[-1]) else None,
            "url":f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={facts_json.get('cik')}&type=10-K"}
@@ -1344,6 +1378,29 @@ def earnings_hits(raw: dict) -> list[dict]:
         accn, _, doc = str(h.get("_id") or "").partition(":")
         url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accn.replace('-', '')}/{doc}" if accn and doc else None
         out.append({"symbol": price_symbol(common[0]), "name": m.group(1).strip(), "cik": cik, "at": at, "url": url})
+    return out
+
+
+SUCCESSOR_FORMS = ("8-K12B", "8-K12G3")          # a listed company put under a new holding company (its shares now the new one's)
+
+
+def successor_hits(raw: dict) -> list[dict]:
+    """e77: the filers of a holding-company succession (8-K12B, 8-K12G3) in one page of the SEC's filing search: [{symbol, cik}], each
+    filer with a common-stock ticker as the SEC lists it (the new holding company), once each."""
+    out, seen = [], set()
+    for h in (((raw or {}).get("hits") or {}).get("hits")) or []:
+        s = (h or {}).get("_source") or {}
+        if str(s.get("file_type") or s.get("form") or "") not in SUCCESSOR_FORMS:
+            continue
+        for d in s.get("display_names") or []:
+            m = _DISPLAY.match(str(d or ""))
+            if not m:
+                continue
+            tickers = [t.strip().upper() for t in m.group(2).split(",") if re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,11}", t.strip().upper())]
+            common = [t for t in tickers if not non_common(t)]
+            if common and int(m.group(3)) not in seen:
+                seen.add(int(m.group(3)))
+                out.append({"symbol": price_symbol(common[0]), "cik": int(m.group(3))})
     return out
 
 
@@ -1567,6 +1624,71 @@ class SEC(Source):
                 return other, old
         return None
 
+    REPORTING_TTL = 7 * 86400
+
+    def reporting_name(self, symbol: str) -> str:
+        """e77 (owner, 18 Nov: "Exxon Mobil Corporation"; the R76 US Oil and gas deck still printed "ExxonMobil Holdings Corp" from a page
+        stored before r69e kept the registrant): the name of the registrant whose reports a company's figures are, when the listed company
+        is a new holding company put over it (8-K12B, 8-K12G3: see predecessor), as that registrant's filings name it (company facts'
+        entityName, the name company() gives the page); "" for any other company. Cached a week, a company with none too, and shared with
+        company(), so a page build and this read ask the SEC once."""
+        cik = self.cik(symbol)
+        key = ("reporting", cik)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        subs = self.submissions(cik)
+        name = ""
+        before = self.predecessor(cik, subs) if _forms(subs) & set(SUCCESSOR_FORMS) else None
+        if before:
+            old = self._json(f"/api/xbrl/companyfacts/CIK{before[0]:010d}.json")
+            name = str(old.get("entityName") or (before[1] or {}).get("name") or "").strip()
+        self.cache.set(key, name, self.REPORTING_TTL)
+        return name
+
+    SUCCESSION_DAYS = 3 * 366         # how far back a holding-company succession is looked for
+    SUCCESSION_MOST = 40              # successions worked out in one call (each kept a week): the rest on the next day's
+
+    def successor_names(self, listed: dict | None = None, today: date | None = None, skip=()) -> dict[str, dict]:
+        """e77: {symbol: {"name": the reporting registrant's name, "" for none, "listed": the listed name}} of the listed companies put
+        under a new holding company in the last SUCCESSION_DAYS, from the SEC's filing search for the succession forms (a page or a few)
+        and, for each such filer, reporting_name: at most SUCCESSION_MOST not yet kept here are asked in one call, so a day's read is
+        bounded. `listed`: {symbol: listed name} (the SEC's ticker list when not given); a filer not on it is left out, and so is one in
+        `skip` (checked lately, its answer kept by the caller)."""
+        today = today or date.today()
+        listed = listed if listed is not None else {t: v.get("name") for t, v in self.tickers().items()}
+        start = (today - timedelta(days=self.SUCCESSION_DAYS)).isoformat()
+        hits, asked, out = [], 0, {}
+        for page in range(self.SEARCH_PAGES):
+            raw = self._json(f"{self.SEARCH}?forms={','.join(SUCCESSOR_FORMS)}&dateRange=custom&startdt={start}"
+                             f"&enddt={today.isoformat()}&from={page * 100}")
+            hits += successor_hits(raw)
+            got = ((raw or {}).get("hits") or {}) if isinstance(raw, dict) else {}
+            total = ((got.get("total") or {}).get("value")) or 0
+            if len(got.get("hits") or []) < 100 or (page + 1) * 100 >= total:
+                break
+        for h in {h["symbol"]: h for h in hits}.values():
+            s = h["symbol"]
+            if s not in listed or s in skip:
+                continue
+            try:
+                kept = self.cache.get(("reporting", self.cik(s)))
+            except SourceError:
+                continue
+            if kept is None:
+                if asked >= self.SUCCESSION_MOST:
+                    continue
+                asked += 1
+                try:
+                    kept = self.reporting_name(s)
+                except SourceError as e:
+                    if e.busy:
+                        break
+                    continue
+            same = " ".join(str(kept).split()).lower() == " ".join(str(listed.get(s) or "").split()).lower()
+            out[s] = {"name": "" if same else str(kept or ""), "listed": str(listed.get(s) or "")}
+        return out
+
     def ads(self, subs: dict) -> dict | None:
         """{"ratio", "ads", "form", "url"} from the latest annual report of a foreign company, whose US shares may be
         depositary shares (see ads_ratio); None for a US company or when the report can't be read. Cached a month."""
@@ -1690,6 +1812,7 @@ class SEC(Source):
                     # registrant that still files them, named as its own filings name it (dei EntityRegistrantName: "Exxon Mobil
                     # Corporation"), never the new holding company's interim name
                     reporting_name = str(old.get("entityName") or (before[1] or {}).get("name") or "").strip()
+                    self.cache.set(("reporting", cik), reporting_name, self.REPORTING_TTL)      # e77: reporting_name's, asked once
                     facts = merge_facts(old, facts) if facts else old
                 except SourceError as e:
                     if e.busy:
@@ -2197,7 +2320,7 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
 # ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
 BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
 BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
-BUSINESS_KEY = ("business", 3)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read
+BUSINESS_KEY = ("business", 4)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read; e78: 4, before a sentence of a REIT's tax status was passed over (REIT_TAX)
 BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
     (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
     # lane n2 (the outside review of the live R33 decks: TSMC's and UMC's 20-F gave nothing, or a line on process technology): a 20-F's
@@ -2265,9 +2388,17 @@ def _prose(body: str, limit: int) -> list[str]:
 # "•19.2 million square feet of office space in 26 of the properties;"): a sentence of how the company is held or financed (its operating
 # partnership, its general partner's interest, its cash flow owed to creditors first) says nothing of its work, and a list the opening
 # introduces ("we own:", "consisting of:") is one sentence of its items
+# e78 (the owner's review of the live R76 REITs deck: Essex Property Trust, "predominantly apartment communities", in "Other": its 10-K's
+# opening, read to 700 characters, was its REIT tax election, "taxable REIT subsidiaries ... subject to federal income tax as a regular C
+# Corporation ... consolidated by the Company for financial reporting purposes", and never reached the sentence of what it owns): a sentence of
+# a company's tax status (its election to be taxed as a REIT, its taxable REIT subsidiaries) tells how it is held, not what it does
+REIT_TAX = (r"\belect(?:ed|s)? to be (?:taxed|treated) as an? (?:reit|real estate investment trust)\b|\btaxable reit subsidiar(?:y|ies)\b|"
+            r"\bqualif(?:y|ies|ied) (?:to be taxed )?as an? (?:reit|real estate investment trust)\b|\bfor federal income tax purposes\b|"
+            r"\bconsolidated by the company for financial reporting purposes\b")
+_REIT_TAX = re.compile(REIT_TAX, re.I)
 _STRUCTURE = re.compile(r"\boperating partnership\b|\bgeneral partner\b|\blimited partnership (?:interest|units?)\b|\bumbrella partnership\b|"
-                        r"\bupreit\b|\bability to pay dividends\b|\bobligations to (?:its |their )?creditors\b|\bdirect and indirect subsidiaries\b",
-                        re.I)
+                        r"\bupreit\b|\bability to pay dividends\b|\bobligations to (?:its |their )?creditors\b|\bdirect and indirect subsidiaries\b|"
+                        + REIT_TAX, re.I)
 _LIST_ITEM = re.compile(r"^\s*(?:[•●▪◦·‣∙○■□–—-]|\(?[a-z0-9ivx]{1,3}[.)])\s*")
 LIST_CHARS = 420                        # of a list's items joined into the sentence that introduces them
 
@@ -2315,6 +2446,12 @@ def structure_only(text: str) -> bool:
     xs = [x for x in _SENTENCE_END.split(str(text or "").strip()) if len(x.split()) >= 4]
     return bool(xs) and all(_STRUCTURE.search(x) or not _SAYS_WORK.search(x) and not re.search(r"\b(?:own|operat|lease|sell|make|provid)\w*\b", x, re.I)
                             for x in xs) and any(_STRUCTURE.search(x) for x in xs)
+
+
+def reit_tax_said(text: str) -> bool:
+    """e78: whether a stored description holds a sentence of a REIT's tax status (REIT_TAX), which an opening read before e78 kept in place
+    of what the company owns (read again, theme_routes.thin_about)."""
+    return bool(_REIT_TAX.search(str(text or "")))
 
 
 def business_opening(text: str, limit: int = 700) -> str:

@@ -67,10 +67,13 @@ test("THEMES: every company of the theme's official industries is listed by laye
   const dive = read("src/components/ThemeDive.tsx"), page = read("src/pages/ThemesPage.tsx");
   assert.match(dive, /export function MembersCard/);
   for (const h of ["Company", "Industry", "Market value", "What it does, in its own words", "In the theme by"]) assert.match(dive, new RegExp(`header: "${h}"`));
-  assert.match(dive, /from the official industry list, \{named > 0 && `\$\{named\.toLocaleString\("en-IN"\)\} named in the theme's list, `\}\{added\.toLocaleString\("en-IN"\)\} added/);
+  // e77 (updated on purpose): the count line is themeFormat.countsLine (its sources add up: one listed twice counted once, unit/e77.test.mjs)
+  const fmt = read("src/lib/themeFormat.ts");
+  assert.match(dive, /countsLine\(total, p\)/);
+  assert.match(fmt, /from the official industry list`, \.\.\.\(named > 0 \? \[`\$\{n\(named\)\} named in the theme's list`\] : \[\]\),\n\s+`\$\{n\(added\)\} added/);
   assert.match(dive, /NO_WORDS/);           // LIVE6-007 (updated on purpose): "No description in its own words yet"
   assert.match(dive, /c\.base \? \(c\.basis === "list" \? "Named in the theme's list" : "Official industry"\)/);
-  assert.match(dive, /named in the theme's list, /);
+  assert.match(fmt, /named in the theme's list`/);          // e77 (updated on purpose): in countsLine
   assert.match(dive, /matched by the theme's own words/);                       // the page says which industries a typed theme used, and how
   assert.match(dive, /US-listed companies have no industry on file yet/);
   assert.match(dive, /Show all \$\{rows\.length\} companies/);                       // a long group is listed in full a press away, never "and N more"

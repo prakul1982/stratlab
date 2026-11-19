@@ -152,6 +152,12 @@ def operating(layer: dict, pid: str, members: list, figs: dict, region: str) -> 
     return {"profile": pid, "of": len(members), "measures": out, "none": none}
 
 
+def with_figures(c: dict) -> bool:
+    """e78: whether a layer's company is one the deck has figures for, its membership not unverified: the evidence a sector profile's or a way of
+    earning's own terminology needs before a deck says it of the layer (deck.not_in_sources, deck.profile_short)."""
+    return isinstance(c, dict) and c.get("status") != "unverified" and (c.get("revenue") is not None or c.get("profit") is not None)
+
+
 def rows(v: dict, ops_figs: dict | None = None) -> list[dict]:
     """Every layer of one way of earning with its financial profile and, where its companies fit one, its sector operating profile; layers of
     one family next to each other (in the order the deck lists them). `ops_figs`: {profile: {symbol: {measure: figure}}} as the deck has them
@@ -169,7 +175,9 @@ def rows(v: dict, ops_figs: dict | None = None) -> list[dict]:
         ops = operating(L, pid, members, (ops_figs or {}).get(pid) or {}, region) if pid else None
         cos = L.get("companies") or []
         out.append({"layer": L.get("layer"), "family": fin["family"], "model": L.get("model") or {}, "fin": fin, "ops": ops,
-                    "adjacent": bool(L.get("adjacent")) or (bool(cos) and all(c.get("symbol") in adj for c in cos))})
+                    "adjacent": bool(L.get("adjacent")) or (bool(cos) and all(c.get("symbol") in adj for c in cos)),
+                    # e78: how many of its companies the deck has figures for (membership evidence a sector's terminology is said on)
+                    "evidenced": sum(1 for c in cos if with_figures(c))})
     order = []
     for r in out:
         if r["family"] not in order:

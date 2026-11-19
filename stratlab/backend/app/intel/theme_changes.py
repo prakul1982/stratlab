@@ -692,12 +692,65 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
              **({"moved": [move_why(r) for r in e.get("moved") or []]} if e.get("moved") else {})} for e in entries]
 
 
+# e77 (LIVE14A-007: Cement's log moved Kanoria 7 times in 4 days, three of them on 17 Nov; REITs moved Adamas Trust Other -> Mortgage REITs
+# -> Other -> Mortgage REITs on 18 Nov alone, each re-check of a day an entry of its own): a company moved more than once in one day's entries
+# shows one move that day, the net one, from where the day's first move took it to where its last one left it, with the last move's reason
+# (why it is where it is); one the day's moves put back where it was shows none. An entry the collapse leaves empty is not shown
+def _day_of(e: dict) -> str:
+    return str(e.get("d") or str(e.get("at") or "")[:10])
+
+
+def net_by_day(log: list) -> list:
+    """The log (oldest first) with each company's moves of one day collapsed into its net move of that day ("times": how many moves it
+    nets), in the day's last entry that moved it; the counts follow the rows dropped."""
+    out = [dict(e) for e in log]
+    by_day: dict[str, list[int]] = {}
+    for i, e in enumerate(out):
+        by_day.setdefault(_day_of(e), []).append(i)
+    for idx in by_day.values():
+        if len(idx) < 2:
+            continue
+        seq: dict[str, list[tuple[int, dict]]] = {}
+        for i in idx:
+            for r in out[i].get("moved") or []:
+                if isinstance(r, dict) and r.get("symbol"):
+                    seq.setdefault(r["symbol"], []).append((i, r))
+        drop: dict[int, set] = {}
+        put: dict[int, dict] = {}
+        for sym, rows in seq.items():
+            if len(rows) < 2:
+                continue
+            first, (last_i, last) = rows[0][1], rows[-1]
+            for i, _r in rows:
+                drop.setdefault(i, set()).add(sym)
+            if str(first.get("from") or "") != str(last.get("to") or ""):
+                put[last_i] = put.get(last_i, {})
+                put[last_i][sym] = {**last, "from": first.get("from"), "times": len(rows)}
+        for i in set(drop) | set(put):
+            e = out[i]
+            gone = drop.get(i, set())
+            kept = []
+            for r in e.get("moved") or []:
+                sym = r.get("symbol") if isinstance(r, dict) else None
+                if sym in put.get(i, {}):
+                    kept.append(put[i][sym])
+                elif sym not in gone:
+                    kept.append(r)
+            n_was, n_now = len(e.get("moved") or []), len(kept)
+            e["moved"] = kept
+            counts = dict(e.get("counts") or {})
+            if isinstance(counts.get("moved"), int):
+                counts["moved"] = max(0, counts["moved"] - (n_was - n_now))
+            e["counts"] = counts
+    return [e for e in out if any((e.get("counts") or {}).values()) or any(e.get(k) for k in KINDS)]
+
+
 def view(region: str, name: str, full: bool, words_of=None, industry_of=None) -> dict:
     """The log as the page shows it, newest first: every entry (`full`), else the latest entry's counts and first FREE_ROWS rows, with
     how many older entries there are. "since": the day the theme's first read was kept. r572: `words_of` / `industry_of`, a company's stored
     words and official industry, say why a company the map no longer names left (reasoned)."""
     got = stored(region, name)
-    log = [e for e in got.get("log") or [] if isinstance(e, dict)][::-1]
+    log = net_by_day([e for e in got.get("log") or [] if isinstance(e, dict)])[::-1]          # e77: one net move a company a day
     tw = None
     if words_of is not None or industry_of is not None:
         from .theme_base import kind_stems

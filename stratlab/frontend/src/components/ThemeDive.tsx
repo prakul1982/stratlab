@@ -10,7 +10,7 @@ import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { deckLock } from "../lib/account";
-import { marginCell, quarterText } from "../lib/themeFormat";
+import { countsLine, marginCell, quarterText } from "../lib/themeFormat";
 import { decksWord, useUsage } from "../lib/usage";
 import { SampleDeckLink } from "./SampleDeck";
 import { LineChart } from "./Charts";
@@ -117,7 +117,7 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
   const ev = evidenceOf(dive);
   // LIVE11A-011: each group largest first by market value (ACC ₹23,442 cr sat above Shree ₹89,900 cr); a company with none goes last
   for (const g of groups) g.rows = [...g.rows].sort((a, b) => (caps.get(b.ticker) ?? b.cap ?? -1) - (caps.get(a.ticker) ?? a.cap ?? -1));
-  const named = p?.named ?? 0, base = (p?.base ?? 0) - named, added = p?.added ?? 0, inds = p?.industries ?? [];
+  const named = p?.named ?? 0, inds = p?.industries ?? [];
   // LIVE10A-040: an Industry column that says the same industry on every row (Cement's 41 cards each "Industry: Cement & Cement Products")
   // is left out; the theme's industries are said once in the counts line
   const indOf = (c: Co) => (region === "US" ? plainIndustry(c.industry) : c.industry) || "";
@@ -154,8 +154,7 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
     <Card id="theme-members" label="Every company in this theme">
       <CardHead title="Every company in this theme" info="The base is every listed company the exchange's own industry classification puts in the theme's industries: it is in the theme whatever the AI says. The AI sorts companies into layers and adds companies from other industries; an added company stays only while its own description doesn't show otherwise, marked confirmed when its words show the work." />
       <p className="k-small" data-testid="theme-counts">
-        <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {named > 0 && `${named.toLocaleString("en-IN")} named in the theme's list, `}{added.toLocaleString("en-IN")} added
-        {added > 0 && ` (${p?.confirmed ?? 0} description-verified)`}.
+        {(() => { const line = countsLine(total, p), at = line.indexOf(": "); return <><b>{line.slice(0, at)}</b>{line.slice(at)}</>; })()}
       </p>
       {unquotedNote && <p className="k-small k-muted" data-testid="theme-unquoted">{unquotedNote}</p>}
       {byOnce && <p className="k-small k-muted" data-testid="theme-by-once">Every company here is in the theme by: {byOnce}.</p>}

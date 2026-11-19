@@ -234,6 +234,16 @@ def dive_caps(dive: dict) -> dict:
     return out
 
 
+def dive_names(dive: dict) -> dict:
+    """e77: {symbol: its name} as the theme's stored dive names it (theme_data.member_name: the app's rows and the deck's)."""
+    out: dict = {}
+    for x in (dive.get("layers") or []) + (dive.get("subs") or []):
+        for c in (x or {}).get("companies") or []:
+            if isinstance(c, dict) and c.get("symbol") and str(c.get("name") or "").strip():
+                out.setdefault(c["symbol"], str(c["name"]))
+    return out
+
+
 def _evidence(dive: dict):
     """e54: symbol -> its evidence state as the theme's stored dive keeps it (the figures' window, then the companies the membership check
     reached beyond it), "membership_unverified" for one neither has; None for a dive kept before the states were (nothing is claimed)."""
@@ -275,6 +285,9 @@ def view(entry: dict, p: dict) -> dict:
     caps, revs, ev = ({**_index_caps(region), **dcaps, **{k: x[0] for k, x in newer.items()}},
                       {**_index_sales(region), **_revenues(region, entry["name"], p, dive)}, _evidence(dive))
     known = stock_pages.companies(region)
+    # e77 (the R76 decks: "OSI Systems Inc" in the deck beside "Osi Systems Inc" here; "ExxonMobil Holdings Corp" after the owner's "Exxon Mobil
+    # Corporation"): each company named as the app's rows and the deck name it (the stored dive's name), a reporting registrant's name first
+    named = dive_names(dive)
     layers = []
     for v in theme_layers(p):
         rows = []
@@ -283,7 +296,8 @@ def view(entry: dict, p: dict) -> dict:
             rev = revs.get(sym)
             # e54: what its place rests on; a company the map added is shown only confirmed by its own words (share.checked)
             state = "description_verified" if c.get("verified") is True else (ev(sym) if ev else None)
-            rows.append({"symbol": sym, "name": clean_name(public_words(c.get("name") or sym, 100) or sym),
+            nm_ = stock_pages.reporting_name(region, sym) or named.get(sym) or c.get("name") or sym
+            rows.append({"symbol": sym, "name": clean_name(public_words(nm_, 100) or sym),
                          "page": stock_pages.path(region, sym) if sym in known else None,
                          "cap": money(region, caps.get(sym)), "cap_v": caps.get(sym) if isinstance(caps.get(sym), (int, float)) else None,
                          "revenue": money(region, rev[0], rev[2]) if rev else None,

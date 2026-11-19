@@ -5342,7 +5342,20 @@ def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
         except Exception as e:
             print(f"stock list {region} failed:", str(e)[:160])
             failed.append(region)
+            continue
+        if region == "US":
+            us_reporting_names()
     return failed
+
+
+def us_reporting_names() -> None:
+    """e77: the listed US companies put under a new holding company, named as their reporting registrant (sec.SEC.successor_names, a few
+    filing-search pages and at most SUCCESSION_MOST companies a day), kept for every place a name shows (stock_pages.keep_reporting_names)."""
+    try:
+        with memguard.heavy("stock-list"):          # a predecessor's company facts run to megabytes
+            stock_pages.keep_reporting_names("US", sec_feed.successor_names(skip=stock_pages.reporting_skip("US")))
+    except Exception as e:
+        print("stock list US: reporting names not read:", str(e)[:160])
 
 
 def stock_list_job():

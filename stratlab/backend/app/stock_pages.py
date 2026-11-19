@@ -151,6 +151,70 @@ def _put(key: str, value):
         print("stock pages: could not save", key, str(ex)[:120])
 
 
+# ---------- the names of reporting registrants ----------
+# e77 (owner, 18 Nov: "Exxon Mobil Corporation"; the R76 US Oil and gas deck printed "ExxonMobil Holdings Corp" 10 times, from a page stored
+# before r69e kept the registrant): a listed company put under a new holding company is named as the registrant whose reports its figures
+# are, in every place a name shows (its stock page, the directory, a theme's rows, dive, deck and public page), without waiting for its page
+# to be rebuilt: stocks:reporting:<region> = {"at", "rows": {symbol: {"name": the reporting name ("" for none), "listed", "at": day checked}}},
+# kept by the daily list job from the SEC's filings (sec.SEC.successor_names, bounded) and by each page build that finds one (Pages._get)
+REPORTING_KEY = "stocks:reporting:"
+REPORTING_RECHECK = 30            # days before a company checked is asked again
+_reporting: dict[str, tuple[float, dict]] = {}
+
+
+def reporting_rows(region: str) -> dict:
+    """{symbol: {"name", "listed", "at"}} as stored (kept in memory ten minutes)."""
+    hit = _reporting.get(region)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    rows = ((_setting(REPORTING_KEY + region) or {}).get("rows")) or {}
+    rows = rows if isinstance(rows, dict) else {}
+    _reporting[region] = (time.time(), rows)
+    return rows
+
+
+def reporting_name(region: str, symbol: str | None) -> str:
+    """The reporting registrant's name a listed company is shown by, or ""."""
+    if region != "US" or not symbol:
+        return ""
+    row = reporting_rows(region).get(str(symbol).upper())
+    return " ".join(str((row or {}).get("name") or "").split()) if isinstance(row, dict) else ""
+
+
+def reporting_skip(region: str, today: date | None = None) -> set[str]:
+    """The companies checked in the last REPORTING_RECHECK days (not asked again)."""
+    cut = ((today or date.today()) - timedelta(days=REPORTING_RECHECK)).isoformat()
+    return {s for s, r in reporting_rows(region).items() if isinstance(r, dict) and str(r.get("at") or "") >= cut}
+
+
+def keep_reporting_names(region: str, got: dict, today: date | None = None) -> None:
+    """Keep what a check found ({symbol: {"name", "listed"}}, a name "" for none) beside what was kept before."""
+    if not got:
+        return
+    day = (today or date.today()).isoformat()
+    rows = dict(((_setting(REPORTING_KEY + region) or {}).get("rows")) or {})
+    changed = False
+    for sym, r in got.items():
+        new = {"name": " ".join(str((r or {}).get("name") or "").split()), "listed": str((r or {}).get("listed") or ""), "at": day}
+        if rows.get(sym) != new:
+            rows[sym], changed = new, True
+    if changed:
+        _put(REPORTING_KEY + region, {"at": datetime.now(timezone.utc).isoformat(), "rows": rows})
+        _reporting.pop(region, None)
+        _dir.pop(region, None)
+
+
+def with_reporting_name(region: str, symbol: str | None, f: dict | None) -> dict | None:
+    """A US page's facts named as its reporting registrant names itself, the listed name kept as "registrant" (what a page built since
+    r69e keeps itself): unchanged for a page that keeps its registrant, or a company with no reporting name stored."""
+    if region != "US" or not isinstance(f, dict) or not f or f.get("registrant"):
+        return f
+    name = reporting_name(region, symbol)
+    if not name or name.lower() == " ".join(str(f.get("name") or "").split()).lower():
+        return f
+    return {**f, "name": name, "registrant": str(f.get("name") or "")}
+
+
 # ---------- which companies have a page ----------
 _companies: dict[str, tuple[float, dict]] = {}
 _companies_lock = threading.Lock()
@@ -1189,6 +1253,26 @@ def financial_mismatch(f: dict | None) -> bool:
     return sales > 0 and profit > sales
 
 
+def revenue_part_due(f: dict | None) -> bool:
+    """e78 (the owner's review of the live R76 REITs deck: Camden Property Trust's revenue $13 m, a part of its $1,573.5 m of property revenue,
+    beside a profit many times it): whether a stored US company page built before its principal revenue line was read beside a part of it
+    (sec.principal_lines, PRINCIPAL_RULE) has a newest reported year whose net profit is above its revenue: it is built again, so the revenue
+    a theme reads is the whole. A page built with the rule is never built again by it."""
+    if not isinstance(f, dict) or f.get("region") != "US" or f.get("no_numbers") or f.get("not_company"):
+        return False
+    from .intel.sec import PRINCIPAL_RULE
+    if (f.get("rev_rule") or 0) >= PRINCIPAL_RULE:
+        return False
+    years = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM"]
+    if not years:
+        return False
+    try:
+        sales, profit = float(years[-1].get("sales")), float(years[-1].get("profit"))
+    except (TypeError, ValueError):
+        return False
+    return sales > 0 and profit > sales
+
+
 def basis_missing(f: dict | None) -> bool:
     """r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue beside its annual report's, the basis of neither said):
     whether a stored US page of a bank, lender or insurer with reported years was built before its revenue's lines were kept
@@ -1617,6 +1701,8 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
     if financial_mismatch(stored["facts"]) and now - ts >= UNREAD_FRESH:
         return False                     # r581: a financial filer's revenue below its net profit: built again (at most hourly)
+    if revenue_part_due(stored["facts"]) and now - ts >= UNREAD_FRESH:
+        return False                     # e78: a revenue below the net profit, built before the principal line was read: built again
     if (stored["facts"].get("annual_unread") or stored["facts"].get("type_unread") or annual_behind(stored["facts"])) \
             and now - ts >= UNREAD_FRESH:
         return False                     # built without its latest annual report, which couldn't be read then (R8V-003, R10V-002)
@@ -1763,7 +1849,7 @@ class Pages:
         key = f"stocks:page:{region}:{symbol}"
         hit = self.mem.get(key)
         if hit is not None:
-            return hit or None
+            return with_reporting_name(region, symbol, hit or None)
         try:
             stored = _setting(key)
         except Exception:
@@ -1771,13 +1857,13 @@ class Pages:
         facts = (stored or {}).get("facts") or None
         if facts and fresh(stored, region):
             self.mem.set(key, facts, 600)            # what _get keeps for a fresh stored page, so the next view skips the parse
-        return facts
+        return with_reporting_name(region, symbol, facts)          # e77
 
     adjust = None              # (region, symbol, facts) -> facts as served: the exchange's 52-week report taken in (R10O-007)
 
     def get(self, region: str, symbol: str, co: dict) -> dict | None:
         """The company's facts as served: stored or built (see `_get`), with `adjust` applied."""
-        f = self._get(region, symbol, co)
+        f = with_reporting_name(region, symbol, self._get(region, symbol, co))          # e77
         if f and self.adjust:
             try:
                 return self.adjust(region, symbol, f) or f
@@ -1819,6 +1905,9 @@ class Pages:
                 raise Busy() from None
             if got:
                 got["symbol"] = symbol
+                if region == "US" and got.get("registrant") and got.get("name"):
+                    # e77: a page that found its reporting registrant names it for the directory and the themes too
+                    keep_reporting_names(region, {symbol: {"name": got["name"], "listed": got["registrant"]}})
             _put(key, {"ts": time.time(), "facts": got})
             _mark_thin(region, symbol, not indexable(got))         # nothing to show, no recent price (or a fund): not in the sitemap
             self.mem.set(key, got or {}, 600)
@@ -3707,7 +3796,7 @@ def label_of(region: str, symbol: str, co: dict | None = None) -> str:
     """A company's name as the directory lists and sorts it: tidy case for US filings' capitals, the symbol for a company
     with no name."""
     co = co if co is not None else companies(region).get(symbol) or {}
-    name = co.get("name")
+    name = reporting_name(region, symbol) or co.get("name")          # e77: a holding company's listing by its reporting registrant's name
     return str((proper_name(name, symbol) if region == "US" else tidy_in_name(name)) or symbol)
 
 

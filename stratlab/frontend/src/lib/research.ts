@@ -111,6 +111,8 @@ export interface SectorAI {
     unclassified?: number;
     /** companies still unchecked when the check stopped waiting: shown as not yet confirmed, checked again later */
     timed_out?: number;
+    /** e77: one company listed under two symbols, its other listing left out (theme_identity.one_listing) */
+    same_company?: { ticker: string; name?: string; kept?: string }[];
   } | null;
   /** the listed companies the exchange puts in the theme's industries, A to Z (DE-013); `named`: the map names it too */
   exchange?: { industries: string[]; total: number; companies: { ticker: string; name: string; industry: string; named: boolean }[] } | null;
