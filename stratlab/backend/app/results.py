@@ -258,6 +258,41 @@ def reported(r: dict) -> list[dict]:
     return out
 
 
+_AMOUNT = re.compile(r"^(-?)\$([\d,]+(?:\.\d+)?)( billion| million)?$")
+_SCALE = {" billion": 1e9, " million": 1e6, "": 1.0}
+
+
+def _dollars(v: float) -> str:
+    return f"${v / 1e9:,.2f} billion" if v >= 1e9 else f"${v / 1e6:,.1f} million" if v >= 1e6 else f"${v:,.2f}"
+
+
+def in_currency(nums: list[dict] | None, cur: str | None, usd_rate: float | None) -> list[dict]:
+    """LIVE16A-005: a foreign filer's reported numbers in the currency it reports in, with their dollar figure at today's rate beside them.
+    The results feed gives a company's EPS and revenue in its own reporting currency, and they were printed as dollars (Alibaba "Revenue
+    $270.00 billion", RMB; Futu "$6.69 billion", HK$). `cur`: that currency (None or USD: as they are); `usd_rate`: dollars for one unit
+    of it (None: no dollar figure). A value already in another form is left as it is."""
+    if not cur or cur == "USD":
+        return list(nums or [])
+    out = []
+    for n in nums or []:
+        m = _AMOUNT.match(str((n or {}).get("value") or ""))
+        if not m:
+            out.append(n)
+            continue
+        sign, figure, unit = m.group(1), m.group(2), m.group(3) or ""
+        value = f"{sign}{cur} {figure}{unit}"
+        if usd_rate:
+            value += f" (about {sign}{_dollars(float(figure.replace(',', '')) * _SCALE[unit] * usd_rate)})"
+        out.append({**n, "value": value, "currency": cur})
+    return out
+
+
+def _report_currency(symbol: str, snaps: dict | None = None) -> tuple[str | None, float | None]:
+    """(the currency a US-listed company reports in, dollars for one unit of it) from the screener's stored row; (None, None) for the dollar."""
+    s = (snaps if snaps is not None else _snap("US")).get(symbol) or {}
+    return s.get("report_currency"), s.get("fx_usd")
+
+
 # ---------- storage ----------
 _BARE_Q = re.compile(r"^Quarterly results \(Q(\d) (\d{4})\)$")
 
@@ -590,6 +625,8 @@ def us_out(fh, sec, r: dict) -> dict | None:
             nums = []
     if not rel and not nums:
         return None
+    if nums:
+        nums = in_currency(nums, *_report_currency(r["symbol"]))       # LIVE16A-005: a foreign filer's figures in its own currency
     return {"at": rel["at"] if rel else r["date"], "title": rel["title"] if rel else "Results reported",
             "url": rel["url"] if rel else None, "numbers": nums}
 
@@ -1084,6 +1121,9 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
 
     def rich(r: dict) -> dict:
         out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv)}
+        if region == "US" and (r.get("out") or {}).get("numbers"):
+            # LIVE16A-005: a foreign filer's stored figures (stored as dollars before) in the currency it reports in, the dollars beside them
+            out["out"] = {**r["out"], "numbers": in_currency(r["out"]["numbers"], *_report_currency(r["symbol"], ctx.snaps))}
         if out.get("q") and too_old(out["q"].get("of"), r["date"]):
             out["q"] = {"sales": None, "profit": None, "of": out["q"].get("of"), "unreported": True}
         if not r.get("name") and (ctx.snaps.get(r["symbol"]) or {}).get("name"):

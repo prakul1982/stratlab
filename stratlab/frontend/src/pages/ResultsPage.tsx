@@ -35,7 +35,8 @@ function capCell(r: ResultRow, live: number | null | undefined, fmt: (v: number)
  * latest quarter against a year before, what the price did over earlier results days, the move the options price in), and the
  * figures once they are filed. */
 
-interface ResultNumber { label: string; value: string }
+/** `currency`: a foreign filer's figure, in the currency it reports in with its dollar figure beside it (LIVE16A-005) */
+interface ResultNumber { label: string; value: string; currency?: string }
 export interface Moves { avg: number; n: number; last: number[]; dates: string[] }
 /** `unreported` (LIVE15A-010): the latest quarter kept is older than the one this day reports and the one before it, so no growth is shown */
 interface Quarter { sales: number | null; profit: number | null; of: string | null; unreported?: boolean }
@@ -208,7 +209,7 @@ export function ResultsPage() {
     // its tags with the name beside it, then the meeting and a small link to the filing; a long line ends in "…" with the whole of it on hover
     { key: "co", header: "Company", rowHeader: true, cell: (r) => {
       const purpose = purposeShown(r.region, r.purpose);
-      const numbers = r.out?.numbers.length ? ` · ${r.out.numbers.map((x) => `${x.label} ${x.value}`).join(" · ")} (as stated)` : "";
+      const numbers = r.out?.numbers.length ? ` · ${r.out.numbers.map((x) => `${x.label} ${x.value}`).join(" · ")} (as stated${r.out.numbers.some((x) => x.currency) ? "; dollars at today's rate" : ""})` : "";
       const plain = !r.out && !r.when && /^financial results$/i.test(r.purpose.trim());
       return (
         <span className="res-co">

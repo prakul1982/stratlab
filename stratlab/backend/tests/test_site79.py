@@ -141,3 +141,29 @@ def test_live16a_001_stored_closes_that_differ_from_the_settled_ones_run_the_mar
     assert runs == ["US"] and moods == ["US"]
     assert job.repair("US", datetime(2026, 11, 18, 20, 0, tzinfo=ny)) == []      # once a day
     assert runs == ["US"]
+
+
+# ---------- LIVE16A-005: a foreign filer's results in the currency it reports in, the dollars beside them ----------
+def test_live16a_005_reported_figures_of_a_foreign_filer_are_in_its_own_currency_with_dollars():
+    from app import results as R
+    nums = R.reported({"epsActual": 8.07, "revenueActual": 270e9})
+    assert nums == [{"label": "EPS", "value": "$8.07"}, {"label": "Revenue", "value": "$270.00 billion"}]
+    got = R.in_currency(nums, "CNY", 0.14)
+    assert got[0]["value"] == "CNY 8.07 (about $1.13)" and got[0]["currency"] == "CNY"
+    assert got[1]["value"] == "CNY 270.00 billion (about $37.80 billion)"
+    hk = R.in_currency([{"label": "Revenue", "value": "$6.69 billion"}, {"label": "EPS", "value": "-$0.40"}], "HKD", 0.128)
+    assert hk[0]["value"] == "HKD 6.69 billion (about $856.3 million)"
+    assert hk[1]["value"] == "-HKD 0.40 (about -$0.05)"
+    assert R.in_currency(nums, "USD", None) == nums and R.in_currency(nums, None, None) == nums
+    assert R.in_currency(nums, "CNY", None)[1]["value"] == "CNY 270.00 billion"          # no rate: no dollar figure, never a guess
+    assert R.in_currency(got, "CNY", 0.14) == got                                          # already converted: as it is
+
+
+def test_live16a_005_the_results_page_converts_stored_rows_and_the_screener_row_carries_the_currency(monkeypatch):
+    from app import results as R, screens
+    f = {"name": "Alibaba Group Holding", "price": 150.0, "report_currency": "CNY", "fx": {"rate": 0.14, "at": "2026-11-19"}, "foreign": True}
+    row = screens.row("US", "BABA", f)
+    assert row["report_currency"] == "CNY" and row["fx_usd"] == 0.14
+    assert "report_currency" not in screens.row("US", "AAPL", {"name": "Apple", "price": 200.0})
+    assert "report_currency" not in screens.row("IN", "TCS", {"name": "TCS", "price": 2342.7, "report_currency": "INR"})
+    assert R._report_currency("BABA", {"BABA": row}) == ("CNY", 0.14)
