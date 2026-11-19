@@ -18,9 +18,9 @@ test("LIVE16B-001: /login and /signup's own HTML draws both ways in, with true w
     assert.doesNotMatch(html, /signs in with your Google account/);
     assert.match(html, new RegExp(`<h1 class="serif lp-h1 lp-own-h1">${heading}</h1>`));
     assert.match(html, new RegExp(`<p class="serif lp-lede">${verb} with your Google account<span data-boot-or> or your email address</span>: no password to set up\\.</p>`));
-    assert.match(html, /<button type="button" class="btn lp-cta" data-boot-google><svg[^]*?<\/svg>Continue with Google<\/button>/);
+    assert.match(html, /<button type="button" class="btn lp-cta" data-boot-google disabled><svg[^]*?<\/svg>Continue with Google<\/button>/);
     assert.match(html, new RegExp(`<label for="boot-email" class="email-signin-label">${verb} with email</label>`));
-    assert.match(html, /<button type="submit" class="btn outline">Email me a code<\/button>/);
+    assert.match(html, /<button type="submit" class="btn outline" disabled>Email me a code<\/button>/);   // updated on purpose: disabled until signin-early.js has run (rel79)
     assert.match(html, /<script src="\/signin-early\.js" async><\/script>\n<\/body>/);
     // the classes the app draws on the same page, so nothing moves when it takes over
     assert.match(html, /class="lp-wrap lp-hero-grid lp-hero-solo lp-hero-login"/);
@@ -38,6 +38,8 @@ test("LIVE16B-001: the early script keeps a press and the address, and takes the
   assert.match(js, /if \(!on\) d\.documentElement\.setAttribute\("data-email-off", "1"\);/);
   assert.match(js, /e\.way = "google";/);
   assert.match(js, /e\.way = "email";/);
+  // the frame's buttons are enabled only once the handlers above are in place (rel79: a press before them was a plain form submit)
+  assert.match(js, /querySelectorAll\("\[data-boot-google\], \[data-boot-email\] button"\);\n  for \(var i = 0; i < bs\.length; i\+\+\) bs\[i\]\.removeAttribute\("disabled"\);\n\}\)\(\);/);
   const css = read("index.html");
   assert.match(css, /html\[data-email-off\] \.boot-login \[data-boot-email\], html\[data-email-off\] \.boot-login \[data-boot-or\] \{ display: none; \}/);
   // the app does the press once it draws

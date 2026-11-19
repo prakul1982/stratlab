@@ -28,4 +28,8 @@
   });
   d.addEventListener("input", function (ev) { if (inFrame(ev.target, "[data-boot-email]")) e.email = ev.target.value; });
   d.addEventListener("focusin", function (ev) { e.focus = !!inFrame(ev.target, "[data-boot-email] input"); });
+  // the frame's buttons start disabled (scripts/seoPages.mjs) until these handlers are in place: a press before them would be a plain
+  // form submit that reloads the page and loses the address (seen under load in e2e/site79)
+  var bs = d.querySelectorAll("[data-boot-google], [data-boot-email] button");
+  for (var i = 0; i < bs.length; i++) bs[i].removeAttribute("disabled");
 })();

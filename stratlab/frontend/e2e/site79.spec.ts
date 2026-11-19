@@ -72,6 +72,30 @@ test("an address typed and sent in the start-up frame is emailed once the app is
   expect(sent[0].email).toBe("early@example.com");
 });
 
+// rel79: under load the frame was drawn before signin-early.js (async) had run, and "Email me a code" then did a plain form submit that
+// reloaded the page and lost the address. The frame's buttons now start disabled and that script enables them.
+test("the start-up frame's buttons wait for its script: a press is never a plain form submit that loses the address", async ({ page }) => {
+  await withConfig(page, { EMAIL_SIGNIN: "on" });
+  const sent: Record<string, unknown>[] = [];
+  await page.route(`${SB}/otp**`, (r) => { sent.push(r.request().postDataJSON()); return r.fulfill({ status: 200, contentType: "application/json", body: "{}" }); });
+  await servedAsLive(page);
+  const release = await holdCode(page);
+  let early!: () => void;
+  const gate = new Promise<void>((ok) => { early = ok; });
+  await page.route(/\/signin-early\.js(\?|$)/, async (r) => { await gate; await r.continue().catch(() => undefined); });
+  await page.goto("/login", { waitUntil: "commit" });
+  const button = page.getByRole("button", { name: "Email me a code" });
+  await expect(button).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeDisabled();
+  await page.getByLabel("Sign in with email").fill("held@example.com");
+  early();
+  await expect(button).toBeEnabled();
+  await button.click();
+  release();
+  await expect(page.getByTestId("email-sent")).toContainText("held@example.com", { timeout: 30_000 });
+  expect(sent.length).toBe(1);
+});
+
 test("Continue with Google pressed in the start-up frame starts Google sign-in once the app is ready", async ({ page }) => {
   await withConfig(page, { EMAIL_SIGNIN: "on" });
   let authorize: URL | null = null;

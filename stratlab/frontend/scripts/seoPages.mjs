@@ -127,7 +127,8 @@ export function heroFrame(template, { heading, summary, after = "", fonts = [] }
 // and the email form, the small print), drawn from the HTML with the app's stylesheet and the classes pages/Login.tsx draws, so the real
 // choices are on screen at once and nothing moves when the app draws over them. It said "StratLab signs in with your Google account" with no
 // button for up to 3.25 s (live, 19 Nov), though email sign-in is on. A press or a typed address before the app is ready is kept by
-// public/signin-early.js and done by the app once it draws; with email sign-in off in /config.js that script takes the email way out.
+// public/signin-early.js and done by the app once it draws (both buttons start disabled and that script enables them, so a press before it
+// has run is never a plain form submit that reloads the page and loses the address); with email sign-in off in /config.js that script takes the email way out.
 export const loginWords = (signup) => {
   const verb = signup ? "Sign up" : "Sign in";
   return { verb, lede: `${verb} with your Google account or your email address: no password to set up.`,
@@ -145,11 +146,11 @@ export function loginFrame(template, { heading, summary, signup = false }) {
   const words = (summary ?? []).map((p) => `<p class="boot-text">${text(p)}</p>`).join("\n");
   const frame = `<section id="top" class="lp-hero ruled boot-login" data-boot>\n<div class="lp-wrap lp-hero-grid lp-hero-solo lp-hero-login"><div class="stack g22 lp-hero-copy">\n`
     + `<span class="eyebrow">Is your trading idea <em>skill</em> or luck?</span>\n<h1 class="serif lp-h1 lp-own-h1">${text(heading)}</h1>\n<p class="serif lp-lede">${lede}</p>\n`
-    + `<div class="row wrap g12"><button type="button" class="btn lp-cta" data-boot-google>${GOOGLE_SVG}Continue with Google</button></div>\n`
+    + `<div class="row wrap g12"><button type="button" class="btn lp-cta" data-boot-google disabled>${GOOGLE_SVG}Continue with Google</button></div>\n`
     + `<div class="email-signin" data-boot-email><p class="email-signin-or" aria-hidden="true"><span>or</span></p><form class="email-signin-form" novalidate>`
     + `<label for="boot-email" class="email-signin-label">${w.verb} with email</label><div class="email-signin-row">`
     + `<input id="boot-email" class="k-input" autocomplete="email" inputmode="email" placeholder="you@example.com" aria-describedby="boot-email-help" type="email" name="email">`
-    + `<button type="submit" class="btn outline">Email me a code</button></div><span id="boot-email-help" class="small muted">We email a one-time code and link. No password.</span></form></div>\n`
+    + `<button type="submit" class="btn outline" disabled>Email me a code</button></div><span id="boot-email-help" class="small muted">We email a one-time code and link. No password.</span></form></div>\n`
     + `<p class="small muted">${small}<a class="link" href="/terms">Terms</a> and <a class="link" href="/privacy">Privacy policy</a>.</p>\n`
     + `${words}\n${b[1].replace('class="boot-foot"', 'class="boot-foot boot-text"')}\n</div></div>\n</section>`;
   return template.replace(block, () => frame).replace("</body>", '<script src="/signin-early.js" async></script>\n</body>');
