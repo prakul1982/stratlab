@@ -1273,6 +1273,20 @@ def revenue_part_due(f: dict | None) -> bool:
     return sales > 0 and profit > sales
 
 
+CAP_RULE_MIN = 5000.0          # ₹ crore: the Indian pages built again under new share-count rules first, by market value (LIVE15A-016)
+
+
+def cap_rule_due(f: dict | None) -> bool:
+    """LIVE15A-016 / LIVE15B-005: whether a stored Indian page worth at least CAP_RULE_MIN was built before today's share-count rules
+    (intel.screener.CAP_RULE): TCS's page kept the source's 356.8 crore shares (₹8.49 lakh cr) a day after the rule that takes the share
+    capital's 361.8 (₹8.61 lakh cr) went live, and the company page, the peers and the screens all read that stored count. It is built
+    again, the largest first; a page built under the rules is never built again by it."""
+    if not isinstance(f, dict) or f.get("region") != "IN" or f.get("no_numbers") or f.get("not_company"):
+        return False
+    from .intel.screener import CAP_RULE
+    return (f.get("cap_rule") or 0) < CAP_RULE and (_num(f.get("market_cap")) or 0) >= CAP_RULE_MIN
+
+
 def basis_missing(f: dict | None) -> bool:
     """r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue beside its annual report's, the basis of neither said):
     whether a stored US page of a bank, lender or insurer with reported years was built before its revenue's lines were kept
@@ -1530,7 +1544,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis", "registrant")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis", "registrant", "cap_rule")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],

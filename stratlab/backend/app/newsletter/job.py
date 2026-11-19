@@ -202,9 +202,13 @@ def facts_line(issue: dict, facts: dict, sections: list[dict]) -> dict:
     return issue
 
 
-def build_market(region: str, day: date, weekly: bool = False, store: bool = True) -> dict | None:
+CLOSES_WAIT = timedelta(hours=2)      # a daily brief waits this long past its slot for the day's index closes, then goes without them
+
+
+def build_market(region: str, day: date, weekly: bool = False, store: bool = True, now: datetime | None = None) -> dict | None:
     """The region's Market Brief for a day (or the week to it): the stored one when it exists, else built now.
-    None when every source failed."""
+    None when every source failed, or (LIVE15A-001) when a daily brief has no index close yet and is still within CLOSES_WAIT of its
+    slot: the closes are read again at the next check rather than the brief going out with an older level or none."""
     if store:
         have = load(issue_id("market", region, day.isoformat(), weekly))
         if have:
@@ -212,6 +216,11 @@ def build_market(region: str, day: date, weekly: bool = False, store: bool = Tru
     facts = content.market_facts(region, day, weekly)
     if not any(k in facts for k in ("indices", "rotation", "scan", "headlines")):
         return None
+    if not weekly and not facts.get("indices") and region in SEND_AT:
+        tz, at = SEND_AT[region]
+        slot = datetime.combine(day, clock.fromisoformat(at), ZoneInfo(tz))
+        if (now or datetime.now(ZoneInfo("UTC"))) < slot + CLOSES_WAIT:
+            return None
     issue = make_issue(facts, region)
     return save(issue) if store else issue
 
@@ -262,6 +271,56 @@ def repair_index_moves(region: str, days: int = 60) -> int:
         kind, scope, dkey = parse_id(iid)
         db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
         fixed += 1
+    return fixed
+
+
+CLOSE_DRIFT = 0.001           # a stored index level over 0.1% from the day's close is not that close (a source's small late revisions are left)
+
+
+def repair_closes(region: str, days: int = 10) -> list[str]:
+    """LIVE15A-001: the daily briefs stored in the last `days` days whose index levels are not the day's closes, as the daily candles now
+    give them, set to those closes (the 18 Nov US brief kept S&P 500 7,303.98 −0.50%, NASDAQ 24,322.71 −0.02% and Dow 50,089.71 −1.32%,
+    the 10:52 ET levels an edge copy kept, against closes of 7,323.63 −0.23%, 24,429.88 +0.42% and 50,198.17 −1.11%). An index whose
+    close can't be read keeps its stored figure. The issue is rebuilt as repair_index_moves rebuilds one, and its blog post written
+    again from it. Run at the job's first check of each day. Returns the ids of the issues changed."""
+    from .. import blog
+    fixed, cutoff = [], (date.today() - timedelta(days=days)).isoformat()
+    for iid in ids("market", region):
+        dkey = (parse_id(iid) or ("", "", ""))[2]
+        if dkey.endswith("-weekly") or dkey < cutoff:
+            continue                                   # read only the days asked for
+        issue = _stored(iid)
+        if not issue or issue.get("weekly") or issue.get("day", "") < cutoff or not issue.get("indices"):
+            continue
+        day = date.fromisoformat(issue["day"])
+        prev = content.reference_day(region, day, False).isoformat()
+        syms = dict(content.INDICES.get(region, []))
+        indices, changed = [], False
+        for i in issue["indices"]:
+            sym = syms.get(i.get("name")) if isinstance(i, dict) else None
+            got = content.index_close(sym, day, prev=prev) if sym else None
+            old = i.get("price") if isinstance(i, dict) else None
+            if got and isinstance(old, (int, float)) and old and abs(got["price"] / old - 1) > CLOSE_DRIFT:
+                i = {**i, "price": got["price"], "change_pct": got.get("change_pct")}
+                changed = True
+            indices.append(i)
+        if not changed:
+            continue
+        if region == "IN":
+            indices = blog.official_changes(region, day, indices)[0]
+        rotation = next((s["items"] for s in issue.get("sections") or [] if s.get("title") == "Sector rotation"), [])
+        f = {"kind": "market", "region": region, "day": issue["day"], "weekly": False, "indices": indices, "rotation": rotation}
+        issue.update(indices=indices, subject=write.subject(f), title=write.headline(f), summary=write.template(f), ai=False)
+        issue.pop("ai_summary", None)                 # the AI's words restated the older levels
+        issue["sections"] = write.market_sections({**f, "rotation": []})[:1] + [s for s in issue.get("sections") or [] if s.get("title") != "Indices"]
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(iid)
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        try:
+            blog.rewrite_brief(issue)
+        except Exception as e:
+            print("newsletters: the corrected brief's post couldn't be written:", str(e)[:160])
+        fixed.append(iid)
     return fixed
 
 
@@ -838,6 +897,11 @@ class Job:
                     self.status["last_error"] = str(e)[:200]
                     print("newsletters: bootstrap:", e)
             try:
+                if leader.leading():
+                    self.check_closes(datetime.now(ZoneInfo("UTC")))
+            except Exception as e:
+                print("newsletters: closes check:", str(e)[:160])
+            try:
                 if leader.leading():      # another container leads: it runs this pass
                     self.tick(datetime.now(ZoneInfo("UTC")))
             except Exception as e:
@@ -849,6 +913,23 @@ class Job:
             except Exception as e:
                 print("newsletters: late check:", e)
             time.sleep(300)
+
+    def check_closes(self, now: datetime) -> list[str]:
+        """Once a day per region, from an hour after that region's brief slot (and at the first check after a start), the briefs stored
+        in the last days checked against the day's closes and corrected (repair_closes). Returns the issues corrected."""
+        out = []
+        for region, (tz, at) in SEND_AT.items():
+            local = now.astimezone(ZoneInfo(tz))
+            # the day whose slot is over an hour past: today's after that time, else yesterday's
+            ready = local - timedelta(hours=1) >= datetime.combine(local.date(), clock.fromisoformat(at), ZoneInfo(tz))
+            mark = (local.date() if ready else local.date() - timedelta(days=1)).isoformat()
+            if self.last.get(f"closes-{region}") == mark:
+                continue
+            out += repair_closes(region)
+            self.last[f"closes-{region}"] = mark
+        if out:
+            print(f"newsletters: set {len(out)} stored briefs to the day's closes: {', '.join(out)}")
+        return out
 
     def check_late(self, now: datetime) -> list[str]:
         """Tell the admins (alerts.tell_admins) when a region's daily brief still isn't on its way LATE_AFTER past its

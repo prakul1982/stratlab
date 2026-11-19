@@ -50,8 +50,8 @@ test("the table has the new themes row and the tax downloads row, and the for-ev
   assert.equal(plans.FLAG_GROUP.tax_export, "money");
   assert.ok(EVERYONE.includes("Every theme already mapped"));
   assert.ok(EVERYONE.some((x) => /the tax report on screen/.test(x)));
-  // the comparison table's cell for Free's decks
-  assert.match(read("src/components/PlanCompare.tsx"), /v === 0 && k === "decks_per_month" \? "0 \(a sample deck to download\)"/);
+  // the comparison table's cell for Free's decks (updated on purpose, site78 LIVE15A-003: the promise only while the server has a sample)
+  assert.match(read("src/components/PlanCompare.tsx"), /v === 0 && k === "decks_per_month" \? \(sample === null \? "0" : "0 \(a sample deck to download\)"\)/);
   // the landing page's JavaScript doesn't carry the for-everyone list any more (the table loads it with itself)
   assert.doesNotMatch(read("src/lib/plans.ts"), /export const EVERYONE/);
 });

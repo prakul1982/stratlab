@@ -383,6 +383,21 @@ class Yahoo(Source):
         misses[symbol] = now
         return alt if (alt["meta"].get("regularMarketTime") or 0) > (got["meta"].get("regularMarketTime") or 0) else got
 
+    def closing_chart(self, symbol: str, days: int, ttl: float = 300, now: float | None = None) -> dict | None:
+        """Daily candles whose newest one is the session's real close, for a page that is written from the day's closes (LIVE15A-001: the
+        18 Nov US brief, built at 16:50 ET, printed S&P 500 7,303.98 −0.50%, the 10:52 ET level an edge copy kept, against a close of
+        7,323.63 −0.23%). An answer the edge kept (stale_edge) is asked again at an address it has not kept; when that one is a kept
+        copy too, None: no close is given rather than an older level."""
+        now = time.time() if now is None else now
+        got = self.chart(symbol, "1d", days, ttl=ttl)
+        if not stale_edge(got.get("meta") or {}, now):
+            return got
+        try:
+            alt = self._chart(symbol, "1d", days, INTERVAL["1d"][0], 60, fresh=True)
+        except SourceError:
+            return None
+        return None if stale_edge(alt.get("meta") or {}, now) else alt
+
     def meta(self, symbol: str) -> dict:
         """Price, previous close, day range and 52-week range for one symbol."""
         # exact: a fresh short window, never cut from a long download, so the last sessions are today's

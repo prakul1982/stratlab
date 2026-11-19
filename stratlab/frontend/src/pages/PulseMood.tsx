@@ -4,7 +4,7 @@ import { useLiveRefresh } from "../lib/liveRefresh";
 import { changeDir, fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
-import { keepMood, keptMood, moodStale } from "../lib/moodCache";
+import { keepMood, keptMood, moodOldAt, moodStale } from "../lib/moodCache";
 import { companyRows, crore, fromHighText, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
 import { Card, CardHead, DataTable, Delta, EmptyState, Signed, Skeleton, Working, type Column } from "../components/kit";
 import { sparseNotes } from "../components/kit/DataTable";
@@ -47,6 +47,12 @@ export function usePulseMood(region: Region) {
   return { mood, error, retry: () => setAgain((n) => n + 1), updating: moodStale(mood) };
 }
 
+/** The time of a session read over 20 minutes old (LIVE15A-002), with its zone, for the tables' day column; else null. */
+export const moodOldTime = (m: PulseMood | null, region: Region): string | null => {
+  const at = moodOldAt(m);
+  return at ? fmtTime(at, { tz: marketTz(region), zone: true }) : null;
+};
+
 /** The headline and its few lines, each from one of the tables below. */
 export function MoodCard({ m, region, updating = false, behindNote }: { m: PulseMood; region: Region;
   /** an older read shown while a fresh one is read behind it: its read time says when, with the kit's small bar beside it (LIVE4-024) */
@@ -60,12 +66,15 @@ export function MoodCard({ m, region, updating = false, behindNote }: { m: Pulse
   // LIVE9A-001/002: a read of an earlier session than the index levels above is never shown as the current one: its card is titled with its
   // session and its headline starts with that day, and the line saying the new session's read is under way comes first
   const behind = !!behindNote && !!m.session;
+  // LIVE15A-002: a session read over 20 minutes old says its time: its lines and the tables below are of then, the index levels above of now
+  const old = !behind ? moodOldTime(m, region) : null;
   return (
     <Card testId="pulse-mood-card">
       <CardHead title={behind ? `The mood · ${day(m.session)} session` : "The mood"} info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
         actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{m.during ? ", during the session" : ""}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
       {behindNote && <p className="k-note" data-testid="pulse-mood-behind">{behindNote}</p>}
-      {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{behind ? `On ${day(m.session)}: ${m.headline}` : m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
+      {old && <p className="k-note" data-testid="pulse-mood-old">These lines and the tables below are from the {old} read; the index levels above are newer.{updating ? " A new read is under way." : ""}</p>}
+      {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{behind ? `On ${day(m.session)}: ${m.headline}` : old ? `At ${old}: ${m.headline}` : m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
       {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
     </Card>
   );
@@ -99,11 +108,13 @@ export function BreadthTable({ b: given, open = true, behind = false }: { b: Non
   );
 }
 
-export function SectorsTable({ s, closedDay }: { s: NonNullable<PulseMood["sectors"]>; closedDay?: string | null }) {
+export function SectorsTable({ s, closedDay, oldAt }: { s: NonNullable<PulseMood["sectors"]>; closedDay?: string | null;
+  /** LIVE15A-002: the time of a session read over 20 minutes old: the day's column is headed with it, never "Today" */
+  oldAt?: string | null }) {
   type Row = (typeof s.rows)[number];
   const cols: Column<Row>[] = [
     { key: "n", header: "Sector index", rowHeader: true, cell: (r) => r.label },
-    { key: "d", header: sessionHeader(closedDay, day), numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
+    { key: "d", header: !closedDay && oldAt ? `At ${oldAt}` : sessionHeader(closedDay, day), numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
     { key: "w", header: "1 week", numeric: true, cell: (r) => chg(r.w1) },
     { key: "m", header: "1 month", numeric: true, cell: (r) => chg(r.m1) },
     { key: "by", header: "Moved by", wrap: true, phone: false, cell: (r) => (r.movers.length ? movedBy(r.movers, (v) => pct(v, 2)) : "–") },
@@ -117,11 +128,11 @@ export function SectorsTable({ s, closedDay }: { s: NonNullable<PulseMood["secto
   );
 }
 
-export function MoversTable({ m, closedDay }: { m: NonNullable<PulseMood["movers"]>[number]; closedDay?: string | null }) {
+export function MoversTable({ m, closedDay, oldAt }: { m: NonNullable<PulseMood["movers"]>[number]; closedDay?: string | null; oldAt?: string | null }) {
   const rows = moverRows(m);
   const cols: Column<(typeof rows)[number]>[] = [
     { key: "n", header: "Company", rowHeader: true, cell: (r) => r.name ?? r.symbol },
-    { key: "c", header: closedDay ? `Move on ${day(closedDay)}` : "Move today", numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
+    { key: "c", header: closedDay ? `Move on ${day(closedDay)}` : oldAt ? `Move at ${oldAt}` : "Move today", numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
     { key: "p", header: "Points", numeric: true, cell: (r) => <Delta value={r.points}>{signedPoints(r.points)}</Delta> },
   ];
   return (

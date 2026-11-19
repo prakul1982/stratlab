@@ -7,6 +7,7 @@ import { ADS, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, t
 import { EVERYONE, hasMore, MORE_FLAGS, SHARE_LINKS } from "../lib/planFeatures";
 import { changeCount, changeDay } from "../lib/freeChange";
 import type { FreeChange } from "../lib/types";
+import { useSampleDeck } from "./SampleDeck";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
@@ -14,6 +15,7 @@ export function PlanCompare({ plans, grace }: { plans?: Record<string, Partial<L
   /** a Free account in its grace (the server's free_change): its earlier count beside Free's, until the day (LIVE10A-003) */
   grace?: FreeChange | null }) {
   const lim = (p: PlanId): Limits => ({ ...LIMITS[p], ...(plans?.[p] ?? {}) });
+  const sample = useSampleDeck();          // LIVE15A-003: no sample on the server, no promise of one in Free's cell
   const graceDay = grace ? changeDay(grace.on).replace(/ \d{4}$/, "") : "";
   const num = (p: PlanId, k: keyof Limits) => {
     const v = lim(p)[k] as number | null;
@@ -22,7 +24,7 @@ export function PlanCompare({ plans, grace }: { plans?: Record<string, Partial<L
     if (kept) return `${v == null ? unlimitedLabel(p, k) : v.toLocaleString("en-IN")} (${changeCount(kept.before)} for you until ${graceDay})`;
     // Free's one session is a trial of 5 market days: said as a trial in the cell (DK-005)
     // FREE-TIER: no decks of its own on Free: the sample deck (Plans page) shows what one holds
-    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v === 0 && k === "decks_per_month" ? "0 (a sample deck to download)" : v.toLocaleString("en-IN");
+    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v === 0 && k === "decks_per_month" ? (sample === null ? "0" : "0 (a sample deck to download)") : v.toLocaleString("en-IN");
   };
   const shareCell = (p: PlanId) => {
     const v = (plans?.[p] as { share_links_per_month?: number | null } | undefined)?.share_links_per_month;

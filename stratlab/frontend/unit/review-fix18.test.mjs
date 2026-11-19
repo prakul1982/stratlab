@@ -99,7 +99,8 @@ test("LIVE13A-027: earnings calls show one link per document, say a missing zone
   const src = read("src/pages/EarningsCallsPage.tsx");
   assert.match(src, /export const oneEach = <L extends \{ label: string \}>\(links: L\[\]\): L\[\] => links\.filter\(\(x, i\) => links\.findIndex\(\(y\) => y\.label === x\.label\) === i\);/);
   assert.match(src, /\{oneEach\(r\.links\)\.map\(/);
-  assert.match(src, /if \(r\.time\) return `\$\{r\.time\}\$\{r\.tz \? ` \$\{r\.tz\}` : ", zone not given"\}`;/);
+  // (updated on purpose, site78 LIVE15A-024: an Indian notice with no zone is IST by the owner's default, said as assumed; others as before)
+  assert.match(src, /if \(r\.time\) return `\$\{r\.time\}\$\{r\.tz \? ` \$\{r\.tz\}` : india \? " IST \(assumed: the notice gives no zone\)" : ", zone not given"\}`;/);
   assert.match(src, /<CardHead title=\{when === "past" \? "Held" : "Coming up"\} actions=\{data\.rows\.length \? <CsvButton name="earnings calls"/);
   assert.doesNotMatch(src, /<DataTable csv="earnings calls"/);
 });

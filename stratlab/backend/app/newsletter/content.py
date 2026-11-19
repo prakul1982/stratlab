@@ -81,7 +81,8 @@ def index_close(sym: str, day: date, since: str | None = None, prev: str | None 
     from an older close (R90-001: the 22 Oct India brief said NIFTY −0.88%, from 19 Oct's close, the feed not yet
     carrying 21 Oct's; it was −0.54%)."""
     back = max(21, (date.today() - day).days + 14)        # far enough back to hold that day and the session before it
-    candles = _safe(lambda: _main().research_hub.yahoo.chart(sym, "1d", back, ttl=300)["candles"], []) or []
+    # LIVE15A-001: never a level an edge copy kept from mid-session as the day's close (closing_chart: None when no real close came)
+    candles = (_safe(lambda: _main().research_hub.yahoo.closing_chart(sym, back), {}) or {}).get("candles") or []
     candles = with_special_sessions(sym, candles, day)
     upto = [c for c in candles if c["t"][:10] <= day.isoformat()]
     if not upto or (not since and upto[-1]["t"][:10] != day.isoformat()):
@@ -120,7 +121,8 @@ def index_moves(region: str, day: date, weekly: bool) -> list[dict]:
     out = []
     for name, sym in INDICES.get(region, []):
         got, now = index_close(sym, day, since, prev), live.get(name)
-        today = bool(now and not weekly and now.get("day") == day.isoformat() and not now.get("stale"))
+        # (LIVE15A-001: a level from before the session's close, `pre_close`, is never the day's close)
+        today = bool(now and not weekly and now.get("day") == day.isoformat() and not now.get("stale") and not now.get("pre_close"))
         # the day's candle isn't out yet: the live quote, same measure, only if it is today's own (not a previous session's)
         if got is None and today:
             got = {"price": round(now["price"], 2), "change_pct": None if now.get("change_pct") is None else round(now["change_pct"], 2)}
@@ -544,7 +546,8 @@ def market_facts(region: str, day: date, weekly: bool = False) -> dict:
         gaps = _safe(lambda: holidays_in_week(region, day), [])
         if gaps:
             facts["holidays"] = gaps
-    if any(k in facts for k in ("indices", "rotation", "scan", "headlines")):
+    # (LIVE15A-001: a day's facts without its index closes are not kept, so the next check reads the closes again)
+    if any(k in facts for k in ("indices", "rotation", "scan", "headlines")) and (weekly or facts.get("indices")):
         _cache.set(key, facts, 6 * 3600)
     return facts
 

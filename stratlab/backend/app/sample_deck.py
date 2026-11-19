@@ -2,9 +2,12 @@
 Plans page and the locked deck buttons offer one fixed theme deck that is already kept in the shared store (computed.py, kind
 "deck:theme", made by theme_routes.theme_dive_deck) for anyone, signed in or not, to download and see what a deck holds.
 
-Nothing is made here: no AI call, no data source, no deck build, nothing counted. The deck is SAMPLE_THEME's newest kept PDF made under
-today's versions (blog2: never a deck an older release made); when that theme has none, the newest such PDF of any theme; when none is kept,
-404 (the pages then show no link: GET /pricing/sample-deck/info).
+Nothing is made here: no AI call, no data source, no deck build, nothing counted. The deck is a kept PDF whose publication gate passed:
+SAMPLE_THEME's newest made under today's versions, else the newest such of any theme; when a release has changed the versions and no deck
+of today's versions has passed yet, the last one that passed under an earlier release (LIVE15A-003: after Release 77 changed the deck's
+versions, no kept PDF was current until someone made a deck again, so /info said available:false for hours while /plans promised a sample);
+only then a current deck whose gate failed an item; when none is kept, 404 (the pages then show no link and no promise:
+GET /pricing/sample-deck/info).
 """
 import base64
 
@@ -38,18 +41,28 @@ def current(row: dict, versions: list | None = None) -> bool:
 
 
 def pick(rows: list[dict], versions: list | None = None) -> dict | None:
-    """The kept deck to offer, from computed.entries (newest first): of the PDFs made under today's versions (current), SAMPLE_THEME's
-    newest, else the newest; None when no current PDF is kept (the pages then show no link until a deck is made again)."""
+    """The kept deck to offer, from computed.entries (newest first): of the PDFs made under today's versions (current) whose gate passed,
+    SAMPLE_THEME's newest, else the newest; else (LIVE15A-003) the newest PDF whose gate passed under an earlier release, kept until a deck of
+    today's versions passes; else a current one whose gate failed an item; None when none of these is kept."""
     from .intel import theme_library
-    pdfs = [r for r in rows if _is_pdf(r.get("label") or "") and current(r, versions)]
+    pdfs = [r for r in rows if _is_pdf(r.get("label") or "")]
+    now = [r for r in pdfs if current(r, versions)]
     # fix20 (LIVE14B-005: the IT services deck, the newest kept, handed out as the showcase with engine notes in it): a deck whose publication
     # gate passed every item first, SAMPLE_THEME's before any other; one with a failed item only when no clean one is kept
-    pdfs = sorted(pdfs, key=lambda r: not clean(r))
     region, theme = SAMPLE_THEME
-    for r in pdfs:
-        if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme and (clean(r) or not clean(pdfs[0])):
+    good = [r for r in now if clean(r)]
+    for r in good:
+        if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme:
             return r
-    return pdfs[0] if pdfs else None
+    if good:
+        return good[0]
+    last_good = next((r for r in pdfs if clean(r)), None)       # blog2's older release only while no current deck has passed
+    if last_good:
+        return last_good
+    for r in now:
+        if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme:
+            return r
+    return now[0] if now else None
 
 
 def clean(row: dict) -> bool:
@@ -64,7 +77,7 @@ def chosen(deck_id: str | None = None) -> dict | None:
     try:
         rows = computed.entries(KIND)
         if deck_id:
-            same = next((r for r in rows if r.get("id") == deck_id and _is_pdf(r.get("label") or "") and current(r)), None)
+            same = next((r for r in rows if r.get("id") == deck_id and _is_pdf(r.get("label") or "") and (current(r) or clean(r))), None)
             if same:
                 return same
         return pick(rows)
