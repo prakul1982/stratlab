@@ -5050,6 +5050,8 @@ def fold_scope_layers(vc: list[dict], scope: str, theme: str) -> list[dict]:
         rest_v["companies"] = list(rest_v.get("companies") or []) + [
             {**{k: x for k, x in c.items() if k not in ("fit", "placed_by")}, "moved": True, "refit": {"from": frm, "to": "", "why": why, "scope": True}}
             for c in v["companies"]]
+        # (the layer stays in its place, emptied and marked: the map's layers keep their order for every step that reads them by position)
+        out.append({**v, "companies": [], "folded": why})
     if rest_v is not None and rest_v not in out:
         out.append(rest_v)
     return out

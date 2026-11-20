@@ -450,8 +450,8 @@ def test_a_property_developers_layer_in_a_theme_of_another_business_is_folded_wi
           {"layer": "Property developers", "companies": [{"ticker": "BHARATAGRI"}]},
           {"layer": "Other fertilizers and agrochemicals companies", "official": True, "basis": "rest", "companies": []}]
     out = B.fold_scope_layers(vc, "Fertilizers and agrochemicals", "Fertilizers and agrochemicals")
-    assert [v["layer"] for v in out] == ["Urea and nitrogen fertiliser makers", "Other fertilizers and agrochemicals companies"]
-    assert out[1]["companies"][0]["refit"]["why"].startswith("“Property developers” is a property business beside the theme's own work")
+    assert [v["layer"] for v in out if v["companies"]] == ["Urea and nitrogen fertiliser makers", "Other fertilizers and agrochemicals companies"]
+    assert out[1]["folded"] and out[2]["companies"][0]["refit"]["why"].startswith("“Property developers” is a property business beside the theme's own work")
     hotels = [{"layer": "Hotel property owners (lodging REITs)", "companies": [{"ticker": "HST"}]}]
     assert B.fold_scope_layers(hotels, "Hotels and casinos", "Hotels and casinos") == hotels          # guard: the theme's own kind
     assert B.PROPERTY_SAYS.search("The company is engaged in the construction of residential and commercial buildings")
