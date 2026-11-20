@@ -181,6 +181,13 @@ def members(payload: dict) -> int:
 GATE_UNCHECKED = 0.10
 GATE_MAP_SHARE = 0.05
 GATE_BROAD_MIN = 100
+# e85 (LIVE21A-001: Quantum computing back on /themes after Release 84, "66 description-verified, 318 industry-supported, 0 not checked",
+# "Other quantum computing companies" 221 of 386, Otis, GameStop and NerdWallet in its layers: it passed because a company kept on its
+# official industry counts as checked): a theme is offered only once at least GATE_EVIDENCED of its companies are in it on evidence of the
+# theme's work, their own words (description-verified) or the theme's own list (list-supported), never an industry label alone. The bar,
+# against the 53 public pages of 20 Nov: Quantum computing 17%, the next Restaurants 45% (before its words are read again), Steel and
+# metals 64%, every India page 77% or more
+GATE_EVIDENCED = 0.40
 
 
 def broad_industries(payload: dict) -> bool:
@@ -209,6 +216,10 @@ def gate_why(meta: dict, pub: dict | None, payload: dict | None = None, unchecke
         broad = broad_industries(payload) if isinstance(payload, dict) else False
     if broad:
         return "its companies come almost all from broad official industries, not from evidence of the theme's work"
+    # e85 (LIVE21A-001): its companies on evidence of the theme's work (the dive's tally: description-verified and list-supported)
+    ev, of = (pub or {}).get("evidenced") if isinstance(pub, dict) else None, (pub or {}).get("tallied") if isinstance(pub, dict) else None
+    if isinstance(ev, int) and isinstance(of, int) and of and ev < GATE_EVIDENCED * of:
+        return f"only {ev} of its {of} companies in it on their own words or the theme's own list"
     if not isinstance(pub, dict) or not isinstance(pub.get("all"), int):
         # no count kept with a dive: judged on the dive's own tally where one is kept (`unchecked`, `total`), else nothing to judge it by
         # (its page shows no tally either: e83, the index never held "broad" before this release, so no entry was ever judged here)

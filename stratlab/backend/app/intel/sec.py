@@ -2320,7 +2320,7 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
 # ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
 BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
 BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
-BUSINESS_KEY = ("business", 4)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read; e78: 4, before a sentence of a REIT's tax status was passed over (REIT_TAX)
+BUSINESS_KEY = ("business", 5)         # e85: 5, before a sentence of an operating company held as an LLC ("managing member of the OP") was passed over (_OP_LLC); lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read; e78: 4, before a sentence of a REIT's tax status was passed over (REIT_TAX)
 BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
     (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
     # lane n2 (the outside review of the live R33 decks: TSMC's and UMC's 20-F gave nothing, or a line on process technology): a 20-F's
@@ -2396,9 +2396,17 @@ REIT_TAX = (r"\belect(?:ed|s)? to be (?:taxed|treated) as an? (?:reit|real estat
             r"\bqualif(?:y|ies|ied) (?:to be taxed )?as an? (?:reit|real estate investment trust)\b|\bfor federal income tax purposes\b|"
             r"\bconsolidated by the company for financial reporting purposes\b")
 _REIT_TAX = re.compile(REIT_TAX, re.I)
+# e85 (LIVE21A-009, the live R84 REITs log: Franklin BSP moved into "Mortgage REITs" because "The Company is the managing member of the OP and
+# directly or indirectly held 91% of the common units ..."; LIVE21A-002: Welltower's stored words, its 10-K's three sentences "Welltower Inc.
+# is the initial member and majority owner of Welltower OP ...", "... obligated to contribute as additional capital to Welltower OP", "All debt
+# ... is incurred by Welltower OP ... fully and unconditionally guaranteed", none of its senior housing): an operating company held as an LLC
+# (its managing or initial member, "the OP", its common units of membership interests, the equity it contributes to it, the debt the parent
+# guarantees) tells how the company is held as an operating partnership does
+_OP_LLC = (r"|\b(?:managing|initial|sole)\s+member\b|(?-i:\bOP\b)|\bcommon units of (?:membership|limited partnership) interests?\b|"
+           r"\bcontribute\w* (?:it )?as additional capital\b|\bfully and unconditionally guarantee\w*\b")
 _STRUCTURE = re.compile(r"\boperating partnership\b|\bgeneral partner\b|\blimited partnership (?:interest|units?)\b|\bumbrella partnership\b|"
                         r"\bupreit\b|\bability to pay dividends\b|\bobligations to (?:its |their )?creditors\b|\bdirect and indirect subsidiaries\b|"
-                        + REIT_TAX, re.I)
+                        + REIT_TAX + _OP_LLC, re.I)
 _LIST_ITEM = re.compile(r"^\s*(?:[•●▪◦·‣∙○■□–—-]|\(?[a-z0-9ivx]{1,3}[.)])\s*")
 LIST_CHARS = 420                        # of a list's items joined into the sentence that introduces them
 
@@ -2446,6 +2454,14 @@ def structure_only(text: str) -> bool:
     xs = [x for x in _SENTENCE_END.split(str(text or "").strip()) if len(x.split()) >= 4]
     return bool(xs) and all(_STRUCTURE.search(x) or not _SAYS_WORK.search(x) and not re.search(r"\b(?:own|operat|lease|sell|make|provid)\w*\b", x, re.I)
                             for x in xs) and any(_STRUCTURE.search(x) for x in xs)
+
+
+def structure_opens(text: str) -> bool:
+    """e85 (LIVE21A-009: Franklin BSP's stored words opening "Substantially all of the Company's business is conducted through FBRT OP LLC
+    ... (the "OP")", then "The Company is the managing member of the OP ..."): whether a stored description's first sentence tells how the
+    company is held (_STRUCTURE), the opening a reader kept before it passed such sentences over (read again, theme_routes.reader_due)."""
+    xs = [x for x in _SENTENCE_END.split(str(text or "").strip()) if len(x.split()) >= 4]
+    return bool(xs) and bool(_STRUCTURE.search(xs[0]))
 
 
 def reit_tax_said(text: str) -> bool:

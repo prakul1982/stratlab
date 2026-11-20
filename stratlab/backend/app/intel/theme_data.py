@@ -297,6 +297,31 @@ def price_day(members: list[dict]) -> tuple[str | None, int]:
     return top, sum(1 for d in days if d < top)
 
 
+def older_count(as_of: str | None, rows: dict, placed, index_rows) -> int:
+    """e85 (LIVE21A-004: the IT services app "prices to the 20 Nov 2026 close (2 companies at an earlier close)" beside its public page's 31):
+    how many of the theme's companies with a market value are at an earlier close than `as_of`: each at its row's price day (`rows`, the
+    dive's company rows), a company with no row at its index row's (`index_rows`, the screens' index), a company left unconfirmed by its
+    check never counted; the public page counts the same (public_themes._price_label)."""
+    if not as_of:
+        return 0
+    idx = {r["symbol"]: r for r in index_rows or [] if isinstance(r, dict) and r.get("symbol")}
+    n = 0
+    for s_ in placed:
+        r = rows.get(s_)
+        if r is not None:
+            if r.get("status") == "unverified" or not r.get("cap"):
+                continue
+            d_ = str(r.get("price_at") or "")[:10]
+        else:
+            x = idx.get(s_) or {}
+            if not isinstance(x.get("market_cap"), (int, float)) or x["market_cap"] <= 0:
+                continue
+            d_ = str(x.get("price_at") or "")[:10]
+        if d_ and d_ < as_of:
+            n += 1
+    return n
+
+
 def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     """One company's line, from its stored page facts; None when the page holds nothing to show."""
     if not isinstance(f, dict) or not f or f.get("not_company"):
@@ -4615,6 +4640,12 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             pp["moved"] = moved
     market_med = {k: stat(m.get(k) for m in market) for k in ("opm", "net_margin", "roce", "sales_cagr_3y")} if market else {}
     as_of, older = price_day(members)
+    # e85 (LIVE21A-004): the theme's companies at an earlier close, every one with a market value, as its public page counts them
+    try:
+        older = max(older, older_count(as_of, rows, [s_ for s_ in placed if (placed[s_] or {}).get("status") != "unverified"],
+                                       src.index_rows()))
+    except Exception as e:
+        print("theme data: earlier closes not counted:", type(e).__name__, str(e)[:100])
     own_set = {r["symbol"] for r in own}
     from .theme_base import kind_stems as _kind
     layer_name = {c["symbol"]: b["layer"] for b in blocks for c in b["companies"]}

@@ -228,9 +228,17 @@ def rebuild(region: str, name: str) -> None:
     r, theme, m, _ = R.theme_map(SYSTEM, region, name)
     if not m.get("_library") or m.get("_older"):
         raise NotDone("its read is not kept under today's rules")
-    m = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, m))
+    m0 = m
+    m = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, m0))
     if not (m.get("placements") or {}).get("checked"):
         raise NotDone("its checks are not finished yet", later=True)          # a dive is kept only for a checked map
+    # e85 (LIVE21A-002): its US companies whose stored words hold no line a page may quote read once more first (their annual reports,
+    # largest first, bounded), outside the memory guard's turn (reads only), so the dive judges them on those words
+    try:
+        if theme_routes.describe_quoted(r, m):
+            m = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, m0))          # its lines from the words read now
+    except Exception as e:
+        print("theme re-check: words to quote not read:", region, name, type(e).__name__, str(e)[:100])
     with _turn("dive"):
         theme_routes.dive_of(r, theme, m, rebuild=True)
     return theme_routes.dive_key(r, theme, m)

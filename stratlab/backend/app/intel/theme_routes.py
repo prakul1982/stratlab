@@ -143,6 +143,11 @@ def sec_structure_only(about) -> bool:
     return structure_only(str(about or ""))
 
 
+def sec_structure_opens(about) -> bool:
+    from .sec import structure_opens
+    return structure_opens(str(about or ""))
+
+
 def sec_reit_tax(about) -> bool:
     from .sec import reit_tax_said
     return reit_tax_said(str(about or ""))
@@ -152,7 +157,40 @@ def reader_due(got: dict, region: str = "") -> bool:
     """e79: whether a US company's stored words were read by an earlier annual report reader whose opening today's passes over (its sentences
     of how it is held, a REIT's tax status: sec.BUSINESS_KEY), so a re-check reads them again before it places the company."""
     about = str((got or {}).get("about") or "")
-    return bool(region == "US" and about and got.get("bv") != sec_business_v() and (sec_structure_only(about) or sec_reit_tax(about)))
+    # e85 (LIVE21A-009): or opening on such a sentence (Franklin BSP's "... conducted through FBRT OP LLC ... (the "OP")")
+    return bool(region == "US" and about and got.get("bv") != sec_business_v()
+                and (sec_structure_only(about) or sec_reit_tax(about) or sec_structure_opens(about)))
+
+
+# e85 (LIVE21A-002, the live R84 re-check: Software 467 -> 395 description-verified (Microsoft, Meta, Salesforce, ServiceNow), Semiconductors
+# 90 -> 75 (Arm, Cadence, Synopsys, KLA), Payments 22 -> 14, Restaurants 37 -> 29: e84's rule judges a company on the words a page may quote,
+# and these companies' stored words were read before e57 put the annual report first: an encyclopedia's article only (Cadence "is an American
+# multinational technology and computational software company headquartered in San Jose ..."), or with the report's words cut off behind it.
+# Their records were current (EVIDENCE_DAYS) and said work in the older test (has_own_line reads an encyclopedia's "The company develops ..."
+# as a line), so nothing read them again: no quotable line, so "industry-supported (official industry only)". The rule stands; the words
+# are read: a US record whose stored words hold no line a page may quote that says the company's work (quotable_work), kept before this
+# reader (QUOTE_V), is read once more, its annual report first (evidence_reader), the largest of a theme first (describe_top, the re-check's
+# describe_quoted, describe_missing), within the SEC reads a minute already set (FILING_READS_PER_MINUTE); a read still owed keeps the words
+# it has, and one whose report gives no such line keeps them too, marked so it is not asked again until EVIDENCE_DAYS
+QUOTE_V = 1
+QUOTE_READS = 120                 # companies of one theme read so at its re-check, largest first (two minutes of the SEC reads a minute)
+QUOTE_BUDGET = 150.0              # ...within this many seconds (the re-check runs in the background: no page waits on it)
+
+
+def quotable_work(about, name: str = "") -> bool:
+    """e85: whether a US company's stored words hold a line a page may quote (theme_base.quotable) in its own words about its work
+    (theme_base.has_own_line, the page's own test): the line a description-verified label rests on."""
+    q = theme_base.quotable(str(about or ""), "US")
+    return bool(q) and theme_base.has_own_line(q, name)
+
+
+def quote_due(got: dict, region: str = "", name: str = "") -> bool:
+    """e85 (LIVE21A-002): whether a US company's stored words are read once more for a line a page may quote: words kept (not only its
+    filings' titles, not a read still owed) before QUOTE_V with no such line (quotable_work)."""
+    about = str((got or {}).get("about") or "")
+    if region != "US" or not about or about.startswith("From its own filings:") or got.get("owed") or got.get("qv") == QUOTE_V:
+        return False
+    return not quotable_work(about, name)
 
 
 def thin_about(got: dict, region: str = "", name: str = "") -> bool:
@@ -175,12 +213,16 @@ def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     # r67e (the live R65 REITs deck: Vornado's stored words, its 10-K's three sentences of how it is held, "conducts its business through
     # ... the Operating Partnership", none of what it owns): a US company's stored words that only tell how it is held or financed, kept
     # before the annual report's reader passed over such sentences (sec.BUSINESS_KEY), are read once more
-    if region == "US" and about and got.get("bv") != sec_business_v() and sec_structure_only(about):
+    # e85 (LIVE21A-009): or opening on one (Franklin BSP's "... conducted through FBRT OP LLC ... (the "OP")")
+    if region == "US" and about and got.get("bv") != sec_business_v() and (sec_structure_only(about) or sec_structure_opens(about)):
         return True
     # e78 (the live R76 REITs deck: Essex Property Trust's stored words, its 10-K's REIT tax election and taxable REIT subsidiaries, none of
     # its apartment communities): a US company's stored words holding a sentence of a REIT's tax status, kept before the reader passed over
     # such sentences (sec.BUSINESS_KEY 4), are read once more
     if region == "US" and about and got.get("bv") != sec_business_v() and sec_reit_tax(about):
+        return True
+    # e85 (LIVE21A-002): a US company's stored words with no line a page may quote about its work, kept before QUOTE_V
+    if quote_due(got, region, name):
         return True
     # gl52 (R52): 5, a US company's stored words with no sentence of its own about its work (an encyclopedia's opening only: Visa,
     # Mastercard, Fortinet) are read once more, so its annual report's opening is added (evidence_reader)
@@ -357,6 +399,7 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
         key = f"theme:evidence:{region}:{sym}"
         hit = EVIDENCE_CACHE.get(key)
         prior: dict = {}
+        due_q = False
         if hit is None:
             try:
                 got = db.json_value(db.get_setting(key), {})
@@ -364,6 +407,7 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                 got = {}
             prior = got
             got, cut = own_got(region, sym, got, names.get(sym) or "")
+            due_q = quote_due(got, region, names.get(sym) or "")          # e85
             # r66e: a stored description that is wholly another company's is read again (the encyclopedia's title is checked now)
             if cut and not got.get("about"):
                 got = {}
@@ -382,6 +426,10 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
             elif region == "US":
                 about, owed = filed_business(region, sym, until=pace["until"])          # e57: its own annual report first
                 filed_first = True
+                if due_q and owed:
+                    # e85: its annual report still owed (the minute's reads taken): the words it has stand, unchanged and not kept in
+                    # memory, until a later batch reads the report
+                    return {**got, "about": " ".join(x for x in (got.get("about"), own_filings(region, sym)) if x)}
             if len(about.split()) < ABOUT_WORDS:          # R34: none, or a line too thin to show the business: its encyclopedia summary too
                 try:
                     w = R.hub.wiki.company(plain_name(names.get(sym) or sym)) or {}
@@ -414,7 +462,12 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                    **({"filed": True} if filed_first and not owed else {}),          # e57: its annual report read first (read_chip_making)
                    **({"bv": sec_business_v()} if region == "US" else {}),          # r67e: the annual report reader it was read with
                    # v55: the issuer a listing line was looked up under
-                   **({"issuer": plain_name(names.get(sym) or "")} if theme_base.listing_line(names.get(sym) or "") else {})}
+                   **({"issuer": plain_name(names.get(sym) or "")} if theme_base.listing_line(names.get(sym) or "") else {}),
+                   **({"qv": QUOTE_V} if region == "US" and not owed else {})}          # e85: read by the reader of quotable words
+            # e85 (LIVE21A-002): a read for a line a page may quote whose report gives none keeps the words the record had (marked read, so
+            # it is not asked again until EVIDENCE_DAYS): never fewer words than before
+            if due_q and not owed and not quotable_work(hit["about"], names.get(sym) or "") and str(prior.get("about") or ""):
+                hit = {**prior, "qv": QUOTE_V, "q_at": hit["at"]}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
             except Exception as e:
@@ -704,7 +757,7 @@ def _has_description(region: str, sym: str) -> bool:
     if not hit.get("at"):
         return False
     if hit.get("about"):
-        return True
+        return not quote_due(hit, region)          # e85: US words with no line a page may quote are read once more
     if hit.get("owed"):      # e57: its annual report's read was put off (the minute's reads taken): read at the next check, never 3 days on
         return False
     try:                     # none on its page: asked again after NO_DESCRIPTION_DAYS (evidence_reader)
@@ -735,6 +788,8 @@ def describe_top(region: str, m: dict, rows: list[dict], industries, n: int = TO
     for s_ in top:
         got = _stored_evidence(region, s_)
         if got.get("about") and not got.get("owed"):
+            if quote_due(got, region, names.get(s_) or ""):          # e85 (LIVE21A-002): its words hold no line a page may quote
+                want.append(s_)
             continue
         if got.get("at") and not got.get("owed"):
             try:
@@ -748,6 +803,32 @@ def describe_top(region: str, m: dict, rows: list[dict], industries, n: int = TO
         for s_ in want:
             EVIDENCE_CACHE.pop(f"theme:evidence:{region}:{s_}")
         evidence_reader(region, names, budget=budget, again=again)(want)
+    return want
+
+
+def describe_quoted(region: str, m: dict, n: int = QUOTE_READS, budget: float = QUOTE_BUDGET) -> list[str]:
+    """e85 (LIVE21A-002): the map's US companies whose stored words hold no line a page may quote about their work (quote_due), largest by
+    market value first, at most `n`, read once more (evidence_reader: the annual report first, waiting for the next minute's reads within
+    `budget` seconds; one still owed keeps its words and waits for a later read). Called by the re-check before a theme's dive is worked
+    out, so the dive judges each company on the words read now. No AI call. The symbols asked."""
+    if region != "US":
+        return []
+    names = _map_names(m)
+    cos = sorted({c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}.values(),
+                 key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+    want = []
+    for c in cos:
+        if len(want) >= n:
+            break
+        if quote_due(_stored_evidence(region, c["ticker"]), region, names.get(c["ticker"]) or ""):
+            want.append(c["ticker"])
+    if want:
+        for s_ in want:
+            EVIDENCE_CACHE.pop(f"theme:evidence:{region}:{s_}")
+        try:
+            evidence_reader(region, names, budget=budget)(want)
+        except Exception as e:                  # a source busy: read at a later check or view
+            print("theme: words to quote not read:", type(e).__name__, str(e)[:100])
     return want
 
 
@@ -2059,6 +2140,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
             pub = public_themes.counts(m, hit)
             # e83 (LIVE19A-001): with the dive's own count of its companies not checked yet, listed or not (the public gate's measure)
             pub["unchecked"] = int((hit.get("tally") or {}).get("membership_unverified") or 0)
+            # e85 (LIVE21A-001): and its companies on evidence of the theme's work, of the tally's total (the gate's other measure)
+            pub.update(public_themes.evidenced(hit))
         except Exception as e:
             print("theme dive: count not kept:", type(e).__name__, str(e)[:100])
             pub = None
