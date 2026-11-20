@@ -2489,13 +2489,16 @@ def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT, p
     return r, theme, with_descriptions(r, c)
 
 
-def deck_key(r: str, theme: str, format: str, today, stamp: int, biz: bool, seen, waiting) -> tuple:
+def deck_key(r: str, theme: str, format: str, today, stamp: int, biz: bool, seen, waiting, prices: str = "") -> tuple:
     """The key a theme's deck file is kept under (DECK_CACHE and the shared store): the read of the theme, the day, the format, and every
     version its slides rest on. R40 (another lane's finding): the dive's own sentences (theme_data.DIVE_TEXT) and the sector figures' rules
-    (sector_metrics.VERSION) too, so a deploy changing only those never serves that day's older file from memory."""
+    (sector_metrics.VERSION) too, so a deploy changing only those never serves that day's older file from memory. e84 (LIVE20B-003: the
+    sample Consumer durables deck "Prices as of 19 Nov 2026", made at 18:30 IST before the evening run brought the 20 Nov closes, kept for
+    the rest of the day): the close its prices are at (the dive's as_of), so a deck made before a newer close is made again after it."""
     from .. import deck
     return (r, theme.lower(), format, today.isoformat(), stamp, biz, seen, theme_base.RULES, deck.THEME_DECK_VERSION,
-            f"td{theme_data.DIVE_TEXT}", f"sm{sector_metrics.VERSION}", waiting)          # what the dive still waits for: last, as before
+            f"td{theme_data.DIVE_TEXT}", f"sm{sector_metrics.VERSION}") + ((f"px{prices}",) if prices else ()) \
+        + (waiting,)          # what the dive still waits for: last, as before
 
 
 @router.get("/theme-dive/deck")
@@ -2527,7 +2530,8 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     # still waits for; a deck made while they are read is kept under that count and made again from the fuller dive once they are in
     dive = dive_of(r, theme, m)
     waiting = figures_waiting(dive)
-    key = deck_key(r, theme, format, today, f"{stamp}.{replaced_n}" if replaced_n else stamp, biz, seen, waiting)
+    key = deck_key(r, theme, format, today, f"{stamp}.{replaced_n}" if replaced_n else stamp, biz, seen, waiting,
+                   str(dive.get("as_of") or "")[:10])
     body = DECK_CACHE.get(key)
     if body is None:                           # R20: the file is kept in the shared store too, so a restart or a deploy doesn't rebuild it
         import base64
@@ -2545,7 +2549,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
             # R29: a deck still waiting for filed figures isn't kept in the shared store (it is made again once they are in)
             if not waiting:
                 computed.put("deck:theme", list(key), base64.b64encode(body).decode(), label=f"{theme} ({format.upper()}, {today.isoformat()})", region=r,
-                             meta={"gate": gate})
+                             meta={"gate": gate, "prices": str(dive.get("as_of") or "")[:10]})        # e84: the close its prices are at
         DECK_CACHE.set(key, body, DECK_TTL, size=len(body))
     if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
         db.add_usage(profile["id"], "deck")

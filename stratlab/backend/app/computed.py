@@ -222,7 +222,7 @@ def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | N
                  # e83 (LIVE19A-001): "broad" (theme_library.keep's gate mark) and "generated_at" kept too: the public gate read no "broad"
                  # from the index, so it judged every entry as one kept before the gate
                  "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate", "versions", "pub", "dups",
-                                                                         "broad", "generated_at")}}
+                                                                         "broad", "generated_at", "prices")}}
         ix["entries"][hk] = entry
         if by:
             ix["refreshes"] += 1
