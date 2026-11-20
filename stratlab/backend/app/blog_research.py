@@ -662,7 +662,7 @@ def theme_source(dive: dict, theme: str, region: str) -> dict:
             "basis": dive.get("basis") or "", "rows": rows, "notable": [n for n in dive.get("notable") or [] if n.get("kind") == "move"],
             "members": dive.get("members") if dive.get("members") is not None else pop["core"], "adjacent_n": pop["adjacent"],
             "total": (page_counts or {}).get("all") or p.get("total") or listed, "listed": listed,
-            **({"page_counts": {k: page_counts[k] for k in ("listed", "layers", "all")}} if page_counts else {}), "window": {"shown": figs.get("shown"), "of": figs.get("of")} if figs.get("of") else None,
+            **({"page_counts": {k: page_counts[k] for k in ("listed", "layers", "all", "unlisted") if k in page_counts}} if page_counts else {}), "window": {"shown": figs.get("shown"), "of": figs.get("of")} if figs.get("of") else None,
             "unplaced": sum(1 for x in unplaced for c in x.get("companies") or [] if c.get("status") != "unverified"),
             "chain": {k: chain.get(k) for k in ("line", "highest", "lowest", "measure", "compared", "unranked")},
             "lender": lender, "whole": td.mostly_whole(checks.get("whole_points"), checks.get("with_ebitda")),
@@ -714,8 +714,11 @@ def figures_moved(old: dict | None, new: dict) -> bool:
         return True
     shape = lambda src: [(r.get("layer"), r.get("n"), r.get("listed"), r.get("revenue"), tuple((r.get(k), r.get(f"{k}_n")) for k in ROW_FIGS),      # noqa: E731
                           sorted(c.get("symbol") or "" for c in r.get("companies") or [])) for r in src.get("rows") or []]
+    # e82 (LIVE18A-006: the IT services post "252 ... 10 layers", written before the re-check, beside its page's 11 layers): the page's count
+    # of companies and layers differing is a difference too
+    pc = lambda src: {k: (src.get("page_counts") or {}).get(k) for k in ("listed", "layers", "all")}       # noqa: E731
     return (shape(old) != shape(new) or old.get("members") != new.get("members") or old.get("total") != new.get("total")
-            or (old.get("chain") or {}) != (new.get("chain") or {}))
+            or (old.get("chain") or {}) != (new.get("chain") or {}) or (new.get("page_counts") and pc(old) != pc(new)))
 
 
 def _num_cell(v) -> float | None:
@@ -766,8 +769,16 @@ def theme_source_from_blocks(post: dict) -> dict | None:
             "basis": basis.replace("latest full latest fiscal year", "latest full fiscal year"), "rows": rows, "notable": moves}
 
 
+# e82 (LIVE18A-006: "212 listed Indian companies are in the indian Pharma theme"): a first word naming a people or a place keeps its capital
+PROPER_FIRST = {"indian", "india", "us", "american", "chinese", "china", "japanese", "japan", "european", "europe", "asian", "asia",
+                "british", "uk", "german", "french", "korean", "latin", "african"}
+
+
 def _lower_first(s: str) -> str:
-    """"Cybersecurity" in a sentence is "cybersecurity"; "AI data centers" keeps its capitals."""
+    """"Cybersecurity" in a sentence is "cybersecurity"; "AI data centers" keeps its capitals; "Indian Pharma" too (e82)."""
+    first = (re.findall(r"[A-Za-z]+", s[:30]) or [""])[0].lower()
+    if first in PROPER_FIRST:
+        return s
     return s[:1].lower() + s[1:] if len(s) > 1 and s[1:2].islower() else s
 
 
@@ -853,7 +864,14 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
     if pc and pc.get("all"):
         total = int(pc["all"])
     n_layers = int((pc or {}).get("layers") or len(rows))
-    intro = (f"{total:,} listed {where + ' ' if where else ''}compan{'y is' if total == 1 else 'ies are'} in the {named}; StratLab's map sorts them into "
+    # e82 (LIVE18A-006: the Real estate post "190 listed Indian companies" beside its page's "189 companies in 7 layers (1 more of the
+    # theme's 190 not listed: not checked yet)"): the companies its page lists, and the page's line on the rest, word for word
+    aside = ""
+    if pc and pc.get("listed") is not None and int(pc["listed"]) < total:
+        from .public_themes import unlisted_said
+        aside = f" as its page lists them ({unlisted_said({**pc, 'all': total})})"
+        total = int(pc["listed"])
+    intro = (f"{total:,} listed {where + ' ' if where else ''}compan{'y is' if total == 1 else 'ies are'} in the {named}{aside}; StratLab's map sorts them into "
              f"{n_layers} {'layer' if n_layers == 1 else 'layers'} of its value chain by what each company's own description says it does. "
              f"The figures below are of its {members:,} core member{'' if members == 1 else 's'} with figures"
              + (f", in the {len(rows)} {'layer' if len(rows) == 1 else 'layers'} that have them" if len(rows) < n_layers else ""))

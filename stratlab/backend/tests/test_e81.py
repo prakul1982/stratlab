@@ -189,7 +189,9 @@ def test_e81_a_theme_post_says_its_pages_counts_of_companies_and_layers():
            "page_counts": {"listed": 102, "layers": 10, "all": 104}, "read_on": "2026-11-19"}
     post = BR.theme_post_from(src)
     body = json.dumps(post)
-    assert "104 listed US companies are in the" in body and "into 10 layers" in body and "in the 9 layers that have them" in body
+    # (updated on purpose, e82 LIVE18A-006: the post says the companies its page lists and the page's line on the rest, word for word)
+    assert "102 listed US companies are in the semiconductors theme as its page lists them (2 more of the theme's 104 not listed)" in body
+    assert "into 10 layers" in body and "in the 9 layers that have them" in body
 
 
 # ---------- 4. LIVE17A-008: re-splits and returns are no moves ----------

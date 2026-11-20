@@ -326,9 +326,26 @@ def counts(p: dict, dive: dict | None = None) -> dict:
         st = ev(s_) if ev is not None else ""
         rest[st if st in ("membership_unverified", "not_confirmed") else ""] += 1
     unlisted = [[said, rest[k]] for k, said in UNLISTED_SAID if rest[k]]
-    if sum(n for _, n in unlisted) != total - len(listed):
+    # e82 (LIVE18A-005: Indian Pharma "1 more of the theme's 212 not listed: not confirmed by their own words or official industry yet"
+    # beside its own "205 description-verified, 7 industry-supported, 0 not checked", and six pages more): the true reason for each one left:
+    # a company the dive counts under a second symbol (listed once, under the symbol it keeps), then one its check counts that the stored
+    # read's layers don't hold; never "not confirmed" for a company that was
+    left = total - len(listed) - sum(n for _, n in unlisted)
+    if left > 0:
+        mapped = {c.get("ticker") for v in (p or {}).get("value_chain") or [] if isinstance(v, dict) for c in v.get("companies") or []
+                  if isinstance(c, dict) and c.get("ticker")}
+        dup = min(left, len(twice & mapped) if dt else 0)
+        if dup:
+            unlisted.append([TWICE_SAID, dup])
+        if left - dup:
+            unlisted.append([OUTSIDE_SAID, left - dup])
+    elif left < 0:
         unlisted = [[UNLISTED_SAID[-1][1], total - len(listed)]] if total > len(listed) else []
     return {"listed": len(listed), "layers": len(layers), "all": total, "unlisted": unlisted}
+
+
+TWICE_SAID = "the same company under a second symbol, listed once"
+OUTSIDE_SAID = "counted by the membership check, in none of the stored layers"
 
 
 def unlisted_said(c: dict) -> str:

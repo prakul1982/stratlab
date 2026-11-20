@@ -6662,7 +6662,7 @@ def whole_words(what, about) -> str:
     return w[:w.rfind(" ")].rstrip(" ,;:-–—") + "…"
 
 
-def described(m: dict, about_of) -> dict:
+def described(m: dict, about_of, region: str = "") -> dict:
     """The map with each official layer's company carrying `what`: the first sentence of its own description, from `about_of(symbol)`
     (the description or None; it never reads more than the caller allows). A company with none keeps "", which the page shows as not yet
     confirmed from its own description."""
@@ -6674,7 +6674,9 @@ def described(m: dict, about_of) -> dict:
             for c in v.get("companies") or []:
                 if v.get("official") or c.get("placed"):          # a company placed after the map shows its own words too (R21)
                     about = about_of(c["ticker"])
-                    c = {**c, "what": own_line(about, c.get("name") or "") if about else ""}       # gl52: its own words first
+                    # (e82, LIVE18A-003: of the words a page may quote, never an encyclopedia's sentence: quotable)
+                    q_ = quotable(about, region) if about else ""
+                    c = {**c, "what": own_line(q_, c.get("name") or "") if q_ else ""}       # gl52: its own words first
                 cos.append(c)
             v = {**v, "companies": cos}
         vc.append(v)

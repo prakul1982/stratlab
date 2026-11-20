@@ -1180,6 +1180,47 @@ def replaced_on_words(region: str, theme: str, m: dict, key: tuple, hit: dict, n
     return new
 
 
+# e82 (LIVE18A-003: the Semiconductors members table quoting Astera Labs “… headquartered in San Jose, California, is a fabless
+# manufacturing company …” as "What it does, in its own words" while the dive below said "No description in its own words yet"; the fresh
+# Quantum computing theme quoting Microsoft's encyclopedia sentence): one source of a company's own words for the members table, the dive, the
+# public page and the deck: the words a page may quote (theme_base.quotable), read in the stored map's line too, served (a map stored before
+# this keeps its line only while those words hold it, theme_data.carried_line's rule, for every company, its line written by the AI aside)
+_WHATS: dict = {}
+
+
+def own_whats(region: str, m: dict) -> dict:
+    """e82: the map with each company's line ("what") kept only where the words a page may quote of its stored description hold it (or it has
+    no stored description and the line itself is quotable); "" else. Read from storage only (one round trip a hundred), kept by the map's
+    stamp for the next request."""
+    vc = m.get("value_chain") or []
+    lines = {c["ticker"]: str(c.get("what") or "") for v in vc for c in v.get("companies") or [] if c.get("ticker") and c.get("what")}
+    if not lines:
+        return m
+    key = (region, str(m.get("sector") or ""), str(m.get("generated_at") or ""), str(m.get("checked_at") or ""), hash(tuple(sorted(lines.items()))))
+    drop = _WHATS.get(key)
+    if drop is None:
+        about = kept_about(region)
+        try:
+            db.prefetch_settings([f"theme:evidence:{region}:{s_}" for s_ in lines if EVIDENCE_CACHE.get(f"theme:evidence:{region}:{s_}") is None])
+        except Exception:
+            pass
+        drop = set()
+        for s_, w in lines.items():
+            try:
+                raw = about(s_)
+            except Exception:
+                raw = None
+            if theme_data.quoted_line(w, raw, region) != w:
+                drop.add(s_)
+        if len(_WHATS) > 64:
+            _WHATS.clear()
+        _WHATS[key] = drop
+    if not drop:
+        return m
+    return {**m, "value_chain": [{**v, "companies": [{**c, "what": ""} if c.get("ticker") in drop else c for c in v.get("companies") or []]}
+                                 for v in vc]}
+
+
 def with_caps(m: dict, rows: list[dict]) -> dict:
     """The map's market values as the index has them now (LIVE3-003: a map kept for a day showed BDL at the 3 Nov close beside its own
     page's 4 Nov one): the index takes each page's newest close as the price job moves it (screens.note_price)."""
@@ -1360,7 +1401,7 @@ def with_descriptions(region: str, m: dict, reads: int = 0) -> dict:
         return m
     want = set(theme_base.to_describe(m))
     read = _about_reader(region, {c["ticker"]: c.get("name") for v in m.get("value_chain") or [] for c in v.get("companies") or []}, reads)
-    out = theme_base.described(m, lambda s: read(s) if s in want else None)
+    out = theme_base.described(m, lambda s: read(s) if s in want else None, region)
     if not reads and read.reads["missed"]:
         later(("describe", region, hash(tuple(sorted(want)))), lambda: with_descriptions(region, m, DESCRIBE_READS), wait=0)
     return out

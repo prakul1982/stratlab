@@ -120,3 +120,63 @@ def test_e82_reits_replay_moves_breit_to_other_and_keeps_the_owners():
     assert got["OHI"][0] == "Healthcare property owners" and got["FBRT"][0] == "Mortgage REITs"
     assert got["SQFT"][0] == "Other" and got["KREF"][0] == "Mortgage REITs" and got["SACH"][0] == "Mortgage REITs"
     assert got["AMT"][0] == got["LAND"][0] == got["NLCP"][0] == "Towers, data centres and niche property"
+
+
+# ---------- 3. LIVE18A-003: one source of own words: the members table quotes what the dive may quote ----------
+ALAB = ("Astera Labs, Inc., headquartered in San Jose, California, is a fabless manufacturing company that develops connectivity technologies. "
+        "The company specializes in PCIe retimers for data centers.")
+MSFT = ("Microsoft Corporation is an American multinational technology conglomerate headquartered in Redmond, Washington. The company became "
+        "influential in the rise of personal computers through software like Windows and has since expanded into areas such as Internet "
+        "services, cloud computing, artificial intelligence and video gaming among others.")
+
+
+def test_e82_the_members_table_never_quotes_an_encyclopedia_sentence_the_dive_refuses():
+    m = {"sector": "Quantum computing", "value_chain": [{"layer": "Other quantum computing companies", "official": True, "companies": [
+        {"ticker": "ALAB", "name": "Astera Labs", "what": ALAB.split(". ")[0]},
+        {"ticker": "MSFT", "name": "Microsoft", "what": MSFT.split(". ")[1]},
+        {"ticker": "IONQ", "name": "IonQ", "what": "We are developing quantum computers based on trapped ions"}]}]}
+    about = {"ALAB": ALAB, "MSFT": MSFT, "IONQ": "We are developing quantum computers based on trapped ions. We sell access through clouds."}
+    got = {c["ticker"]: c["what"] for v in theme_base.described(m, about.get, "US")["value_chain"] for c in v["companies"]}
+    assert got["ALAB"] == "" and got["MSFT"] == "" and got["IONQ"].startswith("We are developing quantum computers")
+    # a map stored before: its lines kept only while the quotable words hold them (theme_data.quoted_line), the stored words as the dive reads them
+    assert theme_data.quoted_line(ALAB.split(". ")[0], ALAB, "US") == ""
+    assert theme_data.quoted_line(MSFT.split(". ")[1], MSFT, "US") == ""
+    w = "We are developing quantum computers based on trapped ions"
+    assert theme_data.quoted_line(w, about["IONQ"], "US") == w                      # guard
+    assert theme_data.quoted_line("Makes cement and clinker", "", "IN") == "Makes cement and clinker"   # guard: no words stored, a plain line
+
+
+def test_e82_a_served_map_drops_the_stored_encyclopedia_lines(monkeypatch):
+    m = {"sector": "Semiconductors", "generated_at": "x", "value_chain": [{"layer": "Connectivity", "companies": [
+        {"ticker": "ALAB", "name": "Astera Labs", "what": ALAB.split(". ")[0]}, {"ticker": "NVDA", "name": "Nvidia", "what": "We design GPUs"}]}]}
+    words = {"ALAB": ALAB, "NVDA": "We design GPUs. We sell systems."}
+    monkeypatch.setattr(theme_routes, "kept_about", lambda r: words.get)
+    theme_routes._WHATS.clear()
+    got = {c["ticker"]: c["what"] for c in theme_routes.own_whats("US", m)["value_chain"][0]["companies"]}
+    assert got == {"ALAB": "", "NVDA": "We design GPUs"}
+
+
+# ---------- 5. LIVE18A-005/006: one count; the true reason for each company a page doesn't list; posts say the page's count ----------
+def test_e82_a_page_says_a_company_listed_twice_never_not_confirmed():
+    """Indian Pharma "211 companies ... (1 more of the theme's 212 not listed: not confirmed by their own words or official industry yet)"
+    beside "205 description-verified, 7 industry-supported, 0 not checked"."""
+    p = {"sector": "Pharma", "value_chain": [{"layer": "Generics", "companies": [
+        {"ticker": "A", "name": "A", "verified": True}, {"ticker": "B", "name": "B", "verified": True}, {"ticker": "B2", "name": "B", "verified": True}]}]}
+    dive = {"evidence": {"A": "description_verified", "B": "description_verified", "B2": "description_verified"},
+            "duplicates": [{"symbol": "B2", "kept": "B"}], "tally": {"total": 3, "description_verified": 3, "membership_unverified": 0}}
+    c = public_themes.counts(p, dive)
+    assert c["listed"] == 2 and c["all"] == 3
+    said = public_themes.unlisted_said(c)
+    assert "not confirmed" not in said and said == "1 more of the theme's 3 not listed: the same company under a second symbol, listed once"
+    # one the membership check counts that no stored layer holds
+    dive2 = {**dive, "duplicates": [], "tally": {"total": 4}}
+    p2 = {"sector": "Pharma", "value_chain": [{"layer": "Generics", "companies": p["value_chain"][0]["companies"]}]}
+    assert "counted by the membership check, in none of the stored layers" in public_themes.unlisted_said(public_themes.counts(p2, dive2))
+
+
+def test_e82_a_theme_post_keeps_a_proper_first_word_and_is_written_again_when_its_page_count_moves():
+    from app import blog_research as BR
+    assert BR._lower_first("Indian Pharma") == "Indian Pharma" and BR._lower_first("Cybersecurity") == "cybersecurity"
+    old = {"v": 2, "rows": [], "members": 5, "total": 252, "chain": {}, "page_counts": {"listed": 252, "layers": 10, "all": 252}}
+    assert BR.figures_moved(old, {**old, "page_counts": {"listed": 252, "layers": 11, "all": 252}})
+    assert not BR.figures_moved(old, dict(old))                                    # guard

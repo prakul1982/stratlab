@@ -3331,6 +3331,22 @@ def _flat(t) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(t or "").lower()).strip()
 
 
+def quoted_line(w: str, raw, region: str = "") -> str:
+    """e82: a company's line as a page may quote it: kept when the quotable words of its stored description (theme_base.quotable) hold it,
+    or, with none stored, when the line itself is quotable whole; "" else (an encyclopedia's sentence, a fragment cut short)."""
+    from .theme_base import quotable
+    w = str(w or "")
+    if not w.strip():
+        return ""
+    head = _flat(w.rstrip("…"))[:80]
+    if raw and str(raw).strip() and not str(raw).startswith("From its own filings:"):
+        flat_raw = _flat(raw)
+        if head and head not in flat_raw:
+            return w if _flat(quotable(w, region)) == _flat(w) else ""        # a line not from its words: whole, or none
+        return w if head and head in _flat(quotable(raw, region)) else ""
+    return w if _flat(quotable(w, region))[:80] == head else ""
+
+
 def carried_line(c: dict, v: dict, about_of, raw_of=None) -> str:
     """e79 (LIVE15A-020: TOYO Co., Ltd, a solar cell maker, quoted in the dive with Toyo Tire's words, the line its stored map kept from
     before another company's article was taken off its description): a map line taken from a company's stored words (an official industry's
