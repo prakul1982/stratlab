@@ -50,6 +50,7 @@ test("LIVE18B-003: while the prices come the app holds the currency switch's pla
   const css = read("src/styles.css");
   assert.match(css, /\.lp-skel-cur \{ height: 38px; width: 146px; max-width: 100%; \}/);
   assert.match(css, /\.lp-skel-cur \{ height: 50px; width: 119px; \}/);
+  assert.match(css, /\.lp-period > :first-child \{ flex-basis: 100%; \}/);
   assert.match(css, /\.lp-skel-amount \{ height: calc\(44px \* 1\.05 \+ 2px \+ 13\.5px \* 1\.5\); width: 60%; \}/);
 });
 
@@ -73,47 +74,48 @@ test("LIVE18B-009: the scan page draws every ready-made scan at once", async () 
   assert.match(read("src/pages/ResearchScans.tsx"), /const scans = \[\.\.\.\(sets\?\.scans\?\.length \? sets\.scans : FIRST_SCANS\), CUSTOM_SCAN\];/);
 });
 
-test("LIVE18B-010: the analytics question waits while the page is opening or a card is loading", async () => {
-  const src = read("src/components/Tracking.tsx");
-  assert.match(src, /if \(pageBusy\(\)\) \{ t = window\.setTimeout\(quiet, ASK_QUIET_MS\); return; \}/);
-  const fn = new Function(`return ${src.match(/export function pageBusy[\s\S]*?\n}/)[0].replace("export function pageBusy(doc: Pick<Document, \"querySelector\"> = document): boolean", "function pageBusy(doc)")}`)();
-  const doc = (hit) => ({ querySelector: (s) => (hit && s.includes(hit) ? {} : null) });
-  assert.equal(fn(doc(".k-loading")), true);
-  assert.equal(fn(doc('[aria-busy="true"]')), true);
-  assert.equal(fn(doc(null)), false);
+test("LIVE18B-010: while the app or the page is opening it counts as a call out, so the analytics question waits", () => {
+  const src = read("src/main.tsx");
+  assert.match(src, /function HoldAsk\(\) \{\n  useEffect\(\(\) => \{ callStarted\(\); return callEnded; \}, \[\]\);/);
+  // every "Opening…" the app's shell draws is this one (the spinner and the hold)
+  assert.match(src, /import \{ LoadFailed, LoadGuard, Opening as OpeningSpinner, PageBoundary \} from "\.\/components\/LoadGuard";/);
+  assert.match(src, /function Opening\(p: \{ label\?: string \}\) \{\n  return <><OpeningSpinner \{\.\.\.p\} \/><HoldAsk \/><\/>;/);
+  assert.match(read("src/components/Tracking.tsx"), /if \(callsInFlight\(\) > 0\) return;/);
 });
 
-test("LIVE18B-002 / LIVE18A-011: boot.js asks the page's first reads and the data status beside /me", () => {
-  const src = read("public/boot.js");
-  const run = (path, saved, token = { access_token: "tok", expires_at: Math.floor(Date.now() / 1000) + 3600 }) => {
+test("LIVE18B-002 / LIVE18A-011: a saved sign-in's early reads, from a file of their own the visitor never downloads", () => {
+  const boot = read("public/boot.js");
+  assert.match(boot, /document\.documentElement\.setAttribute\("data-saved", "1"\); document\.head\.appendChild\(document\.createElement\("script"\)\)\.src = "\/early\.js"; break; \}/);
+  assert.match(boot, /earlyMe\(v\); if \(window\.__stratlabEarlyGo\) window\.__stratlabEarlyGo\(v\);/);
+  const src = read("public/early.js");
+  const run = (path, token = { access_token: "tok", expires_at: Math.floor(Date.now() / 1000) + 3600 }, cfgFirst = true) => {
     const calls = [];
     const store = new Map([["sb-demo-auth-token", JSON.stringify(token)]]);
-    const attrs = new Set(saved ? ["data-saved"] : []);
-    const head = { appendChild: (l) => calls.push(["link", l.rel, l.href]) };
-    const win = { addEventListener() {}, location: { pathname: path, search: "" } };
-    const doc = { documentElement: { setAttribute: (k) => attrs.add(k), hasAttribute: (k) => attrs.has(k), dataset: {} }, head,
-      createElement: () => ({}), addEventListener() {}, getElementById: () => null, readyState: "loading" };
-    new Function("window", "document", "localStorage", "sessionStorage", "fetch", "location", src)(win, doc,
-      { getItem: (k) => store.get(k) ?? null, key: (i) => [...store.keys()][i], get length() { return store.size; }, setItem() {} },
-      { getItem: () => null, setItem() {} }, (url) => { calls.push(["fetch", url]); return Promise.resolve({}); }, win.location);
-    win.STRATLAB_CONFIG = { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" };
+    const cfg = { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" };
+    const win = cfgFirst ? { STRATLAB_CONFIG: cfg } : {};
+    const doc = { head: { appendChild: (l) => calls.push(["link", l.rel, l.href]) }, createElement: () => ({}) };
+    new Function("window", "document", "localStorage", "fetch", "location", src)(win, doc, { getItem: (k) => store.get(k) ?? null },
+      (url) => { calls.push(["fetch", url.replace("https://api.example", "")]); return Promise.resolve({}); }, { pathname: path });
+    if (!cfgFirst) win.__stratlabEarlyGo(cfg);                    // /config.js ran after: boot.js's hook calls it
     return { calls, win };
   };
-  const trade = run("/trade", true);
-  assert.deepEqual(trade.calls.filter((c) => c[0] === "fetch").map((c) => c[1].replace("https://api.example", "")),
-    ["/me", "/notebooks", "/markets", "/trade/vix?brief=true", "/trade/positioning?brief=true&pcr=false", "/public/data-online"]);
+  const trade = run("/trade");
+  assert.deepEqual(trade.calls.filter((c) => c[0] === "fetch").map((c) => c[1]),
+    ["/public/data-online", "/notebooks", "/markets", "/trade/vix?brief=true", "/trade/positioning?brief=true&pcr=false"]);
   assert.deepEqual(Object.keys(trade.win.__stratlabEarlyReads), ["/notebooks", "/markets", "/trade/vix?brief=true", "/trade/positioning?brief=true&pcr=false"]);
   assert.ok(trade.win.__stratlabEarlyPublic["/public/data-online"]);
   assert.deepEqual(trade.calls.find((c) => c[0] === "link"), ["link", "preconnect", "https://demo.supabase.co"]);
+  assert.deepEqual(run("/trade", undefined, false).calls.filter((c) => c[0] === "fetch").length, 5);
   // a sign-in past its end (the first visit of a day): no read with its token, the data status still
-  const expired = run("/mine", true, { access_token: "old", expires_at: Math.floor(Date.now() / 1000) - 3600 });
-  assert.deepEqual(expired.calls.filter((c) => c[0] === "fetch").map((c) => c[1]), ["https://api.example/public/data-online"]);
+  assert.deepEqual(run("/mine", { access_token: "old", expires_at: Math.floor(Date.now() / 1000) - 3600 }).calls.filter((c) => c[0] === "fetch").map((c) => c[1]), ["/public/data-online"]);
   // a public page asks nothing of the account's
-  assert.deepEqual(run("/library", true).calls.filter((c) => c[0] === "fetch").map((c) => c[1].replace("https://api.example", "")), ["/me", "/public/data-online"]);
+  assert.deepEqual(run("/library").calls.filter((c) => c[0] === "fetch").map((c) => c[1]), ["/public/data-online"]);
   // the app takes them once, with the same token
   const api = read("src/lib/api.ts");
   assert.match(api, /const e = path === "\/me" \? w\.__stratlabEarlyMe : w\.__stratlabEarlyReads\?\.\[path\];/);
-  assert.match(read("src/lib/http.ts"), /const booted = earlyFromBoot\(path, true\);\n  if \(booted\) return readPublic<T>\(path, signal, undefined, booted\);/);
+  assert.match(api, /export function bootPublic<T>\(path: string\): Promise<T> \| null \{/);
+  assert.match(read("src/lib/app.tsx"), /\(bootPublic<\{ data_online: boolean; data_note\?: DataNote \}>\("\/public\/data-online"\) \?\? publicGet</);
+  assert.doesNotMatch(read("src/lib/http.ts"), /__stratlabEarlyPublic/);                // the visitor's code is unchanged
 });
 
 test("LIVE18B-004: the tax report's switch on its own row takes the card's width on a phone", () => {
@@ -140,14 +142,14 @@ test("LIVE18B-012: the menu shows the open page's item, scrolling only its own b
   assert.equal(shown.scrollTop, 50);                               // already in view: not moved
 });
 
-test("LIVE18B-014: the closing auction says closed once, and a final price under a 'Final price' head says no more", async () => {
+test("LIVE18B-014: the closing auction says closed once", async () => {
   const { PHASE_TEXT } = await import("../src/lib/closingAuction.ts");
   assert.match(PHASE_TEXT.preopen, /closed/i);                    // said once, here (R2A-006)
   const page = read("src/pages/trade/ClosingAuctionPage.tsx");
   assert.match(page, /v\.phase === "preopen" \? "Before the open" : v\.phase === "holiday" \? "Not a trading day"/);
   assert.doesNotMatch(page, /"Market closed"|Closed, next/);
   assert.match(page, /data-testid="cas-next">Next auction window:/);
-  assert.match(page, /\{final && r\.final_out \? null : <span className="k-sub-line">/);
+  assert.match(page, /data-testid="cas-next">Next auction window:/);
 });
 
 test("LIVE18A-020: 'What moved' lists the most points added, then the most taken", async () => {

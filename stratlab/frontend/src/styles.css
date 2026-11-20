@@ -2897,6 +2897,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
   .lp-skel-seg { height: 50px; }
   .lp-skel-cur { height: 50px; width: 119px; }
+  /* site81: the billing choice (or "Prices are per month") takes the first row and the currency switch the second, whatever the offer, so
+     the placeholders' two rows are the loaded rows (a short "Prices are per month" left the switch beside it: one row, the cards moved up) */
+  .lp-period > :first-child { flex-basis: 100%; }
+  .lp-period > span.small:first-child { min-height: 50px; display: flex; align-items: center; }
 }
 .lp-price-note { display: block; line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
