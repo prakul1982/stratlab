@@ -3331,29 +3331,101 @@ _ROOT_END = re.compile(r"(?:ings|ing|ers|er|ies|es|s|ion|ions|al)$")
 def _root(w: str) -> str:
     w = w.lower()
     r = _ROOT_END.sub("", w) if len(w) >= 5 else w.rstrip("s")
-    return r[:-1] if r.endswith("e") and len(r) > 4 else r
+    return r[:-1] if r.endswith("e") and len(r) >= 4 else r          # e84: "mine" and "miners" one root ("min")
+
+
+# e84 (LIVE20A-001: the R82 re-check of Capital goods cut "302 description-verified" to 178: Jyoti CNC Automation, "a leading manufacturer
+# of simultaneous 5-axis CNC machines", Action Construction Equipment's "hydraulic mobile cranes", Ingersoll-Rand's "industrial air
+# compressors" and Shakti Pumps' "pumps and motors" were only industry-supported in "Industrial machinery and engines makers", whose word is
+# "machinery", and the layer's smaller half, made by the split, gave no word at all; e83's Textiles drops (jute, socks, hosiery, innerwear,
+# elastics makers)): a company's words say a layer's work when they say a word of its name in any of its forms ("machines" of "machinery",
+# one root the start of the other, five letters or more) or, in the line a page shows of them, a product of that kind of business
+# (WORK_KINDS: "cranes", "compressors", "pumps" of machinery; "jute", "socks", "hosiery" of textiles); the two halves of a layer split
+# by market value are that layer. Words shared by every trade ("engineering", "equipment") never say it, and a word of the theme's own name
+# says it only with the rest of that name ("mining" alone is no gold miner's work: the theme's roots together, as before)
+WORK_KINDS = (
+    # (a root of the theme's or a layer's name that names the kind, the products a company of that kind makes or sells)
+    (r"^(?:machin|engin|capit)", r"\b(?:machin\w*|cnc|lathes?|cranes?|pumps?|compressors?|valves?|gears?|gear ?box(?:es)?|boilers?|turbines?|"
+     r"conveyors?|earth ?moving|excavators?|backhoe|loaders?|material handling|lifting|hoists?|elevators?|escalators?|forklifts?|heat exchangers?|"
+     r"pressure vessels?|centrifuges?|hydraulic\w*|pneumatic\w*|blowers?|chillers?|refrigeration|gensets?|generating sets?|diesel engines?|"
+     r"tractors?|cutting tools?|carbide tools?|machine tools?|tooling|drilling rigs?|rolling mills?|furnaces?|kilns?|glass[- ]lined|reactors?|"
+     r"bearings?|fasteners?|springs?|fluid (?:management|handling|couplings?)|(?:construction|concrete|mining|process|material handling) "
+     r"equipments?)\b"),
+    (r"^(?:electric|transform|cabl|switchgear)", r"\b(?:switchgears?|transformers?|cables?|(?:winding|enamelled|copper|aluminium|electrical|power|building) wires?|wires and cables|"
+     r"motors?|insulators?|metering|"
+     r"circuit breakers?|relays?|control panels?|inverters?|capacitors?|conductors?|(?:energy |smart |electricity )meters?)\b"),
+    (r"^gold$", r"\bgold (?:mines?|mining|miners?|producers?|production|deposits?|projects?|exploration|properties|ounces)\b|\bdor[ée]\b|"
+     r"\bbullion\b|\bounces of gold\b|\bproduc\w* gold\b"),
+    (r"^(?:textil|fabric|yarn|apparel|garment|spinn)", r"\b(?:textiles?|yarns?|fabrics?|fib(?:re|er)s?|jute|cotton|silk|wool(?:len)?|knit\w*|"
+     r"weav\w*|spinn\w*|hosiery|socks|innerwear|inner ?wears?|lingerie|garments?|apparel|denims?|elastics|interlinings?|(?<!card )clothing|"
+     r"cloth|threads?|towels?|terry|bed ?linen|made-ups|ethnic wear|embroider\w*)\b"),
+)
+
+
+def _near_root(a: str, b: str) -> bool:
+    """e84: one root of a word the other's, or one the start of the other at five letters or more ("machin" of "machinery")."""
+    if a == b:
+        return True
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    return len(short) >= 5 and long_.startswith(short)
+
+
+def _union_list(checked: dict, theme: str) -> set[str] | None:
+    """e84 (LIVE20A-019: the stored "Gold miners" theme's official industries are two entries of the curated table at once, the miners' and the
+    gold one: Martin Marietta (aggregates), Peabody (coal), BHP and Southern Copper came with the miners' entry): for a theme whose name, with
+    no "and" between its parts, names two or more of the curated table's entries and whose industries come from more than one of them (one
+    word qualifying the other: "gold" of "miners"), the roots of those entries' words (no word of the theme's work on its own); None else."""
+    from .theme_base import concepts_of
+    name = str(theme or checked.get("sector") or "")
+    if re.search(r"\band\b|&|,|/|\+", name, re.I):
+        return None
+    inds = {str(x).lower() for x in (checked.get("placements") or {}).get("industries") or []}
+    if not inds:
+        return None
+    hit = [c for c in concepts_of(name)
+           if inds & {str(n).lower() for k, names in c.items() if k in ("IN", "US") for n in names}]
+    if len(hit) < 2:
+        return None
+    return {_root(w) for c in hit for w in c["words"]}
 
 
 def work_test(checked: dict, theme: str):
-    """e83: None for a theme whose official industries come from the curated table; else a test (c, its whole stored words, its layer) ->
-    whether its own words say the theme's own work (see above)."""
+    """e83: None for a theme whose official industries come from the curated table (e84: unless two of its entries at once, _union_list);
+    else a test (c, its whole stored words, its layer) -> whether its own words say the theme's own work (see above)."""
     p = checked.get("placements") or {}
-    if p.get("industries_by") not in ("ai", "words", "pending"):
+    union = _union_list(checked, theme) if p.get("industries_by") == "list" else None
+    if p.get("industries_by") not in ("ai", "words", "pending") and union is None:
         return None
     from .theme_base import _TARGET_FILLER, _name_words
-    roots = {_root(w) for w in _name_words(str(theme or checked.get("sector") or "").lower())} - {_root(w) for w in _TARGET_FILLER}
+    filler = {_root(w) for w in _TARGET_FILLER}
+    roots = {_root(w) for w in _name_words(str(theme or checked.get("sector") or "").lower())} - filler
     if not roots:
         return None
 
     from .theme_base import _HALF_RX
-    filler = {_root(w) for w in _TARGET_FILLER}
-    lw = {_root(w) for v in checked.get("value_chain") or [] if v.get("layer") and not (v.get("official") or v.get("by_model") or v.get("industry_group"))
-          for w in _name_words(_HALF_RX.sub("", v["layer"]).lower())} - filler
+
+    def map_layer(v: dict) -> bool:
+        # a layer the map named, or a half of one split by market value (its name, "(larger)" aside, is the map's); never a layer of official
+        # industries, of an industry group, or one a rule named by how its companies earn
+        if not v.get("layer") or v.get("official") or v.get("industry_group") or (v.get("model") or {}).get("by_how"):
+            return False
+        return not v.get("by_model") or bool(v.get("sibling") or v.get("scale"))
+    lw = {_root(w) for v in checked.get("value_chain") or [] if map_layer(v) for w in _name_words(_HALF_RX.sub("", v["layer"]).lower())}
+    lw -= filler | roots | (union or set())          # e84: a word of the theme's own name (or of its entries) only with the rest of it
+    kinds = [re.compile(says, re.I) for names, says in WORK_KINDS if any(re.search(names, w) for w in lw | roots)]
 
     def says(c: dict, about, v: dict | None = None) -> bool:
         text = " ".join(x for x in (shown_words(c, about), business_sentence(about or ""), str(c.get("what") or "")) if x)
         mine = {_root(w) for w in re.findall(r"[a-z]+", text.lower()) if len(w) >= 3}
-        return roots <= mine or bool(lw & mine)
+        mine = {m for m in mine if not any(m.startswith(f) for f in filler if len(f) >= 5) and m not in filler}    # "pre-engineered" too
+        if all(any(_near_root(r, m) if len(r) >= 5 else r == m for m in mine) for r in roots):
+            return True
+        if any(_near_root(w, m) if len(w) >= 5 else w == m for w in lw for m in mine):
+            return True
+        # a product of the kind only in the line a page shows of its words (what it makes or sells, never a word further on: Grameva's
+        # "Jute and Agro trading" after "deals in agricultural products and metal handicrafts")
+        line = shown_words(c, about) or str(c.get("what") or "")
+        return any(k.search(line) for k in kinds)
     return says
 
 
@@ -3371,8 +3443,13 @@ def evidence_state(c: dict, words: set[str], about: str | None = None, segments=
     if c.get("base") is None and c.get("verified") is None:
         return "membership_unverified"
     own = shown_words(c, about)
-    if c.get("verified") is True and (own or not c.get("base")):
+    # e84 (LIVE20A-019: the stored Gold miners theme's Martin Marietta "Description-verified" beside "–" for its own words): a company is
+    # description-verified only on a line of its own words a page can show; one the map named whose check said yes but which shows no such
+    # line is kept on the map's own naming ("list_supported"), never confirmed by a description it does not show
+    if c.get("verified") is True and own:
         return "description_verified"          # a checked quote, or its stored description read and found to say its layer's work
+    if c.get("verified") is True and not c.get("base"):
+        return "list_supported"
     if own and (does_the_work(own, words) or c.get("fit")
                 or principal_fits(c, words, about, segments() if callable(segments) else segments) in ("segment", "description")
                 or (not c.get("base") and status == "exposure")):          # v55: in the theme by its principal business, its own words
@@ -3488,7 +3565,7 @@ def tally_points(hist) -> list[list]:
             and p[2] and 0 <= p[3] <= p[1] <= p[2]]
 
 
-def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSHIP_STEP, test=None) -> dict:
+def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSHIP_STEP, test=None, region: str = "") -> dict:
     """e54 (R54, the owner's review: Biotech "564 still not checked" and Software 488 after several checks: the companies checked were always
     the same window, every company the AI named and then the largest by market value, theme_base.for_figures, so the check never reached the
     rest): the next `step` companies of the map (`m`, every company it lists) not checked yet (`done`: those already checked, this version's
@@ -3501,19 +3578,34 @@ def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSH
             t = c.get("ticker")
             if t and t not in done and t not in seen:
                 seen.add(t)
-                todo.append(c)
+                todo.append({**c, "_official": bool(v.get("official"))})
     todo.sort(key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
-    return {c["ticker"]: _state_of(c, words, about, test) for c in todo[:max(0, step)]}
+    return {c["ticker"]: _state_of(c, words, about, test, region) for c in todo[:max(0, step)]}
 
 
-def _state_of(c: dict, words: set[str], about, test=None) -> str:
+def quoted_words(c: dict, raw, region: str = "", official: bool = False) -> tuple[dict, str | None]:
+    """e84 (LIVE20A-019): (the company's map record, its stored words as a page may quote them, theme_base.quotable): a map line taken from
+    its stored words (a company of a layer of official industries, `official`, or one placed after the map) kept only while those words hold
+    it (as carried_line shows it), so its evidence is judged on what a page shows."""
+    from .theme_base import quotable
+    q = quotable(raw, region) if raw else ""
+    w = str(c.get("what") or "")
+    if w and raw and str(raw).strip() and (official or c.get("placed")):
+        head = _flat(w.rstrip("…"))[:80]
+        if not head or head not in _flat(q):
+            c = {**c, "what": ""}
+    return c, (q or None)
+
+
+def _state_of(c: dict, words: set[str], about, test=None, region: str = "") -> str:
     """One company's evidence state from its map record and its own stored description (`about(symbol)`, stored only). e83: `test`
-    (work_test) for a theme whose official industries the AI picked."""
+    (work_test) for a theme whose official industries the AI picked. e84: on the words a page may quote (quoted_words)."""
     try:
-        text = about(c["ticker"])
+        raw = about(c["ticker"])
     except Exception:
-        text = None
+        raw = None
     from .theme_base import one_line
+    c, text = quoted_words(c, raw, region, bool(c.get("_official")))
     rec = {**c, "what": c.get("what") or (one_line(text) if text else "")}
     return work_checked(evidence_state(rec, words, text, None), rec, text, test)
 
@@ -3529,30 +3621,59 @@ def work_checked(state: str, c: dict, about, test=None) -> str:
         return state
 
 
-def kept_work_checked(m: dict, kept: dict, about, test=None) -> dict:
+# e84 (LIVE20A-001/019): the version of the evidence rule (work_test, evidence_state, the words judged): a read kept under another one has
+# every state it kept beyond the figures' window judged again under this one (kept_rejudged), so a stored theme never keeps labels of an
+# earlier rule beside its window's new ones (Capital goods' 139 industry-supported, Gold miners' Martin Marietta "Description-verified")
+EVIDENCE_RULE = 2
+
+
+def _cos(m: dict) -> dict:
+    """{symbol: its map record, marked "_official" when its layer is one of official industries} (quoted_words reads the mark)."""
+    out = {}
+    for v in m.get("value_chain") or []:
+        for c in v.get("companies") or []:
+            if c.get("ticker") and c["ticker"] not in out:
+                out[c["ticker"]] = {**c, "_official": bool(v.get("official"))}
+    return out
+
+
+def kept_work_checked(m: dict, kept: dict, about, test=None, region: str = "") -> dict:
     """e83: the states an earlier read kept beyond the figures' window, each description-verified one of the theme's official industries
-    judged again by `test` (its stored description only); unchanged with no test."""
+    judged again by `test` (its stored description only); unchanged with no test. e84: on the words a page may quote."""
     if test is None:
         return kept
-    cos = {c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    cos = _cos(m)
     out = dict(kept)
     for s_, x in kept.items():
         if x == "description_verified" and s_ in cos:
             try:
-                text = about(s_)
+                raw = about(s_)
             except Exception:
-                text = None
-            out[s_] = work_checked(x, cos[s_], text, test)
+                raw = None
+            c, text = quoted_words(cos[s_], raw, region, cos[s_]["_official"])
+            out[s_] = work_checked(x, c, text, test)
     return out
 
 
-def membership_recheck(m: dict, kept: dict, words: set[str], about, limit: int = MEMBERSHIP_STEP, test=None) -> dict:
+def kept_rejudged(m: dict, kept: dict, words: set[str], about, test=None, region: str = "") -> dict:
+    """e84: every state an earlier read kept beyond the figures' window judged again under the current rule (_state_of: its map record and its
+    stored description only, no AI, never read from a source), the largest by market value first, at most RECHECK_LOOKS; a company no
+    longer on the map is left as it was kept."""
+    cos = _cos(m)
+    todo = sorted((cos[s_] for s_ in kept or {} if s_ in cos), key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+    out = dict(kept or {})
+    for c in todo[:RECHECK_LOOKS]:
+        out[c["ticker"]] = _state_of(c, words, about, test, region)
+    return out
+
+
+def membership_recheck(m: dict, kept: dict, words: set[str], about, limit: int = MEMBERSHIP_STEP, test=None, region: str = "") -> dict:
     """h56 (R56, the owner's review of the live R55 FMCG deck: every company checked, 98 description-verified and 111 on industry labels): a
     company an earlier stored read checked beyond the figures' window and kept on its official industry or the theme's list (or could not
     check) is checked again once its own description is stored (the background check reads those it lacks, theme_routes.describe_unplaced),
     so its own words, where a source has them, take the place of the label. The largest by market value first, at most `limit` a read;
     stored descriptions only, never read from a source, no AI. {symbol: state} of those checked again."""
-    cos = {c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    cos = _cos(m)
     todo = sorted((cos[s_] for s_, x in (kept or {}).items() if x in RECHECK_STATES and s_ in cos),
                   key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
     out = {}
@@ -3564,7 +3685,7 @@ def membership_recheck(m: dict, kept: dict, words: set[str], about, limit: int =
         except Exception:
             has = False
         if has:
-            out[c["ticker"]] = _state_of(c, words, about, test)
+            out[c["ticker"]] = _state_of(c, words, about, test, region)
     return out
 
 
@@ -4187,10 +4308,14 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     named = name_words(checked, theme)          # v55: what a principal business must say to be of the theme on its own words
     every_status = {s: membership(c, words, src.about(s), lambda s=s: seg_list(s), named=named) for s, c in placed.items()}
     # e54: what each one's place rests on (its own words read and showing the work, its official industry alone, ...), one state each
-    every_evidence = {s: evidence_state(c, words, src.about(s), lambda s=s: seg_list(s), every_status[s]) for s, c in placed.items()}
+    # e84 (LIVE20A-019): judged on the words a page may quote (theme_base.quotable) and the map's line only while they hold it, so a company
+    # is description-verified only on a line the page shows (never on an encyclopedia's sentence the members table leaves out)
+    off_ = {c["ticker"] for v in checked.get("value_chain") or [] if v.get("official") for c in v.get("companies") or []}
+    quoted = {s: quoted_words(c, src.about(s), region, s in off_) for s, c in placed.items()}
+    every_evidence = {s: evidence_state(quoted[s][0], words, quoted[s][1], lambda s=s: seg_list(s), every_status[s]) for s, c in placed.items()}
     wt = work_test(checked, theme)          # e83 (LIVE19A-003): the theme's own work, where the AI picked its official industries
     if wt is not None:
-        every_evidence = {s: work_checked(st, placed[s], src.about(s), wt) for s, st in every_evidence.items()}
+        every_evidence = {s: work_checked(st, quoted[s][0], quoted[s][1], wt) for s, st in every_evidence.items()}
     facts = {s: src.facts(s) for s in placed}
     rows = {s: r for s, r in ((s, company_row(region, s, f)) for s, f in facts.items()) if r}
     # c54 (R53 review: "missing data must not remove a valid member"): a company of one of the map's layers with no stored page figures stays

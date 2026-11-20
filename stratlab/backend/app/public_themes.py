@@ -510,7 +510,11 @@ def view(entry: dict, p: dict) -> dict:
                 continue
             rev = revs.get(sym)
             # e54: what its place rests on; a company the map added is shown only confirmed by its own words (share.checked)
-            state = "description_verified" if c.get("verified") is True else (ev(sym) if ev else None)
+            # e84 (LIVE20A-001: Capital goods' layers summed to 180 description-verified and 137 industry-supported beside its headline's 178
+            # and 139): the stored dive's state first, the one its tally counts; the map's own check only for a company the dive has none for
+            state = ev(sym) if ev else None
+            if c.get("verified") is True and state in (None, "membership_unverified"):
+                state = "description_verified"
             nm_ = stock_pages.reporting_name(region, sym) or named.get(sym) or c.get("name") or sym
             rows.append({"symbol": sym, "name": clean_name(public_words(nm_, 100) or sym),
                          "page": stock_pages.path(region, sym) if sym in known else None,

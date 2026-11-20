@@ -167,6 +167,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
+            **({"ev_rule": mc["rule"]} if ev and isinstance(mc.get("rule"), int) else {}),     # e84: the evidence rule the kept states are of
             **({"left": left} if left else {}), **({"kept_layers": kept_layers} if kept_layers else {})}
 
 

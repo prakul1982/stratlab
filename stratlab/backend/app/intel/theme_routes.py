@@ -1789,7 +1789,7 @@ def _at_seconds(at) -> float:
             return 0.0
 
 
-def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | None, about, today) -> dict:
+def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | None, about, today, region: str = "") -> dict:
     """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks: the companies
     whose membership was checked were always the figures' window, every one the AI named and then the largest by market value, so the
     check never moved on): the companies outside that window checked so far, earlier stored reads' (the snapshot's "ev") and this read's
@@ -1809,13 +1809,18 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
     total = (m.get("placements") or {}).get("total") or (dive.get("coverage") or {}).get("placed") or len(every)
     counts = theme_data.evidence_counts(window)
     step = theme_data.membership_step(theme_data.checked_tally(counts, kept, total)["total"])
-    new, again = {}, {}
+    new, again, kept0 = {}, {}, dict(kept)
     try:
         words = theme_data.theme_words(fm, theme_data.theme_name(theme, fm))      # r68e: the map's own name, whatever search reached it
         wt = theme_data.work_test(fm, theme_data.theme_name(theme, fm))           # e83 (LIVE19A-003): AI-picked industries' work test
-        kept = theme_data.kept_work_checked(m, kept, about, wt)
-        again = theme_data.membership_recheck(m, kept, words, about, step, wt)
-        new = theme_data.membership_round(m, set(window) | set(kept), words, about, step, wt)
+        kept0 = dict(kept)
+        if before.get("ev_rule") != theme_data.EVIDENCE_RULE:
+            # e84 (LIVE20A-001/019): states kept under an earlier evidence rule are all judged again under this one (stored words only)
+            kept = theme_data.kept_rejudged(m, kept, words, about, wt, region)
+        else:
+            kept = theme_data.kept_work_checked(m, kept, about, wt, region)
+        again = theme_data.membership_recheck(m, kept, words, about, step, wt, region)
+        new = theme_data.membership_round(m, set(window) | set(kept), words, about, step, wt, region)
     except Exception as e:
         print("theme: membership check not moved on:", type(e).__name__, str(e)[:100])
     outside = {**kept, **again, **new}
@@ -1825,7 +1830,7 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
     if not hist or hist[-1][1:] != point[1:]:
         hist = (hist + [point])[-theme_changes.KEEP:]
     return {"outside": dict(sorted(outside.items())), "checked": t["checked"], "total": t["total"], "history": hist, "step": len(new),
-            "rechecked": sum(1 for s_, x in again.items() if x != kept.get(s_))}
+            "rechecked": sum(1 for s_, x in {**kept, **again}.items() if s_ in kept0 and x != kept0[s_]), "rule": theme_data.EVIDENCE_RULE}
 
 
 # LIVE10A-008: a kept dive behind a newer close or a rebuilt page was worked out again inside the page's request (Semiconductors 44 s,
@@ -2013,7 +2018,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
     # e54 (R54): the membership check moves on through the companies not checked yet, membership_step a stored read (membership_check)
     hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
-                                               getattr(src, "today", None) or datetime.now(timezone.utc).date())
+                                               getattr(src, "today", None) or datetime.now(timezone.utc).date(), r)
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
     # r65e: every member of the map with its layer, so a fall says why for the members past the figures' window too
     now_all = {c["ticker"]: {"layer": v.get("layer") or "", "refit": c.get("refit"), "unread": c.get("unread")}
