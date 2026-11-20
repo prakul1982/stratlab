@@ -158,7 +158,8 @@ test("the visitor half draws the kept words while a page's code downloads, and t
   assert.ok(entry.indexOf("holdStartup(root)") > entry.indexOf("readConfig()") && entry.indexOf("holdStartup(root)") < entry.indexOf('import("./visitor/visitorMain")'),
     "kept after the config is read and before either half draws over it");
   // the start-up guard still sees the kept words as "the app has not drawn yet"
-  assert.match(read("public/boot.js"), /root\.querySelector\("\[data-boot\]"\)/);
+  // (site85 LIVE21B-001: and a saved sign-in's app frame, changed on purpose)
+  assert.match(read("public/boot.js"), /root\.querySelector\("\[data-boot\], \[data-boot-shell\]"\)/);
 });
 
 test("every public address's tab title at start-up is the title its own HTML carries, so booting resets nothing (R10V-006)", () => {

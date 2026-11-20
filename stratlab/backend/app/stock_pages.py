@@ -774,6 +774,23 @@ def as_traded(bars: list[dict], dividends, reference=None) -> list[dict]:
     return out
 
 
+def broker_as_traded(bars: list[dict], symbol: str) -> list[dict]:
+    """An Indian stock's daily candles from the broker as the exchange printed them, for the trend scans and the breadth run
+    (LIVE21B-013): the broker scales every candle before an extraordinary dividend's ex-date (see EXTRA_DIVIDEND), so a 52-week
+    low read from its candles was a price no session had. ONGC's ₹8 of 9 Nov 2026 (3.4% of its close) took its 8 Oct low of
+    ₹218.53 to ₹211.08, and "Near 52-week low" (the close within 5%) missed it at ₹223.46, 2.3% above the low its own page
+    shows. The dividends are the company's stored list (no source is read); without one, the candles as they are."""
+    if not bars or not symbol:
+        return bars
+    try:
+        from . import corp_actions
+        divs = dividend_list(corp_actions.actions_for("IN", str(symbol).upper(), None, fetch=False), restate=True)
+    except Exception as e:                       # the candles as they are rather than none
+        print("as-traded candles:", symbol, str(e)[:120])
+        return bars
+    return as_traded(bars, divs) if divs else bars
+
+
 def fit_to_exchange_range(bars: list[dict], row, report_day: str | None, through: str | None = None) -> list[dict]:
     """Daily candles held to the exchange's own 52-week high and low for the stock (`row`: [high, its day, low, its day],
     from the report of `report_day`; official_close.ranges). A candle's extreme beyond the exchange's, within the report's

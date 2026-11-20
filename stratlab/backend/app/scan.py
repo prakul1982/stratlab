@@ -122,6 +122,11 @@ def _bars(registry, iid: str) -> list[dict]:
             bars = prov.history(inst, "1d", DAYS)
     else:
         bars = prov.history(inst, "1d", DAYS)
+    if market == "IN" and getattr(prov, "kite", None) is not None and inst.get("symbol") and inst.get("type", "EQ") == "EQ":
+        # LIVE21B-013: the broker's candles as the exchange printed them, its scaling for an extraordinary dividend undone, so a 52-week
+        # rule reads the year's real low and high (the company page's), not a scaled one no session traded at
+        from .stock_pages import broker_as_traded
+        bars = broker_as_traded(bars, inst["symbol"])
     # candles that end before the market's latest completed session are a stale copy: kept a minute, not a quarter of an hour
     # (R41A: a restart's first scan kept Thursday's last candle as Friday's close for the whole 15 minutes)
     from . import last_session
