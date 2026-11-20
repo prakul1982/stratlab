@@ -4350,7 +4350,11 @@ _WHOLE_PLAIN = {"care", "consumer", "health", "safety", "industrial", "services"
 # product ("cloud e-commerce platform", "cloud-based restaurant software", "cloud communications") is a word about that product
 COMPUTE_LAYER = r"\bcomput(?:e|ing)\b|\bhosting\b|data cent(?:er|re)s?|\bcapacity\b|cloud infrastructure|infrastructure providers?"
 COMPUTE_SAYS = (r"\bcomput(?:e|ing)\b|\bcapacity\b|\bhosting\b|data cent(?:er|re)s?|\bgpus?\b|infrastructure[- ]as[- ]a[- ]service|\biaas\b|"
-                r"\bservers?\b|colocation|\b(?:ai|cloud|it|computing|digital) infrastructure\b|hyperscale")
+                r"\bservers?\b|colocation|\b(?:ai|cloud|it|computing|digital) infrastructure\b|hyperscale|"
+                # e85 (CoreWeave's 10-K opening, read again for a line a page may quote: "The Essential Cloud for AI ... enables the full
+                # lifecycle of AI, including large-scale model training, inference ...", moved out of "Data centres, hosting and networks"):
+                # the training of AI models it runs for its customers is the computing it sells
+                r"\b(?:large-scale )?(?:ai )?model training\b")
 CLOUD_ADJECTIVE = r"\bcloud(?:[- ]based|[- ]native)?\s+(?!comput\w*|infrastructure|hosting|servers?|capacity|data cent\w*)"
 
 
@@ -5455,7 +5459,13 @@ COMMERCIAL_LAYER = r"\bcommercial\b|\blarge\b|\bbig\b|\bestablished\b|\bportfoli
 COMMERCIAL_SAYS = (r"\blargest\b[^.;]{0,80}\bby (?:revenue|sales)\b|\b(?:largest|biggest) (?:\w+ ){0,2}(?:pharmaceutical|biopharmaceutical|drug|"
                    r"biotech\w*|biomedical|medical) compan|\bproducts? (?:are|is) (?:marketed|sold) in\b|\bprimary products are\b|\bmarketed products\b|"
                    r"\bapproved (?:products|medicines|drugs|therapies)\b|\bproduct sales\b|\bcommercial[- ]stage\b|\bglobal commercial\b|"
-                   r"\bportfolio of (?:marketed |approved |branded )?(?:products|medicines|drugs)\b|\bsells? (?:its )?(?:products|medicines|drugs) in\b")
+                   r"\bportfolio of (?:marketed |approved |branded )?(?:products|medicines|drugs)\b|\bsells? (?:its )?(?:products|medicines|drugs) in\b|"
+                   # e85 (Regeneron's 10-K opening, read again for a line a page may quote: "a fully integrated biotechnology company that
+                   # invents, develops, manufactures, and commercializes medicines ... Our products and product candidates", moved to a
+                   # clinical-stage layer on "product candidates"): a company that commercializes its medicines, or names its products
+                   # beside its candidates, is commercial too
+                   r"\bcommerciali[sz]es (?:\w+ ){0,2}(?:medicines|products|drugs|therapies)\b|\bfully integrated (?:bio\w*|pharma\w*) compan|"
+                   r"\bproducts and product candidates\b")
 DEVELOPMENT_SAYS = (r"\bclinical[- ]stage\b|\bpre-?revenue\b|\bdevelopment[- ]stage\b|\bpre-?clinical[- ]stage\b|\bproduct candidates?\b|"
                     r"\bdrug candidates?\b|\blead (?:product )?candidates?\b|\bno (?:approved )?products? (?:on (?:the )?market|approved)\b")
 STAGE_FACTOR = 10.0             # v55: revenue this many times the development layer's median developer's, with an operating profit: commercial

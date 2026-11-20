@@ -387,9 +387,9 @@ def public_layers(p: dict, dive: dict | None = None) -> list[dict]:
 
 def evidenced(dive: dict | None) -> dict:
     """e85 (LIVE21A-001): {"evidenced": the dive's companies in the theme on evidence of its work (description-verified or list-supported),
-    "tallied": of its tally's total}, the public gate's measure (theme_library.gate_why); {} with no tally."""
+    "tallied": of its tally's total}, the public gate's measure (theme_library.gate_why); {} with no tally of the states."""
     dt = (dive or {}).get("tally") if isinstance((dive or {}).get("tally"), dict) else None
-    if not dt or not dt.get("total"):
+    if not dt or not dt.get("total") or "description_verified" not in dt:
         return {}
     return {"evidenced": int(dt.get("description_verified") or 0) + int(dt.get("list_supported") or 0), "tallied": int(dt["total"])}
 

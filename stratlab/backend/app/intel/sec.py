@@ -2338,7 +2338,15 @@ _REPORT_TALK = re.compile(r"forward[- ]looking|unless the context|unless otherwi
                           r"\bannual report\b|\bform (?:10-k|20-f|40-f)\b|table of contents|trademarks?|incorporated (?:herein )?by reference|"
                           r"\bsee (?:note|item|part)\b|safe harbor|website|"
                           r"\b(?:was|were) (?:originally |first )?(?:incorporated|formed|founded|organi[sz]ed|established)\b|\bincorporated (?:in|as|under)\b|"
-                          r"initial public offering|fiscal year|5[23]-week", re.I)
+                          r"initial public offering|fiscal year|5[23]-week|"
+                          # e85 (the R84 Software inputs read again: Shopify's opening "In addition, we operate in a highly competitive and
+                          # rapidly changing environment. These statements are inherently uncertain and investors are cautioned ...", the end of
+                          # its cautionary note; Clarivate's "... incorporated on January 7, 2019 under the laws of Jersey ... Our principal
+                          # business offices are located at ...; our main telephone number is ..."): the cautionary note's own sentences and
+                          # where the company is registered or reached are about the report or the company's papers, not its work
+                          r"\bthese statements\b|\b(?:are|is) cautioned\b|\brapidly changing environment\b|\bincorporated on\b|"
+                          r"\bprincipal (?:business|executive) offices?\b|\btelephone number\b|\bregistered office\b|\bforeign private issuer\b|"
+                          r"\bemerging growth company\b|\bblank check\b", re.I)
 # a sentence that says what the company is or does: the opening starts at the first one (a report can open with cautions and definitions)
 _SAYS_WORK = re.compile(
     r"\bwe are (?:a|an|the|one of|primarily|principally|engaged)\b|"
