@@ -618,10 +618,10 @@ def listed_as(name, symbol):
     return grounding.listed_name(name, symbol, symbol)
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73, 75: 74, 76: 75}  # rules versions whose change only adds to a kept placement (e80, R75: the answers unchanged, encyclopedia sentences no line of own words; e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73, 75: 74, 76: 75, 77: 76}  # rules versions whose change only adds to a kept placement (e80, R75: the answers unchanged, encyclopedia sentences no line of own words; e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 31                # (e81: 31, one more for the version R76 carries; e80: 30, one more for the version R75 carries; e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 32                # (e82: 32, one more for the version R77 carries; e81: 31, one more for the version R76 carries; e80: 30, one more for the version R75 carries; e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1180,6 +1180,47 @@ def replaced_on_words(region: str, theme: str, m: dict, key: tuple, hit: dict, n
     return new
 
 
+# e82 (LIVE18A-003: the Semiconductors members table quoting Astera Labs “… headquartered in San Jose, California, is a fabless
+# manufacturing company …” as "What it does, in its own words" while the dive below said "No description in its own words yet"; the fresh
+# Quantum computing theme quoting Microsoft's encyclopedia sentence): one source of a company's own words for the members table, the dive, the
+# public page and the deck: the words a page may quote (theme_base.quotable), read in the stored map's line too, served (a map stored before
+# this keeps its line only while those words hold it, theme_data.carried_line's rule, for every company, its line written by the AI aside)
+_WHATS: dict = {}
+
+
+def own_whats(region: str, m: dict) -> dict:
+    """e82: the map with each company's line ("what") kept only where the words a page may quote of its stored description hold it (or it has
+    no stored description and the line itself is quotable); "" else. Read from storage only (one round trip a hundred), kept by the map's
+    stamp for the next request."""
+    vc = m.get("value_chain") or []
+    lines = {c["ticker"]: str(c.get("what") or "") for v in vc for c in v.get("companies") or [] if c.get("ticker") and c.get("what")}
+    if not lines:
+        return m
+    key = (region, str(m.get("sector") or ""), str(m.get("generated_at") or ""), str(m.get("checked_at") or ""), hash(tuple(sorted(lines.items()))))
+    drop = _WHATS.get(key)
+    if drop is None:
+        about = kept_about(region)
+        try:
+            db.prefetch_settings([f"theme:evidence:{region}:{s_}" for s_ in lines if EVIDENCE_CACHE.get(f"theme:evidence:{region}:{s_}") is None])
+        except Exception:
+            pass
+        drop = set()
+        for s_, w in lines.items():
+            try:
+                raw = about(s_)
+            except Exception:
+                raw = None
+            if theme_data.quoted_line(w, raw, region) != w:
+                drop.add(s_)
+        if len(_WHATS) > 64:
+            _WHATS.clear()
+        _WHATS[key] = drop
+    if not drop:
+        return m
+    return {**m, "value_chain": [{**v, "companies": [{**c, "what": ""} if c.get("ticker") in drop else c for c in v.get("companies") or []]}
+                                 for v in vc]}
+
+
 def with_caps(m: dict, rows: list[dict]) -> dict:
     """The map's market values as the index has them now (LIVE3-003: a map kept for a day showed BDL at the 3 Nov close beside its own
     page's 4 Nov one): the index takes each page's newest close as the price job moves it (screens.note_price)."""
@@ -1360,7 +1401,7 @@ def with_descriptions(region: str, m: dict, reads: int = 0) -> dict:
         return m
     want = set(theme_base.to_describe(m))
     read = _about_reader(region, {c["ticker"]: c.get("name") for v in m.get("value_chain") or [] for c in v.get("companies") or []}, reads)
-    out = theme_base.described(m, lambda s: read(s) if s in want else None)
+    out = theme_base.described(m, lambda s: read(s) if s in want else None, region)
     if not reads and read.reads["missed"]:
         later(("describe", region, hash(tuple(sorted(want)))), lambda: with_descriptions(region, m, DESCRIBE_READS), wait=0)
     return out
@@ -1683,8 +1724,11 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
 def dive_key(r: str, theme: str, m: dict) -> list:
     """A dive's key in the shared store: the market, the stored theme's name (or the search's normalised one), the map's time, how many
     companies are placed and described, and the rules' version."""
-    fm = theme_base.for_figures(m)[0]
-    said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
+    # e82 (LIVE18A-010: Semiconductors, REITs and Software dives "the new read is being worked out" 97-102 minutes after the merge, the
+    # re-check done, with 25-51 companies at an earlier close): the count of described companies is of the whole map, never of the figures'
+    # window, which follows each close's market values, so the key the re-check kept a dive under is the key the page reads after a price
+    # moves a company across the window's edge
+    said = sum(1 for v in m.get("value_chain") or [] if v.get("official") for c in v.get("companies") or [] if c.get("what"))
     return [r, m.get("_library") or theme_library.normalise(theme, r), int(float(m.get("generated_at") or 0)),
             (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}", f"td{theme_data.DIVE_TEXT}"] \
         + ([f"rp{(m.get('placements') or {})['replaced']}"] if (m.get("placements") or {}).get("replaced") else [])     # r572
@@ -1976,7 +2020,9 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit["tally"] = theme_data.checked_tally(hit.get("membership_evidence"), (hit.get("membership_check") or {}).get("outside"), len(now_all))
     # e79 (LIVE15A-021: every public tally "as checked on 18 Nov 2026" after the 19 Nov re-checks, the dive's price day): the day the read was
     # made, the day the app's head says the theme was checked
-    hit["tally_at"] = datetime.now(timezone.utc).date().isoformat()
+    # (e82, LIVE18A-010: "checked 19 Nov" in the app's head beside "as checked on 20 Nov" here, a UTC date after New York's midnight-less
+    # evening: the market's own date, as the head and the map's day say it)
+    hit["tally_at"] = market_day(r).isoformat()
     ctl = theme_changes.coverage_control(hit["coverage"], before, hit, now_all)   # d53: layers lost too
     pc = theme_changes.population_change(before, hit)      # r68e: each company that joined or left the core members, with why
     if pc:

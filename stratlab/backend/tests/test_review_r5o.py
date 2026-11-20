@@ -84,7 +84,8 @@ def test_net_worth_states_the_dollar_rate_its_us_stocks_are_at():
     stocks = {"in": 42139.0, "us": 3 * 336.67 * 96.77, "as_of": "2026-10-08T14:27:00+05:30", "count": 4, "usd_inr": 96.77}
     v = N.build([], stocks, None, N.Prices())
     us = next(a for a in v["assets"] if a["kind"] == "stocks_us")
-    assert us["rule"] == "From My Holdings, at today's prices in rupees, at ₹96.77 a dollar"
+    # (updated on purpose, site81 LIVE18B-013: "the latest prices", whose time the row says, not "today's" beside an earlier day's close)
+    assert us["rule"] == "From My Holdings, at the latest prices in rupees, at ₹96.77 a dollar"
 
 
 # ---------- R5O-005: an ETF's gap is one day's close against that day's NAV ----------

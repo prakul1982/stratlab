@@ -265,7 +265,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) build(); }} />
       <div className="k-row">
         <button type="button" className="btn" disabled={busy} onClick={() => build()}>{busy ? "Building…" : busyLabel}</button>
-        {u && <span className="k-small k-muted k-row">{u.ai_limit == null ? `Unlimited AI builds${u.ai_builds_per_day ? ` (up to ${u.ai_builds_per_day} a day)` : ""}` : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`}
+        {u && <span className="k-small k-muted k-row">{u.ai_limit == null ? (u.ai_builds_per_day ? `Up to ${u.ai_builds_per_day} AI builds a day` : "Unlimited AI builds") : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`}
           <Info>The AI turns your sentence into exact rules. If it's unavailable, a simple built-in converter takes over (it understands SMA, EMA, RSI and price rules).</Info></span>}
       </div>
       {note && (

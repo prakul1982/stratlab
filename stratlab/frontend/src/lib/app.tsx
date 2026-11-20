@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/auth-js";
-import { api, ApiError, setApiHandlers, supabase } from "./api";
+import { api, ApiError, bootPublic, setApiHandlers, supabase } from "./api";
 import { publicGet } from "./http";
 import { clearLocalData } from "./localData";
 import { signOutHere, signingOutOnPurpose } from "./signout";
@@ -173,7 +173,8 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   useEffect(() => {
     let live = true;
     const cap = window.setTimeout(() => setDataKnown(true), DATA_STATUS_WAIT_MS);
-    publicGet<{ data_online: boolean; data_note?: DataNote }>("/public/data-online").then((st) => {
+    // site81: the answer public/early.js asked as /config.js ran, when there is one
+    (bootPublic<{ data_online: boolean; data_note?: DataNote }>("/public/data-online") ?? publicGet<{ data_online: boolean; data_note?: DataNote }>("/public/data-online")).then((st) => {
       if (!live || meIn.current) return;
       setDataOffline(!st.data_online);
       setDataNote(st.data_note ?? null);

@@ -174,7 +174,7 @@ def test_american_homes_and_essex_go_to_the_residential_layer_on_their_own_words
 
 
 def test_rules_are_bumped_and_carried():
-    assert B.RULES == 76 and TR.PLACE_CARRY[76] == 75 and TR.PLACE_CARRY[75] == 74 and TR.PLACE_CARRY[74] == 73 and TR.PLACE_CARRY[73] == 72 and TR.EARLIER_MAX == 31  # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
+    assert B.RULES == 77 and TR.PLACE_CARRY[77] == 76 and TR.PLACE_CARRY[76] == 75 and TR.PLACE_CARRY[75] == 74 and TR.PLACE_CARRY[74] == 73 and TR.PLACE_CARRY[73] == 72 and TR.EARLIER_MAX == 32  # e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
 
 
 # ---------- 4. moves into "Other": each with its reason, and the effect ----------
@@ -198,13 +198,15 @@ def test_the_informative_row_names_each_move_into_other_with_its_reason_and_the_
 
 # ---------- 5. derived FFO ----------
 def test_ffo_is_labelled_derived_with_what_it_leaves_out_of_nareit_ffo():
+    # (updated on purpose, e82 LIVE18A-007: FFO, P/FFO and FFO / revenue are of a company's reported FFO where it reports one, so their
+    # labels say FFO and each figure says its basis; AFFO is only ever derived, its labels still say so)
     for k in ("ffo", "ffo_share", "affo_share", "p_ffo", "affo"):
         m = R.BY_ID[k]
-        assert "derived" in m.label.lower()
+        assert "derived" in m.label.lower() or ("derived FFO, an approximation of Nareit FFO" in m.definition and "(reported)" in m.definition)
         assert "impairments of depreciable real estate" in m.limit and "joint ventures" in m.limit and "approximation of Nareit FFO" in m.limit
-    assert "Derived FFO, an approximation of Nareit FFO" in R.BY_ID["ffo_share"].definition
+    assert "derived FFO, an approximation of Nareit FFO" in R.BY_ID["ffo_share"].definition
     cols = dict((k, lab) for k, lab, _ in deck.CO_COLS)
-    assert cols["ffo_share"] == "Derived FFO / revenue" and cols["p_ffo"] == "P/FFO (derived)"
+    assert cols["ffo_share"] == "FFO / revenue" and cols["p_ffo"] == "P/FFO" and cols["affo_share"] == "Derived AFFO / revenue"
     v = {"region": "US", "layers": [{"layer": "Office landlords", "model": {"family": "property"},
                                      "companies": [{"symbol": "BXP", "name": "BXP", "revenue": 3400.0, "profit": 10.0, "ffo_share": 30.0}]}]}
     got = deck.not_in_sources(v)
@@ -255,8 +257,8 @@ def test_a_single_dated_update_goes_under_the_page_before_it_and_its_references_
 
 
 def test_versions():
-    assert deck.THEME_DECK_VERSION == 87  # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 88  # e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
     from app.intel import theme_data as D
-    assert D.DIVE_TEXT == 47  # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
+    assert D.DIVE_TEXT == 48  # e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
     from app.intel import sector_metrics as S
     assert S.VERSION == 3

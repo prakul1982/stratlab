@@ -12,6 +12,8 @@ export interface DiveRow {
   sales_1y: number | null; sales_3y: number | null; profit_1y: number | null; stage: number | null; from_high: number | null;
   pb: number | null; interest_cover: number | null; ev_ebitda: number | null; quarter: { of: string; sales: number | null; profit: number | null } | null;
   what?: string | null; company_wide?: boolean; years?: YearRow[];
+  /** e82 (LIVE18A-004): a property owner's FFO and P/FFO, on its reported FFO (Nareit's, from its annual report) or StratLab's derived one */
+  ffo?: number | null; p_ffo?: number | null; ffo_basis?: "reported" | "derived" | null;
   /** the margins beyond ±100% of revenue, printed "n.m." on every surface (R64 theme_data.company_row, LIVE11A-008) */
   nm?: ("ebitda" | "net")[];
   /** 0 when its EBITDA margin is filed in whole points (LIVE7A-009: printed 12%, not 12.0%) */
@@ -66,7 +68,8 @@ export interface Dive {
     medians: Record<"ebitda" | "net" | "roce", Stat | null>;
     growth: { aggregate: Record<string, { value: number; n: number; year: string }>; median: Record<string, Stat> };
     margins: History | null;
-    valuation: { pe: Stat | null; market_pe: Stat | null; market_n: number; pb: Stat | null; market_pb: Stat | null; ev_ebitda: Stat | null; ev_missing: number; history: { d: string; pe: number; n: number }[] };
+    valuation: { pe: Stat | null; market_pe: Stat | null; market_n: number; pb: Stat | null; market_pb: Stat | null; ev_ebitda: Stat | null; ev_missing: number;
+      p_ffo?: Stat | null; p_ffo_basis?: "reported" | "derived"; p_ffo_apart?: number; history: { d: string; pe: number; n: number }[] };
     quarter: { companies: { symbol: string; name: string; of: string; sales: number | null; profit: number | null }[]; sales_up: number; sales_down: number; profit_up: number; profit_down: number; sales: Stat | null; profit: Stat | null };
     balance: { debt_equity: Stat | null; above_1: number; with_debt_equity: number; cfo_to_profit: Stat | null; cfo_n: number; interest_cover: Stat | null; cover_under_2: number };
     price: Record<"stage2" | "supertrend_up" | "near_high" | "near_low", { n: number; count: number; share: number | null }>;

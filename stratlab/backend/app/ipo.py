@@ -1152,7 +1152,7 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
         opening = first_open_intraday(row, yahoo, sym, listed) or opening
     bars, first = _settle(row, bars, first, now or _now())
     bse = row.get("bse_perf") or {}
-    issue = issue or bse.get("issue_price")
+    issue = offer_price(row)
     # LIVE7A-020: an issue whose final price no list has given yet (a BSE SME issue shown with its band) still has its listing price and
     # closes, each without a change against an issue price it doesn't have (it showed "– · – · –" though its stock had traded two days)
     pct = (lambda v: round((v / issue - 1) * 100, 2)) if issue else (lambda v: None)      # noqa: E731
@@ -1225,11 +1225,34 @@ def listing_day_prices(row: dict, now: datetime, budget: list | None = None) -> 
     return row["listing_px"]
 
 
+def offer_price(row: dict) -> float | None:
+    """The issue's final price: the one the lists give, BSE's, else a band of one price (the US calendar's priced deal: Anthropic, ANT,
+    "Offer price $83.00" with low = high = 83 and no separate price)."""
+    p = row.get("price") or (row.get("bse_perf") or {}).get("issue_price")
+    if p:
+        return p
+    lo, hi = row.get("low"), row.get("high")
+    return lo if isinstance(lo, (int, float)) and lo > 0 and lo == hi else None
+
+
+def with_issue_price(row: dict, perf: dict | None) -> dict | None:
+    """LIVE18A-009: a performance worked out before the issue price was known (ANT's opening $111.50 and close $97.17, each "issue price not
+    published" beside "Offer price $83.00" in the same row) with its changes against the offer price the row shows."""
+    if not perf or perf.get("issue_price"):
+        return perf
+    issue = offer_price(row)
+    if not issue:
+        return perf
+    pct = lambda v: round((v / issue - 1) * 100, 2) if isinstance(v, (int, float)) and v else None      # noqa: E731
+    return {**perf, "issue_price": issue, "listing_change_pct": pct(perf.get("listing_price")), "day_change_pct": pct(perf.get("day_close")),
+            "change_pct": pct(perf.get("latest"))}
+
+
 def with_listing_day(row: dict, perf: dict | None) -> dict | None:
     """A performance with the listing-day figures the exchange gives (row["listing_px"]) laid in, or, without them, none from a stored
     read whose first candle was not the listing day's (a read kept from before LIVE10A-016: its "listing price" was a later close)."""
     px, listed = row.get("listing_px"), row.get("listing") if row.get("market") == "IN" else row.get("priced")
-    issue = (perf or {}).get("issue_price") or row.get("price") or (row.get("bse_perf") or {}).get("issue_price")
+    issue = (perf or {}).get("issue_price") or offer_price(row)
     if isinstance(px, dict) and px.get("day") == listed and px.get("open"):
         pct = (lambda v: round((v / issue - 1) * 100, 2)) if issue else (lambda v: None)      # noqa: E731
         return {**(perf or {"latest": None, "latest_date": None, "change_pct": None, "basis": "exchange"}), "issue_price": issue,
@@ -1316,7 +1339,7 @@ def newest_official(row: dict, perf: dict, now: datetime) -> dict:
 def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> dict | None:
     """A stored performance with the exchange's official closes put in where its bhavcopy is stored now (the figures kept at 20:10 may have
     been worked out before the file was out): the latest close and the listing day's, each against the issue price. Nothing is read."""
-    perf = with_listing_day(row, perf)
+    perf = with_issue_price(row, with_listing_day(row, perf))
     if perf and row.get("market") == "IN" and row.get("symbol") and perf.get("basis") == "exchange" and perf.get("issue_price"):
         perf = newest_official(row, perf, now or _now())
     if not perf or row.get("market") != "IN" or not row.get("symbol") or perf.get("basis") != "prices" or not perf.get("issue_price"):

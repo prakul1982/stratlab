@@ -172,6 +172,44 @@ def members(payload: dict) -> int:
                 for c in grp.get("companies") or [] if c.get("ticker")})
 
 
+# e82 (LIVE18A-002: "Quantum computing", built on first open, public on /themes within 6 minutes as 386 companies, 383 of them added by
+# the broad computer-hardware industries the AI picked (Apple, Palo Alto Networks, Logitech), 189 not checked): a theme's own read is
+# offered on the public pages only once it passes a minimum quality gate: its membership check done (no more than GATE_UNCHECKED of its
+# companies not checked yet, the dive's count) and, for a theme whose official industries were picked by the AI or by words (never the
+# curated table), its companies not almost all brought by those industries alone (the AI's own layers hold at least GATE_MAP_SHARE of them
+# once the theme has GATE_BROAD_MIN companies or more)
+GATE_UNCHECKED = 0.10
+GATE_MAP_SHARE = 0.05
+GATE_BROAD_MIN = 100
+
+
+def broad_industries(payload: dict) -> bool:
+    """e82: whether a read's companies come almost all from official industries the AI (or the theme's words) picked, not the curated table:
+    GATE_BROAD_MIN companies or more, fewer than GATE_MAP_SHARE of them in the AI's own layers."""
+    p = payload.get("placements") or {}
+    if p.get("industries_by") not in ("ai", "words", "pending"):
+        return False
+    vc = payload.get("value_chain") or []
+    every = {c.get("ticker") for v in vc for c in v.get("companies") or [] if c.get("ticker")}
+    own = {c.get("ticker") for v in vc if not v.get("official") for c in v.get("companies") or [] if c.get("ticker")}
+    return len(every) >= GATE_BROAD_MIN and len(own) < GATE_MAP_SHARE * len(every)
+
+
+def gate_why(meta: dict, pub: dict | None) -> str:
+    """e82: why a stored theme is not offered on the public pages yet ("" when it is): its dive's count not kept yet, more than
+    GATE_UNCHECKED of its companies not checked, or its companies almost all from broad industries the AI picked."""
+    if meta.get("broad"):
+        return "its companies come almost all from broad official industries, not from evidence of the theme's work"
+    if meta.get("rules") is None or "broad" not in meta:
+        return ""                       # kept before the gate: as it was
+    if not isinstance(pub, dict) or not isinstance(pub.get("all"), int):
+        return "its membership check is not done yet"
+    unchecked = sum(int(n) for why, n in pub.get("unlisted") or [] if why == "not checked yet")
+    if pub["all"] and unchecked > GATE_UNCHECKED * pub["all"]:
+        return f"{unchecked} of its {pub['all']} companies not checked yet"
+    return ""
+
+
 def keep(region: str, q: str, payload: dict, by: str | None = None) -> bool:
     """Keep a finished read for everyone, under the stored theme the search matched (so its aliases grow) or a new one."""
     if not complete(payload):
@@ -194,6 +232,7 @@ def keep(region: str, q: str, payload: dict, by: str | None = None) -> bool:
     body = {k: v for k, v in payload.items() if k not in ("ai", "refresh_state")}
     kept = computed.put(KIND, key_of(region, name), {"payload": body, "q": q}, label=payload.get("sector") or q, region=region,
                         meta={"q": name, "aliases": sorted(aliases), "members": members(payload), "rules": theme_base.RULES,
+                              "broad": broad_industries(payload),
                               "generated_at": float(payload.get("generated_at") or 0) or None}, by=by)
     mark_refreshing(region, name, False)
     return kept is not None

@@ -1,4 +1,5 @@
 import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ComponentType, type ReactNode } from "react";
+import { callEnded, callStarted } from "./lib/inflight";
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
 import { useFeedbackOpen } from "./components/FeedbackOpen";
@@ -17,7 +18,7 @@ import { ViewAsBanner } from "./components/ViewAs";
 import { Toast } from "./components/Toast";
 import { Tracking } from "./components/Tracking";
 import { VisitorApp } from "./visitor/VisitorApp";
-import { LoadFailed, LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
+import { LoadFailed, LoadGuard, Opening as OpeningSpinner, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { endsAt, endsAtShort } from "./lib/offer";
@@ -37,6 +38,17 @@ const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, n
     return Ready ? <Ready /> : <Lazy />;
   };
 };
+/** LIVE18B-010: while the app or the page is opening, counted as a call out (lib/inflight), so the analytics question (components/Tracking,
+ * which waits for the page's calls) never comes beside "Opening…": no call is out while the code downloads or the sign-in is renewed, and
+ * live it came at 6.8 s and the page's content then pushed it down (CLS 0.094). */
+function HoldAsk() {
+  useEffect(() => { callStarted(); return callEnded; }, []);
+  return null;
+}
+/** The app's "Opening…" (components/LoadGuard), holding the analytics question while it shows (HoldAsk). */
+function Opening(p: { label?: string }) {
+  return <><OpeningSpinner {...p} /><HoldAsk /></>;
+}
 const home = () => import("./pages/Home");
 const spaceHomes = () => import("./pages/SpaceHomes");
 const SpaceHome = page(spaceHomes, "SpaceHome");

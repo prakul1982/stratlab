@@ -491,7 +491,10 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
           { key: "pe", measure: "P/E", a: med(val.pe, (v) => times(v)), b: span(val.pe, (v) => times(v)), c: val.pe?.n ?? dash, d: med(val.market_pe, (v) => times(v)) },
           { key: "pb", measure: "P/B", a: med(val.pb, (v) => times(v)), b: span(val.pb, (v) => times(v)), c: val.pb?.n ?? dash, d: med(val.market_pb, (v) => times(v)) },
           { key: "ev", measure: "EV/EBITDA", a: med(val.ev_ebitda, (v) => times(v)), b: span(val.ev_ebitda, (v) => times(v)), c: val.ev_ebitda?.n ?? dash, d: dash },
+          // e82 (LIVE18A-004): a property owner's P/FFO, the median of one basis of FFO, said on its row
+          ...(val.p_ffo ? [{ key: "pffo", measure: `P/FFO (${val.p_ffo_basis ?? "derived"} FFO)`, a: med(val.p_ffo, (v) => times(v)), b: span(val.p_ffo, (v) => times(v)), c: val.p_ffo.n ?? dash, d: dash }] : []),
         ])} />
+        {!!val.p_ffo && <p className="k-note">P/FFO is market value over FFO: the FFO a company reports (Nareit's definition, from its annual report) where it reports one, else StratLab's derived FFO (net income plus real-estate depreciation, less gains on property sales). The median is of {val.p_ffo_basis ?? "derived"} FFO only{val.p_ffo_apart ? `; ${val.p_ffo_apart} on ${val.p_ffo_basis === "reported" ? "derived" : "reported"} FFO are shown on their rows, not in it` : ""}.</p>}
         {medianPe != null && marketPe != null && <p className="k-small">The theme's median P/E is {times(medianPe)} against {times(marketPe)} for all {val.market_n.toLocaleString("en-IN")} listed companies with one.</p>}
         {val.ev_missing > 0 && <p className="k-note">EV/EBITDA is n/a for {val.ev_missing} compan{val.ev_missing === 1 ? "y" : "ies"} where debt, cash or EBITDA isn't stored. The all-listed comparison is not worked out for it.</p>}
         {val.history.length >= 2
@@ -674,6 +677,9 @@ function LeadersCard({ dive, prices }: { dive: Dive; prices: Prices | null }) {
     { key: "pe", header: "P/E", numeric: true, sortable: true, cell: (x) => times(x.pe) },
     { key: "pb", header: "P/B", numeric: true, sortable: true, narrow: false, cell: (x) => times(x.pb) },
     { key: "ev_ebitda", header: "EV/EBITDA", numeric: true, sortable: true, narrow: false, cell: (x) => times(x.ev_ebitda) },
+    // e82 (LIVE18A-004): a property owner's P/FFO with its basis, only in a theme where a company has one
+    ...(rows.some((x) => x.p_ffo != null) ? [{ key: "p_ffo", header: "P/FFO", numeric: true, sortable: true, narrow: false, info: "Market value over FFO: reported is the company's own (Nareit's definition, its annual report); derived is StratLab's.",
+      cell: (x: L) => (x.p_ffo != null ? `${times(x.p_ffo)} (${x.ffo_basis === "reported" ? "reported" : "derived"})` : dash) } as Column<L>] : []),
     { key: "r1y", header: "1-yr price", cardLabel: "Price, 1 year", numeric: true, sortable: true, cell: (x) => chg(x.r1y) },
   ];
   const phone = usePhone();

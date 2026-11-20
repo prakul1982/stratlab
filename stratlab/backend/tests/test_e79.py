@@ -220,7 +220,8 @@ def test_e79_another_companys_article_run_on_after_its_own_words_is_left_out():
 def test_e79_the_tally_is_dated_by_the_day_of_the_read_and_logs_one_entry_a_day():
     import inspect
     src = inspect.getsource(TR.dive_of)
-    assert 'hit["tally_at"] = datetime.now(timezone.utc).date().isoformat()' in src
+    # (updated on purpose, e82 LIVE18A-010: the day of the read in the market's own time, as the app's head says it, never a UTC date)
+    assert 'hit["tally_at"] = market_day(r).isoformat()' in src
     L = "Fabless chip design"
 
     def e(at, **kw):
@@ -256,6 +257,6 @@ def test_e79_a_layer_with_members_and_no_figures_says_how_many_it_lists(monkeypa
 
 
 def test_e79_versions():          # e80 (LIVE16A, the R78 decks): RULES 75, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose)
-    assert B.RULES == 76 and TR.PLACE_CARRY[76] == 75 and TR.PLACE_CARRY[75] == 74 and TR.PLACE_CARRY[74] == 73 and TR.EARLIER_MAX == 31          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
-    assert D.DIVE_TEXT == 47 and deck.THEME_DECK_VERSION == 87 and SM.VERSION == 3          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
+    assert B.RULES == 77 and TR.PLACE_CARRY[77] == 76 and TR.PLACE_CARRY[76] == 75 and TR.PLACE_CARRY[75] == 74 and TR.PLACE_CARRY[74] == 73 and TR.EARLIER_MAX == 32          # e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
+    assert D.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and SM.VERSION == 3          # e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
     assert json and computed and time        # (imports kept for the replays above)

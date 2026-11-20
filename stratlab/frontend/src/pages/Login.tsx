@@ -606,6 +606,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
+          {/* LIVE18B-003: the currency switch's place is held while the prices come (on a phone it is a second row: the cards moved 62px) */}
+          {loading && <span className="lp-skel lp-skel-cur" />}
           {!loading && usd && <CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} />}
         </div>
         <div className="lp-prices">
@@ -634,11 +636,12 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                     </div>
                   )}
                   {/* only when it has something to say: an empty note kept a two-line gap under Basic's and Pro's prices (item 44) */}
-                  {p !== "free" && (loading || gst || save != null) && (
+                  {/* LIVE18B-003: no placeholder for it while the prices come: on a monthly price with no GST it has nothing to say, and its
+                      placeholder took 21px away from every card when the prices came */}
+                  {p !== "free" && !loading && (gst || save != null) && (
                     <span className="small lp-price-note">
-                      {loading ? <span className="lp-skel lp-skel-note" />
-                        : gst && price?.chargedCur !== "USD" ? "incl. GST" : ""}
-                      {!loading && save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
+                      {gst && price?.chargedCur !== "USD" ? "incl. GST" : ""}
+                      {save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
                     </span>
                   )}
                 </div>

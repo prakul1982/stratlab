@@ -82,6 +82,8 @@ def entries(region: str | None = None) -> list[dict]:
     # rules bump took 15 of 21 public theme pages to "No theme at this address" until each was read again), never one of an older map
     # name: an entry under today's rules always wins
     best: dict = {}
+    gated: dict = {}
+    pubs = _dive_pubs()
     for hk, e in (computed.index(theme_library.KIND).get("entries") or {}).items():
         m = e.get("meta") or {}
         if not isinstance(m.get("rules"), int) or m["rules"] > theme_base.RULES or e.get("region") not in ("IN", "US") \
@@ -100,6 +102,7 @@ def entries(region: str | None = None) -> list[dict]:
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
+            gated[key] = theme_library.gate_why(m, pubs.get((e["region"], name)))
     # e80 (LIVE16A-009: Public sector banks' public page "checked under an earlier version ... being checked again now" for 4 h and more while
     # its app page said "checked 19 Nov"): an entry kept under older rules whose theme the library now finds under today's rules by another
     # name (the re-check kept it there) stands for nothing: its address answers 301 to that theme's page
@@ -116,7 +119,23 @@ def entries(region: str | None = None) -> list[dict]:
         if cur and cur[1]["rules"] >= theme_base.RULES:
             cur[1]["aliases"] = [x for x in dict.fromkeys(cur[1]["aliases"] + [row["slug"]] + row["aliases"]) if x and x != cur[1]["slug"]]
             best.pop(k, None)
-    return sorted((row for _, row in best.values()), key=lambda x: (x["region"], x["label"].lower()))
+    # e82 (LIVE18A-002): a theme is offered here only once its newest entry passes the quality gate (theme_library.gate_why)
+    return sorted((row for k, (_, row) in best.items() if not gated.get(k)), key=lambda x: (x["region"], x["label"].lower()))
+
+
+def _dive_pubs() -> dict:
+    """e82: {(region, theme name): the count kept with its newest dive (index meta "pub")}, from the store's index in memory."""
+    out, at = {}, {}
+    try:
+        rows = (computed.index(theme_library.DIVE).get("entries") or {}).values()
+    except Exception:
+        return {}
+    for x in rows:
+        m = (x or {}).get("meta") or {}
+        k = (x.get("region"), m.get("q"))
+        if isinstance(m.get("pub"), dict) and float(x.get("at") or 0) >= at.get(k, -1.0):
+            out[k], at[k] = m["pub"], float(x.get("at") or 0)
+    return out
 
 
 def page_path(region: str, name: str) -> str:
@@ -326,9 +345,26 @@ def counts(p: dict, dive: dict | None = None) -> dict:
         st = ev(s_) if ev is not None else ""
         rest[st if st in ("membership_unverified", "not_confirmed") else ""] += 1
     unlisted = [[said, rest[k]] for k, said in UNLISTED_SAID if rest[k]]
-    if sum(n for _, n in unlisted) != total - len(listed):
+    # e82 (LIVE18A-005: Indian Pharma "1 more of the theme's 212 not listed: not confirmed by their own words or official industry yet"
+    # beside its own "205 description-verified, 7 industry-supported, 0 not checked", and six pages more): the true reason for each one left:
+    # a company the dive counts under a second symbol (listed once, under the symbol it keeps), then one its check counts that the stored
+    # read's layers don't hold; never "not confirmed" for a company that was
+    left = total - len(listed) - sum(n for _, n in unlisted)
+    if left > 0:
+        mapped = {c.get("ticker") for v in (p or {}).get("value_chain") or [] if isinstance(v, dict) for c in v.get("companies") or []
+                  if isinstance(c, dict) and c.get("ticker")}
+        dup = min(left, len(twice & mapped) if dt else 0)
+        if dup:
+            unlisted.append([TWICE_SAID, dup])
+        if left - dup:
+            unlisted.append([OUTSIDE_SAID, left - dup])
+    elif left < 0:
         unlisted = [[UNLISTED_SAID[-1][1], total - len(listed)]] if total > len(listed) else []
     return {"listed": len(listed), "layers": len(layers), "all": total, "unlisted": unlisted}
+
+
+TWICE_SAID = "the same company under a second symbol, listed once"
+OUTSIDE_SAID = "counted by the membership check, in none of the stored layers"
 
 
 def unlisted_said(c: dict) -> str:
@@ -375,6 +411,23 @@ def _revenues(region: str, name: str, p: dict, dive: dict | None = None) -> dict
     return out
 
 
+def reported_ffos(dive: dict) -> dict:
+    """e82 (LIVE18A-004/007: no FFO anywhere on the public REITs page while the deck prints Camden's reported $745 m): {symbol: FFO in $
+    million} of the property owners whose own annual report states their FFO (Nareit's definition; the dive's row "ffo_basis" "reported").
+    A derived FFO is StratLab's working, never on this page (only reported figures are: the module's rule); the app and the deck show it."""
+    out = {}
+    for b in dive.get("layers") or []:
+        for c in b.get("companies") or []:
+            v = c.get("ffo")
+            if c.get("symbol") and c.get("ffo_basis") == "reported" and isinstance(v, (int, float)) and v > 0:
+                out.setdefault(c["symbol"], v)
+    return out
+
+
+FFO_LINE = ("FFO: funds from operations as the company reports it (Nareit's definition, from its annual report), marked (reported); for a "
+            "company that reports none, StratLab's derived FFO is in the app and the deck, marked (derived).")
+
+
 RESTATED_SHARE = 0.02          # e79: a revenue of the same year moved by more than this share (theme_changes.REVENUE_SHARE) is restated
 
 
@@ -408,6 +461,7 @@ def view(entry: dict, p: dict) -> dict:
     caps, revs, ev = ({**_index_caps(region), **dcaps, **{k: x[0] for k, x in newer.items()}},
                       restated_sales(_index_sales(region), _revenues(region, entry["name"], p, dive)), _evidence(dive))
     known = stock_pages.companies(region)
+    ffos = reported_ffos(dive)                # e82: a property owner's FFO as its annual report states it
     # e77 (the R76 decks: "OSI Systems Inc" in the deck beside "Osi Systems Inc" here; "ExxonMobil Holdings Corp" after the owner's "Exxon Mobil
     # Corporation"): each company named as the app's rows and the deck name it (the stored dive's name), a reporting registrant's name first
     named = dive_names(dive)
@@ -429,7 +483,8 @@ def view(entry: dict, p: dict) -> dict:
                          "page": stock_pages.path(region, sym) if sym in known else None,
                          "cap": money(region, caps.get(sym)), "cap_v": caps.get(sym) if isinstance(caps.get(sym), (int, float)) else None,
                          "revenue": money(region, rev[0], rev[2]) if rev else None,
-                         "year": str(rev[1] or "")[:20] if rev else None, "evidence": state if state in EVIDENCE_PUBLIC else None})
+                         "year": str(rev[1] or "")[:20] if rev else None, "evidence": state if state in EVIDENCE_PUBLIC else None,
+                         **({"ffo": money(region, ffos[sym], "$ million") + " (reported)"} if sym in ffos and region == "US" else {})})
         # l55 (R55): each layer's companies by what their place rests on, as the page's count does for the whole theme
         # LIVE9A-011: a layer's companies largest first by market value (those without one last, by name)
         rows.sort(key=lambda r_: (r_["cap_v"] is None, -(r_["cap_v"] or 0), r_["name"].lower()))
@@ -551,6 +606,9 @@ def render(v: dict) -> str:
     # LIVE10A-007: no company on the page with a revenue: no Revenue column (it was "–" on every row of 29 pages); on a phone each row is a
     # stacked card (name, then ticker, market value, revenue), never a table wider than the screen
     has_rev = any(c.get("revenue") for x in v["layers"] for c in x["companies"])
+    has_ffo = any(c.get("ffo") for x in v["layers"] for c in x["companies"])       # e82: a property owner's reported FFO
+    if has_ffo:
+        body += f'<p class="muted small" data-ffo-note>{e(FFO_LINE)}</p>'
     # r69e (LIVE13A-013: Semiconductors' layer tables of 4 and 5 columns, the Ticker edge jumping from x 662 to 555, "description-verified"
     # on 31 of 39 rows): one set of columns on every layer table of the page, and a Membership cell only for a company that is not
     # description-verified (the page's line says so once)
@@ -573,9 +631,11 @@ def render(v: dict) -> str:
             # e80 (LIVE16A-019 / LIVE15A-019: every phone card of a description-verified company carried an empty "Membership" label): an
             # empty cell keeps the table's columns and carries no label, so a phone's stacked card shows no row for it
             rows += (f'<tr><td>{name}</td><td class="l" data-label="Ticker">{e(c["symbol"])}</td><td data-label="Market value">{e(c["cap"]) if c["cap"] else "–"}</td>'
-                     + (f'<td data-label="Revenue">{rev}</td>' if has_rev else "") + f"{ev}</tr>")
+                     + (f'<td data-label="Revenue">{rev}</td>' if has_rev else "")
+                     + ((f'<td data-label="FFO">{e(c["ffo"])}</td>' if c.get("ffo") else "<td>–</td>") if has_ffo else "") + f"{ev}</tr>")
         thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th>'
-                + ('<th scope="col">Revenue</th>' if has_rev else "") + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
+                + ('<th scope="col">Revenue</th>' if has_rev else "") + ('<th scope="col">FFO</th>' if has_ffo else "")
+                + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
         # the layer's own mix of states only where it isn't every company description-verified (the page's line above says the whole)
         lev = (f'<p class="muted small" data-layer-evidence>{e(evidence_said(x["evidence"]))}</p>'
                if x.get("evidence") and any(c.get("evidence") and c["evidence"] != "description_verified" for c in x["companies"]) else "")

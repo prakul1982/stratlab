@@ -1120,7 +1120,7 @@ def sector_payload(profile, region: str, q: str, refresh: bool = False, wait: bo
 
 def sector_served(r: str, payload: dict) -> dict:
     """A stored theme read as the page gets it: today's market values from the stored index (no AI, no outside call)."""
-    out = theme_routes.with_caps(payload, index_rows(r))
+    out = theme_routes.own_whats(r, theme_routes.with_caps(payload, index_rows(r)))      # e82: one source of own words
     return {**{k: v for k, v in out.items() if k != "_library"}, "ai": None}
 
 

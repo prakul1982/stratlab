@@ -36,7 +36,8 @@ export const pairable = (a: number, b: number): boolean => a > 0 && b > 0 && a =
 
 /** The movers table's rows: the most points added first, then the most taken, as one list ordered by points. */
 export function moverRows(m: NonNullable<PulseMood["movers"]>[number]): MoodMover[] {
-  return [...m.adding, ...m.taking].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+  // the most points added first, then the most taken (LIVE18A-020: the losses ran smallest to largest, AMD −6.9 first and Alphabet −13.4 last)
+  return [...[...m.adding].sort((a, b) => (b.points ?? 0) - (a.points ?? 0)), ...[...m.taking].sort((a, b) => (a.points ?? 0) - (b.points ?? 0))];
 }
 
 /** "ICICI Bank +1.05%, HDFC Bank −1.19%": what moved a sector, from its largest members. */

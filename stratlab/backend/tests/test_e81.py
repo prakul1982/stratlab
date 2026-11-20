@@ -189,7 +189,9 @@ def test_e81_a_theme_post_says_its_pages_counts_of_companies_and_layers():
            "page_counts": {"listed": 102, "layers": 10, "all": 104}, "read_on": "2026-11-19"}
     post = BR.theme_post_from(src)
     body = json.dumps(post)
-    assert "104 listed US companies are in the" in body and "into 10 layers" in body and "in the 9 layers that have them" in body
+    # (updated on purpose, e82 LIVE18A-006: the post says the companies its page lists and the page's line on the rest, word for word)
+    assert "102 listed US companies are in the semiconductors theme as its page lists them (2 more of the theme's 104 not listed)" in body
+    assert "into 10 layers" in body and "in the 9 layers that have them" in body
 
 
 # ---------- 4. LIVE17A-008: re-splits and returns are no moves ----------
@@ -297,8 +299,8 @@ def test_e81_deck_check_reads_a_reason_after_a_name_ending_in_inc():
 
 def test_e81_versions():
     from app.intel import sector_metrics
-    assert theme_base.RULES == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 31
-    assert theme_data.DIVE_TEXT == 47 and deck.THEME_DECK_VERSION == 87 and sector_metrics.VERSION == 3
+    assert theme_base.RULES == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 32          # (updated on purpose: e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
+    assert theme_data.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and sector_metrics.VERSION == 3
 
 
 # ---------- owner P0-a (R79 REITs deck): the FFO Camden reports, $744.8 m, first; the derived proxy with its gains deducted ----------
@@ -339,7 +341,8 @@ def test_e81_a_layers_ffo_medians_are_of_one_basis_and_a_reported_ffo_is_marked_
     b = theme_data.layer_block("Residential landlords", rows, set())
     assert b["ffo_basis"] == "reported" and b["ffo_apart"] == 1 and b["stats"]["p_ffo"]["median"] == 15.0
     assert deck.co_cell({**rows[0], "official_industry": "Real Estate Investment Trusts"}, "p_ffo", None) == "13.0x (reported)"
-    assert deck.co_cell({**rows[3], "official_industry": "Real Estate Investment Trusts"}, "p_ffo", None) == "40.0x"
+    # (updated on purpose, e82 LIVE18A-007: a derived figure is marked derived on its cell, under a column that names neither)
+    assert deck.co_cell({**rows[3], "official_industry": "Real Estate Investment Trusts"}, "p_ffo", None) == "40.0x (derived)"
 
 
 # ---------- owner P0-b (R79 Textiles and IT services decks): a stored figure never decides a company's layer ----------

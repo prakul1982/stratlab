@@ -1699,6 +1699,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .tax-controls > .k-card-head > .k-card-actions { flex: 1 1 100%; }
   .tax-controls > .k-card-head > .k-card-actions > .k-seg, .tax-controls > .k-card-head > .k-card-actions > select.k-input,
   .tax-controls > .k-card-head > .k-card-actions > .btn, .tax-controls .k-row > .k-upload { width: 100%; box-sizing: border-box; }
+  /* LIVE18B-004: on its own row under the title the switch takes the card's width too: the head's room for its move and fold buttons (top
+     right, on the title's row only) left it 248px against 324px for everything under it */
+  .tax-controls > .k-card-head:has(> .k-sec) > .k-card-actions { margin-right: -76px; max-width: none; }
 }
 /* a table in a compact card (a strip of a few figures) fills the card's width, not the width of its words (owner, 5 Nov: the tax
    report's two-figure table stopped two thirds of the way across its card) */
@@ -2879,7 +2882,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-skel-p.lp-skel-p-one, .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }   /* LIVE2-031: the Plans page's one-line lede: a two-line (four on a phone) placeholder moved the cards up 27 to 81px when the prices arrived */
 .lp-period { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
-.lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
+.lp-skel-cur { height: 38px; width: 146px; max-width: 100%; }   /* LIVE18B-003: the "Prices in" switch's place, held while the prices come (a phone's second row moved the cards 62px) */
+.lp-skel-amount { height: calc(44px * 1.05 + 2px + 13.5px * 1.5); width: 60%; }   /* site81: the price row's own 68.4px (the price at 44px × 1.05, the gap, a small line), not 70.5 */   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
 /* LIVE15B-012 / LIVE17B: Free's price has no line under it (no dollar or rupee figure beside ₹0): its placeholder is the price line alone, so
    Free's card doesn't shrink and pull the cards under it up when the prices arrive (visitor phone CLS 0.045) */
@@ -2892,6 +2896,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }
   .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
   .lp-skel-seg { height: 50px; }
+  .lp-skel-cur { height: 50px; width: 119px; }
+  /* site81: the billing choice (or "Prices are per month") takes the first row and the currency switch the second, whatever the offer, so
+     the placeholders' two rows are the loaded rows (a short "Prices are per month" left the switch beside it: one row, the cards moved up) */
+  .lp-period > :first-child { flex-basis: 100%; }
+  .lp-period > span.small:first-child { min-height: 50px; display: flex; align-items: center; }
 }
 .lp-price-note { display: block; line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }

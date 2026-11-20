@@ -137,7 +137,8 @@ test("item 44: each plan card takes its rows from the plans' grid (subgrid), and
   assert.match(css, /\.k-plans > \.k-plan \{ display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: var\(--s4\); \}/);
   assert.match(css, /\.k-plan-body > :last-child \{ margin-top: auto; \}/);
   assert.match(css, /\.lp-price-note \{ display: block; line-height: 1\.4; color: var\(--ink-2\); \}/);
-  assert.match(read("src/pages/Login.tsx"), /\{p !== "free" && \(loading \|\| gst \|\| save != null\) && \(\n\s*<span className="small lp-price-note">/);
+  // (updated on purpose, site81 LIVE18B-003: no note placeholder while the prices come; a note only when it has something to say)
+  assert.match(read("src/pages/Login.tsx"), /\{p !== "free" && !loading && \(gst \|\| save != null\) && \(\n\s*<span className="small lp-price-note">/);
   // the signed-in cards: name, price, then the list and the button in one body
   const plans = read("src/pages/PlansPage.tsx");
   assert.ok(plans.indexOf('<div className="k-plan-body">') < plans.indexOf('<ul className="k-plan-list">'));

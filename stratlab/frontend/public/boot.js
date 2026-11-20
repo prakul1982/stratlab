@@ -83,7 +83,8 @@
   try {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); break; }
+      // site81: and a saved sign-in's early reads (public/early.js), a file of their own so a visitor's download is unchanged
+      if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); document.head.appendChild(document.createElement("script")).src = "/early.js"; break; }
     }
   } catch (e) { /* storage off */ }
 
@@ -143,7 +144,7 @@
   try {
     var cfgNow = window.STRATLAB_CONFIG;
     Object.defineProperty(window, "STRATLAB_CONFIG", { configurable: true, enumerable: true,
-      get: function () { return cfgNow; }, set: function (v) { cfgNow = v; earlyMe(v); } });
+      get: function () { return cfgNow; }, set: function (v) { cfgNow = v; earlyMe(v); if (window.__stratlabEarlyGo) window.__stratlabEarlyGo(v); } });
   } catch (e) {}
 
   // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme

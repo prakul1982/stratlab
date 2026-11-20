@@ -370,6 +370,54 @@ def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None, bre
 ZONE = {"IN": "IST", "US": "ET"}           # the clock a market's live counts are timed in
 
 
+def movers_line(m: dict | None) -> str | None:
+    """The line on the stocks that moved the index most, or None. LIVE17A-003: each half a whole clause, with its unit and the index named:
+    on a day no stock added points the card read only "Amazon.com took off about 8." (the second half of "… added about 40 points to the
+    NIFTY 50 and … took off about 16")."""
+    if not m or not (m.get("adding") or m.get("taking")):
+        return None
+    bits = []
+    if m.get("adding"):
+        a = m["adding"][0]
+        bits.append(f"{a['name']} added about {points(a['points'])} to the {m['index']}")
+    if m.get("taking"):
+        t = m["taking"][0]
+        bits.append(f"{t['name']} took about {points(abs(t['points']))} off {'it' if bits else 'the ' + m['index']}")
+    return " and ".join(bits) + "."
+
+
+def _movers_line_before(m: dict) -> str | None:
+    """The same line in the words of Release 79 and before ("… and Tata Consultancy Services took off about 16."), to find it in a stored read."""
+    if not m or not (m.get("adding") or m.get("taking")):
+        return None
+    bits = []
+    if m.get("adding"):
+        a = m["adding"][0]
+        bits.append(f"{a['name']} added about {points(a['points'])} to the {m['index']}")
+    if m.get("taking"):
+        t = m["taking"][0]
+        bits.append(f"{t['name']} took off about {points(abs(t['points'])) if fnum(abs(t['points'])) == '1' else fnum(abs(t['points']))}")
+    return " and ".join(bits) + "."
+
+
+_OLD_MOVERS = re.compile(r" took off about [\d,]+(?: point)?\.$")
+
+
+def mend_lines(p: dict | None) -> dict | None:
+    """LIVE18A-001: a read stored before Release 80 (a closed session's final read is served as it is until the next session, and it is kept
+    across restarts) still carried the broken movers sentence ("Alphabet took off about 13."): its movers line is written again from the
+    read's own stored figures in today's words. Every other line, and a read with no such line, is left as it is."""
+    if not p or not p.get("lines"):
+        return p
+    m = (p.get("movers") or [None])[0]
+    new = movers_line(m)
+    if not new:
+        return p
+    before = _movers_line_before(m)
+    lines = [new if (ln == before or _OLD_MOVERS.search(ln)) and ln != new else ln for ln in p["lines"]]
+    return p if lines == list(p["lines"]) else {**p, "lines": lines}
+
+
 def lines_of(p: dict) -> list[str]:
     """Three to five plain lines, each from one table of the payload, in this order of importance. No advice, no forecast."""
     out: list[tuple[str, str]] = []
@@ -399,18 +447,9 @@ def lines_of(p: dict) -> list[str]:
     if s:
         lead, lag = s["rows"][0], s["rows"][-1]
         out.append(("sectors", f"{s['up']} of {s['of']} sector indices rose and {s['down']} fell; {lead['label']} led ({fpct(lead['change_pct'])}) and {lag['label']} lagged ({fpct(lag['change_pct'])})."))
-    m = (p.get("movers") or [None])[0]
-    if m and (m["adding"] or m["taking"]):
-        # LIVE17A-003: each half a whole clause, with its unit and the index named: on a day no stock added points the card read only
-        # "Amazon.com took off about 8." (the second half of "… added about 40 points to the NIFTY 50 and … took off about 16")
-        bits = []
-        if m["adding"]:
-            a = m["adding"][0]
-            bits.append(f"{a['name']} added about {points(a['points'])} to the {m['index']}")
-        if m["taking"]:
-            t = m["taking"][0]
-            bits.append(f"{t['name']} took about {points(abs(t['points']))} off {'it' if bits else 'the ' + m['index']}")
-        out.append(("movers", " and ".join(bits) + "."))
+    line = movers_line((p.get("movers") or [None])[0])
+    if line:
+        out.append(("movers", line))
     f = p.get("flows")
     if f and f["rows"]:
         last = f["rows"][-1]
@@ -650,6 +689,7 @@ class Mood:
             return
         at, value = got.get("at"), got.get("value")
         if isinstance(value, dict) and isinstance(at, (int, float)) and time.time() - at < KEEP_FOR:
+            value = mend_lines(value)            # LIVE18A-001: a read kept before a release is served in today's words
             self.payloads.put(region, value, at)
             self._kept_at[region] = at
 
@@ -971,6 +1011,7 @@ class Mood:
 
     def get(self, region: str, wait: float = 20.0) -> tuple[dict | None, float | None]:
         value, at = self._get(region, wait)
+        value = mend_lines(value)
         if value:
             other = self.payloads.kept("US" if region == "IN" else "IN")
             value = newest_rows(value, other[1] if other else None)

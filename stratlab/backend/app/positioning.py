@@ -471,6 +471,14 @@ def shares(row: dict, a: str, b: str) -> tuple[float | None, float | None]:
     return long_pct, round(100 - long_pct, 1)
 
 
+def long_share(row: dict, a: str, b: str) -> float | None:
+    """The long side's share of long + short in percent, unrounded (for a change between two days: LIVE18B-005)."""
+    lo, sh = row.get(a), row.get(b)
+    if not isinstance(lo, int) or not isinstance(sh, int) or lo < 0 or sh < 0 or lo + sh <= 0:
+        return None
+    return 100 * lo / (lo + sh)
+
+
 def participant_view(rows: dict, prev: dict | None) -> list[dict]:
     """Each participant's index and stock futures and options: long, short and net, each side's share of long +
     short, with the change from the day before."""
@@ -492,9 +500,11 @@ def participant_view(rows: dict, prev: dict | None) -> list[dict]:
             if item[name] is not None and was is not None:
                 item[name + "_chg"] = item[name] - was
             item[seg + "_long_pct"], item[seg + "_short_pct"] = shares(r, a, b)
-            was_pct = shares(q, a, b)[0] if q else None
-            if item[seg + "_long_pct"] is not None and was_pct is not None:
-                item[seg + "_long_pct_chg"] = round(item[seg + "_long_pct"] - was_pct, 1)
+            # the change from the two days' unrounded shares, then rounded (LIVE18B-005: 34.15% − 32.45% read "+1.6 pts" from the rounded
+            # 34.1 and 32.5; the files give +1.70)
+            now_pct, was_pct = long_share(r, a, b), long_share(q, a, b) if q else None
+            if now_pct is not None and was_pct is not None:
+                item[seg + "_long_pct_chg"] = round(now_pct - was_pct, 1)
         out.append(item)
     return out
 
