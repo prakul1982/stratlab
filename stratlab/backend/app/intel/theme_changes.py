@@ -140,8 +140,8 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
     left = {str(x["ticker"]): dropped_why(x) for x in ((dive.get("placements") or {}).get("dropped") or []) if isinstance(x, dict) and x.get("ticker")}
     mc = dive.get("membership_check") if isinstance(dive.get("membership_check"), dict) else {}
     ev = {s_: EV_CODE[x] for s_, x in (mc.get("outside") or {}).items() if x in EV_CODE}
-    # e85: the figures' window's states too, so a fall from description-verified of a company there is known to the next read
-    ev.update({s_: EV_CODE[x] for s_, x in (dive.get("evidence") or {}).items() if x in EV_CODE and s_ not in ev})
+    # e85: the figures' window's states apart ("ev_win"), so a fall from description-verified of a company there is known to the next read
+    ev_win = {s_: EV_CODE[x] for s_, x in (dive.get("evidence") or {}).items() if x in EV_CODE and s_ not in ev}
     ev_down = [[str(x.get("symbol")), clip_words(x.get("name") or "", 80), str(x.get("to") or ""), clip_words(x.get("why") or "", 200)]
                for x in dive.get("evidence_down") or [] if isinstance(x, dict) and x.get("symbol")]
     # h56 (R56): only the points with the evidence tally's counts ([day, checked, total, description-verified]) are kept
@@ -173,7 +173,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
             **({"ev_rule": mc["rule"]} if ev and isinstance(mc.get("rule"), int) else {}),     # e84: the evidence rule the kept states are of
             **({"left": left} if left else {}), **({"kept_layers": kept_layers} if kept_layers else {}),
-            **({"ev_down": ev_down[:ROWS_KEEP]} if ev_down else {})}
+            **({"ev_down": ev_down[:ROWS_KEEP]} if ev_down else {}), **({"ev_win": ev_win} if ev_win else {})}
 
 
 BUSINESS, LISTING = "business membership: ", "listing: "

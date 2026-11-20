@@ -399,13 +399,13 @@ def test_ffo_columns_only_in_a_reit_themes_value_chain():
 def test_every_fall_from_description_verified_is_kept_with_its_reason():
     """Fails on R84: Software's 467 -> 395 fell with no reason in the deck or the change log."""
     from app.intel import theme_changes as C
-    before = {"ev": {"MSFT": "d", "ADBE": "d", "ORCL": "i"}}
+    before = {"ev": {"MSFT": "d"}, "ev_win": {"ADBE": "d", "ORCL": "i"}}
     dive = {"evidence": {"MSFT": "industry_code_supported", "ADBE": "description_verified", "ORCL": "description_verified"}}
     down = TR.evidence_down(before, dive, lambda s: MSFT_ARTICLE, "US", {"MSFT": MSFT})
     assert [x["symbol"] for x in down] == ["MSFT"] and "may quote" in down[0]["why"]
     snap = C.snapshot({"layers": [{"layer": "L", "companies": [{"symbol": "MSFT", "name": MSFT}]}], "evidence_down": down,
                        "evidence": dive["evidence"]}, ["MSFT"], 1, B.RULES)
-    assert snap["ev_down"][0][0] == "MSFT" and snap["ev"]["ADBE"] == "d"
+    assert snap["ev_down"][0][0] == "MSFT" and snap["ev_win"]["ADBE"] == "d"
     got = C.apply({"snap": {**snap, "ev_down": None}}, snap)
     assert got["log"][-1]["down"][0]["symbol"] == "MSFT" and "ev_down" not in got["snap"]
 

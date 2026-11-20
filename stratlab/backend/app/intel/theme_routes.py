@@ -1932,7 +1932,7 @@ def evidence_down(before: dict | None, dive: dict, about, region: str, names: di
     """e85: [{symbol, name, to, why}] of the companies the stored version (theme_changes' snapshot "ev", the window's states too since e85)
     held description-verified and this read holds in another state, by symbol, with why: no words stored now, no line of its stored words a
     page may quote (its annual report is read for one: quote_due), or its words read now not saying the theme's work."""
-    was = {s_: theme_changes.EV_STATE.get(x, x) for s_, x in ((before or {}).get("ev") or {}).items()}
+    was = {s_: theme_changes.EV_STATE.get(x, x) for s_, x in {**((before or {}).get("ev_win") or {}), **((before or {}).get("ev") or {})}.items()}
     now = {**((dive.get("membership_check") or {}).get("outside") or {}), **(dive.get("evidence") or {})}
     out = []
     for s_ in sorted(s_ for s_, x in was.items() if x == "description_verified" and s_ in now and now[s_] != "description_verified"):
