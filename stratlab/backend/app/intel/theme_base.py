@@ -3275,6 +3275,13 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
                 continue
             ok = judge(c, v)
             words_ = sells_layer(v, named, sold_text(ev(c), c.get("name") or ""), None, theme_words) if ok else None
+            # e84 (LIVE20A-003: Omega Healthcare Investors kept in "Mortgage REITs" by the R80 re-check's move, though its own words say "we
+            # own and operate healthcare facilities": its name's "Healthcare", set aside from its words, left them naming no kind of
+            # property): a property owner whose own words, its name kept in them, say it owns or runs the kind of property the layer's name
+            # names is of that layer, whatever an earlier re-check moved
+            owns_ = owns_named_kind(v, c, ev(c), model_of)
+            if ok and not words_ and owns_:
+                words_ = owns_
             if ok and not words_ and went_out(c, v):
                 # r69e (LIVE13A-001: OSI Systems back in "Fabless chip design" a re-check after one moved it out for its words): an earlier
                 # re-check's move out of this layer is undone only by words of its own that say what the layer sells, never its official
@@ -4906,8 +4913,9 @@ def property_rename(companies: list[dict], was: str, name: str, text) -> str:
 # company a layer can never hold, whatever placed or held it there. Each is a fact of the company's own records: its words (a lender's), its
 # name and words (a non-traded vehicle's), its official industry and market value (an oilfield services company's), its principal sentence
 # (a property business's)
+# (e84, LIVE20A-003: never the "real estate loans" of Omega's "classified as non-real estate loans")
 LENDS_SAYS = re.compile(r"\boriginat(?:e|es|ed|ing|ion)\b[^.;]{0,80}?\b(?:loans?|debt|mortgages?|credit)\b|\bfirst[- ]mortgage\s+loans?\b|"
-                        r"\bmezzanine\s+loans?\b|\b(?:commercial\s+)?real\s+estate\s+(?:debt|credit|loans?|lending)\b|\bCRE\s+(?:debt|loans?|credit)\b|"
+                        r"\bmezzanine\s+loans?\b|(?<!non-)\b(?:commercial\s+)?real\s+estate\s+(?:debt|credit|loans?|lending)\b|\bCRE\s+(?:debt|loans?|credit)\b|"
                         r"\breal\s+estate\s+finance\s+company\b|\bsenior\s+(?:secured\s+)?(?:mortgage\s+)?loans?\b|\bmortgage[- ]backed\s+securities\b|"
                         r"\bagency\s+RMBS\b", re.I)
 LENDING_LAYER = re.compile(r"\bmortgage|\bloans?\b|\blend|\bcredit\b|\bfinanc", re.I)
@@ -5997,7 +6005,7 @@ def listed_out(vc: list[dict], words_of, theme: str, moved_before: dict | None =
                 # (r63e: one kept beyond the figures' window with no figure read is marked, so the window never adds it to fill a layer)
                 keep.append({**c, "fig_unread": True} if mostly and worded_ and no_fig(c) else c)
                 continue
-            line = bool(t.strip()) and not no_words(t) and prints_layer(v, t, nm)
+            line = bool(t.strip()) and not no_words(t) and (prints_layer(v, t, nm) or bool(owns_named_kind(v, c, t)))    # e84: Omega
             mb = before.get(c.get("ticker"))
             came = mb[0] if isinstance(mb, (list, tuple)) and len(mb) == 2 and mb[1] in names and mb[0] not in names else None
             left = mb[1] if left_of(c) else None
@@ -6942,6 +6950,23 @@ def company_property_types(text: str) -> set[str]:
     if not t or not _PROPERTY_SPEAKER.search(t):
         return set()
     return {ty for _, ty in _property_hits(t)}
+
+
+def owns_named_kind(v: dict, c: dict, text, model_of=None) -> str:
+    """e84 (LIVE20A-003): for a property owner whose name names the kind of property its layer's name names ("Omega Healthcare Investors" of
+    "Healthcare property owners"), the line of its own words (its name kept in them, own_text) that says it owns, leases or runs that kind
+    ("we own and operate healthcare facilities"); "" when none do, for one whose name names no such kind, one read to earn another way than
+    from property, or a layer whose name names no kind of property."""
+    lt = layer_property_types(_HALF_RX.sub("", str(v.get("layer") or "")))
+    model = str((model_of(c) if model_of else c.get("model")) or c.get("model") or "")
+    nm = str(c.get("name") or "").lower()
+    # (a REIT named for the kind it owns, as named_property: one whose name names no kind keeps the rules of its words alone)
+    if not lt or model not in ("property", "") or not ({t for t, by_name, _ in PROPERTY_TYPES if re.search(by_name, nm)} & lt):
+        return ""
+    for s_ in re.split(r"(?<=[.;])\s+", own_text(text)):
+        if company_property_types(s_) & lt:
+            return s_.strip()
+    return ""
 
 
 def named_property(v: dict, c: dict, text: str = "") -> bool:

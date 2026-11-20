@@ -3857,9 +3857,13 @@ def ffo_states(v: dict) -> dict:
                 continue
             seen.add(c.get("symbol"))
             name = clean_name(c.get("name") or c.get("symbol") or "")
+            has = c.get("ffo_share") is not None or c.get("p_ffo") is not None
             if set(c.get("not_applicable") or ()) & set(FFO_KEYS):
                 out["na"].append(name)          # e78: FFO taken off its row as not applicable (metric_registry.withhold_inapplicable)
-            elif fam == "property":
+            elif fam == "property" or has:
+                # e84 (LIVE20A-003: Omega Healthcare Investors "FFO not applicable" here while its row, the app's and the public page carried
+                # "$899M (reported)" and 15.5x): a row that keeps its FFO (its own way of earning is property's) is said with it, whatever
+                # its layer's family
                 ok = c.get("ffo_share") is not None or c.get("p_ffo") is not None
                 out["available" if ok else "missing"].append(name)
                 out["affo"] += 1 if ok and c.get("affo_share") is not None else 0
