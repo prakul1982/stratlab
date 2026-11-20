@@ -44,8 +44,10 @@ LATE_AFTER = 60                   # minutes after READ_AT with no read written: 
 
 
 class Job:
-    def __init__(self, read=None, mood=None, opening=None, session=None):
+    def __init__(self, read=None, mood=None, opening=None, session=None, warm=None):
         self.read = read or _pulse_read
+        self.warm = warm                         # LIVE20A-002: the first pass takes up each market's kept card (an older release's read again)
+        self._warmed = False
         self.mood = mood or _mood_payload        # LIVE9A-001: the Mood card's own payload, of the session that closed
         self.opening = opening                   # fix11: the card's payload read once after the open (the clock's job sets it)
         self.session = session                   # LIVE15A-002: the card's payload read again during the session (the clock's job sets it)
@@ -159,6 +161,13 @@ class Job:
 
     def tick(self, now: datetime) -> dict:
         """Each market whose read is due: the read asked for once; written (or already there), the day is done."""
+        if self.warm and not self._warmed:
+            self._warmed = True
+            for region in TIMES:
+                try:
+                    self.warm(region)
+                except Exception as e:
+                    print("mood read job: warm:", region, str(e)[:120])
         try:
             self.tick_open(now)
         except Exception as e:
@@ -236,5 +245,11 @@ def _mood_open(region: str) -> str | None:
     return (routes.mood_hub().refresh_now(region) or {}).get("session")
 
 
-job = Job(opening=_mood_open, session=_mood_open)
+def _mood_warm(region: str) -> None:
+    """LIVE20A-002: the kept card taken up as the server starts; one kept by an earlier release is read again now (in the background)."""
+    from .intel import routes
+    routes.mood_hub().warm(region)
+
+
+job = Job(opening=_mood_open, session=_mood_open, warm=_mood_warm)
 autofix.source(lambda: job.checks())          # LIVE10A-001: a read not written an hour after its time is re-run, then shown to the owner
