@@ -74,7 +74,35 @@
   }
 
   /** A file failed to load: reload once, else say so. */
+  // LIVE21A-003: the page is being left (a link followed, an address typed): a file the browser stops downloading on the way out is no failure.
+  // Safari stops the page's loads as soon as a navigation starts and reports each as failed ("…due to access control checks"): the landing's
+  // pwa chunk, asked ~4 s after load, failed that way when "Themes" was clicked and the reload below sent the reader back to the landing
+  // (5 of 5 tries at 4.4-6.2 s). Leaving is known from beforeunload or pagehide (iOS fires no beforeunload), or a press on a link to
+  // another page just before (a phone's Safari stops the loads before either event).
+  var leaving = false, leftAt = 0;
+  window.addEventListener("beforeunload", function () { leaving = true; });
+  window.addEventListener("pagehide", function () { leaving = true; });
+  window.addEventListener("pageshow", function () { leaving = false; leftAt = 0; });       // back from the browser's page cache: here again
+  try {
+    document.addEventListener("click", function (e) {
+      var a = e && !e.defaultPrevented && e.target && e.target.closest ? e.target.closest("a[href]") : null;     // the app's own links prevent it
+      if (!a || a.hasAttribute("download") || (a.target && a.target !== "_self")) return;
+      var to = a.href.split("#")[0], here = location.href.split("#")[0];
+      if (to !== here) leftAt = Date.now();         // a place on this page (#faq) leaves nothing
+    });
+  } catch (e) { /* no document events: the unload events still say it */ }
+  function goingAway() { return leaving || (leftAt > 0 && Date.now() - leftAt < 5000); }
+  window.__stratlabLeaving = goingAway;
+
+  /** The app has drawn its page: the root is React's and holds none of the start-up frame. */
+  function drawn() {
+    var root = document.getElementById("root");
+    return !!root && Object.keys(root).some(function (k) { return k.indexOf("__reactContainer") === 0; }) && !root.querySelector("[data-boot], [data-boot-shell]");
+  }
+
+  /** A file failed to load: reload once, else say so; never while the page is being left (LIVE21A-003). */
   function recover() {
+    if (goingAway()) return;
     if (once()) location.reload(); else show();
   }
 
@@ -245,6 +273,9 @@
     var url = String(t.src || t.href || "");
     // config.js too: without it the app can send no request (R68-004: its 502 showed "StratLab ran into a problem")
     if ((/\/assets\//.test(url) || /\/config\.js(\?|$)/.test(url)) && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
+      // LIVE21A-003: once the app has drawn, a file it asks later (a page's code, the install helper) is its own to retry (lib/lazyRetry.ts) or
+      // do without: reloading for it threw the reader's page away. Only the start-up's own files (the page still the start-up frame) reload it.
+      if (goingAway() || drawn()) return;
       var asked = refetch(url);
       if (asked) asked.then(recover); else recover();
     }

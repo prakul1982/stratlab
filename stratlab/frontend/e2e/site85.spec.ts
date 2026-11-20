@@ -130,3 +130,35 @@ test("a visitor's load and a policy page are unchanged", async ({ page }) => {
   await page.waitForTimeout(500);
   expect(await page.locator(".boot-shell").count()).toBe(0);
 });
+
+// LIVE21A-003 (High): on Safari, clicking "Themes" 4.4-6.2 s after the landing opened reloaded the landing instead (5 of 5), each time with a
+// failed load of the pwa chunk: WebKit stops the page's loads as a navigation starts and reports each as failed, and the start-up script took
+// that for a broken download and reloaded the page over the reader's click. In WebKit itself (this machine's build; skipped where none runs).
+test("Safari: a link followed while a late file is still downloading opens that page, not the landing again", async ({}, info) => {
+  test.skip(info.project.name !== "desktop", "one browser is enough");
+  const { webkit } = await import("playwright");
+  const browser = await webkit.launch({ executablePath: process.env.PW_WEBKIT ?? "/opt/pw-browsers/webkit-2359/pw_run.sh" }).catch(() => null);
+  test.skip(!browser, "no WebKit on this machine");
+  try {
+    const page = await browser!.newPage({ baseURL: info.project.use.baseURL, viewport: { width: 1440, height: 900 } });
+    // the install helper's code (asked ~4 s after load) never answers, as on a slow link; the next page takes 1.5 s to answer
+    await page.route(/\/assets\/pwa-[^/]+\.js$/, () => undefined);
+    let served = 0;
+    await page.route((u) => u.pathname === "/themes", async (r) => {
+      served += 1;
+      await new Promise((ok) => setTimeout(ok, 1500));
+      await r.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Themes</title><h1>Themes, the next page</h1>" });
+    });
+    let homes = 0;
+    page.on("request", (q) => { if (q.isNavigationRequest() && new URL(q.url()).pathname === "/") homes += 1; });
+    await page.goto("/");
+    await expect(page.locator("header").getByRole("link", { name: "Themes", exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    await page.waitForFunction(() => performance.getEntriesByType("resource").some((e) => /\/assets\/pwa-/.test(e.name)) || document.querySelector('link[href*="/assets/pwa-"]'), null, { timeout: 15_000 });
+    await page.locator("header").getByRole("link", { name: "Themes", exact: true }).first().click();
+    await expect(page.getByRole("heading", { name: "Themes, the next page" })).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(2500);
+    expect(new URL(page.url()).pathname, "still on the page the reader opened").toBe("/themes");
+    expect(homes, "the landing was not loaded again").toBe(1);
+    expect(served).toBe(1);
+  } finally { await browser?.close(); }
+});
