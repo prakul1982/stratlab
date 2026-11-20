@@ -1766,7 +1766,7 @@ def _chain_table(blocks: list[dict]) -> dict:
                 "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"]),
                 **({"scale": b["scale"]} if b.get("scale") else {}), **({"adjacent": True} if b.get("adjacent") else {}),
                 **({"abroad": True} if isinstance(b.get("adjacent"), dict) and b["adjacent"].get("kind") == FOREIGN_KIND else {}),
-                "aggregate": b.get("aggregate")}
+                "aggregate": b.get("aggregate"), **({"ffo_basis": b["ffo_basis"]} if b.get("ffo_basis") else {})}
     rows = [row_of(b) for b in blocks]
     # gl52 (R52, the rotating review of Release 51: Cement's "Regional cement makers" and Airlines' "Hotels and resorts", each split into
     # halves by market value, left those themes with no ranking at all): the two halves of a layer split by market value are one layer, ranked
@@ -2728,7 +2728,21 @@ def valuation_section(rows: list[dict], market: list[dict]) -> dict:
             "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses,
             "no_pe_profit": len(no_pe) - losses,
             "peers": peers_section(rows, market, max((str(r["price_at"])[:10] for r in rows if r.get("price_at")), default=None)),
+            **p_ffo_of(rows),
             "n": len(rows)}                 # the population every count here is of (R22: 11 with a P/E and 6 loss-makers of 15)
+
+
+def p_ffo_of(rows: list[dict]) -> dict:
+    """e82 (LIVE18A-004: no P/FFO in the app while the deck has it): the theme's median P/FFO over one basis of FFO (the companies' reported
+    FFO where most of those with one report it, else derived: layer_block's rule), the basis and how many on the other are apart; {} when no
+    company has one."""
+    with_ = [r for r in rows if isinstance(r.get("p_ffo"), (int, float)) and r["p_ffo"] > 0]
+    if not with_:
+        return {}
+    rep_n = sum(1 for r in with_ if r.get("ffo_basis") == "reported")
+    basis = "reported" if rep_n and rep_n * 2 >= len(with_) else "derived"
+    same = [r["p_ffo"] for r in with_ if (r.get("ffo_basis") or "derived") == basis]
+    return {"p_ffo": stat_mid(same), "p_ffo_basis": basis, "p_ffo_apart": len(with_) - len(same)}
 
 
 def relative_ok(val: dict) -> bool:
@@ -2836,7 +2850,9 @@ def stored_price_section(rows: list[dict]) -> dict:
 def leaders(rows: list[dict]) -> list[dict]:
     """The table of every company in the theme with the figures to sort it by."""
     return [{k: r.get(k) for k in ("symbol", "name", "cap", "revenue", "year", "ebitda", "net", "roce", "sales_1y", "sales_3y", "profit_1y", "profit_3y",
-                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status", "bank", "profit") + LENDER_KEYS} for r in rows]
+                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status", "bank", "profit") + LENDER_KEYS
+             # e82 (LIVE18A-004: no FFO or P/FFO anywhere in the app): a property owner's FFO and P/FFO with their basis
+             + ("ffo", "p_ffo", "ffo_basis")} for r in rows]
 
 
 # ---------- gl50 (R50): a parent and its listed subsidiary in one theme ----------

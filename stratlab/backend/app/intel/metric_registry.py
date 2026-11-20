@@ -51,6 +51,9 @@ def _m(id_, label, definition, unit, period, source, limit, applies, regions=("I
 PROPERTY_ONLY = ("lending",)
 FFO_DERIVED = ("Derived FFO, an approximation of Nareit FFO: net income + real-estate depreciation and amortisation − gains on property sales, "
                "from the filed lines")
+FFO_EITHER = (f"FFO as the company reports it (Nareit's definition, from its annual report), marked (reported), where it does; else "
+              f"{FFO_DERIVED[0].lower() + FFO_DERIVED[1:]}, marked (derived)")
+FFO_BASIS_KEYS = ("ffo", "ffo_share", "p_ffo")     # e82: the figures on a company's FFO, each of one basis: reported or derived
 FFO_LEAVES_OUT = ("an approximation of Nareit FFO: impairments of depreciable real estate and the adjustments for unconsolidated partnerships "
                   "and joint ventures are not in it, and its depreciation is as filed")
 
@@ -167,14 +170,16 @@ METRICS = (
     # e78 (the owner's review of the live R76 REITs deck, P1: "the stated formula omits real-estate impairments and unconsolidated JV adjustments:
     # reconcile fully or label it a derived approximation"): labelled "derived FFO", an approximation of Nareit FFO, with what it leaves out
     # (FFO_LEAVES_OUT), wherever it shows
-    _m("ffo_share", "Derived FFO / revenue", f"{FFO_DERIVED} over revenue, the latest fiscal year", "pct", "year", _US,
+    # e82 (LIVE18A-007, the R80 REITs deck: Camden's reported $745 m under a column headed "Derived FFO", cells "37.8x (reported)" under
+    # "P/FFO (derived)"): the columns say FFO, each figure its basis ("(reported)": the company's own Nareit FFO; "(derived)": FFO_DERIVED)
+    _m("ffo_share", "FFO / revenue", f"{FFO_EITHER} over revenue, the latest fiscal year", "pct", "year", _US,
        f"Property owners only; {FFO_LEAVES_OUT}", ("us",), ("US",), group="us", never=PROPERTY_ONLY),
     _m("affo_share", "Derived AFFO / revenue", "Derived FFO less recurring capital spending (capital improvements, as filed) over revenue, the "
        "latest fiscal year", "pct", "year", _US, f"Only where recurring capital spending is filed; not filed otherwise; {FFO_LEAVES_OUT}",
        ("us",), ("US",), group="us", never=PROPERTY_ONLY),
-    _m("p_ffo", "P/FFO (derived)", "Market value over derived FFO, the latest fiscal year's (in place of P/E for a property owner)", "x",
+    _m("p_ffo", "P/FFO", f"Market value over FFO ({FFO_EITHER}), the latest fiscal year's (in place of P/E for a property owner)", "x",
        "year", _US, f"Property owners with a positive derived FFO only; {FFO_LEAVES_OUT}", ("us",), ("US",), group="us", never=PROPERTY_ONLY),
-    _m("ffo", "Derived FFO", f"{FFO_DERIVED}, the latest fiscal year", "amt", "year", _US, f"Filings in US dollars only; {FFO_LEAVES_OUT}",
+    _m("ffo", "FFO", f"{FFO_EITHER}, the latest fiscal year", "amt", "year", _US, f"Filings in US dollars only; {FFO_LEAVES_OUT}",
        ("us",), ("US",), headline=False, group="us", never=PROPERTY_ONLY),
     _m("affo", "Derived AFFO", "Derived FFO less recurring capital spending, the latest fiscal year", "amt", "year", _US, "Only where recurring "
        f"capital spending is filed; {FFO_LEAVES_OUT}", ("us",), ("US",), headline=False, group="us", never=PROPERTY_ONLY),

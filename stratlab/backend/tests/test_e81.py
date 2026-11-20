@@ -341,7 +341,8 @@ def test_e81_a_layers_ffo_medians_are_of_one_basis_and_a_reported_ffo_is_marked_
     b = theme_data.layer_block("Residential landlords", rows, set())
     assert b["ffo_basis"] == "reported" and b["ffo_apart"] == 1 and b["stats"]["p_ffo"]["median"] == 15.0
     assert deck.co_cell({**rows[0], "official_industry": "Real Estate Investment Trusts"}, "p_ffo", None) == "13.0x (reported)"
-    assert deck.co_cell({**rows[3], "official_industry": "Real Estate Investment Trusts"}, "p_ffo", None) == "40.0x"
+    # (updated on purpose, e82 LIVE18A-007: a derived figure is marked derived on its cell, under a column that names neither)
+    assert deck.co_cell({**rows[3], "official_industry": "Real Estate Investment Trusts"}, "p_ffo", None) == "40.0x (derived)"
 
 
 # ---------- owner P0-b (R79 Textiles and IT services decks): a stored figure never decides a company's layer ----------

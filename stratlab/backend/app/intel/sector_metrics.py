@@ -818,6 +818,25 @@ def _summary(rows: list[dict], keys: list[str], region: str, tagsets: list[set],
     return {"states": sts, "medians": meds, "extreme": extreme, "headline": head, "main": main}
 
 
+def one_ffo_basis(rows: list[dict], keys: list[str], meds: dict, stat) -> dict:
+    """e82 (LIVE18A-007, the R80 REITs deck: "derived FFO / revenue 41.8% (79 of 89), P/FFO (derived) 16.20x (79 of 89)", 36 of them the
+    companies' reported FFO): the theme's FFO medians are of one basis, the FFO its companies report where most of those with one report it,
+    else the derived one (theme_data.layer_block's rule); {"medians", "ffo_basis", "ffo_apart"}, {} with no FFO figure."""
+    fk = [k for k in keys if k in registry.FFO_BASIS_KEYS]
+    with_ = [r for r in rows if any(r.get(k) is not None for k in fk)]
+    if not fk or not with_:
+        return {}
+    rep_n = sum(1 for r in with_ if r.get("ffo_basis") == "reported")
+    basis = "reported" if rep_n and rep_n * 2 >= len(with_) else "derived"
+    same = [r for r in with_ if (r.get("ffo_basis") or "derived") == basis]
+    out = dict(meds)
+    for k in fk:
+        st = stat(r.get(k) for r in same if r.get(k) is not None) or {}
+        out[k] = {**{x: y for x, y in (meds.get(k) or {}).items() if x != "median"}, **st, "n": st.get("n", 0),
+                  "of": (meds.get(k) or {}).get("of"), "basis": basis}
+    return {"medians": out, "ffo_basis": basis, "ffo_apart": len(with_) - len(same)}
+
+
 def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, model_of: dict | None = None) -> dict:
     """The theme's sector figures by family (R23; R27: metric_registry): each company's figures with their periods and sources and its state for
     each figure (value, unavailable, not applicable, not comparable), the median of each over its "value" rows with "N of M" the companies it
@@ -848,6 +867,7 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, 
             continue
         out_rows = [{"symbol": r["symbol"], "name": r["name"], "layer": layer_of.get(r["symbol"]), "as_of": r.get("sector_as_of"),
                      **{k: r.get(k) for k in have}, "src": r.get("sector_src") or {},
+                     **({"ffo_basis": r["ffo_basis"]} if r.get("ffo_basis") and any(r.get(k) is not None for k in registry.FFO_BASIS_KEYS) else {}),
                      **({"type": registry.insurer_type(r, r.get("sector_kind") or "")} if fam == "insurer" else {})} for r in with_]
         tagsets = [registry.tags(region, r, model_of.get(r["symbol"])) for r in with_]
         # a figure is a column only where it applies to one of the companies (R27: no column of "n/a")
@@ -860,6 +880,7 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, 
         # R29 (the live R27 Banks deck: "Median of the 7 banks with filed figures" while 12 were still being read after VERSION 2): how many of
         # the family's companies are still being read, so the deck says "read for 7 of 19 so far" instead of a silently smaller sample
         late = sum(1 for r in rest if r["symbol"] in waiting)
+        summ = {**summ, **one_ffo_basis(out_rows, keys, summ["medians"], stat)}
         f = {"keys": keys, "n": len(with_), "of": len(cos), "pending": late, "read": len(cos) - late, **summ,
              "rows": out_rows,
              "periods": sorted({(r.get("sector_src") or {}).get(k, {}).get("period") or "" for r in with_ for k in keys} - {""}),

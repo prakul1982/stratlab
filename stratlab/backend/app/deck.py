@@ -3834,7 +3834,9 @@ def ffo_words(v: dict) -> str:
         parts.insert(0, f"FFO as the company reports it (Nareit's definition, from its annual report) for {len(rep):,}: {named(rep)}, marked "
                         "(reported), each layer's medians of one basis only")
     # e78 (P1): said as derived FFO, an approximation of Nareit FFO, with what it leaves out (metric_registry.FFO_LEAVES_OUT)
-    return (f"; derived FFO ({FFO_LEAVES_OUT.replace('an approximation of Nareit FFO: ', 'an approximation of Nareit FFO, ', 1)}) and P/FFO on it, by company: "
+    # e82 (LIVE18A-007): each figure marked with its basis, (reported) or (derived)
+    return (f"; FFO and P/FFO by company, each marked (reported) or (derived), derived FFO "
+            f"({FFO_LEAVES_OUT.replace('an approximation of Nareit FFO: ', 'an approximation of Nareit FFO, ', 1)}): "
             + "; ".join(parts))
 
 
@@ -5103,8 +5105,8 @@ CO_COLS = [("revenue", "Revenue", 1.25), ("ebitda", "EBITDA margin", 1.3), ("net
            ("roe", "ROE", 1.0), ("nii_assets", "NII / assets", 1.2), ("gnpa", "Gross NPA", 1.1), ("nnpa", "Net NPA", 1.0),
            ("deposit_growth", "Deposit growth", 1.1),
            ("solvency", "Solvency", 1.0), ("loss_ratio", "Loss ratio", 1.0), ("expense_ratio", "Expense ratio", 1.1),
-           ("combined_ratio", "Combined ratio", 1.1), ("ffo_share", "Derived FFO / revenue", 1.3), ("affo_share", "Derived AFFO / revenue", 1.35),
-           ("p_ffo", "P/FFO (derived)", 1.05), ("sbc_share", "SBC / revenue", 1.1), ("fcf_margin", "FCF margin", 1.0)]
+           ("combined_ratio", "Combined ratio", 1.1), ("ffo_share", "FFO / revenue", 1.3), ("affo_share", "Derived AFFO / revenue", 1.35),
+           ("p_ffo", "P/FFO", 1.05), ("sbc_share", "SBC / revenue", 1.1), ("fcf_margin", "FCF margin", 1.0)]
 
 
 def is_lender_set(cos: list) -> bool:
@@ -5194,7 +5196,8 @@ def co_cell(c: dict, key: str, amt) -> str:
         return "–"
     # e81 (the owner's review of the R79 REITs deck, P0): a company's own reported Nareit FFO marked as such on its row, beside the derived
     # ones the column is named for (never one standing in silently for the other)
-    rep = " (reported)" if key in ("p_ffo", "ffo_share") and c.get("ffo_basis") == "reported" and c.get(key) is not None else ""
+    # e82 (LIVE18A-007): and a derived one marked derived, under columns that name neither
+    rep = ffo_mark(c, key) if key in ("p_ffo", "ffo_share") else ""
     if key == "p_ffo":                        # r62
         return _times(c.get(key)) + rep
     if rep:
@@ -5269,7 +5272,7 @@ def _of_n(n: int, of: int | None) -> str:
 
 
 CHAIN_FAMILY_COLS = (("cet1", "CET1", 0.95), ("solvency", "Solvency", 1.0), ("loss_ratio", "Loss ratio", 1.05), ("combined_ratio", "Combined ratio", 1.15),
-                     ("ffo_share", "Derived FFO / revenue", 1.3), ("p_ffo", "P/FFO (derived)", 1.05), ("sbc_share", "SBC / revenue", 1.15), ("fcf_margin", "FCF margin", 1.05))
+                     ("ffo_share", "FFO / revenue", 1.3), ("p_ffo", "P/FFO", 1.05), ("sbc_share", "SBC / revenue", 1.15), ("fcf_margin", "FCF margin", 1.05))
 
 
 def chain_family_cols(rows: list) -> list[tuple]:
@@ -6848,7 +6851,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 return companies_cell(r["n"], r.get("listed"))
             if k == "revenue":
                 return amt(r.get("revenue"))
-            return _medn(None, r["n"], fmt_.get(k, _pc), n=r.get(f"{k}_n"), value=r.get(k))
+            got = _medn(None, r["n"], fmt_.get(k, _pc), n=r.get(f"{k}_n"), value=r.get(k))
+            # e82 (LIVE18A-007): a layer's FFO median is of one basis, said on it
+            return got + (f" ({r['ffo_basis']})" if k in ("ffo_share", "p_ffo") and r.get("ffo_basis") and r.get(k) is not None else "")
         head, widths = ["Layer"] + [c[1] for c in cols], [2.9] + [c[2] for c in cols]
         rows = [[adjacent_label(r["layer"], r.get("adjacent"))] + [cell(r, k) for k, _, _ in cols] for r in rows_c]
         head, rows, widths, _ = drop_empty(head, rows, widths)
@@ -8047,9 +8052,13 @@ def sector_lines(sec: dict, waiting: bool = True) -> list[str]:
                 st = (g.get("medians") or {}).get(k)
                 if st and st.get("median") is not None and headline_ok(st.get("n", 0), st.get("of") or g.get("n"), floor=MIN_BASE):
                     st = {**st, "of": st.get("of") or g.get("n")}
-                    parts.append(f"{_low(BY_ID[k].label)} {_med_of(st, sector_fmt(k))}")
+                    # e82: an FFO median names its one basis
+                    on = f" on {st['basis']} FFO" if st.get("basis") and k != "ffo" else f" ({st['basis']})" if st.get("basis") else ""
+                    parts.append(f"{_low(BY_ID[k].label)}{on} {_med_of(st, sector_fmt(k))}")
             if parts:
-                out.append(f"Median of the {_n(g['n'], one, many)} with filed figures: {', '.join(parts[:4])}.")
+                apart = (f"; FFO medians of {g['ffo_basis']} FFO only, {g['ffo_apart']:,} on "
+                         f"{'derived' if g['ffo_basis'] == 'reported' else 'reported'} FFO apart") if g.get("ffo_apart") else ""
+                out.append(f"Median of the {_n(g['n'], one, many)} with filed figures: {', '.join(parts[:4])}{apart}.")
     return out
 
 
@@ -8088,8 +8097,17 @@ def _state_cell(r: dict, k: str, state: str | None, fmt) -> str:
     """A company's cell for one figure in its state (metric_registry): the value, "–" unavailable, "n/a" not applicable, "n.c." not comparable."""
     from .intel.metric_registry import MARK, VALUE
     if state is None:
-        return fmt(r[k]) if r.get(k) is not None else "–"
-    return fmt(r[k]) if state == VALUE else MARK[state]
+        return fmt(r[k]) + ffo_mark(r, k) if r.get(k) is not None else "–"
+    return fmt(r[k]) + ffo_mark(r, k) if state == VALUE else MARK[state]
+
+
+def ffo_mark(r: dict, k: str) -> str:
+    """e82 (LIVE18A-007): an FFO figure's basis on its own cell: " (reported)" for the company's own Nareit FFO, " (derived)" else; "" for
+    another figure or none."""
+    from .intel.metric_registry import FFO_BASIS_KEYS
+    if k not in FFO_BASIS_KEYS or r.get(k) is None:
+        return ""
+    return " (reported)" if r.get("ffo_basis") == "reported" else " (derived)"
 
 
 def _amount(v, unit) -> str:

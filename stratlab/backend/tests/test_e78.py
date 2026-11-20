@@ -198,13 +198,15 @@ def test_the_informative_row_names_each_move_into_other_with_its_reason_and_the_
 
 # ---------- 5. derived FFO ----------
 def test_ffo_is_labelled_derived_with_what_it_leaves_out_of_nareit_ffo():
+    # (updated on purpose, e82 LIVE18A-007: FFO, P/FFO and FFO / revenue are of a company's reported FFO where it reports one, so their
+    # labels say FFO and each figure says its basis; AFFO is only ever derived, its labels still say so)
     for k in ("ffo", "ffo_share", "affo_share", "p_ffo", "affo"):
         m = R.BY_ID[k]
-        assert "derived" in m.label.lower()
+        assert "derived" in m.label.lower() or ("derived FFO, an approximation of Nareit FFO" in m.definition and "(reported)" in m.definition)
         assert "impairments of depreciable real estate" in m.limit and "joint ventures" in m.limit and "approximation of Nareit FFO" in m.limit
-    assert "Derived FFO, an approximation of Nareit FFO" in R.BY_ID["ffo_share"].definition
+    assert "derived FFO, an approximation of Nareit FFO" in R.BY_ID["ffo_share"].definition
     cols = dict((k, lab) for k, lab, _ in deck.CO_COLS)
-    assert cols["ffo_share"] == "Derived FFO / revenue" and cols["p_ffo"] == "P/FFO (derived)"
+    assert cols["ffo_share"] == "FFO / revenue" and cols["p_ffo"] == "P/FFO" and cols["affo_share"] == "Derived AFFO / revenue"
     v = {"region": "US", "layers": [{"layer": "Office landlords", "model": {"family": "property"},
                                      "companies": [{"symbol": "BXP", "name": "BXP", "revenue": 3400.0, "profit": 10.0, "ffo_share": 30.0}]}]}
     got = deck.not_in_sources(v)

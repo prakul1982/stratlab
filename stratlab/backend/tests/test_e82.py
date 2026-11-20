@@ -180,3 +180,58 @@ def test_e82_a_theme_post_keeps_a_proper_first_word_and_is_written_again_when_it
     old = {"v": 2, "rows": [], "members": 5, "total": 252, "chain": {}, "page_counts": {"listed": 252, "layers": 10, "all": 252}}
     assert BR.figures_moved(old, {**old, "page_counts": {"listed": 252, "layers": 11, "all": 252}})
     assert not BR.figures_moved(old, dict(old))                                    # guard
+
+
+# ---------- 2. LIVE18A-004/007: FFO with its basis on every surface; medians of one basis ----------
+def _ffo_rows():
+    def row(s_, nm, ffo, p, share, basis):
+        return {"symbol": s_, "name": nm, "ffo": ffo, "p_ffo": p, "ffo_share": share, "ffo_basis": basis}
+    # the R80 REITs deck's rows: Camden's reported $745 m (P/FFO 12.90x, 47.3%) printed under "Derived FFO" / "P/FFO (derived)"
+    return [row("CPT", "Camden Property Trust", 744.8, 12.9, 47.3, "reported"), row("ESS", "Essex", 1100.0, 17.0, 55.0, "reported"),
+            row("MAA", "Mid-America", 1000.0, 15.0, 45.0, "reported"), row("AKR", "Acadia", 172.0, 16.6, 41.8, "derived"),
+            row("ADC", "Agree", 438.0, 20.8, 61.0, "derived")]
+
+
+def test_e82_the_sector_table_marks_each_ffo_with_its_basis_under_headers_that_name_neither():
+    from app.intel import metric_registry as R
+    assert R.BY_ID["ffo"].label == "FFO" and R.BY_ID["p_ffo"].label == "P/FFO" and R.BY_ID["ffo_share"].label == "FFO / revenue"
+    rows = _ffo_rows()
+    fmt_amt = lambda x: f"${x:,.0f} m"            # noqa: E731
+    assert deck._state_cell(rows[0], "ffo", None, fmt_amt) == "$745 m (reported)"
+    assert deck._state_cell(rows[0], "p_ffo", None, deck.sector_fmt("p_ffo")) == "12.90x (reported)"
+    assert deck._state_cell(rows[3], "ffo_share", None, deck.sector_fmt("ffo_share")) == "41.8% (derived)"
+    assert deck._state_cell({"sbc_share": 1.6}, "sbc_share", None, deck.sector_fmt("sbc_share")) == "1.6%"          # guard
+
+
+def test_e82_the_themes_ffo_medians_are_of_one_basis_and_say_it():
+    from app.intel import sector_metrics, theme_data as td
+    rows = _ffo_rows()
+    meds = {k: {"median": 99.0, "n": 5, "of": 5} for k in ("ffo", "p_ffo", "ffo_share", "sbc_share")}
+    got = sector_metrics.one_ffo_basis(rows, ["ffo", "p_ffo", "ffo_share", "sbc_share"], meds, td.stat)
+    assert got["ffo_basis"] == "reported" and got["ffo_apart"] == 2
+    assert got["medians"]["p_ffo"]["median"] == 15.0 and got["medians"]["p_ffo"]["n"] == 3 and got["medians"]["p_ffo"]["of"] == 5
+    assert got["medians"]["sbc_share"]["median"] == 99.0                       # guard: another figure untouched
+    fam = {"n": 5, "of": 5, "headline": ["p_ffo", "ffo_share"], "keys": ["p_ffo", "ffo_share"], **got}
+    line = " ".join(deck.sector_lines({"sector": {"families": {"us": fam}}}, waiting=False))
+    assert "P/FFO on reported FFO 15.00x (3 of 5)" in line and "FFO / revenue on reported FFO" in line
+    assert "FFO medians of reported FFO only, 2 on derived FFO apart" in line and "derived FFO / revenue" not in line
+
+
+def test_e82_the_app_and_the_public_page_show_ffo_with_its_basis():
+    from app.intel import theme_data as td
+    rows = _ffo_rows()
+    v = td.p_ffo_of(rows)
+    assert v["p_ffo"]["median"] == 15.0 and v["p_ffo_basis"] == "reported" and v["p_ffo_apart"] == 2
+    lead = td.leaders([{**r, "cap": 9630.0} for r in rows])
+    assert lead[0]["p_ffo"] == 12.9 and lead[0]["ffo_basis"] == "reported"
+    dive = {"layers": [{"layer": "Residential landlords", "companies": rows}]}
+    assert public_themes.reported_ffos(dive) == {"CPT": 744.8, "ESS": 1100.0, "MAA": 1000.0}        # derived: StratLab's, never on the page
+    page = {"region": "US", "label": "REITs", "slug": "reits", "name": "reit", "evidence": None, "older": False, "rechecking": False,
+            "summary": "", "members": 2, "all": 2, "counts": {"listed": 2, "layers": 1, "all": 2, "unlisted": []}, "tally_at": None,
+            "prices": None, "day": None, "indexable": False,
+            "layers": [{"name": "Residential landlords", "evidence": None, "companies": [
+                {"symbol": "CPT", "name": "Camden Property Trust", "page": None, "cap": "$9.6B", "revenue": "$1.6B", "year": "2025",
+                 "evidence": None, "ffo": "$744.8M (reported)"},
+                {"symbol": "AKR", "name": "Acadia", "page": None, "cap": "$2.9B", "revenue": "$0.4B", "year": "2025", "evidence": None}]}]}
+    html_ = public_themes.render(page)
+    assert '<th scope="col">FFO</th>' in html_ and "$744.8M (reported)" in html_ and "data-ffo-note" in html_
