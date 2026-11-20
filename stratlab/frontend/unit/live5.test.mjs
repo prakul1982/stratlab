@@ -176,7 +176,8 @@ test("LIVE5-002 globally: a list table wider than its box on a desktop wraps its
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
   assert.match(dt, /if \(!fit && !phone && !grid && !scrollEnd && b && b\.scrollWidth > b\.clientWidth \+ 2\) setFit\(true\);/);
   assert.match(dt, /\$\{fit \? " k-fit" : ""\}/);
-  assert.match(css, /\.k-tbl-wrap\.k-fit \.k-table th, \.k-tbl-wrap\.k-fit \.k-table td \{ white-space: normal; padding-left: 10px; padding-right: 10px; \}/);
+  // (updated on purpose, site83: 8px, for room in the centred page column at 1280)
+  assert.match(css, /\.k-tbl-wrap\.k-fit \.k-table th, \.k-tbl-wrap\.k-fit \.k-table td \{ white-space: normal; padding-left: 8px; padding-right: 8px; \}/);
   assert.match(css, /\.k-tbl-wrap\.k-fit \.k-table td\.k-num \{ white-space: nowrap; \}/);
   const rules = readFileSync(new URL("../e2e/ui-lint-rules.ts", import.meta.url), "utf8");
   assert.match(rules, /add\("R27", e, `a table of \$\{head\.length\} columns shows/);

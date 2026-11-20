@@ -96,7 +96,9 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   // LIVE5: four very wide comparison tables accepted under R27 at 1280 (each with its reason), as follow-ups of their own
   // (updated on purpose, site76 LIVE14A-008: the theme's "Every company" table now fits its card, so its R27 entry is gone, none added)
   assert.deepEqual(allow.map((x) => `${x.page} ${x.rule} ${x.element}`), ["/plans R1 k-plan", "* R27 StrategyMarketAfter costsBuy and holdvs",
-    "* R27 StockGain or lossTermSoldCostSaleBought", "* R27 StockCloseDay %StageSupertrendSince"]);
+    "* R27 StockGain or lossTermSoldCostSaleBought", "* R27 StockCloseDay %StageSupertrendSince",
+    // (updated on purpose, site83: R29's "wider than its box" accepts the same two known tables, with their reasons)
+    "* R29 StrategyMarketAfter costsBuy and holdvs", "* R29 StockCloseDay %StageSupertrendSince"]);
   // the company page: the peers' tiles in equal rows, the news under them
   assert.match(read("src/pages/Research.tsx"), /<div className="k-stack">\s*\{c\.peers\.length > 0 && <Card><CardHead title="Similar companies"/);
   assert.match(read("src/pages/Research.tsx"), /<QuoteTable region=\{region\} symbols=\{c\.peers\} label="Similar companies" \/>/);      // (UI-CO: the peers are a table, not tiles)

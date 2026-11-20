@@ -31,6 +31,17 @@ export function Cell({ c }: { c: BriefCell }) {
   );
 }
 
+/** The longest text in a column (its cells' main words and the lines under them). */
+const longest = (rows: BriefCell[][], k: number): number => Math.max(0, ...rows.map((r) => {
+  const c = r[k];
+  if (c == null) return 0;
+  if (typeof c === "string") return c.length;
+  return Math.max((c.t ?? "").length, (c.sub ?? "").length, ...(c.lines ?? []).map((l) => l.t.length));
+}));
+/** site83 (owner, 20 Nov: no table wider than its box): a column of words takes a wrapping column's room (7rem at least) only when its words
+ * are long enough to wrap; "Stage 2", "Up" and "18 Nov" in three such columns ran the brief's stock tables past its 460px column at 1280. */
+const WRAP_FROM = 40;
+
 export function BriefTables({ tables }: { tables: BriefTable[] }) {
   return (
     <>
@@ -43,7 +54,7 @@ export function BriefTables({ tables }: { tables: BriefTable[] }) {
             <>
               <DataTable label={t.title} rows={t.rows} rowKey={(_, n) => `${i}-${n}`} stack
                 columns={t.head.map((h, k): Column<BriefCell[]> => ({
-                  key: `c${k}`, header: h, numeric: t.align[k] === "r", rowHeader: k === 0, wrap: t.align[k] === "l" && k > 0, cell: (r) => <Cell c={r[k] ?? ""} />,
+                  key: `c${k}`, header: h, numeric: t.align[k] === "r", rowHeader: k === 0, wrap: t.align[k] === "l" && k > 0 && longest(t.rows, k) > WRAP_FROM, cell: (r) => <Cell c={r[k] ?? ""} />,
                 }))} />
               {(t.note || t.link) && (
                 <p className="k-note">{t.note}{t.note && t.link ? " " : ""}{t.link && <Anchor href={t.link.href}>{t.link.a}</Anchor>}</p>
