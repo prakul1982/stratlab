@@ -104,9 +104,8 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
   useEffect(() => {
     const box = sideScroll.current;
     if (!box) return;
-    // the menu's box can shrink after the first look, when its fonts arrive or the "More below" row shows under it (CI, Release 81:
-    // the item ended 31 px under the box's edge); for a few seconds after a page opens, a change of the box's size looks again,
-    // until anything but this moves the menu (a reader scrolling it is never pulled back to the open page's item)
+    // a reveal looks once more when the fonts arrive (they change the rows' heights), unless the menu was moved in between: a reader
+    // scrolling the menu is never pulled back to the open page's item
     let mine = box.scrollTop, moved = false;
     const reveal = () => {
       if (moved) return;
@@ -117,11 +116,8 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
     const onScroll = () => { if (Math.abs(box.scrollTop - mine) > 1) moved = true; };
     box.addEventListener("scroll", onScroll, { passive: true });
     const t = window.setTimeout(reveal, 0);
-    const until = Date.now() + 3000;
-    const again = () => { if (Date.now() < until) reveal(); };
-    const stopSize = watchSize(box, again);           // a frame later, never inside the observer (R7T-014)
-    void document.fonts?.ready.then(again);
-    return () => { window.clearTimeout(t); stopSize(); box.removeEventListener("scroll", onScroll); };
+    void document.fonts?.ready.then(reveal);
+    return () => { window.clearTimeout(t); box.removeEventListener("scroll", onScroll); };
   }, [loc.pathname]);
   // the tour opens the phone's menu to point at what is in it (DI-023); held open by the tour, the menu is not a modal of its
   // own, so the tour's note keeps the keyboard and Esc
@@ -411,10 +407,15 @@ export function mainAction(space: SpaceView, focus: string | null | undefined, h
 }
 
 /** Scrolls `box` (only it) so `item` is inside it with a little room, when it isn't already. */
+// the "More below" row shows under a menu that scrolls and takes its height from the box (Release 81 CI: an item revealed just above
+// the box's edge ended 31 px under it once the row showed), so a menu that scrolls keeps that much room at its foot
+export const MORE_ROOM = 32;
 export function revealIn(box: HTMLElement, item: HTMLElement, room = 24): void {
   const b = box.getBoundingClientRect(), r = item.getBoundingClientRect();
-  if (box.scrollHeight <= box.clientHeight + 1 || (r.top >= b.top && r.bottom <= b.bottom)) return;
-  const top = box.scrollTop + (r.top - b.top) - (r.bottom > b.bottom ? Math.max(room, box.clientHeight - r.height - room) : room);
+  if (box.scrollHeight <= box.clientHeight + 1) return;
+  const foot = b.bottom - MORE_ROOM;
+  if (r.top >= b.top && r.bottom <= foot) return;
+  const top = box.scrollTop + (r.top - b.top) - (r.bottom > foot ? Math.max(room, box.clientHeight - MORE_ROOM - r.height - room) : room);
   box.scrollTop = Math.max(0, top);
 }
 

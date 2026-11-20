@@ -130,17 +130,18 @@ test("LIVE18B-007: Pro's AI builds line names its cap, not 'unlimited' beside it
 
 test("LIVE18B-012: the menu shows the open page's item, scrolling only its own box", () => {
   const src = read("src/components/Shell.tsx");
-  // updated on purpose (Release 81 CI): the reveal looks again when the menu's box changes size for a few seconds, and stops once
-  // anything else moves the menu
+  // updated on purpose (Release 81 CI): the reveal keeps the "More below" row's room at the menu's foot, looks once more when the fonts
+  // arrive, and never after the menu was moved
   assert.match(src, /const cur = box\.querySelector<HTMLElement>\('\[aria-current="page"\]'\);\n      if \(cur\) revealIn\(box, cur\);/);
   assert.match(src, /const onScroll = \(\) => \{ if \(Math\.abs\(box\.scrollTop - mine\) > 1\) moved = true; \};/);
-  assert.match(src, /const stopSize = watchSize\(box, again\);/);
+  assert.match(src, /void document\.fonts\?\.ready\.then\(reveal\);/);
   const body = src.match(/export function revealIn[\s\S]*?\n}/)[0]
     .replace("export function revealIn(box: HTMLElement, item: HTMLElement, room = 24): void", "function revealIn(box, item, room = 24)");
-  const revealIn = new Function(`${body}; return revealIn;`)();
+  const MORE_ROOM = Number(src.match(/export const MORE_ROOM = (\d+);/)[1]);
+  const revealIn = new Function("MORE_ROOM", `${body}; return revealIn;`)(MORE_ROOM);
   const box = { scrollTop: 0, scrollHeight: 1200, clientHeight: 500, getBoundingClientRect: () => ({ top: 100, bottom: 600 }) };
   revealIn(box, { getBoundingClientRect: () => ({ top: 820, bottom: 860, height: 40 }) });
-  assert.equal(box.scrollTop, 284);                                // its bottom 24px above the box's
+  assert.equal(box.scrollTop, 316);                                // updated on purpose: its bottom 24px above the "More below" row's room
   const shown = { ...box, scrollTop: 50 };
   revealIn(shown, { getBoundingClientRect: () => ({ top: 300, bottom: 340, height: 40 }) });
   assert.equal(shown.scrollTop, 50);                               // already in view: not moved
