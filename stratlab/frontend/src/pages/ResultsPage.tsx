@@ -287,7 +287,9 @@ export function ResultsPage() {
     } } as Column<ResultRow>] : []),
   ];
 
-  const dayColumns = columns.filter((c) => c.key !== "im" || shown.some((r) => r.fo));
+  // "Usual move" is the page's (movesEmpty over every row shown, LIVE14A-009); "Implied" stays a day's own, only on a day with an F&O stock
+  // (R15 #11). It is the last column, so a day without it keeps the first five columns' fixed widths and the tables still line up
+  const pageColumns = columns;
 
   return (
     <div className="k-page">
@@ -352,9 +354,9 @@ export function ResultsPage() {
               <ReportScope section={`Results on ${resultDay(d)}`} source="Results filed with the exchange and the day's prices">
               {/* LIVE19A-011: one column set for every day's table, fixed widths (styles-invest .res-days), so the stacked tables line up: each
                   day's own set and widths put Market value at x 780, 870 and 755 on three days. "Usual move" is the page's (movesEmpty over every
-                  row shown, LIVE14A-009's rule for a column of one value), "Implied" when any row shown has options */}
+                  row shown, LIVE14A-009's rule for a column of one value); "Implied" only on a day with an F&O stock (R15 #11), the last column */}
               <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`}
-                columns={dayColumns} stack compact phonePage={10} />
+                columns={pageColumns.filter((c) => c.key !== "im" || on.some((r) => r.fo))} stack compact phonePage={10} />
               </ReportScope>
               {(info.count > info.shown || (openDay === d && dayRows > 0)) && (
                 <div className="k-row">

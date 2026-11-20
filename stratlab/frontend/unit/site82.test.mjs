@@ -62,7 +62,9 @@ test("LIVE19A-011: every results row names its quarter, and the day tables share
   assert.equal(quarterLabel(null, "2026-11-19", false), null);
   const page = read("src/pages/ResultsPage.tsx");
   assert.match(page, /data-testid="res-q-of">\{l\.text\}/);
-  assert.match(page, /columns=\{dayColumns\} stack compact phonePage=\{10\}/);
+  // updated on purpose (Release 82 CI): "Implied" stays a day's own column (R15 #11, e2e/r15-pages); it is the last column, so the first five
+  // keep their fixed widths and still line up
+  assert.match(page, /columns=\{pageColumns\.filter\(\(c\) => c\.key !== "im" \|\| on\.some\(\(r\) => r\.fo\)\)\} stack compact phonePage=\{10\}/);
   assert.doesNotMatch(page, /movesEmpty\(on, moves, on\.length\)/);
   assert.match(page, /<div key=\{d\} className="inv-day res-days" data-testid="results-day">/);
   const inv = read("src/styles-invest.css");

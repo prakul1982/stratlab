@@ -59,7 +59,7 @@ test("LIVE14A-009: Usual move per day's table; the quarter before the one being 
   const page = read("src/pages/ResultsPage.tsx");
   // (updated on purpose, LIVE19A-011: one column set for every day of the page (Implied when any row shown has options, Usual move by the page's rows), so the stacked day tables line up: the page's "Usual move" rule is movesEmpty over the rows shown)
   assert.match(page, /const mvEmpty = movesEmpty\(shown, moves\);/);
-  assert.match(page, /columns=\{dayColumns\}/);
+  assert.match(page, /columns=\{pageColumns\.filter\(\(c\) => c\.key !== "im" \|\| on\.some\(\(r\) => r\.fo\)\)\}/);   // updated on purpose: Release 82, "Implied" a day's own (R15 #11)
   // PANW on 18 Nov: figures to Jul 2026 (110 days before) are the previous quarter's; TJX's to Oct 2026 are the one reported
   assert.equal(priorQuarter("Jul 2026 vs Jul 2025", "2026-11-18"), "Jul 2026");
   assert.equal(priorQuarter("Oct 2026 vs Oct 2025", "2026-11-18"), null);
