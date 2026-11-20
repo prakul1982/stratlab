@@ -408,3 +408,58 @@ def test_every_fall_from_description_verified_is_kept_with_its_reason():
     assert snap["ev_down"][0][0] == "MSFT" and snap["ev"]["ADBE"] == "d"
     got = C.apply({"snap": {**snap, "ev_down": None}}, snap)
     assert got["log"][-1]["down"][0]["symbol"] == "MSFT" and "ev_down" not in got["snap"]
+
+
+def test_no_company_outside_the_stated_evidence_states_is_in_a_calculation_cohort_on_any_theme_fixture():
+    """The owner's R84 reassessment (Payments, Medical devices, Hotels & Casinos, Aerospace, Telecom, Building materials: the rule printed
+    beside the figures and the companies in them disagreed). Guard over every live theme fixture: a company the membership check keeps in
+    the theme (in a layer's calculations when it has figures) is description-verified, industry-supported or list-supported, the three
+    states the deck's rule names (deck.EVIDENCE_RULE_SAID); not checked and other work are in none."""
+    import glob
+    import pathlib
+    from app import deck as K
+    for s_ in ("Description-verified", "industry-supported", "list-supported"):
+        assert s_ in K.EVIDENCE_RULE_SAID
+    ok = {"description_verified", "industry_code_supported", "list_supported"}
+    seen = 0
+    for p in sorted(glob.glob(str(pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "*" / "*.json"))):
+        try:
+            d = json.load(open(p))
+        except ValueError:
+            continue
+        d = d.get("data", d) if isinstance(d, dict) else d
+        if not isinstance(d, dict) or "evidence" not in d or "value_chain" not in d:
+            continue
+        theme, region = d.get("theme") or d.get("sector") or "", d.get("region") or "US"
+        words, named, wt = D.theme_words(d, theme), D.name_words(d, theme), D.work_test(d, theme)
+        for v in d["value_chain"]:
+            for c in v["companies"]:
+                raw = d["evidence"].get(c["ticker"])
+                st = D.membership(c, words, raw, None, named=named)
+                qc, q = D.quoted_words(c, raw, region, bool(v.get("official")))
+                ev = D.work_checked(D.evidence_state(qc, words, q, None, st), qc, q, wt)
+                assert st == "unverified" or ev in ok, (p, c["ticker"], st, ev)
+        seen += 1
+    assert seen >= 50
+
+
+def test_a_property_developers_layer_in_a_theme_of_another_business_is_folded_with_why():
+    """Fails on R84: Fertilizers & Agrochemicals showed a "Property developers" layer (pp.10-11); Bharat Agri Fert & Realty's reason said its
+    words don't say property while quoting its construction words."""
+    vc = [{"layer": "Urea and nitrogen fertiliser makers", "companies": [{"ticker": "U1"}]},
+          {"layer": "Property developers", "companies": [{"ticker": "BHARATAGRI"}]},
+          {"layer": "Other fertilizers and agrochemicals companies", "official": True, "basis": "rest", "companies": []}]
+    out = B.fold_scope_layers(vc, "Fertilizers and agrochemicals", "Fertilizers and agrochemicals")
+    assert [v["layer"] for v in out] == ["Urea and nitrogen fertiliser makers", "Other fertilizers and agrochemicals companies"]
+    assert out[1]["companies"][0]["refit"]["why"].startswith("“Property developers” is a property business beside the theme's own work")
+    hotels = [{"layer": "Hotel property owners (lodging REITs)", "companies": [{"ticker": "HST"}]}]
+    assert B.fold_scope_layers(hotels, "Hotels and casinos", "Hotels and casinos") == hotels          # guard: the theme's own kind
+    assert B.PROPERTY_SAYS.search("The company is engaged in the construction of residential and commercial buildings")
+
+
+def test_a_small_share_of_companies_with_figures_says_its_selection_and_bias():
+    """Fails on R84: Biotech's figures of 85 of 807 core companies with no word of how they were chosen."""
+    from app import deck as K
+    line = K.selection_said({"n": 85, "total": 807, "share": 71, "of_what": "the theme's market value"})
+    assert line.startswith("The figures are of 85 of the theme's 807 companies") and "lean towards larger" in line
+    assert K.selection_said({"n": 60, "total": 100}) == ""

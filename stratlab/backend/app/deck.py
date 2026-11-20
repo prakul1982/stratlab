@@ -2429,6 +2429,22 @@ def roll_said(n_in: int, total: int, n_out: int, in_: str, out_: str, cut: bool)
 # by its words is never said to have no other way of earning from words that name none; what its words name beside the layer's business is
 # said as what it also earns from, and "no other way of earning" only where one reportable segment is stored (theme_data.also_said)
 ON_WORDS_NOTE = "(on its words): the map placed it here and its own words say the layer's name, so it is in the layer's figures."
+SELECTION_SHARE = 0.5         # e85: figures of fewer than this share of the theme's companies say their selection basis and its bias
+
+
+def selection_said(cov: dict | None) -> str:
+    """e85 (the owner's R84 reassessment, P1: Biotech's figures of 85 of its 807 core companies, the basis unsaid): when the companies with
+    figures are under SELECTION_SHARE of the theme's, one line of how they were chosen and which way that leans the medians; "" else."""
+    cov = cov if isinstance(cov, dict) else {}
+    n, total = int(cov.get("n") or 0), int(cov.get("total") or 0)
+    if not n or not total or n >= SELECTION_SHARE * total:
+        return ""
+    share = cov.get("share")
+    return (f"The figures are of {n:,} of the theme's {total:,} companies: the largest by market value whose filed figures are read"
+            + (f" ({share}% of {cov.get('of_what') or 'the market value'})" if share is not None else "")
+            + "; smaller and earlier-stage companies are under-represented, so the medians lean towards larger, more established companies.")
+
+
 EVIDENCE_RULE_SAID = ("Description-verified, industry-supported and list-supported companies count in a median or total; a company not "
                       "checked yet, or whose own words describe other work, counts in none.")
 
@@ -3600,6 +3616,9 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False, most:
                      # apply it, list-supported members (the theme's own list) counted as they are
                      EVIDENCE_RULE_SAID if evidence_tally(v, cov["total"])
                      else "Only companies in the theme count in a median or total."])
+    sel = selection_said(cov)
+    if sel:
+        rows.append(["Selection", sel, "Every median is read as one of the larger companies of the theme."])
     par = parents_row(v)
     if par:
         rows.append(par)
