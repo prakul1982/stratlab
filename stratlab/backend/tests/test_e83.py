@@ -142,3 +142,36 @@ def test_e83_the_gate_mark_is_worked_out_from_an_old_entrys_stored_read(monkeypa
     p = {"placements": {"industries_by": "ai"}, "value_chain": [{"layer": "Computers", "official": True, "companies": cos}]}
     assert TL.gate_why({"rules": 70}, {"all": 200, "listed": 200, "unlisted": [], "unchecked": 0}, p).startswith("its companies come almost all")
     assert TL.gate_why({"rules": 70}, {"all": 200, "listed": 200, "unlisted": [], "unchecked": 0}, None) == ""       # guard: no read, nothing said
+
+
+# ---------- 7. LIVE19B-005 (LIVE18B-006): one rule for n.m. and counts across the deck ----------
+def test_e83_a_layers_median_count_and_bottom_leave_out_an_nm_margin_as_the_legend_says():
+    """The sample Consumer durables deck: "EBITDA margin 6.4% (11 of 11) ... bottom Universus Photo Imagings Ltd −530% (of 11)" while its row
+    printed n.m. and the legend said n.m. figures are out of every median, range and aggregate."""
+    from app.intel import layer_profiles as LP
+    cos = [{"symbol": f"S{i}", "name": f"Small {i}", "ebitda": 4.0 + i, "roce": 8.0 + i, "sales_1y": 2.0 + i} for i in range(10)]
+    cos.append({"symbol": "UNI", "name": "Universus Photo Imagings Ltd", "ebitda": -530.0, "roce": -12.1, "sales_1y": -24.0})
+    fin = LP.financial({"model": {"family": "making"}, "companies": cos}, "IN")
+    eb = next(f for f in fin["figs"] if f["key"] == "ebitda")
+    assert eb["n"] == 10 and eb["of"] == 11 and eb["min"] == 4.0
+    assert fin["top"]["key"] == "ebitda" and fin["top"]["low"] == (4.0, "Small 0") and fin["top"]["n"] == 10
+    assert next(f for f in fin["figs"] if f["key"] == "roce")["n"] == 11         # guard: its other figures stay in
+
+
+def test_e83_a_series_break_clears_the_layers_growth_as_it_clears_the_appendixs():
+    """LIVE18B-006: layer 1 "Revenue growth +22.2% (5 of 5)" while the appendix printed Growth "–" for Dixon and PG Electroplast: the growth
+    of a company whose series broke was cleared on the appendix's rows after the layers had copied them."""
+    import copy
+    from datetime import date
+    from app.intel import theme_data as D
+    from tests.test_r17_fixes import theme_a
+    region, m, f = theme_a()
+    m = copy.deepcopy(m)
+    sym = m["value_chain"][1]["companies"][0]["ticker"]
+    jumped = copy.deepcopy(f.get(sym))
+    jumped["years"][-1]["sales"] = jumped["years"][-2]["sales"] * 2          # a year's revenue doubling: a merger moved a business in
+    facts = {**{s: f.get(s) for s in [c["ticker"] for v in m["value_chain"] for c in v["companies"]]}, sym: jumped}
+    dive = D.build(region, m["sector"], m, D.Sources(date(2026, 10, 5), facts=lambda s: facts.get(s) if s in facts else f.get(s)))
+    lead = next(r for r in dive["sections"]["leaders"] if r["symbol"] == sym)
+    row = next(r for b in dive["layers"] for r in b["companies"] if r["symbol"] == sym)
+    assert lead["sales_1y"] is None and row["sales_1y"] is None and row.get("series_break")

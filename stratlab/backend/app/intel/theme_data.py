@@ -4258,6 +4258,15 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     for s, p in parents.items():
         rows[s]["parent"] = p
     holding_across(rows, parents, first, wide, theme)
+    # e83 (LIVE19B-005, LIVE18B-006: the sample Consumer durables deck's layer "Revenue growth +22.2% (5 of 5)" while its appendix printed
+    # Growth "–" for two of the five): a merger or demerger broke the company's series: no growth figure for it, none in the growth totals,
+    # cleared before the layers' rows are copied from these, so a layer's median and count are of the figures its rows and the appendix print
+    for r in rows.values():
+        r["demerger"] = demerger_on(src, r["symbol"])
+        if series_break(r) or r["demerger"]:
+            r["series_break"] = True
+            for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
+                r[k] = None
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
@@ -4382,12 +4391,6 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         # the Fertilizers page, "Engineering and R&D services" beside a layer of that work): a sub-theme no listed member fits is not shown
         if cos:
             subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
-    for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
-        r["demerger"] = demerger_on(src, r["symbol"])
-        if series_break(r) or r["demerger"]:
-            r["series_break"] = True
-            for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
-                r[k] = None
     listed = one_row_each(sorted(rows.values(), key=lambda r: -(r.get("cap") or 0)))     # R36: one company under two symbols, once
     syms = [r["symbol"] for r in listed]
     # every total and median: the confirmed companies with their key figures (R22: one population, so no count is larger than the one stated)
