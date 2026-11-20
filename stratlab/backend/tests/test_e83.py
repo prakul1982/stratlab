@@ -175,3 +175,21 @@ def test_e83_a_series_break_clears_the_layers_growth_as_it_clears_the_appendixs(
     lead = next(r for r in dive["sections"]["leaders"] if r["symbol"] == sym)
     row = next(r for b in dive["layers"] for r in b["companies"] if r["symbol"] == sym)
     assert lead["sales_1y"] is None and row["sales_1y"] is None and row.get("series_break")
+
+
+# ---------- 6. LIVE19A-010: no lone unlabelled "–" on a phone card; the column notes after the tables ----------
+def test_e83_a_public_cards_missing_ffo_is_labelled_and_the_column_notes_follow_the_tables():
+    import re
+    from app import public_themes
+    page = {"region": "US", "label": "REITs", "slug": "reits", "name": "reit", "evidence": None, "older": False, "rechecking": False,
+            "summary": "", "members": 2, "all": 2, "counts": {"listed": 2, "layers": 1, "all": 2, "unlisted": []}, "tally_at": None,
+            "prices": None, "day": None, "indexable": False,
+            "layers": [{"name": "Residential landlords", "evidence": None, "companies": [
+                {"symbol": "CPT", "name": "Camden Property Trust", "page": None, "cap": "$9.6B", "revenue": "$1.6B", "year": "2025",
+                 "evidence": "industry_code_supported", "ffo": "$744.8M (reported)"},
+                {"symbol": "UDR", "name": "UDR", "page": None, "cap": "$12.0B", "revenue": "$1.7B", "year": "2025", "evidence": None}]}]}
+    html_ = public_themes.render(page)
+    assert not re.search(r"<td>–</td>", html_)                                # every "–" cell carries its label on a phone card
+    assert '<td data-label="FFO">–</td>' in html_
+    last_table = html_.rindex("</table>")
+    assert html_.index("data-ffo-note") > last_table and html_.index("data-membership-note") > last_table

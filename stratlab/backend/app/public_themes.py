@@ -640,14 +640,15 @@ def render(v: dict) -> str:
     # stacked card (name, then ticker, market value, revenue), never a table wider than the screen
     has_rev = any(c.get("revenue") for x in v["layers"] for c in x["companies"])
     has_ffo = any(c.get("ffo") for x in v["layers"] for c in x["companies"])       # e82: a property owner's reported FFO
-    if has_ffo:
-        body += f'<p class="muted small" data-ffo-note>{e(FFO_LINE)}</p>'
+    # e83 (LIVE19A-010: four grey notes above the first table, in a column half the tables' width): the notes on the tables' columns (FFO,
+    # the Membership mark) come after the tables they explain
+    notes = f'<p class="muted small" data-ffo-note>{e(FFO_LINE)}</p>' if has_ffo else ""
     # r69e (LIVE13A-013: Semiconductors' layer tables of 4 and 5 columns, the Ticker edge jumping from x 662 to 555, "description-verified"
     # on 31 of 39 rows): one set of columns on every layer table of the page, and a Membership cell only for a company that is not
     # description-verified (the page's line says so once)
     state_page = any(c.get("evidence") and c["evidence"] != "description_verified" for x in v["layers"] for c in x["companies"])
     if state_page:
-        body += f'<p class="muted small" data-membership-note>{e(MARK_NOTE)}</p>'
+        notes += f'<p class="muted small" data-membership-note>{e(MARK_NOTE)}</p>'
     for x in v["layers"]:
         state = state_page
         rows = ""
@@ -665,7 +666,8 @@ def render(v: dict) -> str:
             # empty cell keeps the table's columns and carries no label, so a phone's stacked card shows no row for it
             rows += (f'<tr><td>{name}</td><td class="l" data-label="Ticker">{e(c["symbol"])}</td><td data-label="Market value">{e(c["cap"]) if c["cap"] else "–"}</td>'
                      + (f'<td data-label="Revenue">{rev}</td>' if has_rev else "")
-                     + ((f'<td data-label="FFO">{e(c["ffo"])}</td>' if c.get("ffo") else "<td>–</td>") if has_ffo else "") + f"{ev}</tr>")
+                     # e83 (LIVE19A-010: every phone card of a company with no FFO ended on a lone unlabelled "–", R78's fix undone): labelled
+                     + ((f'<td data-label="FFO">{e(c["ffo"])}</td>' if c.get("ffo") else '<td data-label="FFO">–</td>') if has_ffo else "") + f"{ev}</tr>")
         thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th>'
                 + ('<th scope="col">Revenue</th>' if has_rev else "") + ('<th scope="col">FFO</th>' if has_ffo else "")
                 + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
@@ -674,6 +676,7 @@ def render(v: dict) -> str:
                if x.get("evidence") and any(c.get("evidence") and c["evidence"] != "description_verified" for c in x["companies"]) else "")
         body += (f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<div class="cotbl" data-stack><table aria-label="{e(x["name"])}">'
                  f"<thead>{thead}</thead><tbody>{rows}</tbody></table></div></section>")
+    body += notes
     if not v["layers"]:
         body += '<p class="note">No company in this theme has been checked yet.</p>'
     if v["summary"]:
