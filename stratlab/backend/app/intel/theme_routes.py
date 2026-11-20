@@ -51,7 +51,9 @@ DESCRIBE_READS = 6                                                        # desc
 # are read from its annual report first (evidence_reader), one report's front at a time (sec.SEC.business: at most BUSINESS_BYTES read, a
 # few lines kept a month), well inside the SEC client's own limit; at 6 a minute a theme check read about 6, so Biotech's 650 smaller
 # companies would have waited months
-FILING_READS_PER_MINUTE = 30
+# e83 (LIVE19A-003: a fresh US theme not ready at ~200 s, its check waiting on the minute's annual-report reads): 60, still a fifth of the
+# SEC client's own 300 requests a minute (one report's front and its filing list a read)
+FILING_READS_PER_MINUTE = 60
 PLACE_READS = 60                                                          # R28: descriptions read for a theme's companies to place, in its check, at most
 PLACE_READS_MAX = 150                                                     # h56: ...for a large theme, as many as its companies without one over
 DESCRIBE_CHECKS_TO_FINISH = 3                                             # ...this many checks (describe_reads), at most this many

@@ -371,3 +371,31 @@ def test_e83_versions():
     assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.EARLIER_MAX == 33
     assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and blog_research.GEN == 11
     assert sector_metrics.VERSION == 3 and sector_metrics.REIT_V == 3                    # never sector_metrics.VERSION
+
+
+def test_e83_a_fresh_themes_check_asks_its_batches_at_once():
+    """LIVE19A-003: a fresh theme not ready at ~200 s: its check asked each batch of six companies in turn."""
+    import json
+    import threading
+    import time
+    from app.intel import theme_check as TC
+    cos = [{"ticker": f"C{i}", "name": f"C{i} Corp"} for i in range(18)]
+    out = {"value_chain": [{"layer": "Gold producers", "description": "They mine gold.", "companies": cos}]}
+    live, peak, lock = [0], [0], threading.Lock()
+
+    def ask(system, text):
+        payload = json.loads(text.split("CHECKS:\n", 1)[1])
+        with lock:
+            live[0] += 1
+            peak[0] = max(peak[0], live[0])
+        time.sleep(0.15)
+        with lock:
+            live[0] -= 1
+        return {"checks": [{"id": f"{g}|{c['symbol']}", "does": True, "quote": c["description"]} for c in payload["companies"]
+                           for g in c["check_groups"]]}
+    ev = lambda syms: ({s: {"about": f"{s} Corp is a gold producer that mines gold in Nevada.", "industry": ""} for s in syms}, set())      # noqa: E731
+    got = TC.check_placements(out, ev, ask, "Gold miners")
+    assert peak[0] >= 2 and TC.CHECK_WORKERS >= 2
+    assert {c["ticker"] for v in got["value_chain"] for c in v["companies"]} == {c["ticker"] for c in cos}     # every answer read as before
+    from app.intel import theme_routes as TR
+    assert TR.FILING_READS_PER_MINUTE == 60
