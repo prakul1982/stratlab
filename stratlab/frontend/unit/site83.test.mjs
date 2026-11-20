@@ -49,3 +49,22 @@ test("LIVE20B-001: a browser without the routes API, or one that refuses them, s
   assert.equal(res.status, 503);
   assert.match(await res.text(), /StratLab can't be reached/);
 });
+
+test("LIVE20A-006: a filed row with an older quarter kept says previous quarter; the meeting's own quarter decides when it names one", async () => {
+  const { quarterLabel, reportedQuarter, movesEmpty } = await import("../src/lib/resultsRows.ts");
+  // BJ's, filed Fri 20 Nov for the quarter ended Oct 2026, figures to Aug 2026
+  assert.deepEqual(quarterLabel("Aug 2026 vs Aug 2025", "2026-11-20", { filedAt: "2026-11-20T07:00:00" }), { text: "previous quarter, to Aug 2026", prior: true });
+  assert.deepEqual(quarterLabel("Aug 2026 vs Aug 2025", "2026-11-20", { reported: reportedQuarter("Quarterly results (quarter ended Oct 2026)") }), { text: "previous quarter, to Aug 2026", prior: true });
+  // IES, filed for the quarter ended Sep 2026, figures to Jun 2026
+  assert.equal(quarterLabel("Jun 2026 vs Jun 2025", "2026-11-20", { filedAt: "2026-11-20" }).prior, true);
+  // once the filed quarter is read, it is its own
+  assert.deepEqual(quarterLabel("Oct 2026 vs Oct 2025", "2026-11-20", { filedAt: "2026-11-20", reported: "Oct 2026" }), { text: "quarter to Oct 2026", prior: false });
+  assert.deepEqual(quarterLabel("Sep 2026 vs Sep 2025", "2026-11-14", { filedAt: "2026-11-14" }), { text: "quarter to Sep 2026", prior: false });
+  assert.equal(reportedQuarter("Quarterly results (fiscal Q3 2027)"), null);
+  const page = read("src/pages/ResultsPage.tsx");
+  assert.match(page, /r\.q\?\.unreported && r\.out \? <span className="k-muted" data-testid="res-q-unread"[^>]*>Not read yet<\/span> :/);
+  // the US column with no company that has an earlier results day kept: decided from the first frame, no "–" column and loading bars
+  const rows = Array.from({ length: 30 }, (_, i) => ({ symbol: `S${i}`, mv_days: i < 2 ? 3 : 0 }));
+  assert.equal(movesEmpty(rows, {}), true);
+  assert.equal(movesEmpty(rows.map((r, i) => ({ ...r, mv_days: i < 5 ? 3 : 0 })), {}), false);           // five could still bring one
+});

@@ -37,9 +37,19 @@ export const MIN_MOVES = 3;
  * `enough` of them have been answered (rows past the reads' time limit are never answered, and kept the column up before), fewer than
  * MIN_MOVES rows (or half the answered ones, if that is fewer) carry a usual move. LIVE13A-005: one value in 408 US rows (a $0.05 stock)
  * kept the column on every day's table. */
-export function movesEmpty(rows: { symbol: string; moves?: unknown }[], moves: Record<string, { moves?: unknown; since?: unknown } | null | undefined>, enough = 24): boolean {
+export function movesEmpty(rows: { symbol: string; moves?: unknown; mv_days?: number }[], moves: Record<string, { moves?: unknown; since?: unknown } | null | undefined>, enough = 24): boolean {
   if (!rows.length) return false;
-  const back = rows.filter((r) => r.moves || moves[r.symbol] !== undefined);
+  // LIVE20A-006: a row whose company has no earlier results day kept (`mv_days` 0, from the server) can have no usual move: it is answered
+  // from the first frame. The US column stood for 10 s with "–" on every row and loading bars on three, then went.
+  const none = (r: { moves?: unknown; mv_days?: number }) => !r.moves && r.mv_days === 0;
+  const back = rows.filter((r) => r.moves || moves[r.symbol] !== undefined || none(r));
+  const some = new Set(back.filter((r) => r.moves || moves[r.symbol]?.moves).map((r) => r.symbol)).size;
+  // ...and when the rows that could still bring one can't reach the count the column needs, it is decided now
+  const could = new Set(rows.filter((r) => !r.moves && moves[r.symbol] === undefined && !none(r)).map((r) => r.symbol)).size;
+  if (some + could < Math.min(MIN_MOVES, Math.ceil(rows.length / 2))) return true;
+  // ...and while rows the server says have earlier results days (`mv_days` > 0) are still being read and could bring it there, it waits
+  const pending = new Set(rows.filter((r) => !r.moves && moves[r.symbol] === undefined && (r.mv_days ?? 0) > 0).map((r) => r.symbol)).size;
+  if (pending && some < MIN_MOVES && some + pending >= Math.min(MIN_MOVES, Math.ceil(rows.length / 2))) return false;
   if (back.length < Math.min(rows.length, enough)) return false;
   // LIVE12A-008: a "since the latest results" line alone is no usual move: the column of "–" stayed for it (NVDA "– / since Tue 17 Nov")
   const have = new Set(back.filter((r) => r.moves || moves[r.symbol]?.moves).map((r) => r.symbol)).size;
@@ -69,12 +79,33 @@ export function priorQuarter(of: string | null | undefined, resultsDay: string):
   return (day - end) / 86400000 > REPORTED_WITHIN_DAYS ? `${m[1]} ${m[2]}` : null;
 }
 
+/** LIVE20A-006: the quarter a results row reports, from its meeting's own words ("Quarterly results (quarter ended Oct 2026)" -> "Oct 2026");
+ * null when they don't say (India's rows, the US "(fiscal Q3 2027)" form). */
+export function reportedQuarter(purpose: string | null | undefined): string | null {
+  const m = /\(quarter ended ([A-Z][a-z]{2}) (\d{4})\)/.exec(String(purpose ?? ""));
+  return m && MONTHS.includes(m[1]) ? `${m[1]} ${m[2]}` : null;
+}
+
+const monthNo = (q: string): number => { const m = /^([A-Z][a-z]{2}) (\d{4})/.exec(q.trim()); return m ? Number(m[2]) * 12 + MONTHS.indexOf(m[1]) : NaN; };
+
+/** LIVE20A-006: a filing reports a quarter that ended at most this many days before it (a US 10-Q in 40-45, a 10-K in 60-75; India's results
+ * in 45, a year's last in 60): figures of a quarter that ended earlier, on a row already filed, are those of the quarter before. */
+export const FILED_WITHIN_DAYS = 75;
+
 /** LIVE19A-011: the quarter every row's growth figures are of, on the row itself: "quarter to Oct 2026", or "previous quarter, to Jul 2026" when
- * the figures are of the quarter before the one this day reports (priorQuarter; a row whose results are filed is of its own quarter). BJ's
- * "Rev +15.7% Profit +15.4%" stood unlabelled beside rows that said "previous quarter, to Jul 2026". null when the figures name no quarter. */
-export function quarterLabel(of: string | null | undefined, resultsDay: string, filed: boolean): { text: string; prior: boolean } | null {
+ * the figures are of the quarter before the one this day reports. BJ's "Rev +15.7% Profit +15.4%" stood unlabelled beside rows that said
+ * "previous quarter, to Jul 2026". LIVE20A-006: a filed row is not taken to be of its own quarter (the figures kept are read some time after
+ * the filing): BJ's and The Buckle, filed on 20 Nov for the quarter ended Oct 2026, said "quarter to Aug 2026", IES "quarter to Jun 2026".
+ * The quarter the meeting names (`reported`) decides when there is one; else, for a filed row, how long before the filing the figures'
+ * quarter ended (FILED_WITHIN_DAYS); else how long before the results day (priorQuarter). null when the figures name no quarter. */
+export function quarterLabel(of: string | null | undefined, resultsDay: string, o: { reported?: string | null; filedAt?: string | null } = {}): { text: string; prior: boolean } | null {
   const m = /^([A-Z][a-z]{2}) (\d{4})/.exec(String(of ?? "").trim());
-  if (!m || MONTHS.indexOf(m[1]) < 0) return null;
-  const p = filed ? null : priorQuarter(of, resultsDay);
-  return p ? { text: `previous quarter, to ${p}`, prior: true } : { text: `quarter to ${m[1]} ${m[2]}`, prior: false };
+  const mi = m ? MONTHS.indexOf(m[1]) : -1;
+  if (!m || mi < 0) return null;
+  const mine = `${m[1]} ${m[2]}`;
+  const filed = o.filedAt ? Date.parse(`${o.filedAt.slice(0, 10)}T00:00:00Z`) : NaN;
+  const p = o.reported && Number.isFinite(monthNo(o.reported)) ? (monthNo(mine) < monthNo(o.reported) ? mine : null)
+    : Number.isFinite(filed) ? ((filed - Date.UTC(Number(m[2]), mi + 1, 0)) / 86400000 > FILED_WITHIN_DAYS ? mine : null)
+      : priorQuarter(of, resultsDay);
+  return p ? { text: `previous quarter, to ${p}`, prior: true } : { text: `quarter to ${mine}`, prior: false };
 }

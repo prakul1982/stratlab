@@ -1117,10 +1117,17 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
     sort = sort if sort in SORTS else "cap"
     desc = (sort != "name") if desc is None else bool(desc)
     mv = load_moves(region)
+    try:
+        past = load_past(region)["rows"]
+    except Exception:
+        past = None                              # not known: the rows say nothing, and the page asks for each as before
     first, last = week_of(today)[0], week_of(today)[0] + timedelta(days=13)
 
     def rich(r: dict) -> dict:
-        out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv)}
+        out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv),
+               # LIVE20A-006: how many earlier results days are kept for the company: with none it can have no usual move, and the page knows
+               # that from the first frame (the US column stood 10 s with "–" on every row while each was asked for)
+               **({"mv_days": len(past.get(r["symbol"]) or [])} if past is not None else {})}
         if region == "US" and (r.get("out") or {}).get("numbers"):
             # LIVE16A-005: a foreign filer's stored figures (stored as dollars before) in the currency it reports in, the dollars beside them
             out["out"] = {**r["out"], "numbers": in_currency(r["out"]["numbers"], *_report_currency(r["symbol"], ctx.snaps))}

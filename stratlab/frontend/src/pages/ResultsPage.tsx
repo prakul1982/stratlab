@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { capAt, laterDays, movesEmpty, priorQuarter, purposeShown, quarterLabel, whenShort } from "../lib/resultsRows";
+import { capAt, laterDays, movesEmpty, purposeShown, quarterLabel, reportedQuarter, whenShort } from "../lib/resultsRows";
 import { resultDay } from "../lib/resultDay";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
@@ -44,7 +44,7 @@ export interface ResultRow {
   region: Region; symbol: string; name: string | null; date: string; when: string | null; purpose: string; url: string | null;
   mine?: boolean; out?: { at: string; title: string; url: string | null; numbers: ResultNumber[] } | null;
   cap?: number | null; band?: string | null; sector?: string | null; last?: number | null; last_at?: string | null; fo?: boolean; indices?: string[];
-  q?: Quarter | null; moves?: Moves | null;
+  q?: Quarter | null; moves?: Moves | null; mv_days?: number;
 }
 /** One day of a week: how many companies it has and how many of them came in this answer (DE-026). */
 export interface ResultDay { date: string; count: number; shown: number }
@@ -255,12 +255,14 @@ export function ResultsPage() {
     // LIVE5-002: revenue and profit growth share one column, a line each (two columns of one figure each pushed "Options imply" off a 1280 screen);
     // the CSV keeps them apart
     { key: "q", header: "Quarter", cardLabel: "Latest quarter", phone: false, tight: false, csv: null, info: "Year on year (YoY): the latest reported quarter's revenue and net profit against the same quarter a year before, from the company's results as the app keeps them. Hover a figure for the quarters compared. A quarter that came after a loss has no profit growth figure.", cell: (r) => (
+      // LIVE20A-006: a company that filed today with only an older quarter kept: not "Not reported" beside its filed figures (Frontline)
+      r.q?.unreported && r.out ? <span className="k-muted" data-testid="res-q-unread" title={`Filed ${resultDay(r.out.at)}; its figures are beside its name. The growth against a year before is worked out once the quarter's accounts are read${r.q.of ? ` (the latest kept is ${r.q.of.replace(/ vs .*/, "")})` : ""}.`}>Not read yet</span> :
       r.q?.unreported ? <span className="k-muted" data-testid="res-q-unreported" title={r.q.of ? `The latest quarter kept is ${r.q.of.replace(/ vs .*/, "")}` : undefined}>Not reported</span> :
       <span className="res-q"><span><span className="k-muted">Rev </span><Growth v={r.q?.sales} of={r.q?.of} /></span><span><span className="k-muted">Profit </span><Growth v={r.q?.profit} of={r.q?.of} /></span>
         {/* LIVE14A-009: the quarter before the one this day reports says so (PANW's figures to Jul 2026 on its 18 Nov row) */}
-        {(() => { const p = r.q && !r.out ? priorQuarter(r.q.of, r.date) : null; return p && <span className="k-note k-muted" data-testid="res-q-prior">previous quarter, to {p}</span>; })()}
+        {(() => { const l = r.q ? quarterLabel(r.q.of, r.date, { reported: reportedQuarter(r.purpose), filedAt: r.out?.at }) : null; const p = l?.prior ? l.text.replace(/^previous quarter, to /, "") : null; return p && <span className="k-note k-muted" data-testid="res-q-prior">previous quarter, to {p}</span>; })()}
         {/* LIVE19A-011: a row of the quarter this day reports says which quarter too (BJ's figures stood unlabelled) */}
-        {(() => { const l = r.q && (r.q.sales != null || r.q.profit != null) ? quarterLabel(r.q.of, r.date, !!r.out) : null; return l && !l.prior && <span className="k-note k-muted" data-testid="res-q-of">{l.text}</span>; })()}</span>) },
+        {(() => { const l = r.q && (r.q.sales != null || r.q.profit != null) ? quarterLabel(r.q.of, r.date, { reported: reportedQuarter(r.purpose), filedAt: r.out?.at }) : null; return l && !l.prior && <span className="k-note k-muted" data-testid="res-q-of">{l.text}</span>; })()}</span>) },
     { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} />, csv: (r) => r.q?.sales ?? null },
     { key: "pat", header: "Profit", csvHeader: "Profit YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} />, csv: (r) => r.q?.profit ?? null },
     // LIVE10A-020: no row with a past results-day move once every row's read is back (US: "–" on every row): no column for it

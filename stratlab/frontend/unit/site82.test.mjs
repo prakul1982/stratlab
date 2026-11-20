@@ -56,10 +56,11 @@ test("LIVE19B-011: three watched stocks stack the Invest home's cards across the
 
 test("LIVE19A-011: every results row names its quarter, and the day tables share one column set at fixed widths", async () => {
   const { quarterLabel } = await import("../src/lib/resultsRows.ts");
-  assert.deepEqual(quarterLabel("Oct 2026 vs Oct 2025", "2026-11-19", false), { text: "quarter to Oct 2026", prior: false });
-  assert.deepEqual(quarterLabel("Jul 2026 vs Jul 2025", "2026-11-19", false), { text: "previous quarter, to Jul 2026", prior: true });
-  assert.deepEqual(quarterLabel("Jul 2026 vs Jul 2025", "2026-11-19", true), { text: "quarter to Jul 2026", prior: false });   // filed: its own quarter
-  assert.equal(quarterLabel(null, "2026-11-19", false), null);
+  assert.deepEqual(quarterLabel("Oct 2026 vs Oct 2025", "2026-11-19"), { text: "quarter to Oct 2026", prior: false });
+  assert.deepEqual(quarterLabel("Jul 2026 vs Jul 2025", "2026-11-19"), { text: "previous quarter, to Jul 2026", prior: true });
+  // updated on purpose (site83, LIVE20A-006): a filed row is no longer taken to be of its own quarter (IES, filed 20 Nov for Sep 2026,
+  // said "quarter to Jun 2026"), so quarterLabel no longer takes "filed"; unit/site83 has the filed cases
+  assert.equal(quarterLabel(null, "2026-11-19"), null);
   const page = read("src/pages/ResultsPage.tsx");
   assert.match(page, /data-testid="res-q-of">\{l\.text\}/);
   // updated on purpose (Release 82 CI): "Implied" stays a day's own column (R15 #11, e2e/r15-pages); it is the last column, so the first five

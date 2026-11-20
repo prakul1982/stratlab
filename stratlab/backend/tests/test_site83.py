@@ -74,3 +74,21 @@ def test_live20a_002_every_new_read_says_its_method_and_the_job_warms_both_marke
     j.tick(now)
     assert warmed == ["IN", "US"]
     assert mood_job.job.warm is mood_job._mood_warm
+
+
+# ---------- LIVE20A-006: each results row says how many earlier results days are kept (no usual move without one) ----------
+def test_live20a_006_results_rows_carry_their_kept_earlier_results_days(monkeypatch):
+    from datetime import date
+    from app import results
+    cal = {"rows": [results.row("US", "BJ", date(2026, 11, 20), "Quarterly results (fiscal Q3 2027)"),
+                    results.row("US", "FRO", date(2026, 11, 20), "Quarterly results")]}
+    monkeypatch.setattr(results, "load", lambda region: {**cal, "v": results.CAL_VERSION, "at": "2026-11-20T04:00:00+00:00"})
+    monkeypatch.setattr(results, "_snap", lambda region: {})
+    monkeypatch.setattr(results, "index_sets", lambda region: {})
+    monkeypatch.setattr(results, "load_moves", lambda region: {})
+    monkeypatch.setattr(results, "my_stocks", lambda uid, region: [])
+    monkeypatch.setattr(results, "alerts_on", lambda uid: False)
+    monkeypatch.setattr(results, "load_past", lambda region: {"at": None, "rows": {"BJ": ["2026-08-21", "2026-05-22"]}})
+    got = results.view("US", "u-x", scope="all", today=date(2026, 11, 20))
+    rows = {r["symbol"]: r for w in got["weeks"] for r in w["rows"]}
+    assert rows["BJ"]["mv_days"] == 2 and rows["FRO"]["mv_days"] == 0
