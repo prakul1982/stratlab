@@ -1462,6 +1462,9 @@ _FIN_THEME = re.compile(r"\b(?:banks?|banking|lenders?|lending|financ\w*|insur\w
 _BIG_PCT = re.compile(r"(?<![+−\-(\d.,])(\d{3,}(?:,\d{3})*(?:\.\d+)?)%(?!\s+(?:of|more|less|above|below)\b)")
 
 
+_HEADLINE_ROW = re.compile(r"·\s*\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}\s*·")
+
+
 def financial_checks(pages: list[str], add) -> None:
     """r581: "financial margin", a net margin above 100% printed for a bank, lender or insurer (the deck's theme names them, its name read
     under the cover's head, or the row's own line does). A margin column's figure is the one checked: a growth figure carries its sign, a share its bracket."""
@@ -1475,6 +1478,10 @@ def financial_checks(pages: list[str], add) -> None:
                 for m in re.finditer(r"(?:Loss|Expense|Combined|Cost-income|Efficiency) ratio", ln, re.I)]
         for ln in page.split("\n"):
             if not (fin_deck or _FIN_THEME.search(ln)):
+                continue
+            # e84 (the R82 Alcoholic beverages deck: "neutral alcohol 162.5% Duty on Bulk Scotch Whisky · 20 Nov 2026 · BigGo Finance", a
+            # headline row whose source's name says "Finance"): a dated headline from a source is no figure of a company's margin
+            if _HEADLINE_ROW.search(ln):
                 continue
             for m in _BIG_PCT.finditer(ln):
                 if any(a <= (m.start() + m.end()) / 2 <= b for a, b in cols):

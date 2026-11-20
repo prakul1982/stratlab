@@ -51,6 +51,11 @@ def pick(rows: list[dict], versions: list | None = None) -> dict | None:
     # gate passed every item first, SAMPLE_THEME's before any other; one with a failed item only when no clean one is kept
     region, theme = SAMPLE_THEME
     good = [r for r in now if clean(r)]
+    # e84 (LIVE20B-003: the sample deck "Prices as of 19 Nov 2026" handed out after the 20 Nov closes were in): of the clean decks, those at
+    # the newest close their prices are at (meta "prices", kept since e84; one kept before says none and counts as older)
+    top = max((str((r.get("meta") or {}).get("prices") or "") for r in good), default="")
+    if top:
+        good = [r for r in good if str((r.get("meta") or {}).get("prices") or "") == top]
     for r in good:
         if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme:
             return r

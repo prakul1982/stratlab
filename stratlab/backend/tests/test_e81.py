@@ -197,7 +197,9 @@ def test_e81_a_theme_post_says_its_pages_counts_of_companies_and_layers():
 
 
 # ---------- 4. LIVE17A-008: re-splits and returns are no moves ----------
-def test_e81_a_resplit_into_halves_and_a_move_that_returns_are_not_logged_as_moves():
+def test_e81_a_resplit_into_halves_is_not_logged_as_a_move():
+    # (updated on purpose, e84 / LIVE20A-004: a move a later re-check undoes is a change the page showed for a day (Franklin BSP out of
+    # "Mortgage REITs" on 19 Nov and back on 20 Nov), so each is logged on its day; a re-split into halves still is no move)
     log = [{"d": "2026-11-15", "cause": "rules", "counts": {"moved": 2}, "moved": [
                {"symbol": "OSIS", "name": "OSI", "from": "Fabless chip design", "to": "Other semiconductor companies"},
                {"symbol": "AAA", "name": "A", "from": "Oilfield services (larger)", "to": "Oilfield services (smaller)"}]},
@@ -210,8 +212,9 @@ def test_e81_a_resplit_into_halves_and_a_move_that_returns_are_not_logged_as_mov
                {"symbol": "OSIS", "name": "OSI", "from": "Fabless chip design", "to": "Makers of their own products"}]}]
     got = theme_changes.net_moves(log)
     moves = [(r["symbol"], r["to"]) for e in got for r in e.get("moved") or []]
-    assert moves == [("OSIS", "Makers of their own products")]
-    assert [e["counts"]["moved"] for e in got] == [1]
+    assert moves == [("OSIS", "Other semiconductor companies"), ("BIGBLOC", "Cement integrated producers (smaller)"),
+                     ("OSIS", "Fabless chip design"), ("BIGBLOC", "Other cement companies"), ("OSIS", "Makers of their own products")]
+    assert [e["counts"]["moved"] for e in got] == [1, 2, 1, 1]
     # and a new read never logs a re-split
     was = {"layers": ["Oilfield services (larger)"], "cos": {"AAA": ["A", 0, None, None, None, None]}}
     now = {"layers": ["Oilfield services (smaller)"], "cos": {"AAA": ["A", 0, None, None, None, None]}}
@@ -301,8 +304,8 @@ def test_e81_deck_check_reads_a_reason_after_a_name_ending_in_inc():
 
 def test_e81_versions():
     from app.intel import sector_metrics
-    assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 33          # (e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
-    assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and sector_metrics.VERSION == 3          # e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)
+    assert theme_base.RULES == 79 and theme_routes.PLACE_CARRY[79] == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 34          # e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); (e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
+    assert theme_data.DIVE_TEXT == 50 and deck.THEME_DECK_VERSION == 90 and sector_metrics.VERSION == 3          # e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)
 
 
 # ---------- owner P0-a (R79 REITs deck): the FFO Camden reports, $744.8 m, first; the derived proxy with its gains deducted ----------

@@ -50,6 +50,14 @@ OFFICIAL = "an official industry of the theme"
 
 
 # ---------- reading a deck ----------
+
+_WHOM = re.compile(r"\bconsumers?\b", re.I)
+
+
+def _whom_said(name: str, text: str) -> bool:
+    """e84: whether a layer's name names whom its companies serve ("consumer lenders") and the text names them too ("for consumers")."""
+    return bool(_WHOM.search(str(name or "")) and _WHOM.search(str(text or "")))
+
 def deck_path(folder: pathlib.Path, key: str) -> pathlib.Path | None:
     for ext in (".pdf", ".txt"):
         p = folder / f"{key}{ext}"
@@ -431,7 +439,10 @@ def diff_theme(old_pages: list[str], new_pages: list[str]) -> dict:
             text, src = words_in_deck(old_pages + new_pages, comp, layers_all, descr)
             if src != "what" or re.search(r"no description", text, re.I):
                 continue             # only what the deck prints a company does ("What it does"): the lines naming it say too little
-            if text.strip() and G.shares(name, text) is False:
+            # e84 (the R82 Payments deck: JPMorgan into "Card issuers and consumer lenders" on "financial services for consumers and small
+            # businesses", failed as no word of the name): a layer named for whom it lends to ("consumer lenders") is said by words of that
+            # customer ("consumers"), the generic "consumer" read here as the name's own word
+            if text.strip() and G.shares(name, text) is False and not _whom_said(name, text):
                 fail("layer words", f"“{name}”", f"{comp}: what the decks print of its words says no word of the layer's name ({text[:90]})")
     if renamed_moves:
         rows.append({"kind": "table", "company": f"{renamed_moves} companies", "from": "", "to": "",
