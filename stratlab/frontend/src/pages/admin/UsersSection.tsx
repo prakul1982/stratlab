@@ -159,7 +159,8 @@ export function UsersSection() {
 
   const mon = monthShort();
   const cols: Column<UserRow>[] = [
-    { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => <>{u.email ?? "–"}{u.test && <> <Badge dot={false}>Test</Badge></>}</> },
+    // a long address breaks inside its cell, so the ⋯ button stays in view at 1280 on any font (site83 CI)
+    { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => <><span className="adm-break">{u.email ?? "–"}</span>{u.test && <> <Badge dot={false}>Test</Badge></>}</> },
     // the badge with its note under it, always: a note that sometimes wrapped made uneven rows (DJ-014)
     { key: "plan", header: "Plan", cell: (u) => (
       <span className="k-stack adm-plan"><Badge tone={u.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[u.plan]}</Badge>
