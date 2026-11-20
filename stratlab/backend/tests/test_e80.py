@@ -285,6 +285,6 @@ def test_e80_an_older_entry_of_a_theme_kept_now_under_another_name_is_no_page_of
 def test_e80_versions():
     from app import deck
     from app.intel import sector_metrics, theme_base
-    assert theme_base.RULES == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.PLACE_CARRY[75] == 74 and theme_routes.EARLIER_MAX == 31          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
-    assert theme_data.DIVE_TEXT == 47 and deck.THEME_DECK_VERSION == 87 and sector_metrics.VERSION == 3          # e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
+    assert theme_base.RULES == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.PLACE_CARRY[75] == 74 and theme_routes.EARLIER_MAX == 32          # e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
+    assert theme_data.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and sector_metrics.VERSION == 3          # e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose)
     assert computed.entry_max(theme_library.DIVE) >= 4 * 1024 * 1024 and computed.entry_max("theme") == computed.ENTRY_MAX

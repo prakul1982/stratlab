@@ -235,3 +235,83 @@ def test_e82_the_app_and_the_public_page_show_ffo_with_its_basis():
                 {"symbol": "AKR", "name": "Acadia", "page": None, "cap": "$2.9B", "revenue": "$0.4B", "year": "2025", "evidence": None}]}]}
     html_ = public_themes.render(page)
     assert '<th scope="col">FFO</th>' in html_ and "$744.8M (reported)" in html_ and "data-ffo-note" in html_
+
+
+# ---------- 4. LIVE18A-002: a fresh theme is published only once it passes the quality gate ----------
+def _quantum(own_n: int, total: int = 386, how: str = "ai") -> dict:
+    hw = [{"ticker": f"H{i}", "name": f"H{i}", "base": True, "basis": "industry"} for i in range(total - own_n)]
+    own = [{"ticker": f"Q{i}", "name": f"Q{i}", "verified": True} for i in range(own_n)]
+    return {"sector": "Quantum computing", "placements": {"checked": True, "industries_by": how},
+            "value_chain": [{"layer": "Quantum processors", "companies": own},
+                            {"layer": "Computer Peripheral Equipment", "official": True, "basis": "industry", "companies": hw}]}
+
+
+def test_e82_a_theme_of_broad_ai_picked_industries_or_an_unfinished_check_is_not_public():
+    from app.intel import theme_library as TL
+    assert TL.broad_industries(_quantum(3)) is True                    # 3 of 386 in the AI's own layers
+    assert TL.broad_industries(_quantum(60)) is False                  # guard: the AI's layers hold enough of them
+    assert TL.broad_industries(_quantum(3, how="list")) is False       # guard: the curated table's industries
+    assert TL.broad_industries(_quantum(3, total=40)) is False         # guard: a small theme
+    meta = {"rules": theme_base.RULES, "broad": False}
+    assert "not checked yet" in TL.gate_why(meta, {"all": 386, "listed": 197, "unlisted": [["not checked yet", 189]]})
+    assert TL.gate_why(meta, None) == "its membership check is not done yet"
+    assert TL.gate_why({**meta, "broad": True}, {"all": 386, "listed": 386, "unlisted": []}).startswith("its companies come almost all")
+    assert TL.gate_why(meta, {"all": 24, "listed": 23, "unlisted": [["not checked yet", 1]]}) == ""       # guard: Space and satellites
+    assert TL.gate_why({"rules": 76}, None) == ""                                                         # guard: kept before the gate
+
+
+def test_e82_the_themes_list_leaves_out_a_theme_whose_newest_entry_fails_the_gate(monkeypatch):
+    from app import computed
+    from app.intel import theme_library as TL
+    idx = {"entries": {
+        "a": {"region": "US", "label": "Quantum computing", "at": 2.0, "meta": {"q": "quantum computing", "rules": theme_base.RULES, "broad": True}},
+        "b": {"region": "US", "label": "Quantum computing", "at": 1.0, "meta": {"q": "quantum computing", "rules": theme_base.RULES - 1}},
+        "c": {"region": "US", "label": "Semiconductors", "at": 1.0, "meta": {"q": "semiconductor", "rules": theme_base.RULES, "broad": False}}}}
+    dives = {"entries": {"d": {"region": "US", "at": 1.0, "meta": {"q": "semiconductor", "pub": {"all": 104, "listed": 102, "unlisted": []}}}}}
+    monkeypatch.setattr(computed, "index", lambda kind: idx if kind == TL.KIND else dives)
+    assert [x["name"] for x in public_themes.entries("US")] == ["semiconductor"]
+
+
+# ---------- 7. R80 Biotech informative 505 -> 491: clinical-stage companies sent to "Other" when the AI renamed their layer ----------
+def test_e82_a_company_left_out_of_a_renamed_layer_goes_to_the_layer_its_words_say_never_other():
+    words = {f"C{i}": f"C{i} Medicine is a clinical-stage genome editing company dedicated to developing transformative medicines."
+             for i in range(6)}
+    words["V"] = "Valneva is a vaccine company developing, producing and selling vaccines."      # guard: one shared word
+    cos = [{"ticker": s_, "name": f"{s_} Medicine Inc" if s_ != "V" else "Valneva SE", "model_out": "unknown"} for s_ in words]
+    words.update({"K1": "K1 sells commercial specialty medicines for rare diseases.", "K2": "K2 markets commercial specialty drugs."})
+    cos += [{"ticker": "K1", "name": "K1"}, {"ticker": "K2", "name": "K2"}]
+    vc = [{"layer": "Commercial specialty biotechs", "description": "They sell approved specialty medicines.", "companies": cos},
+          {"layer": "Clinical-stage platform developers", "description": "Clinical-stage companies developing therapies on a platform.",
+           "companies": [{"ticker": "P1", "name": "P1"}, {"ticker": "P2", "name": "P2"}]},
+          {"layer": "Other biotech companies", "official": True, "basis": "rest", "companies": []}]
+    out, rows = theme_base.listed_out(vc, words.get, "Biotechnology")
+    at = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
+    assert all(at[f"C{i}"] == "Clinical-stage platform developers" for i in range(6)), at
+    assert at["K1"] == at["K2"] == "Commercial specialty biotechs"
+    assert at["V"] == "Other biotech companies"
+    assert any("they say what “Clinical-stage platform developers” is" in r["why"] for r in rows)
+
+
+# ---------- 6. LIVE18A-010: the dive the re-check keeps is the one the page reads after prices move ----------
+def test_e82_the_dives_key_does_not_follow_the_figures_window(monkeypatch):
+    cos = [{"ticker": f"S{i}", "name": f"S{i}", "what": "We make chips" if i % 2 else "", "cap": 100.0 - i} for i in range(10)]
+    m = {"_library": "semiconductor", "generated_at": 1.0, "placements": {"placed": 10},
+         "value_chain": [{"layer": "Semiconductors", "official": True, "companies": cos}]}
+    k1 = theme_routes.dive_key("US", "Semiconductors", m)
+    # a close moves a described company across the figures' window's edge
+    monkeypatch.setattr(theme_base, "for_figures", lambda m_: ({**m_, "value_chain": [{**m_["value_chain"][0], "companies": cos[:3]}]}, None))
+    assert theme_routes.dive_key("US", "Semiconductors", m) == k1
+
+
+def test_e82_a_public_tally_is_dated_in_the_markets_own_day():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    assert str(theme_routes.market_day("US")) == datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    assert str(theme_routes.market_day("IN")) == datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+
+
+def test_e82_versions():
+    from app import blog_research
+    from app.intel import sector_metrics
+    assert theme_base.RULES == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.EARLIER_MAX == 32
+    assert theme_data.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and blog_research.GEN == 10 and sector_metrics.VERSION == 3

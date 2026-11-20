@@ -299,8 +299,8 @@ def test_e81_deck_check_reads_a_reason_after_a_name_ending_in_inc():
 
 def test_e81_versions():
     from app.intel import sector_metrics
-    assert theme_base.RULES == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 31
-    assert theme_data.DIVE_TEXT == 47 and deck.THEME_DECK_VERSION == 87 and sector_metrics.VERSION == 3
+    assert theme_base.RULES == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 32          # (updated on purpose: e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
+    assert theme_data.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and sector_metrics.VERSION == 3
 
 
 # ---------- owner P0-a (R79 REITs deck): the FFO Camden reports, $744.8 m, first; the derived proxy with its gains deducted ----------

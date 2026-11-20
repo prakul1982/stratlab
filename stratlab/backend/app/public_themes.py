@@ -82,6 +82,8 @@ def entries(region: str | None = None) -> list[dict]:
     # rules bump took 15 of 21 public theme pages to "No theme at this address" until each was read again), never one of an older map
     # name: an entry under today's rules always wins
     best: dict = {}
+    gated: dict = {}
+    pubs = _dive_pubs()
     for hk, e in (computed.index(theme_library.KIND).get("entries") or {}).items():
         m = e.get("meta") or {}
         if not isinstance(m.get("rules"), int) or m["rules"] > theme_base.RULES or e.get("region") not in ("IN", "US") \
@@ -100,6 +102,7 @@ def entries(region: str | None = None) -> list[dict]:
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
+            gated[key] = theme_library.gate_why(m, pubs.get((e["region"], name)))
     # e80 (LIVE16A-009: Public sector banks' public page "checked under an earlier version ... being checked again now" for 4 h and more while
     # its app page said "checked 19 Nov"): an entry kept under older rules whose theme the library now finds under today's rules by another
     # name (the re-check kept it there) stands for nothing: its address answers 301 to that theme's page
@@ -116,7 +119,23 @@ def entries(region: str | None = None) -> list[dict]:
         if cur and cur[1]["rules"] >= theme_base.RULES:
             cur[1]["aliases"] = [x for x in dict.fromkeys(cur[1]["aliases"] + [row["slug"]] + row["aliases"]) if x and x != cur[1]["slug"]]
             best.pop(k, None)
-    return sorted((row for _, row in best.values()), key=lambda x: (x["region"], x["label"].lower()))
+    # e82 (LIVE18A-002): a theme is offered here only once its newest entry passes the quality gate (theme_library.gate_why)
+    return sorted((row for k, (_, row) in best.items() if not gated.get(k)), key=lambda x: (x["region"], x["label"].lower()))
+
+
+def _dive_pubs() -> dict:
+    """e82: {(region, theme name): the count kept with its newest dive (index meta "pub")}, from the store's index in memory."""
+    out, at = {}, {}
+    try:
+        rows = (computed.index(theme_library.DIVE).get("entries") or {}).values()
+    except Exception:
+        return {}
+    for x in rows:
+        m = (x or {}).get("meta") or {}
+        k = (x.get("region"), m.get("q"))
+        if isinstance(m.get("pub"), dict) and float(x.get("at") or 0) >= at.get(k, -1.0):
+            out[k], at[k] = m["pub"], float(x.get("at") or 0)
+    return out
 
 
 def page_path(region: str, name: str) -> str:
