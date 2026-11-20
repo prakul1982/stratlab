@@ -56,7 +56,10 @@ export function PageLock() {
     // note for a frame before the observer hid it: looked again, before paint, whenever the title's slot appears
   }, [locked, pathname, slot]);
   if (!locked || own || loading || !gate || !me) return null;
-  if (!gate.whole && !(slot && slot.isConnected)) return null;          // the page itself still opening (its title not drawn yet)
+  // the page itself still opening (its title not drawn yet). LIVE19B-009: a whole page too: drawn at the top over the app's "Opening…", the
+  // note was then taken away by the page's own (the scan's), a different message lower down (Free CLS 0.085). Every gated page has a title,
+  // so the note waits for it and is drawn once, under it, or not at all when the page words its own
+  if (!(slot && slot.isConnected)) return null;
   const plan = PLAN_NAME[gatePlan(gate)];
   const yours = PLAN_NAME[(me.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
   const what = lockWhat(pathname, gate.feature);
@@ -68,6 +71,5 @@ export function PageLock() {
       {hint}
     </Notice>
   );
-  // under the page's title when it has one; at the top for a page with no title component
-  return slot && slot.isConnected ? createPortal(note, slot) : note;
+  return createPortal(note, slot);
 }

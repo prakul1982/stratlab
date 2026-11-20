@@ -589,7 +589,7 @@ export function OptionsPage() {
         </Notice>
       )}
 
-      <Card label="Set up the structure">
+      <Card label="Set up the structure" className="opt-setup">
         <CardHead title="What to trade" actions={<>
           <button type="button" className="btn quiet sm" onClick={exportIt}>Export</button>
           <button type="button" className="btn quiet sm" onClick={() => setConfirmReset(true)}>Start over</button>
@@ -600,11 +600,10 @@ export function OptionsPage() {
             <div className="k-row">
               <ChipBar wrap label="Underlying" value={onPopular ? `${s.exchange}:${s.underlying}` : ""} onChange={(v) => { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); }}
                 options={popular.map((u) => ({ value: `${u.exchange}:${u.name}`, label: u.name }))} />
-              {!!unds?.length && (
-                <Select small label="Other underlyings" value={onPopular ? "" : `${s.exchange}:${s.underlying}`}
-                  onChange={(v) => { if (v) { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}
-                  options={[{ value: "", label: `Other underlyings (${Math.max(0, unds.length - popular.length)})…` }, ...unds.filter((u) => !popular.some((p) => p.exchange === u.exchange && p.name === u.name)).map((u) => ({ value: `${u.exchange}:${u.name}`, label: `${u.name} (${u.venue})` }))]} />
-              )}
+              {/* LIVE19B-006: drawn from the first frame (disabled until the list comes): inserted at 5.1 s, it pushed the page down on a phone */}
+              <Select small label="Other underlyings" value={onPopular ? "" : `${s.exchange}:${s.underlying}`} disabled={!unds?.length}
+                onChange={(v) => { if (v) { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}
+                options={[{ value: "", label: unds?.length ? `Other underlyings (${Math.max(0, unds.length - popular.length)})…` : "Other underlyings…" }, ...(unds ?? []).filter((u) => !popular.some((p) => p.exchange === u.exchange && p.name === u.name)).map((u) => ({ value: `${u.exchange}:${u.name}`, label: `${u.name} (${u.venue})` }))]} />
             </div>
           </FieldGroup>
           <FieldGroup label="Expiry" info="Nearest is the first expiry still to come; Next is the one after; Monthly is the last expiry of the month.">
@@ -616,6 +615,7 @@ export function OptionsPage() {
                 options={expiryChoices(und?.expiries, s.expiry, shortDay).options}
                 onChange={(v) => patch({ expiry: v })} />
               {/* the expiry priced, once there is a price: the one the pill names is the one the numbers use (R11C-007) */}
+              {!und && <span className="k-note" aria-hidden="true">&nbsp;</span>}
               {und && <span className="k-note" data-testid="opt-expiry-note">{[preview ? expiryName(preview.expiry) : exp ? expiryName(exp) : "", (preview ? preview.lot : lot) != null ? `lot ${preview ? preview.lot : lot} ${s.underlying}` : ""].filter(Boolean).join(" · ")}</span>}
               {/* LIVE10B-017: an expiry that is today says so ("Start over" after midday gave today's contract with nothing saying it ends in hours) */}
               {(preview?.expiry ?? exp)?.slice(0, 10) === dayIn(new Date(), IST) && <span className="k-note" data-testid="opt-expiry-today">This expiry is today{s.exchange === "NFO" || s.exchange === "BFO" ? ": the contracts end at 15:30 IST" : ""}.</span>}

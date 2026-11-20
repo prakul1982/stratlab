@@ -1702,6 +1702,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   /* LIVE18B-004: on its own row under the title the switch takes the card's width too: the head's room for its move and fold buttons (top
      right, on the title's row only) left it 248px against 324px for everything under it */
   .tax-controls > .k-card-head:has(> .k-sec) > .k-card-actions { margin-right: -76px; max-width: none; }
+  /* LIVE19B-008: the journal's upload card the same as the tax report's (its switch was 248px and stacked, its buttons three widths) */
+  .j-bring > .k-card-head > .k-card-actions { flex: 1 1 100%; }
+  .j-bring > .k-card-head > .k-card-actions > .k-seg, .j-bring > .k-card-head > .k-card-actions > .btn, .j-bring .k-row > .k-upload,
+  .j-bring .k-row > .btn { width: 100%; box-sizing: border-box; }
+  .j-bring > .k-card-head:has(> .k-sec) > .k-card-actions { margin-right: -76px; max-width: none; }
 }
 /* a table in a compact card (a strip of a few figures) fills the card's width, not the width of its words (owner, 5 Nov: the tax
    report's two-figure table stopped two thirds of the way across its card) */
@@ -2901,6 +2906,16 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
      the placeholders' two rows are the loaded rows (a short "Prices are per month" left the switch beside it: one row, the cards moved up) */
   .lp-period > :first-child { flex-basis: 100%; }
   .lp-period > span.small:first-child { min-height: 50px; display: flex; align-items: center; }
+  /* LIVE19B-002: both switches take the row, each choice an equal half: "Monthly" filled half and "Yearly · about 2 months free" was
+     squeezed to the edge, and "₹ INR / $ USD" sat alone at 118px on the row under it. A long label wraps inside its half (two lines fit the
+     50px row on any font), so the row's height is the placeholder's whatever font the phone has */
+  .lp-period > *, .lp-period .cur-switch { flex-basis: 100%; }
+  .lp-skel-cur { width: 100%; }
+}
+@media (max-width: 640px) {
+  .lp-period .k-seg, .k-plan-opts .k-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+  .lp-period .k-seg button, .k-plan-opts .k-seg button { min-width: 0; white-space: normal; text-wrap: balance; line-height: 1.2; padding-inline: 8px; }
+  .lp-period .cur-switch, .k-plan-opts .cur-switch { width: 100%; }
 }
 .lp-price-note { display: block; line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
@@ -3418,3 +3433,16 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .h-sum.wide .k-table td .k-sub-line { display: flex; justify-content: center; margin-top: 4px; }
 .k-phone-fold > summary { list-style: none; display: inline-flex; margin: 8px 0; cursor: pointer; }   /* r69e: a layer's tables a press away on a phone */
 .k-phone-fold > summary::-webkit-details-marker { display: none; }
+
+/* LIVE19B-006: the options builder on a phone. The expiry choices share the row in equal parts, each label wrapping inside its part, so the row
+   is one height before the expiries come (bare "Nearest / Next / Monthly") and after (with their dates), on any font: it turned from a row
+   into three full-width rows at 5.1 s and pushed the page down. Export, Start over and Import a structure: two equal halves and a full row,
+   not two uneven rows */
+@media (max-width: 640px) {
+  .k-expiry > .k-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+  .k-expiry > .k-seg button { min-width: 0; white-space: normal; text-wrap: balance; line-height: 1.2; padding-inline: 6px; min-height: 44px; }
+  .opt-setup > .k-card-head > .k-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 1 1 100%; }
+  .opt-setup > .k-card-head > .k-card-actions > :last-child { grid-column: 1 / -1; }
+  .opt-setup > .k-card-head > .k-card-actions > .btn { justify-content: center; }
+  .opt-setup > .k-card-head:has(> .k-sec) > .k-card-actions { margin-right: -76px; max-width: none; }
+}

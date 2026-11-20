@@ -107,6 +107,8 @@ test("LIVE6-020: a page with part of it on a plan gets the page's plan note only
   assert.match(lock, /export const LOADING = 'main \[aria-busy="true"\], main \.k-working:not\(\.inline\)';/);
   assert.match(lock, /setLoading\(partial && !!document\.querySelector\(LOADING\)\);/);
   assert.match(lock, /if \(!locked \|\| own \|\| loading \|\| !gate \|\| !me\) return null;/);
-  assert.match(lock, /if \(!gate\.whole && !\(slot && slot\.isConnected\)\) return null;/);
+  // (updated on purpose, LIVE19B-009: a whole page's note waits for the title too: drawn at the top over "Opening…", it was taken away by the
+  // scan page's own note lower down, CLS 0.085)
+  assert.match(lock, /if \(!\(slot && slot\.isConnected\)\) return null;/);
   assert.match(src("pages/IposPage.tsx"), /asOfPending=\{!d && !error\}/);                    // the as-of badge's place kept while loading
 });
