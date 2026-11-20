@@ -4363,6 +4363,11 @@ COMPUTE_SAYS = (r"\bcomput(?:e|ing)\b|\bcapacity\b|\bhosting\b|data cent(?:er|re
 CLOUD_ADJECTIVE = r"\bcloud(?:[- ]based|[- ]native)?\s+(?!comput\w*|infrastructure|hosting|servers?|capacity|data cent\w*)"
 
 
+# e85: word starts of no kind of work, never counted as words a company shares with a layer (compute_fit's last step)
+SHARE_GENERIC = {"one", "while", "run", "platf", "deliv", "desig", "engin", "servi", "solut", "busin", "compa", "custo", "provi", "offer",
+                 "build", "grow", "start", "every", "speed", "lead", "globa", "world", "focus", "help", "enabl"}
+
+
 def says_compute(text: str) -> bool:
     """r572: whether a company's own words say it sells computing, capacity, hosting or data centres ("cloud" said of another product aside)."""
     return bool(re.search(COMPUTE_SAYS, re.sub(CLOUD_ADJECTIVE, " ", str(text or ""), flags=re.I), re.I))
@@ -4472,12 +4477,23 @@ def compute_fit(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[
             # properties", put in "Mortgage REITs" on the words it shares with it): a layer of lenders only for one whose words say it lends
             if not LENDS_SAYS.search(plain):
                 others_ = [w for w in others_ if not LENDING_LAYER.search(_HALF_RX.sub("", w.get("layer") or ""))]
+            # e85: a layer's name said in its opening or the sentences that say what the company sells (principal_words), never in a later one of its
+            # platform's qualities (Shopify's "reliability and security")
+            sells_ = " ".join(dict.fromkeys(x for x in ((_sentences(" ".join(plain.split())) or [""])[0], principal_words(plain)) if x)) or plain
             said = [w for w in others_ if layer_says(w, plain, tw)[1]]
+            said = [w for w in said if layer_says(w, sells_, tw)[1]] if len(said) == 1 else said
             to, how = (said[0], "its own words say what “{}” is") if len(said) == 1 else (None, "")
             if to is None:
-                mine = kind_stems(plain) - tw
-                best = max(others_, key=lambda w: len(mine & (kind_stems(f"{w.get('layer')} {w.get('description') or ''}") - tw)), default=None)
-                if best is not None and len(mine & (kind_stems(f"{best.get('layer')} {best.get('description') or ''}") - tw)) >= 2:
+                # e85 (the re-read Software words: Shopify sent to "Security software subscriptions" on "all-in-one", "platform", "while" and
+                # "reliability and security", a quality of its platform): words of no kind of work never count (SHARE_GENERIC), and a layer is
+                # taken on shared words only on two of them, or on a word of its name said in the company's opening sentence of what it is
+                mine = kind_stems(plain) - tw - SHARE_GENERIC
+                opening = kind_stems((_sentences(" ".join(plain.split())) or [""])[0]) - tw - SHARE_GENERIC
+                shared = lambda w: mine & (kind_stems(f"{w.get('layer')} {w.get('description') or ''}") - tw)      # noqa: E731
+                others_ = [w for w in others_ if len(shared(w)) >= 2
+                           or shared(w) & opening & kind_stems(_HALF_RX.sub("", w.get("layer") or ""))]
+                best = max(others_, key=lambda w: len(shared(w)), default=None)
+                if best is not None:
                     to, how = best, "its own words share most with what “{}” is"
             if to is None:
                 to = next((w for w in vc if w.get("official") and w.get("basis") == "rest"), None)
