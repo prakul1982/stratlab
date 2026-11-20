@@ -19,6 +19,7 @@ import { Toast } from "./components/Toast";
 import { Tracking } from "./components/Tracking";
 import { VisitorApp } from "./visitor/VisitorApp";
 import { LoadFailed, LoadGuard, Opening as OpeningSpinner, PageBoundary } from "./components/LoadGuard";
+import { BootFrame } from "./components/BootFrame";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { endsAt, endsAtShort } from "./lib/offer";
@@ -269,13 +270,13 @@ function Routed() {
   // the analytics question comes first in the page's order, so the keyboard and a screen reader meet it before a hundred controls
   // (A11Y-2: it was the 127th Tab stop); signed in, the Shell draws it in the first row of its page column (LIVE7B-006)
   if (everyone) return <><VisitorApp userId={session?.user.id} /><Tracking /></>;
-  if (!ready) return <><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main><Tracking /></>;
+  if (!ready) return <><BootFrame><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></BootFrame><Tracking /></>;
   // a saved sign-in the sign-in service didn't answer for is not "signed out": say it couldn't load, offer Reload (R20-002)
   if (!session && sessionUnconfirmed(ready, session)) return <><main><LoadFailed what="your account" /></main><Tracking /></>;
   if (!session) return <><VisitorApp /><Tracking /></>;
   // the data status first (a moment at most, asked for beside the sign-in check): the offline line is then drawn with the page, never
   // pushed in over it a second later (LIVE11B-004)
-  if (!dataKnown) return <><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main><Tracking /></>;
+  if (!dataKnown) return <><BootFrame><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></BootFrame><Tracking /></>;
   return (
     <Shell ask={<Tracking />}>
       <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}

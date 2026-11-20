@@ -113,6 +113,23 @@ body:has(#root [role="alert"]) > main > .boot-now { display: none; }
 @keyframes boot-in { to { opacity: 1; } }
 html[data-saved] [data-boot] > * { display: none; }
 html[data-saved] [data-boot]::before { content: "Opening StratLab…"; font: 600 18px/1.3 Georgia, serif; }
+/* LIVE21B-001: a saved sign-in on an app page is shown the app's own frame (public/boot.js builds it as the page is parsed), never the
+ * landing's header with "Sign in" and its heading: hidden here too, for the moment before the script has taken them out. The frame's look is
+ * the app's stylesheet (.shell, .sidebar, .topbar, .k-loading), which the built page links in its head; the rules below are for a page
+ * without it (the dev server), at no specificity, so the app's own rules always win. */
+html[data-app-boot] #root > .boot-head, html[data-app-boot] [data-boot-head], html[data-app-boot] [data-boot] { display: none; }
+:where(body) { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+:where(.boot-shell) { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; color: var(--b-ink); }
+:where(.boot-shell .sidebar) { background: var(--b-card); border-right: 1px solid var(--b-line); padding: 12px 16px; }
+:where(.boot-shell .topbar), :where(.boot-shell .sr-only) { display: none; }
+:where(.boot-shell .k-loading) { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 80px 16px; color: var(--b-muted); }
+:where(.boot-shell .brand) { display: flex; align-items: center; }
+:where(.boot-shell .logo) { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+@media (max-width: 900px) {
+  :where(.boot-shell) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  :where(.boot-shell .sidebar) { display: none; }
+  :where(.boot-shell .topbar) { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--b-line); }
+}
 </style>
 <noscript><style>.boot-wait { opacity: 1; animation: none; }</style></noscript>
 <script src="/boot.js"></script>

@@ -22,7 +22,8 @@ test("LIVE11B-004: the data status is asked for as the app starts, and the page 
   assert.match(app, /publicGet<\{ data_online: boolean; data_note\?: DataNote \}>\("\/public\/data-online"\)/);
   assert.match(app, /export const DATA_STATUS_WAIT_MS = 1500;/);
   const main = read("src/main.tsx");
-  assert.match(main, /if \(!dataKnown\) return <><main><h1 className="sr-only">Opening StratLab<\/h1>/);
+  // (changed on purpose, site85 LIVE21B-001: inside the app's frame, the menu's panel and the top bar, as the page's HTML draws it)
+  assert.match(main, /if \(!dataKnown\) return <><BootFrame><h1 className="sr-only">Opening StratLab<\/h1>/);
   assert.match(main, /<DataBanner note=\{me \? me\.data_note \?\? null : dataNote\}/);
 });
 
