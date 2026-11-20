@@ -4,10 +4,27 @@ const SHELL = "stratlab-shell-v4";          // v4: a v3 shell may be a public pa
 // where the script should be) is replaced by it instead of leaving the app without its settings
 const STATIC = ["/config.js", "/theme.js", "/boot.js"];
 
+// LIVE20B-001 / LIVE20A-008: nothing waits for this worker to start. On a browser's first page the worker's start took 3.5-4 s live
+// (a cold browser), and every request of the page (the page itself, its files, the server's answers) waited for it, navigation
+// preload or not: a page's requests can't pass a worker with a fetch handler until it runs. These routes (Chrome and Edge; other
+// browsers have none and keep the fetch handler below) are decided by the browser without starting the worker:
+// - while it isn't running, every request goes to the network, as with no worker at all. Racing the page load against the worker
+//   instead (to keep the offline page) started it alongside the page, and the page's start-up files then came through it: about
+//   0.15 s slower on every first page, for an offline page shown only when there is no network;
+// - while it runs, its own files and page loads are its to answer (the last good copy, the app shell, the offline page), and every
+//   other request goes straight to the network (the handler answers nothing else, so passing through it was only a wait).
+const OWN = [...STATIC, "/favicon.svg"];
+const ROUTES = [
+  { condition: { runningStatus: "not-running" }, source: "network" },
+  { condition: { or: [{ requestMode: "navigate" }, ...OWN.map((f) => ({ urlPattern: f }))] }, source: "fetch-event" },
+  { condition: { requestMethod: "GET" }, source: "network" },
+];
+const addRoutes = (e) => (typeof e.addRoutes === "function" ? Promise.resolve().then(() => e.addRoutes(ROUTES)).catch(() => undefined) : Promise.resolve());
+
 // each file on its own: one that fails to download (a 502 on the icon) no longer leaves the whole shell uncached (R6O-006)
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => Promise.all(["/", "/favicon.svg", "/icon-192.png", ...STATIC]
-    .map((f) => c.add(f).catch(() => undefined)))).catch(() => undefined));
+  e.waitUntil(Promise.all([addRoutes(e), caches.open(SHELL).then((c) => Promise.all(["/", "/favicon.svg", "/icon-192.png", ...STATIC]
+    .map((f) => c.add(f).catch(() => undefined)))).catch(() => undefined)]));
   self.skipWaiting();
 });
 
