@@ -102,3 +102,11 @@ test("LIVE21B-012: the tax report's sales are five columns, the long name wraps 
   assert.match(align, /PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN - GROWTH/);
   assert.match(read("e2e/ui-lint-world.ts"), /const fund = "PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN - GROWTH";/);
 });
+
+test("LIVE21B-003: /mine lists the watchlist in its own order, and Coming up has as many rows as the watchlist shows", () => {
+  const mine = read("src/pages/MineHome.tsx");
+  assert.match(mine, /return parts\.flat\(\)\.sort\(\(a, b\) => at\(a\) - at\(b\)\)\.slice\(0, 6\)/);
+  assert.doesNotMatch(mine, /Math\.abs\(b\.q\.change_pct \?\? 0\) - Math\.abs\(a\.q\.change_pct \?\? 0\)/);
+  assert.match(mine, /const comingShown = coming && shownWatch && shownWatch < 6 \? coming\.slice\(0, Math\.max\(2, shownWatch\)\) : coming;/);
+  assert.match(mine, /watch: <WatchCard onRows=\{setWatchRows\} \/>/);
+});
