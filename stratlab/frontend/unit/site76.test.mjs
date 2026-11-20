@@ -114,13 +114,18 @@ test("LIVE14B-001: boot.js asks for a saved sign-in's account the moment /config
     { getItem: () => null, setItem() {} }, fetchStub, win.location);
   win.STRATLAB_CONFIG = { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" };
   assert.equal(win.STRATLAB_CONFIG.API_BASE, "https://api.example");          // the config still reads back
-  assert.equal(calls.length, 1);
+  // (updated on purpose, site81: the page's own first reads, /notebooks and /markets on /mine, now go out beside /me with the same token;
+  // /me is still asked first and once)
+  const me = () => calls.filter((c) => c[0] === "https://api.example/me");
+  assert.equal(me().length, 1);
+  assert.deepEqual(calls.map((c) => c[0]), ["https://api.example/me", "https://api.example/notebooks", "https://api.example/markets"]);
   assert.equal(calls[0][0], "https://api.example/me");
   assert.equal(calls[0][1].Authorization, "Bearer tok");
   assert.equal(calls[0][1]["X-View-As"], "basic");
   assert.equal(win.__stratlabEarlyMe.token, "tok");
   win.STRATLAB_CONFIG = { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" };        // a second write: asked once
-  assert.equal(calls.length, 1);
+  assert.equal(me().length, 1);
+  assert.equal(calls.length, 3);
 });
 
 test("LIVE14A-016 (LIVE13A-017): a lock's price after words naming the same plan doesn't name it again", async () => {

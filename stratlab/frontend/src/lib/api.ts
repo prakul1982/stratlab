@@ -42,10 +42,13 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
 /** The account asked for while the app's code downloaded (lib/accountEarly.ts, LIVE13B-004), taken once by the first GET of /me with the same
  * token, and only while fresh; read from the window so this file doesn't depend on that one. */
 function takeEarlyMe(path: string, method: string, token: string | undefined): Promise<Response> | null {
-  const w = window as unknown as { __stratlabEarlyMe?: { token: string; at: number; got: Promise<Response> } | null };
-  const e = w.__stratlabEarlyMe;
-  if (!e || path !== "/me" || method !== "GET") return null;
-  w.__stratlabEarlyMe = null;
+  type Early = { token: string; at: number; got: Promise<Response> };
+  const w = window as unknown as { __stratlabEarlyMe?: Early | null; __stratlabEarlyReads?: Record<string, Early | undefined> };
+  if (method !== "GET") return null;
+  // site81: the page's first reads public/boot.js asked beside /me (the app-wide lists, Trade's strip), each taken once the same way
+  const e = path === "/me" ? w.__stratlabEarlyMe : w.__stratlabEarlyReads?.[path];
+  if (!e) return null;
+  if (path === "/me") w.__stratlabEarlyMe = null; else delete w.__stratlabEarlyReads![path];
   return e.token === token && Date.now() - e.at < 30_000 ? e.got : null;
 }
 
