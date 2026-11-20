@@ -274,6 +274,7 @@ def repair_index_moves(region: str, days: int = 60) -> int:
     return fixed
 
 
+GAP_DRIFT = 0.15              # e85: a stored 52-week gap this many points from the close's (beyond one decimal's rounding of two highs) is set to it
 CLOSE_DRIFT = 0.001           # a stored index level over 0.1% from the day's close is not that close (a source's small late revisions are left)
 
 
@@ -295,13 +296,19 @@ def repair_closes(region: str, days: int = 10) -> list[str]:
         day = date.fromisoformat(issue["day"])
         prev = content.reference_day(region, day, False).isoformat()
         syms = dict(content.INDICES.get(region, []))
-        indices, changed = [], False
+        indices, changed, gap_only = [], False, True
         for i in issue["indices"]:
             sym = syms.get(i.get("name")) if isinstance(i, dict) else None
             got = content.index_close(sym, day, prev=prev) if sym else None
             old = i.get("price") if isinstance(i, dict) else None
             if got and isinstance(old, (int, float)) and old and abs(got["price"] / old - 1) > CLOSE_DRIFT:
                 i = {**i, "price": got["price"], "change_pct": got.get("change_pct")}
+                changed, gap_only = True, False
+            # e85 (LIVE21A-015: the 18 Nov US brief's S&P 500 set to its close, 7,323.63, kept "6.9% below" its 52-week high, the gap of the
+            # 7,303.98 it had replaced; 6.6% from the close): the gap from the day's own close, where the candles give it
+            if got and isinstance(i, dict) and isinstance(got.get("from_high_pct"), (int, float)) \
+                    and (not isinstance(i.get("from_high_pct"), (int, float)) or abs(got["from_high_pct"] - i["from_high_pct"]) >= GAP_DRIFT):
+                i = {**i, "from_high_pct": got["from_high_pct"]}
                 changed = True
             indices.append(i)
         if not changed:
@@ -310,8 +317,11 @@ def repair_closes(region: str, days: int = 10) -> list[str]:
             indices = blog.official_changes(region, day, indices)[0]
         rotation = next((s["items"] for s in issue.get("sections") or [] if s.get("title") == "Sector rotation"), [])
         f = {"kind": "market", "region": region, "day": issue["day"], "weekly": False, "indices": indices, "rotation": rotation}
-        issue.update(indices=indices, subject=write.subject(f), title=write.headline(f), summary=write.template(f), ai=False)
-        issue.pop("ai_summary", None)                 # the AI's words restated the older levels
+        if gap_only:                                  # e85: only the 52-week gaps: the issue's words stand, its Indices table is drawn again
+            issue.update(indices=indices)
+        else:
+            issue.update(indices=indices, subject=write.subject(f), title=write.headline(f), summary=write.template(f), ai=False)
+            issue.pop("ai_summary", None)             # the AI's words restated the older levels
         issue["sections"] = write.market_sections({**f, "rotation": []})[:1] + [s for s in issue.get("sections") or [] if s.get("title") != "Indices"]
         issue["html"], issue["text"] = write.render(issue)
         kind, scope, dkey = parse_id(iid)

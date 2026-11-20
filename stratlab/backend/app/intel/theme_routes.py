@@ -734,7 +734,8 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
                                      figures_of=_figures_reader(region),
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
                                      **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}),
-                                     **({"moved_out": mo} if mo else {}), published=published_layers(region, theme, m))
+                                     **({"moved_out": mo} if mo else {}), published=published_layers(region, theme, m),
+                                     recent=recent_moves(region, theme, m))          # e85: moves of the last days not reversed
     # p57: the misfit and audit answers (and the retry mark) are kept too, so each is asked at most once a theme and rules version
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())
                                                     or any(got.get(k) != kept.get(k) for k in ("fit", "audit", "reasked_rules") if got.get(k))):
@@ -1171,6 +1172,16 @@ def moved_before(region: str, theme: str, m: dict) -> dict:
         return theme_changes.move_memory(theme_changes.stored(region, m.get("_library") or theme))
     except Exception as e:
         print("theme: earlier moves not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def recent_moves(region: str, theme: str, m: dict) -> dict:
+    """e85 (LIVE21A-009): {symbol: [from, to]} of the moves the stored log made in the last days under today's rules
+    (theme_changes.recent_moves). {} when none is stored."""
+    try:
+        return theme_changes.recent_moves(theme_changes.stored(region, m.get("_library") or theme), theme_base.RULES)
+    except Exception as e:
+        print("theme: recent moves not read:", type(e).__name__, str(e)[:100])
         return {}
 
 
@@ -2590,7 +2601,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     tailwinds and risks with their sources, and which placements are confirmed. Counted against the plan's monthly decks as a
     company's deck is (Free 1, Basic 5, Pro unlimited); a theme's PDF and PowerPoint are one deck, once a month. A file made today for the
     same read of the theme is kept (DECK_CACHE) and sent again at once: the owner, 6 Nov: "it's taking a whole lot of time to make the pdf"."""
-    from .. import biz_updates, deck, main
+    from .. import biz_updates, main
     if format not in ("pptx", "pdf"):
         err(400, "bad_format", "Pick PowerPoint or PDF.")
     R = _routes()
@@ -2603,8 +2614,21 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
         return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
                              "message": "Preparing the deck: the theme is being checked again under the current rules." if m.get("_older")
                              else "Preparing the deck: the AI map is being written."}, status_code=202)
-    today = datetime.now(R.IST).date()
     biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
+    body = deck_file(R, r, theme, m, profile, format, biz)
+    if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
+        db.add_usage(profile["id"], "deck")
+        db.add_usage(profile["id"], mark)
+    from fastapi.responses import Response
+    return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, market_day(r))}"'})
+
+
+def deck_file(R, r: str, theme: str, m: dict, profile: dict, format: str, biz: bool) -> bytes:
+    """A theme deck's file for the checked map: the one kept today for the same read (DECK_CACHE, the shared store), else made, kept with
+    its publication gate and the close its prices are at (theme_dive_deck; e85: the sample deck's refresh too, refresh_sample)."""
+    from .. import deck
+    today = datetime.now(R.IST).date()
     stamp = int(float(m.get("generated_at") or 0))
     replaced_n = (m.get("placements") or {}).get("replaced")         # r572: a map placed again on new words is a new read of the theme
     seen = (NEWS_CACHE.get((r, theme.lower(), int(float(theme_base.for_figures(m)[0].get("generated_at") or 0)))) is not None,
@@ -2634,12 +2658,41 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
                 computed.put("deck:theme", list(key), base64.b64encode(body).decode(), label=f"{theme} ({format.upper()}, {today.isoformat()})", region=r,
                              meta={"gate": gate, "prices": str(dive.get("as_of") or "")[:10]})        # e84: the close its prices are at
         DECK_CACHE.set(key, body, DECK_TTL, size=len(body))
-    if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
-        db.add_usage(profile["id"], "deck")
-        db.add_usage(profile["id"], mark)
-    from fastapi.responses import Response
-    return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, market_day(r))}"'})
+    return body
+
+
+# e85 (LIVE21A-018: the /plans sample deck "Prices as of 19 Nov 2026" at 18:44 UTC, made 13:00 UTC, 5 h after the 20 Nov India closes
+# landed): the sample is a deck someone made (sample_deck.pick prefers the newest close among those kept), and nothing made one at the new
+# close until a user did. The offered sample's theme gets its PDF made again once its dive is at a newer close than the deck's prices
+# (theme_recheck's job, when its queue is empty: at most every IDLE seconds, one deck, in the memory guard's turn), once a close
+_SAMPLE_TRIED: dict = {}          # (market, theme, close) -> when it was made or tried (bounded)
+
+
+def refresh_sample(profile: dict) -> str | None:
+    """e85: the offered sample deck made again at its theme's newer close (a PDF, no plan-only part); the close it was made at, or None when
+    nothing was due (no sample, its dive still at the deck's close, being worked out, or tried at this close already)."""
+    from .. import sample_deck
+    row = sample_deck.chosen()
+    if not row:
+        return None
+    region, name = row.get("region"), sample_deck._name(row.get("label") or "")
+    R = _routes()
+    pending: list = []
+    r, theme, m = map_for_deck(R, profile, region, name, wait=0, pending=pending)
+    if (pending and pending[0]) or not (m.get("placements") or {}).get("checked"):
+        return None
+    dive = dive_of(r, theme, m)
+    close = str(dive.get("as_of") or "")[:10]
+    if dive.get("updating") or not close or close <= str((row.get("meta") or {}).get("prices") or "")[:10]:
+        return None
+    k = (r, theme.lower(), close)
+    if k in _SAMPLE_TRIED:
+        return None
+    if len(_SAMPLE_TRIED) > 64:
+        _SAMPLE_TRIED.clear()
+    _SAMPLE_TRIED[k] = time.time()
+    deck_file(R, r, theme, m, profile, "pdf", False)
+    return close
 
 
 @router.get("/theme-dive/workbook")

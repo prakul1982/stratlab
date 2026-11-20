@@ -2429,6 +2429,14 @@ def roll_said(n_in: int, total: int, n_out: int, in_: str, out_: str, cut: bool)
 # by its words is never said to have no other way of earning from words that name none; what its words name beside the layer's business is
 # said as what it also earns from, and "no other way of earning" only where one reportable segment is stored (theme_data.also_said)
 ON_WORDS_NOTE = "(on its words): the map placed it here and its own words say the layer's name, so it is in the layer's figures."
+def on_words(c: dict) -> bool:
+    """e85 (LIVE21A-009: Welltower's row "(on its words)" in the R84 REITs deck while the same deck's Membership note said it has "no
+    description in its own words yet" and its page said "industry-supported"): a row is marked placed on its words only when its evidence
+    state is description-verified (the words a page may quote); placed on words a page doesn't quote, it is in its layer as the map placed
+    it (MAP_TAG), one state on the page, the app and the deck."""
+    return bool(c.get("by_words")) and c.get("evidence") in (None, "description_verified")
+
+
 LOW_TAG = "read at low confidence"
 MAP_TAG = "as the map placed it"          # r572: in its layer's figures as the map placed it, its own words contradicting nothing
 # fix20 (LIVE14B-005, the IT services sample deck p.12: "(read at low confidence): how it earns is read at low confidence as the layer's way"):
@@ -6995,7 +7003,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if c.get("distress"):          # y57 (R57, TEL-5): its margins on its row, out of every median and range
                 return "in distress"
             return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else \
-                "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else MAP_TAG if c.get("by_map") else ""
+                "on its words" if on_words(c) else LOW_TAG if c.get("read_low") else MAP_TAG if c.get("by_map") or c.get("by_words") else ""
         tags = {c["symbol"]: tag(c) for c in cos}
         # e54 (R54): a company whose whole-company figures, of another way of earning too, stand in the layer's figures says so on its row
         cons = consolidated_of(layer, cos)
@@ -7687,8 +7695,8 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
             why = why_kind(calc_of(c))        # LIVE7A-005: a row's mark is its kept reason first, the whole company's figures after (ex49: its kind)
             mark = ABROAD_TAG if calc_of(c).get("abroad") and not calc_of(c).get("in") else ROLL_TAG.get(why) if why else ("whole company" if c.get("company_wide") or c["symbol"] in (x.get("company_wide") or []) else
                                                   "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else
-                                                  "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else
-                                                  MAP_TAG if c.get("by_map") else "")
+                                                  "on its words" if on_words(c) else LOW_TAG if c.get("read_low") else
+                                                  MAP_TAG if c.get("by_map") or c.get("by_words") else "")
             name = (f"{c['name']} ({mark})" if mark else c["name"]) \
                 + (f"; also listed, not confirmed: {', '.join(others)}" if others and i == len(sure) - 1 else "")
             rows_.append(({**x, "layer": x["layer"] if i == 0 else "", "_of": x["layer"]}, c, name))

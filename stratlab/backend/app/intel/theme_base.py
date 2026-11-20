@@ -709,7 +709,7 @@ def fill_earlier(answer: dict, earlier: dict) -> dict:
 
 def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None, facts_of=None, carried: bool = False,
                previous: dict | None = None, off_before: dict | None = None, moved_before: dict | None = None, moved_out: dict | None = None,
-               figures_of=None, published: dict | None = None) -> tuple[dict, dict]:
+               figures_of=None, published: dict | None = None, recent: dict | None = None) -> tuple[dict, dict]:
     """(the map with every base company in one of the map's own layers, the answer as worked out: {"assign": {symbol: {"layer", "by"}},
     "rename": {layer: {"name", "description"}}, "extra": [{"name", "description", "symbols"}]}). Runs only when the map has layers of its own;
     companies in its official-industry or named-list layers (not a list grouped by industry) are placed: from `kept` (the answer kept with the map),
@@ -1094,7 +1094,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         # r59: a layer never mostly listed and left out, a company moved in on no line of its words back where it was
         out_vc, listed_rows = listed_out(out_vc, words_of, theme, moved_before, figures_for if figures_of is not None else None, published)
         out_vc, bar_rows = kind_bars(out_vc, words_of, theme)          # e81: a kind of company a layer can never hold
-        single_rows = single_rows + listed_rows + bar_rows
+        # e85 (LIVE21A-009): a move made within the last days under today's rules is not reversed by this re-check
+        out_vc, hold_rows = hold_reversals(out_vc, recent)
+        single_rows = single_rows + listed_rows + bar_rows + hold_rows
         single_rows = other_rows + single_rows
         held_rows = held_rows + compute_rows + single_rows
     back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
@@ -5841,6 +5843,36 @@ HOME_FORMS = re.compile(r"\((?:10-K|10-Q|8-K)\)")         # a US domestic filer'
 ABROAD_FORMS = re.compile(r"\((?:20-F|40-F|6-K)\)")        # a foreign private issuer's
 
 
+def hold_reversals(vc: list[dict], recent: dict | None) -> tuple[list[dict], list[dict]]:
+    """e85 (LIVE21A-009: Omega, Alexandria and Medalist moved on 19 Nov and back on 20 Nov): a company the stored log moved from A to B within
+    the last days under today's rules (`recent`, theme_changes.recent_moves) that this placement puts back in A stays in B, said as held
+    (a move needs evidence that holds: one reversed the next day on the same rules and words is no finding). Only when B is still a layer of
+    the map; with no such layer, the placement stands. (the layers, a row for each company held)."""
+    if not recent:
+        return vc, []
+    by_name = {_HALF_RX.sub("", v.get("layer") or ""): v for v in vc if v.get("layer")}
+    rows = []
+    for v in vc:
+        here = _HALF_RX.sub("", v.get("layer") or "")
+        keep = []
+        for c in v.get("companies") or []:
+            mv = recent.get(c.get("ticker"))
+            frm, to = (_HALF_RX.sub("", mv[0]), _HALF_RX.sub("", mv[1])) if mv else ("", "")
+            back = mv and here == frm and to != here and to in by_name
+            if not back:
+                keep.append(c)
+                continue
+            dest = by_name[to]
+            why = f"moved to “{to}” within the last {HOLD_REVERSAL_DAYS} days under these rules; not moved back on the same evidence"
+            dest["companies"] = list(dest["companies"]) + [{**c, "moved": True, "held": True, "refit": {"from": here, "to": to, "why": why}}]
+            rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": here, "to": to, "why": why})
+        v["companies"] = keep
+    return vc, rows
+
+
+HOLD_REVERSAL_DAYS = 3          # e85: theme_changes.HOLD_DAYS, said in the reason
+
+
 def domicile_moves(vc: list[dict], facts_for) -> tuple[list[dict], list[dict]]:
     """r62: a company in a layer whose name (or its description's first sentence) says its companies are foreign to the theme's market
     (FOREIGN_LAYER), whose stored filings are a domestic filer's own (HOME_FORMS, none of ABROAD_FORMS), is not foreign: it goes to the
@@ -5884,6 +5916,28 @@ def domicile_moves(vc: list[dict], facts_for) -> tuple[list[dict], list[dict]]:
             to = "" if dest is rest_v else _HALF_RX.sub("", dest.get("layer") or "")
             why = (f"its own filings are a domestic filer's ({', '.join(sorted({x.strip('()') for x in home.findall(filed)}))}), so it is not one of “{frm}”"
                    + (f"; in the layer of its official industry whose companies' market values are nearest its own" if to else ""))
+            dest["companies"] = list(dest["companies"]) + [{**{k: x for k, x in c.items() if k not in ("model_out", "out_why", "unfit", "line_says")},
+                                                            "moved": True, "refit": {"from": frm, "to": to, "why": why, "domicile": True}}]
+            rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": frm, "to": to, "why": why})
+        v["companies"] = keep
+    # e85 (LIVE21A-009: the R84 US Regional banks page with UBS in "Custody and asset servicing banks" and Banco Santander (Brasil) in
+    # "Mid-sized banks", while HSBC, RBC and Barclays sat in "Foreign banking groups earning loan interest"): the other way too, a company of a
+    # named layer whose stored filings are a foreign issuer's annual report (ABROAD_FORMS, none of HOME_FORMS) goes to the map's foreign
+    # layer (its largest), beside the other foreign companies, with the reason
+    dest = max((v for v in foreign if v.get("companies")), key=lambda v: len(v["companies"]), default=None)
+    for v in homes if dest is not None else ():
+        keep = []
+        for c in v["companies"]:
+            try:
+                filed = str((facts_for(c.get("ticker")) or {}).get("filings") or "")
+            except Exception:
+                filed = ""
+            if not abroad.search(filed) or home.search(filed):
+                keep.append(c)
+                continue
+            frm, to = _HALF_RX.sub("", v.get("layer") or ""), _HALF_RX.sub("", dest.get("layer") or "")
+            why = (f"its own filings are a foreign issuer's ({', '.join(sorted({x.strip('()') for x in abroad.findall(filed)}))}), so it is "
+                   f"one of “{to}”, not of “{frm}”")
             dest["companies"] = list(dest["companies"]) + [{**{k: x for k, x in c.items() if k not in ("model_out", "out_why", "unfit", "line_says")},
                                                             "moved": True, "refit": {"from": frm, "to": to, "why": why, "domicile": True}}]
             rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": frm, "to": to, "why": why})

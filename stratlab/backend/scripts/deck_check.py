@@ -1476,6 +1476,12 @@ def financial_checks(pages: list[str], add) -> None:
         # combined: claims and costs over premiums, past 100% for an underwriting loss) is no margin
         cols = [(m.start() - 12, m.end() + 4) for ln in page.split("\n") if re.search(r"\bmargin\b|\bRevenue\b", ln)
                 for m in re.finditer(r"(?:Loss|Expense|Combined|Cost-income|Efficiency) ratio", ln, re.I)]
+        # e85 (the R84 US Insurance deck: Employers Holdings' combined ratio 114.3% and its range "69.0% to 114.3%" under a head wrapped over
+        # two lines, "Combined" above "ratio"; Verisk's ROE 293.9% in the appendix): a ratio's head on a line of column heads alone (no
+        # figure), its word over its column, and a return on equity or capital (ROE, ROCE, ROA: profit over equity or capital, never over
+        # revenue) are no margin column either
+        cols += [(m.start() - 12, m.end() + 6) for ln in page.split("\n") if _COLUMNS.search(ln) and not re.search(r"\d%|\d\.\d", ln)
+                 for m in re.finditer(r"\b(?:Loss|Expense|Combined|Cost-income|Efficiency)\b(?:\s+ratio)?|\bRO(?:C?E|A)\b", ln)]
         for ln in page.split("\n"):
             if not (fin_deck or _FIN_THEME.search(ln)):
                 continue
