@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../lib/currency";
 import { cardPrice, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
 import { CurrencySwitch } from "../components/CurrencySwitch";
-import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
+import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, YEARLY_SHORT, yearlySaving } from "../lib/offer";
 import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/planCore";   // the cards only: the tables (plans.ts) stay off the landing download
 import { early, emailSignInOn, signIn, signInUnfinished, startSignIn } from "../lib/signin";
 import { rememberNext } from "../lib/returnTo";
@@ -604,7 +604,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         <div className="lp-period">
           {showYear && !loading ? (
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
-              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
+              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL, short: YEARLY_SHORT }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
           {/* LIVE18B-003: the currency switch's place is held while the prices come (on a phone it is a second row: the cards moved 62px) */}
           {loading && <span className="lp-skel lp-skel-cur" />}

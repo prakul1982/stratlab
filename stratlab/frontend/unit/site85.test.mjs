@@ -110,3 +110,18 @@ test("LIVE21B-003: /mine lists the watchlist in its own order, and Coming up has
   assert.match(mine, /const comingShown = coming && shownWatch && shownWatch < 6 \? coming\.slice\(0, Math\.max\(2, shownWatch\)\) : coming;/);
   assert.match(mine, /watch: <WatchCard onRows=\{setWatchRows\} \/>/);
 });
+
+test("owner, 20 Nov: the phone's billing choice reads \"Yearly\", the saving on each yearly card", () => {
+  for (const f of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) assert.match(read(f), /\{ value: "year", label: YEARLY_LABEL, short: YEARLY_SHORT \}/, f);
+  assert.match(read("src/lib/offer.ts"), /export const YEARLY_SHORT = "Yearly";/);
+});
+
+test("owner, 20 Nov: an IPO in BSE's list only says it is BSE's, never \"No NSE page yet\" with its lot and bids blank (Mahanadi Coalfields)", async () => {
+  const page = read("src/pages/IposPage.tsx");
+  assert.match(page, /export const bseOnly = \(r\?: Pick<IpoRow, "exchanges">\): boolean => !!r\?\.exchanges\?\.length && !r\.exchanges\.includes\("NSE"\);/);
+  assert.match(page, /if \(tab === "upcoming"\) return "Not announced yet";\n  if \(bseOnly\(r\)\) return BSE_ONLY;/);
+  assert.match(page, /bseOnly\(r\) \? BSE_ONLY : r\.page === false/);
+  assert.match(page, /export const BSE_ONLY = "Listed on BSE: not published yet";/);
+  // the lot BSE's list gives is kept on a row only BSE lists (backend/app/ipo.py)
+  assert.match(read("../backend/app/ipo.py"), /"exchanges": \["BSE"\]/);
+});
