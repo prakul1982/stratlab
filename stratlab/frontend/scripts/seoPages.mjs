@@ -15,7 +15,7 @@ import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS as POLICY_BLOCKS, LEGAL_UPDATED 
 import { ABOUT_BLOCKS } from "../src/content/about.ts";
 /** Every page drawn from the policy text: the policies and /about (kept apart in the app so a policy page doesn't download it). */
 const LEGAL_BLOCKS = { "/about": ABOUT_BLOCKS, ...POLICY_BLOCKS };
-import { PLAN_IDS, PLAN_NAME, PRICE, WHO } from "../src/lib/plans.ts";
+import { KEY, PLAN_IDS, PLAN_NAME, PRICE, WHO } from "../src/lib/plans.ts";
 
 const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const text = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -161,8 +161,52 @@ export function loginFrame(template, { heading, summary, signup = false }) {
   return template.replace(block, () => frame).replace(head, () => `${head}\n${early}`);
 }
 
+// ---------- the Plans page's start-up frame (LIVE18B-003) ----------
+// A visitor's /plans while the code downloads: the Plans page itself as the app first draws it (pages/Login.tsx Pricing, `top`, while the
+// prices are on their way), with the app's stylesheet and the same classes: the landing's header, the heading, the one-line lede's
+// placeholder, the billing and currency switches' placeholders, and the three plan cards with their names, who each is for, the price's
+// placeholder, the ways in and the five lines. Live it was a different, plain page for about 2 s (a 480 px column, the heading in Georgia,
+// the site's links as a text list, prose, no buttons), then the real page replaced it. The words for a reader with no script (who can't
+// sign in) are the page's own paragraphs and plans list, shown only then. The Google buttons wait, disabled, as the app's do until the
+// prices come; the email way is a plain link to the sign-in page with the plan picked.
+/** A loading plan card's Google button's words (pages/Login.tsx landingAction before the offer is read: unit/site81 keeps them equal). */
+export const PLAN_FRAME_LABEL = { free: "Continue with Google", basic: "Continue with Google to see plans", pro: "Continue with Google to see plans" };
+
+export function plansFrame(template, { heading, summary, after = "" }) {
+  template = landingHead(template, `<a class="btn outline sm" href="/login">Sign in</a>`);
+  const block = /<div class="boot[^"]*" data-boot>\n<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>\n(<p class="boot-foot">[\s\S]*?<\/p>)\n<\/div>/;
+  const b = block.exec(template);
+  if (!b) throw new Error("index.html has no start-up block");
+  const list = (p) => `<ul class="lp-plan-list">${KEY[p].map((f) => `<li><span aria-hidden="true">✓</span>${text(f)}</li>`).join("")}</ul>`;
+  const card = (p) => {
+    const label = PLAN_FRAME_LABEL[p];
+    const email = p === "free" ? "/login#email" : `/login?plan=${p}#email`;
+    return `<div class="lp-card lp-price${p === "pro" ? " lp-price-top" : ""}" data-plan="${p}"><div class="stack g2"><h2 class="h2">${text(PLAN_NAME[p])}</h2><span class="small muted">${text(WHO[p])}</span></div>`
+      + `<div class="stack g2"><span class="lp-skel lp-skel-amount${p === "free" ? " lp-skel-amount-one" : ""}" role="img" aria-label="Loading the price"></span></div>`
+      + `<div class="lp-plan-ways"><button type="button" class="btn${p === "pro" ? "" : " outline"}" disabled>${text(label)}</button>`
+      + `<a class="btn outline email-way lp-plan-email" href="${attr(email)}">${MAIL_SVG}${text(label.replace("Continue with Google", "Sign in with email"))}</a></div>`
+      // on a phone the five lines are one fold under the buttons, as the app's PhoneFold draws them; on a wider screen in view (index.html)
+      + `<details class="lp-more lp-phone-fold"><summary>What ${text(PLAN_NAME[p])} includes</summary><div class="stack g24">${list(p)}</div></details>`
+      + list(p).replace('class="lp-plan-list"', 'class="lp-plan-list boot-wide"') + `</div>`;
+  };
+  const words = (summary ?? []).map((p) => `<p class="boot-text">${text(p)}</p>`).join("\n");
+  const frame = `<section id="pricing" class="lp-sec lp-sec-first boot-plans" data-boot aria-busy="true">\n<div class="lp-wrap stack g32">\n`
+    + `<div class="lp-head"><h1 class="serif lp-h2">${text(heading)}</h1><span class="lp-skel lp-skel-p lp-skel-p-one" data-boot-js></span></div>\n`
+    + `${words}${after.replace(/<ul class="boot-links">/, '<ul class="boot-links boot-text">')}\n`
+    + `<div class="lp-period" data-boot-js><span class="lp-skel lp-skel-seg"></span><span class="lp-skel lp-skel-cur"></span></div>\n`
+    + `<div class="lp-prices" data-boot-js>${PLAN_IDS.map(card).join("")}</div>\n`
+    + `<div class="lp-faq lp-all-features" data-boot-js><details><summary>Every feature, plan by plan</summary><p class="small muted">Opening the lists…</p></details></div>\n`
+    + `<p class="small muted" data-boot-js>Slide decks are on Basic and Pro. </p>\n<span class="lp-skel lp-skel-fine" data-boot-js></span>\n`
+    + `${b[1].replace('class="boot-foot"', 'class="boot-foot boot-text"')}\n</div>\n</section>`;
+  // with email sign-in off in /config.js, signin-early.js marks the page and the email ways go (index.html), as on /login
+  const early = '<script src="/signin-early.js" defer fetchpriority="high"></script>';
+  const head = '<script src="/config.js"></script>';
+  if (!template.includes(head)) throw new Error("index.html has no config.js script");
+  return template.replace(block, () => frame).replace(head, () => `${head}\n${early}`);
+}
+
 /** The template (index.html as built) with one page's own tags, and its own heading and words in the plain block. */
-export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false, body = "", after = "", readable = !!body, hero = false, login = null, fonts = [] }) {
+export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false, body = "", after = "", readable = !!body, hero = false, login = null, plans = false, fonts = [] }) {
   const swap = (re, to) => {
     if (!re.test(template)) throw new Error(`index.html has no ${re}`);
     template = template.replace(re, () => to);
@@ -183,6 +227,7 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
   // LIVE17B-006: the sign-in page's own words are its lede; its description printed again under the small print (with scripts off) said the
   // same sentence twice. Only words of its own (a summary) are added.
   if (heading && login) return loginFrame(template, { heading, summary: summary?.length ? summary : [], signup: login === "signup" });
+  if (heading && plans) return plansFrame(template, { heading, summary: summary?.length ? summary : [description], after });
   if (heading) {
     // the page's one heading and its words, where index.html has the home page's (the app replaces the block when it draws)
     const boot = /(<div class="boot[^"]*" data-boot>\n)<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>/;
@@ -209,8 +254,8 @@ export function pageFiles(template, fonts = []) {
     pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : p.path === "/plans" ? plansJsonLd() : "", heading: p.heading, summary: p.summary,
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
-      after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : p.path === "/plans" ? plansList() : "",
-      faq: p.path === "/faq", hero: p.path === "/", login: p.path === "/login" ? "login" : p.path === "/signup" ? "signup" : null, fonts })]);
+      after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : p.path === "/plans" || p.path === "/pricing" ? plansList() : "",
+      faq: p.path === "/faq", hero: p.path === "/", login: p.path === "/login" ? "login" : p.path === "/signup" ? "signup" : null, plans: p.path === "/plans" || p.path === "/pricing", fonts })]);
   files.push(["404.html", pageHtml(template, { title: withBrand("Page not found"), description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
   return files;

@@ -2879,7 +2879,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-skel-p.lp-skel-p-one, .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }   /* LIVE2-031: the Plans page's one-line lede: a two-line (four on a phone) placeholder moved the cards up 27 to 81px when the prices arrived */
 .lp-period { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
-.lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
+.lp-skel-cur { height: 38px; width: 146px; max-width: 100%; }   /* LIVE18B-003: the "Prices in" switch's place, held while the prices come (a phone's second row moved the cards 62px) */
+.lp-skel-amount { height: calc(44px * 1.05 + 2px + 13.5px * 1.5); width: 60%; }   /* site81: the price row's own 68.4px (the price at 44px × 1.05, the gap, a small line), not 70.5 */   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
 /* LIVE15B-012 / LIVE17B: Free's price has no line under it (no dollar or rupee figure beside ₹0): its placeholder is the price line alone, so
    Free's card doesn't shrink and pull the cards under it up when the prices arrive (visitor phone CLS 0.045) */
@@ -2892,6 +2893,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }
   .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
   .lp-skel-seg { height: 50px; }
+  .lp-skel-cur { height: 50px; width: 119px; }
 }
 .lp-price-note { display: block; line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
