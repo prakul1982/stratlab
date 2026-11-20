@@ -7,6 +7,7 @@ import { useMarketRefresh } from "../lib/marketLive";
 import { axisInrFor, dayIn, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
+import { optionsOfflineLine } from "../lib/dataBack";
 import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoices, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legWords, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sameExpiryNote, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
@@ -381,7 +382,7 @@ const TILE_GROUPS: { title: string; ids: string[] }[] = [
 ];
 
 export function OptionsPage() {
-  const { fail, notify, refreshMe, notebooks, me, markets } = useApp();
+  const { fail, notify, refreshMe, notebooks, me, markets, dataOffline, dataNote } = useApp();
   const feats = me?.plan_info?.features;
   const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true, canStart = feats ? feats.options !== false : true;
   // entering on a notebook's signal is on Pro: said on the choice and the Start button, not first at Start
@@ -404,10 +405,11 @@ export function OptionsPage() {
 
   useEffect(() => {
     // offline, the indices with a recorded chain are what can be priced, on that recording (DB-001)
-    api<Underlying[]>("/options/underlyings").then((u) => { setUnds(u); setOffline(null); }).catch((e: ApiError) => {
-      setOffline(e.message);
-      api<Underlying[]>("/options/recorded").then(setUnds).catch(() => setUnds([]));
-    });
+    // LIVE18B-008: one answer, never a 503 while the feed is offline (it was a 503 on every load, then /options/recorded: a second round trip)
+    // (a plain list, the answer without ?offline=list, is the live list)
+    api<{ offline: string | null; rows: Underlying[] } | Underlying[]>("/options/underlyings?offline=list")
+      .then((u) => { setUnds(Array.isArray(u) ? u : u.rows ?? []); setOffline(Array.isArray(u) ? null : u.offline ?? null); })
+      .catch((e: ApiError) => { setOffline(e.message); setUnds([]); });
     if (recheck) return;                             // the sessions, the draft and an imported structure are read once
     api<LiveRow[]>("/live/sessions").then((r) => setRows(r.filter((x) => x.instrument?.type === "OPTIONS"))).catch(() => setRows([]));
     try {
@@ -574,7 +576,9 @@ export function OptionsPage() {
         lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask; a contract with none is priced from its last trade, and the page says so."
         actions={<span title={HELP.optBacktest}><Badge tone="plain" dot={false}>Live paper trading only</Badge></span>} />
 
-      {offline && <Notice tone="warn" actions={<button type="button" className="btn quiet sm" onClick={() => setRecheck((n) => n + 1)}>Check again</button>}>{offline}</Notice>}
+      {/* LIVE18B-008: with Indian data offline (known as the page starts) the note is drawn at once, in the server's words, not inserted above
+          "What to trade" when the list answers (a phone's card moved down 187px at 5.3 s) */}
+      {(offline ?? (unds === null && dataOffline ? optionsOfflineLine(dataNote) : null)) && <Notice tone="warn" actions={<button type="button" className="btn quiet sm" onClick={() => setRecheck((n) => n + 1)}>Check again</button>}>{offline ?? optionsOfflineLine(dataNote)}</Notice>}
       {restored && s.name !== blankOptions().name && (
         <p className="k-note" data-testid="opt-restored">This is "{s.name}", kept from your last visit in this browser. Start over for a fresh structure.</p>
       )}
