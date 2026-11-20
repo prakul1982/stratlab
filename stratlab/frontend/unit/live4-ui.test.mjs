@@ -191,7 +191,9 @@ test("LIVE4-012: a page's (i) ends its lede when there is no as-of badge, never 
   assert.match(read("src/components/kit/PageHeader.tsx"), /const inline = !!info && !!lede && !when && !asOfPending;/);
   const nw = read("src/pages/money/NetWorthPage.tsx");
   assert.match(nw, /<EmptyState title="Nothing added yet">/);
-  assert.equal((nw.match(/Add an entry<\/button>/g) ?? []).length, 1);
+  // (changed on purpose, site85 LIVE21B-008: a second, disabled copy holds the button's place while the entries are read, never beside the first)
+  assert.equal((nw.match(/Add an entry<\/button>/g) ?? []).length, 2);
+  assert.match(nw, /: error \? undefined : \([\s\S]{0,400}<button type="button" className="btn" disabled><Plus size=\{16\} \/>Add an entry<\/button>/);
 });
 
 test("LIVE4-013: the usual-range note says which spans are the industry's; an India bank gets the bank spans", () => {
