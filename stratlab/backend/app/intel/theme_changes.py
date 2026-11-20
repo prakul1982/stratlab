@@ -692,13 +692,16 @@ _FORM_ONLY = re.compile(r"\b(?:an?|the)\s+(?:[A-Z][a-z]+\s+){0,2}(?:corporation|
                         r"\bbecame\s+the\b|\bheadquartered\s+in\b")
 
 
-def layer_quote(words, name: str, layer: str, line: str = "") -> tuple[str, bool]:
+def layer_quote(words, name: str, layer: str, line: str = "", aside: set | None = None) -> tuple[str, bool]:
     """e81: (the line of a company's own words a move into `layer` quotes, whether there is one): its work sentence (work_sentence) when it
     says a word of the layer's name, else the first sentence of its words about its work that does (theme_base.layer_line), else its work
     sentence. A move into "Other" quotes its work sentence."""
     from .theme_base import _line_says, layer_line, layer_words, name_aside
     q = line if line else work_sentence(words)
     ws = layer_words(layer) if layer and not str(layer).startswith("Other ") else set()
+    if aside:          # e84: the theme's own name's words ("bank" of Regional banks) are no word of one layer's work
+        from .theme_base import kind_stems
+        ws = {w for w in ws if not (kind_stems(w) & aside)} or ws
     if not ws:
         return q, True
     says = lambda t: any(_line_says(name_aside(t, name), w) for w in ws)         # noqa: E731
@@ -714,6 +717,12 @@ def layer_quote(words, name: str, layer: str, line: str = "") -> tuple[str, bool
     # prime contracting", is still its reason; none at all is said so)
     # e83 (LIVE19A-009: a move into "Real estate-focused lenders (bank)" quoting "BankUnited, Inc., with total consolidated assets of $35
     # billion ..."): only a line of what it does: one of its form, size or history is no reason (the move is then said as the map's)
+    # e84 (LIVE20A-004: BankUnited's "provides a full range of banking services" for "Real estate-focused lenders (bank)" in a Regional banks
+    # theme): a line that says only the theme's own words ("banking") and none of the layer's own says nothing of that layer
+    if q and aside and _LENDER_LAYER.search(layer) and _LENDS_WORDS.search(name_aside(q, name)):
+        return q, True
+    if q and aside and any(_line_says(name_aside(q, name), w) for w in aside):
+        return q, False
     return q, bool(q) and bool(_WORK_SAID.search(q))
 
 
@@ -899,7 +908,7 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
         # Markets Ltd is engaged in capital market operations and merchant banking”", Motilal Oswal "→ Stock broking: “The company offers
         # diversified financial services”"): a move into a named layer quotes the line of its work that says that layer's words, never one
         # that says none of them
-        q, says = layer_quote(w, r.get("name") or "", b, q)
+        q, says = layer_quote(w, r.get("name") or "", b, q, name_words)
         said = f"its own words say “{q}”" if q and says else f"filed under {ind}" if ind and not q else ""
         if not said and q:
             said = f"no line of its own words says a word of “{b}”; the theme's map places it in “{b}”"
