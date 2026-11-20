@@ -67,11 +67,6 @@ export const ASK_AFTER_LOAD_MS = 1200;
 export const ASK_QUIET_MS = 600;
 export const ASK_MAX_WAIT_MS = 15_000;
 
-/** Whether the page still shows a loading state: the app's "Opening…" or a card's placeholder (each says aria-busy), the start-up frame. */
-export function pageBusy(doc: Pick<Document, "querySelector"> = document): boolean {
-  return !!doc.querySelector('#root .k-loading, #root [aria-busy="true"], #root [data-boot]');
-}
-
 /** True once the page has loaded, its calls are back and it has had a moment to draw (or at once when it already had: a page opened
  * later in the visit). */
 function useSettled(): boolean {
@@ -83,10 +78,7 @@ function useSettled(): boolean {
     const quiet = () => {
       window.clearTimeout(t);
       if (callsInFlight() > 0) return;          // asked again when the last call out is answered (onIdle below)
-      // LIVE18B-010: nor while the page is still opening or a card says it is loading (no call is out while the app's or the page's code downloads,
-      // or the sign-in is renewed: live the question came at 6.8 s beside "Opening…" and the page's content pushed it down, CLS 0.094)
-      if (pageBusy()) { t = window.setTimeout(quiet, ASK_QUIET_MS); return; }
-      t = window.setTimeout(() => (callsInFlight() > 0 || pageBusy() ? quiet() : done()), ASK_QUIET_MS);
+      t = window.setTimeout(() => (callsInFlight() > 0 ? undefined : done()), ASK_QUIET_MS);
     };
     const go = () => {
       cap = window.setTimeout(done, ASK_MAX_WAIT_MS);
