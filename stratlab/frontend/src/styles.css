@@ -2248,7 +2248,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-more-tools .k-more-lock { font-size: var(--t-note); color: var(--muted); }
 .k-chipset { display: flex; flex-wrap: wrap; gap: 6px; }
 .k-check { display: inline-flex; align-items: center; gap: var(--s2); min-height: 32px; font-size: var(--t-label); cursor: pointer; }
-.k-check input { width: 18px; height: 18px; accent-color: var(--blue); }
+.k-check input { width: 24px; height: 24px; accent-color: var(--blue); }   /* LIVE19B: 24px, the accessible target size (18px on a desktop: Settings, the scan, IPOs) */
 /* VR1-120: an unchecked box was a dark square with no edge on a dark card (1.6:1), so it looked disabled beside the blue checked ones: a 1.5px edge in the muted text colour */
 .k-check input[type="checkbox"]:not(:checked), .k-tap input[type="checkbox"]:not(:checked) { -webkit-appearance: none; appearance: none; border: 1.5px solid var(--muted); border-radius: 3px; background: transparent; }
 .k-check input[type="checkbox"]:indeterminate:not(:checked), .k-tap input[type="checkbox"]:indeterminate:not(:checked) { -webkit-appearance: checkbox; appearance: auto; }   /* a "select all" with some ticked shows its dash */

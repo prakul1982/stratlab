@@ -92,3 +92,21 @@ test("LIVE19A-012: a page load's request goes out while the service worker start
   assert.match(sw, /self\.registration\.navigationPreload\.enable\(\)/);
   assert.match(sw, /const page = Promise\.resolve\(e\.preloadResponse\)\.catch\(\(\) => undefined\)\.then\(\(pre\) => pre \|\| fetch\(req\)\);/);
 });
+
+test("LIVE19B-004 / LIVE19B-010: Pro's AI builds say the cap alone; a usage row with no limit has no reset date", async () => {
+  const { unlimitedLabel } = await import("../src/lib/plans.ts");
+  assert.equal(unlimitedLabel("pro", "ai_builds_per_month"), "Up to 200 a day");
+  const { resetsWord } = await import("../src/lib/usageText.ts");
+  assert.equal(resetsWord({ resets: "month", limit: null }), "–");
+  assert.equal(resetsWord({ resets: null, limit: null }), "–");
+  assert.equal(resetsWord({ resets: "month", limit: 10 }, new Date("2026-11-20T10:00:00Z")), "1 Dec");
+  assert.equal(resetsWord({ resets: "day", limit: 30 }), "Midnight India time");
+});
+
+test("LIVE19B accessibility: a checkbox is a 24px target on a desktop too", () => {
+  assert.match(css, /\.k-check input \{ width: 24px; height: 24px; accent-color: var\(--blue\); \}/);
+});
+
+test("LIVE19B: the closing auction's rows say final or indicative only where it differs from the column's head", () => {
+  assert.match(read("src/pages/trade/ClosingAuctionPage.tsx"), /\{!!r\.final_out !== final && <span className="k-sub-line">\{r\.final_out \? "final" : "indicative"\}<\/span>\}/);
+});

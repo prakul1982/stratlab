@@ -8,7 +8,8 @@ export * from "./planCore";
 import { AI_BUILDS_PER_DAY, LIMITS, type Limits, type PlanId } from "./planCore";
 
 /** The comparison table's cell for a limit that has none: Pro's AI builds still have a daily safety cap. */
-export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k === "ai_builds_per_month" ? `Unlimited (up to ${AI_BUILDS_PER_DAY} a day)` : "Unlimited");
+// LIVE19B-004: Pro's AI builds say the cap alone, as /new does ("Up to 200 AI builds a day"): "Unlimited (up to 200 a day)" was both in one cell
+export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k === "ai_builds_per_month" ? `Up to ${AI_BUILDS_PER_DAY} a day` : "Unlimited");
 
 // LIVE4-020: every plan's features in full are in planFeatures.ts (FEATURES), loaded only when someone opens "Every feature, plan by
 // plan" on the landing page, so its JavaScript stays under 450 KB (R5V-020)

@@ -41,7 +41,9 @@ export const REFRESH_ON_BASIC = "Refreshing a stored read is on Basic and Pro";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** When a limit starts again, in words: "Midnight India time", "1 Dec", or "When you remove one" for a kept count. */
-export function resetsWord(r: Pick<UsageRow, "resets">, now: Date = new Date()): string {
+export function resetsWord(r: Pick<UsageRow, "resets"> & { limit?: number | null }, now: Date = new Date()): string {
+  // LIVE19B-010: a row with no limit has nothing to start again ("Backtests 2 (no limit) – 1 Dec")
+  if ("limit" in r && r.limit == null) return "–";
   if (r.resets === "day") return "Midnight India time";
   if (r.resets === "month") {
     const ist = new Date(now.getTime() + 5.5 * 3600 * 1000);

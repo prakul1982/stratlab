@@ -109,3 +109,44 @@ def test_live19a_007_more_of_each_sector_is_read_so_its_movers_can_be_found():
     assert mood.SECTOR_MEMBERS["IN"] >= 8 and mood.SECTOR_MEMBERS["US"] >= 5
     src = (FRONT / "src/pages/PulseMood.tsx").read_text()
     assert "moved it most in the direction it moved" in src
+
+
+# ---------- LIVE19A-021 / LIVE18B-011: a main-board issue only BSE's list names gets its NSE page (lot and bids) ----------
+def test_live19a_021_a_bse_only_main_board_issue_being_bid_for_is_looked_up_on_nse(monkeypatch):
+    from datetime import datetime, timezone
+    from app import ipo as I
+    from app.intel import ipo_sources as S
+    from tests import fake_ipo as F
+
+    class Nse:
+        asked: list = []
+
+        def ipo_detail(self, symbol, series="EQ"):
+            self.asked.append(symbol)
+            if symbol == "JPL":
+                return F.file("nse_detail_JPL.json")
+            raise I.SourceError("nse", "no such page")
+
+    class Feed:
+        nse = Nse()
+
+    now = datetime(2026, 10, 22, 6, 0, tzinfo=timezone.utc)          # 11:30 IST, bidding open (21-23 Oct)
+    row = {"id": "in-bse-544999", "market": "IN", "segment": "mainboard", "name": "Jio Platforms Limited", "symbol": None, "bse_code": "544999",
+           "open": "2026-10-21", "close": "2026-10-23", "exchanges": ["BSE"], "currency": "INR", "nkey": S.name_key("Jio Platforms Limited")}
+    sme = {**row, "id": "in-bse-1", "bse_code": "1", "segment": "sme", "name": "Jio Platforms Limited"}
+    rows = I.find_issue_pages([dict(row), dict(sme)], Feed(), now, [], sleep=lambda s: None)
+    got = next(r for r in rows if r["id"] == "in-bse-544999")
+    assert got["symbol"] == "JPL" and got["series"] == "EQ" and "NSE" in got["exchanges"]
+    assert got["id"] == "in-bse-544999"                                   # follows and alerts are by the row's id
+    # the row now has an NSE page: the list says so, and the detail read (lot, bids) takes it
+    assert I.list_row({**got, "low": 1065.0, "high": 1119.0}, now)["page"] is True
+    # an SME issue on BSE's own platform is never on NSE: not looked for
+    assert next(r for r in rows if r["id"] == "in-bse-1").get("symbol") is None
+    # tried once a day: a second run the same day asks nothing more
+    n = len(Nse.asked)
+    miss = {**row, "id": "in-bse-2", "bse_code": "2", "name": "Nowhere Issue Limited", "nkey": S.name_key("Nowhere Issue Limited")}
+    first = I.find_issue_pages([miss], Feed(), now, [], sleep=lambda s: None)
+    assert first[0].get("symbol") is None and first[0]["probe_at"] == "2026-10-22"
+    asked = len(Nse.asked)
+    I.find_issue_pages(first, Feed(), now, [], sleep=lambda s: None)
+    assert len(Nse.asked) == asked and asked > n
