@@ -130,7 +130,11 @@ test("LIVE18B-007: Pro's AI builds line names its cap, not 'unlimited' beside it
 
 test("LIVE18B-012: the menu shows the open page's item, scrolling only its own box", () => {
   const src = read("src/components/Shell.tsx");
-  assert.match(src, /const box = sideScroll\.current, cur = box\?\.querySelector<HTMLElement>\('\[aria-current="page"\]'\);/);
+  // updated on purpose (Release 81 CI): the reveal looks again when the menu's box changes size for a few seconds, and stops once
+  // anything else moves the menu
+  assert.match(src, /const cur = box\.querySelector<HTMLElement>\('\[aria-current="page"\]'\);\n      if \(cur\) revealIn\(box, cur\);/);
+  assert.match(src, /const onScroll = \(\) => \{ if \(Math\.abs\(box\.scrollTop - mine\) > 1\) moved = true; \};/);
+  assert.match(src, /const stopSize = watchSize\(box, again\);/);
   const body = src.match(/export function revealIn[\s\S]*?\n}/)[0]
     .replace("export function revealIn(box: HTMLElement, item: HTMLElement, room = 24): void", "function revealIn(box, item, room = 24)");
   const revealIn = new Function(`${body}; return revealIn;`)();

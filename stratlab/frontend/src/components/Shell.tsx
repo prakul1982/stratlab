@@ -102,11 +102,26 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
   // LIVE18B-012: the open page's own item is in view in the menu: on /invest/ipos at 1440×900 "Calendar › IPOs" sat below the fold under
   // "More below". The menu's own box scrolls (never the page), only when the item is out of view, and not while the reader scrolls it.
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      const box = sideScroll.current, cur = box?.querySelector<HTMLElement>('[aria-current="page"]');
-      if (box && cur) revealIn(box, cur);
-    }, 0);
-    return () => window.clearTimeout(t);
+    const box = sideScroll.current;
+    if (!box) return;
+    // the menu's box can shrink after the first look, when its fonts arrive or the "More below" row shows under it (CI, Release 81:
+    // the item ended 31 px under the box's edge); for a few seconds after a page opens, a change of the box's size looks again,
+    // until anything but this moves the menu (a reader scrolling it is never pulled back to the open page's item)
+    let mine = box.scrollTop, moved = false;
+    const reveal = () => {
+      if (moved) return;
+      const cur = box.querySelector<HTMLElement>('[aria-current="page"]');
+      if (cur) revealIn(box, cur);
+      mine = box.scrollTop;
+    };
+    const onScroll = () => { if (Math.abs(box.scrollTop - mine) > 1) moved = true; };
+    box.addEventListener("scroll", onScroll, { passive: true });
+    const t = window.setTimeout(reveal, 0);
+    const until = Date.now() + 3000;
+    const again = () => { if (Date.now() < until) reveal(); };
+    const stopSize = watchSize(box, again);           // a frame later, never inside the observer (R7T-014)
+    void document.fonts?.ready.then(again);
+    return () => { window.clearTimeout(t); stopSize(); box.removeEventListener("scroll", onScroll); };
   }, [loc.pathname]);
   // the tour opens the phone's menu to point at what is in it (DI-023); held open by the tour, the menu is not a modal of its
   // own, so the tour's note keeps the keyboard and Esc
