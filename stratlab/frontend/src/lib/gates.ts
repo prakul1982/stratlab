@@ -5,9 +5,12 @@
  * entry in ELSEWHERE. */
 import { FLAGS, planOf, type PlanId } from "./plans";
 
-/** `bare` (LIVE20B-009): a page with part of it on a plan that never words its own plan note, so the page's note is drawn under the title from
+export type Gate = { feature: string; whole: boolean };
+
+/** LIVE20B-009: the pages with part of them on a plan that never word a plan note of their own, so the page's note is drawn under the title from
  *  the first frame instead of waiting for the page's figures (Free's /trade/positioning got it at 6.0 s above a table already drawn: CLS 0.057). */
-export type Gate = { feature: string; whole: boolean; bare?: boolean };
+export const BARE_PAGES = new Set(["/trade/positioning", "/trade/positioning/stocks", "/trade/closing-auction", "/trade/fo-changes", "/trade/events",
+  "/invest/etf-gaps", "/invest/margin-funding", "/options"]);
 
 export const PAGE_GATES: Record<string, Gate> = {
   "/trade/signals": { feature: "signal_webhooks", whole: true },
@@ -16,16 +19,16 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/research/investor": { feature: "investor_home", whole: true },
   "/research/filings": { feature: "filings", whole: true },
   "/invest/breadth": { feature: "breadth", whole: false },
-  "/trade/positioning": { feature: "positioning", whole: false, bare: true },
+  "/trade/positioning": { feature: "positioning", whole: false },
   // Market today's Flows: Positioning's cash card and its history, on the same plan as there (IA-1)
   "/invest/flows": { feature: "positioning", whole: false },
-  "/trade/positioning/stocks": { feature: "stock_futures", whole: false, bare: true },
+  "/trade/positioning/stocks": { feature: "stock_futures", whole: false },
   "/trade/journal": { feature: "journal", whole: false },
-  "/trade/closing-auction": { feature: "cas_history", whole: false, bare: true },
-  "/trade/fo-changes": { feature: "fo_alerts", whole: false, bare: true },
-  "/trade/events": { feature: "event_reminders", whole: false, bare: true },
-  "/invest/etf-gaps": { feature: "etf_gaps", whole: false, bare: true },
-  "/invest/margin-funding": { feature: "mtf", whole: false, bare: true },
+  "/trade/closing-auction": { feature: "cas_history", whole: false },
+  "/trade/fo-changes": { feature: "fo_alerts", whole: false },
+  "/trade/events": { feature: "event_reminders", whole: false },
+  "/invest/etf-gaps": { feature: "etf_gaps", whole: false },
+  "/invest/margin-funding": { feature: "mtf", whole: false },
   "/invest/ipos": { feature: "ipo_alerts", whole: false },
   "/invest/movers": { feature: "movers", whole: false },
   // on Free these pages hold nothing else (each company's own updates and holders are on its company page), so the menu
@@ -45,7 +48,7 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/money/sip-test": { feature: "sip_luck", whole: false },
   "/money/rates": { feature: "rates_slab", whole: false },
   "/money/calendar": { feature: "money_reminders", whole: false },
-  "/options": { feature: "options", whole: false, bare: true },
+  "/options": { feature: "options", whole: false },
   // the filings search: Free searches by company and sees the first 3 results; every result and the filters are Basic
   "/research/search": { feature: "doc_search", whole: false },
 };

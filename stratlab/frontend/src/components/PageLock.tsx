@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { CFG } from "../lib/api";
 import { useApp } from "../lib/app";
-import { gateFor, gatePlan, lockWhat } from "../lib/gates";
+import { BARE_PAGES, gateFor, gatePlan, lockWhat } from "../lib/gates";
 import { unlockHint, EARLY_ACCESS_EMAIL } from "../lib/offer";
 import { PLAN_NAME } from "../lib/plans";
 import { lockWords } from "../lib/lockText";
@@ -39,7 +39,7 @@ export function PageLock() {
     setOwn(false);
     setLoading(false);
     if (!locked) return;
-    const partial = !gate?.whole && !gate?.bare;          // LIVE20B-009: a page with no note of its own has nothing to wait for
+    const partial = !gate?.whole && !BARE_PAGES.has(pathname.split(/[?#]/)[0].replace(/(.)\/$/, "$1"));      // LIVE20B-009: a page with no note of its own has nothing to wait for
     // a page that words each of its locks where it applies (Tax tools: Basic's dividend detail, Pro's amounts) says so with
     // data-plan-notes, so its tabs don't get the page's note on one tab and their own on another (DP2-012)
     const look = () => {

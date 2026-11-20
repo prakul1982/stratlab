@@ -98,9 +98,9 @@ test("LIVE20B-005 / 007 / 009 / 008: one 'too few', one 'over', 'the trade journ
   assert.match(read("src/lib/closingAuction.ts"), /closed: "Final prices are the official closes\.",/);
   const css = read("src/styles.css");
   assert.match(css, /@media \(min-width: 641px\) \{\n  \.k-expiry \{ display: grid; grid-template-columns: max-content minmax\(0, 1fr\);[^}]*min-height: 66px; \}/);
-  const { PAGE_GATES } = await import("../src/lib/gates.ts");
-  assert.equal(PAGE_GATES["/trade/positioning"].bare, true);
-  assert.equal(PAGE_GATES["/money/net-worth"].bare, undefined);          // a page with notes of its own still waits (LIVE6-020)
-  assert.match(read("src/components/PageLock.tsx"), /const partial = !gate\?\.whole && !gate\?\.bare;/);
+  const { BARE_PAGES } = await import("../src/lib/gates.ts");
+  assert.ok(BARE_PAGES.has("/trade/positioning"));
+  assert.ok(!BARE_PAGES.has("/money/net-worth"));          // a page with notes of its own still waits (LIVE6-020)
+  assert.match(read("src/components/PageLock.tsx"), /const partial = !gate\?\.whole && !BARE_PAGES\.has\(/);
   assert.match(read("src/pages/money/NetWorthPage.tsx"), /`paid so far \$\{inr\(f\.paid_in\)\} of \$\{inr\(f\.total_in\)\}`/);
 });
