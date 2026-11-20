@@ -4356,7 +4356,7 @@ COMPUTE_SAYS = (r"\bcomput(?:e|ing)\b|\bcapacity\b|\bhosting\b|data cent(?:er|re
                 # e85 (CoreWeave's 10-K opening, read again for a line a page may quote: "The Essential Cloud for AI ... enables the full
                 # lifecycle of AI, including large-scale model training, inference ...", moved out of "Data centres, hosting and networks"):
                 # the training of AI models it runs for its customers is the computing it sells
-                r"\b(?:large-scale )?(?:ai )?model training\b")
+                r"\b(?:large-scale )?(?:ai )?model training\b|\b(?:ai|training) workloads\b|\bai hardware\b")
 CLOUD_ADJECTIVE = r"\bcloud(?:[- ]based|[- ]native)?\s+(?!comput\w*|infrastructure|hosting|servers?|capacity|data cent\w*)"
 
 

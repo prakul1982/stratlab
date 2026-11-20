@@ -171,6 +171,7 @@ def test_words_read_again_move_no_company_on_a_fixed_rule():
     assert B.company_stage(regn)[0] != "development"
     assert B.says_compute("CoreWeave is The Essential Cloud for AI. Our CoreWeave Cloud platform enables the full lifecycle of AI, including "
                           "large-scale model training, inference, data movement, continuous iteration, and agentic workflows.")
+    assert B.says_compute('We offer Slurm on Kubernetes ("SUNK") to support large-scale AI research and training workloads.')
     assert not B.says_compute("Shopify's all-in-one platform makes it easier to start, run and grow a business")          # guard
 
 
