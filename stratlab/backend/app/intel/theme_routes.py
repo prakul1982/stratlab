@@ -2048,6 +2048,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         try:
             from .. import public_themes
             pub = public_themes.counts(m, hit)
+            # e83 (LIVE19A-001): with the dive's own count of its companies not checked yet, listed or not (the public gate's measure)
+            pub["unchecked"] = int((hit.get("tally") or {}).get("membership_unverified") or 0)
         except Exception as e:
             print("theme dive: count not kept:", type(e).__name__, str(e)[:100])
             pub = None

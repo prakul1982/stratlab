@@ -13,6 +13,7 @@ a slug of one of its aliases answers 301 to it. Rendering reads stored entries o
 for hours (CACHE)."""
 import html
 from collections import Counter
+import json
 import re
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -102,7 +103,7 @@ def entries(region: str | None = None) -> list[dict]:
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
-            gated[key] = theme_library.gate_why(m, pubs.get((e["region"], name)))
+            gated[key] = _gate(row, m, pubs.get((e["region"], name)))
     # e80 (LIVE16A-009: Public sector banks' public page "checked under an earlier version ... being checked again now" for 4 h and more while
     # its app page said "checked 19 Nov"): an entry kept under older rules whose theme the library now finds under today's rules by another
     # name (the re-check kept it there) stands for nothing: its address answers 301 to that theme's page
@@ -121,6 +122,38 @@ def entries(region: str | None = None) -> list[dict]:
             best.pop(k, None)
     # e82 (LIVE18A-002): a theme is offered here only once its newest entry passes the quality gate (theme_library.gate_why)
     return sorted((row for k, (_, row) in best.items() if not gated.get(k)), key=lambda x: (x["region"], x["label"].lower()))
+
+
+_GATE_MEMO: dict = {}
+
+
+def _gate(row: dict, m: dict, pub: dict | None) -> str:
+    """e83 (LIVE19A-001): the quality gate on a theme's newest entry, every entry in full (theme_library.gate_why): an entry kept before the
+    gate is judged on its stored read (broad industries) and its dive's own tally of companies not checked, read once per entry and dive
+    count (memoised), only where its index meta and kept count don't say them."""
+    need_p = "broad" not in m
+    need_t = not (isinstance(pub, dict) and isinstance(pub.get("unchecked"), int))
+    if not (need_p or need_t):
+        return theme_library.gate_why(m, pub)
+    k = (row.get("hk"), str(row.get("at") or ""), json.dumps(pub, sort_keys=True, default=str))
+    if k not in _GATE_MEMO:
+        p = dive = None
+        try:
+            p = payload(row)
+            if need_t and isinstance(p, dict):
+                dive = _dive(row["region"], row["name"], p)
+        except Exception:
+            p = p if isinstance(p, dict) else None
+        dt = (dive or {}).get("tally") if isinstance((dive or {}).get("tally"), dict) else None
+        if len(_GATE_MEMO) > 2000:
+            _GATE_MEMO.clear()
+        _GATE_MEMO[k] = (theme_library.broad_industries(p) if need_p and isinstance(p, dict) else None,
+                         int(dt.get("membership_unverified") or 0) if dt and dt.get("total") else None,
+                         int(dt["total"]) if dt and dt.get("total") else None)
+    broad, unchecked, total = _GATE_MEMO[k]
+    if not isinstance(pub, dict):
+        pub = {"total": total} if total else None
+    return theme_library.gate_why(m, pub, unchecked=unchecked, broad=broad)
 
 
 def _dive_pubs() -> dict:

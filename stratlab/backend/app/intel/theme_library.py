@@ -195,18 +195,32 @@ def broad_industries(payload: dict) -> bool:
     return len(every) >= GATE_BROAD_MIN and len(own) < GATE_MAP_SHARE * len(every)
 
 
-def gate_why(meta: dict, pub: dict | None) -> str:
+def gate_why(meta: dict, pub: dict | None, payload: dict | None = None, unchecked: int | None = None, broad: bool | None = None) -> str:
     """e82: why a stored theme is not offered on the public pages yet ("" when it is): its dive's count not kept yet, more than
-    GATE_UNCHECKED of its companies not checked, or its companies almost all from broad industries the AI picked."""
-    if meta.get("broad"):
+    GATE_UNCHECKED of its companies not checked, or its companies almost all from broad industries the AI picked.
+    e83 (LIVE19A-001: Quantum computing still on /themes after Release 81, "386 companies ... 92 not checked" (24%), its entry kept before
+    the gate and so "judged on the dive count only", and that count only of the companies its page leaves out: the 92 are listed): every
+    entry is judged in full, an old one too: "broad" from its stored read (`payload`, or `broad` worked out from it) where its index entry
+    has none, and the companies not
+    checked are the dive's own tally of them (the kept count's "unchecked", or `unchecked` read from the dive), listed or not."""
+    if "broad" in meta:
+        broad = meta.get("broad")
+    elif broad is None:
+        broad = broad_industries(payload) if isinstance(payload, dict) else False
+    if broad:
         return "its companies come almost all from broad official industries, not from evidence of the theme's work"
-    if meta.get("rules") is None or "broad" not in meta:
-        return ""                       # kept before the gate: as it was
     if not isinstance(pub, dict) or not isinstance(pub.get("all"), int):
-        return "its membership check is not done yet"
-    unchecked = sum(int(n) for why, n in pub.get("unlisted") or [] if why == "not checked yet")
-    if pub["all"] and unchecked > GATE_UNCHECKED * pub["all"]:
-        return f"{unchecked} of its {pub['all']} companies not checked yet"
+        # no count kept with a dive: judged on the dive's own tally where one is kept (`unchecked`, `total`), else nothing to judge it by
+        # (its page shows no tally either: e83, the index never held "broad" before this release, so no entry was ever judged here)
+        total = (pub or {}).get("total") if isinstance(pub, dict) else None
+        if isinstance(unchecked, int) and isinstance(total, int) and total and unchecked > GATE_UNCHECKED * total:
+            return f"{unchecked} of its {total} companies not checked yet"
+        return ""
+    left = sum(int(n) for why, n in pub.get("unlisted") or [] if why == "not checked yet")
+    tallied = pub.get("unchecked") if isinstance(pub.get("unchecked"), int) else unchecked
+    n = max(left, tallied) if isinstance(tallied, int) else left
+    if pub["all"] and n > GATE_UNCHECKED * pub["all"]:
+        return f"{n} of its {pub['all']} companies not checked yet"
     return ""
 
 

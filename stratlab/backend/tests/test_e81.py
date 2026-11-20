@@ -171,8 +171,10 @@ def test_e81_a_themes_card_says_its_pages_count(w, monkeypatch):
     p["value_chain"][0]["companies"][1]["verified"] = False           # one not confirmed: listed on neither
     keep("ships", p)
     stored = theme_library.stored("IN", "ship")["payload"]
+    # (updated on purpose, e83: the public gate now judges every entry (LIVE19A-001), and with no evidence kept the one not listed was "not
+    # checked yet", 1 of 7, over the gate's 10%: here its own words describe other work, the case this test is about: listed on neither)
     dive = {"sector": "Ships", "layers": [], "duplicates": [{"symbol": stored["value_chain"][0]["companies"][2]["ticker"], "kept": "X"}],
-            "evidence": {}, "tally": {"total": 7}}
+            "evidence": {stored["value_chain"][0]["companies"][1]["ticker"]: "not_confirmed"}, "tally": {"total": 7}}
     key = theme_routes.dive_key("IN", "ship", {**stored, "_library": "ship"})
     computed.put(theme_library.DIVE, key, {"dive": dive, "pieces": {}}, label="Ships", region="IN",
                  meta={"q": "ship", "rules": theme_base.RULES, "pub": public_themes.counts(stored, dive)})

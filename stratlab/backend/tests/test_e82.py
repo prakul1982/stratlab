@@ -254,7 +254,10 @@ def test_e82_a_theme_of_broad_ai_picked_industries_or_an_unfinished_check_is_not
     assert TL.broad_industries(_quantum(3, total=40)) is False         # guard: a small theme
     meta = {"rules": theme_base.RULES, "broad": False}
     assert "not checked yet" in TL.gate_why(meta, {"all": 386, "listed": 197, "unlisted": [["not checked yet", 189]]})
-    assert TL.gate_why(meta, None) == "its membership check is not done yet"
+    # (updated on purpose, e83: with no dive kept there is no count to judge by (the page shows none); a dive kept with no count is judged
+    # on its own tally of companies not checked)
+    assert TL.gate_why(meta, None) == ""
+    assert TL.gate_why(meta, {"total": 386}, unchecked=189) == "189 of its 386 companies not checked yet"
     assert TL.gate_why({**meta, "broad": True}, {"all": 386, "listed": 386, "unlisted": []}).startswith("its companies come almost all")
     assert TL.gate_why(meta, {"all": 24, "listed": 23, "unlisted": [["not checked yet", 1]]}) == ""       # guard: Space and satellites
     assert TL.gate_why({"rules": 76}, None) == ""                                                         # guard: kept before the gate

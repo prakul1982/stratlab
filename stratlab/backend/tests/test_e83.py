@@ -1,6 +1,17 @@
 """Lane e83 (Release 82): theme-engine items from LIVE19A/B and the R81 decks. Each test fails before its fix and passes after, except those
 marked as guards."""
+import pytest
+
 from app.intel import sector_metrics as SM
+
+
+@pytest.fixture
+def fake_db(monkeypatch):
+    from app import db
+    from tests.fake_db import FakeSupabase
+    f = FakeSupabase()
+    monkeypatch.setattr(db, "_client", f)
+    return f
 
 
 # ---------- 3. LIVE19A-002/005: the FFO a REIT reports, read from the row that is the FFO itself ----------
@@ -77,3 +88,57 @@ def test_e83_guards_camden_and_core_lines():
     assert SM.reported_ffo(CAMDEN_10K) == 744.8
     assert SM.reported_ffo("(in thousands) Core FFO $ 762,551 and Normalized FFO $ 700,000 and FFO per diluted share $ 6.79") is None
     assert SM.reported_ffo("Computation of FFO and Normalized FFO: Net income available for Common Stockholders $ 386,492 $ 366,998") is None
+
+
+# ---------- 1. LIVE19A-001: the public gate judges every stored entry in full ----------
+def test_e83_the_store_index_keeps_the_gate_mark_so_the_gate_judges_a_new_entry(fake_db):
+    """The cause: computed.put kept only some meta keys in the index, never "broad", so public_themes.entries read every entry as one kept
+    before the gate ("judged on the dive count only")."""
+    from app import computed
+    computed.reset_for_tests()
+    computed.put("theme_library_e83", ["US", "quantum computing"], {"payload": {}}, label="Quantum computing", region="US",
+                 meta={"q": "quantum computing", "rules": 1, "broad": True, "generated_at": 5.0})
+    m = next(iter(computed.index("theme_library_e83")["entries"].values()))["meta"]
+    assert m["broad"] is True and m["generated_at"] == 5.0
+
+
+def _quantum_index(monkeypatch, pub: dict, meta_q: dict, tally: dict | None = None):
+    from app import computed, public_themes
+    from app.intel import theme_base, theme_library as TL
+    idx = {"entries": {
+        "q": {"region": "US", "label": "Quantum computing", "at": 3.0, "meta": {"q": "quantum computing", "rules": theme_base.RULES, **meta_q}},
+        "s": {"region": "US", "label": "Semiconductors", "at": 1.0, "meta": {"q": "semiconductor", "rules": theme_base.RULES, "broad": False}}}}
+    dives = {"entries": {"d1": {"region": "US", "at": 1.0, "meta": {"q": "semiconductor", "pub": {"all": 104, "listed": 102, "unlisted": [], "unchecked": 1}}},
+                         "d2": {"region": "US", "at": 2.0, "meta": {"q": "quantum computing", "pub": pub}}}}
+    monkeypatch.setattr(computed, "index", lambda kind: idx if kind == TL.KIND else dives)
+    monkeypatch.setattr(public_themes, "payload", lambda e: {"sector": e["name"], "placements": {"industries_by": "ai"}, "value_chain": []})
+    monkeypatch.setattr(public_themes, "_dive", lambda r, n, p: {"tally": tally} if tally else {})
+    public_themes._GATE_MEMO.clear()
+    return public_themes
+
+
+def test_e83_an_entry_whose_listed_companies_are_a_quarter_not_checked_leaves_the_themes_list_and_its_page(monkeypatch):
+    """Quantum computing after the R81 re-check: 386 companies, all listed, 92 not checked (24%): the gate counted only those its page left
+    out (none) and let it through."""
+    pt = _quantum_index(monkeypatch, {"all": 386, "listed": 386, "unlisted": [], "unchecked": 92}, {"broad": False})
+    assert [x["name"] for x in pt.entries("US")] == ["semiconductor"]
+    assert pt.find("US", "quantum-computing") == (None, None)                 # its public page: no theme at this address (404)
+
+
+def test_e83_an_entry_kept_before_the_gate_is_judged_on_its_dives_own_tally_and_its_read(monkeypatch):
+    # its index meta has no "broad" and its kept count no "unchecked" (kept before this release): the dive's tally is read
+    pt = _quantum_index(monkeypatch, {"all": 386, "listed": 386, "unlisted": []}, {},
+                        tally={"total": 386, "membership_unverified": 92, "description_verified": 244})
+    assert [x["name"] for x in pt.entries("US")] == ["semiconductor"]
+    # guard: the same entry with 10% or fewer not checked stays
+    pt = _quantum_index(monkeypatch, {"all": 386, "listed": 386, "unlisted": []}, {},
+                        tally={"total": 386, "membership_unverified": 30, "description_verified": 300})
+    assert [x["name"] for x in pt.entries("US")] == ["quantum computing", "semiconductor"]
+
+
+def test_e83_the_gate_mark_is_worked_out_from_an_old_entrys_stored_read(monkeypatch):
+    from app.intel import theme_library as TL
+    cos = [{"ticker": f"T{i}", "name": f"T{i}"} for i in range(200)]
+    p = {"placements": {"industries_by": "ai"}, "value_chain": [{"layer": "Computers", "official": True, "companies": cos}]}
+    assert TL.gate_why({"rules": 70}, {"all": 200, "listed": 200, "unlisted": [], "unchecked": 0}, p).startswith("its companies come almost all")
+    assert TL.gate_why({"rules": 70}, {"all": 200, "listed": 200, "unlisted": [], "unchecked": 0}, None) == ""       # guard: no read, nothing said
