@@ -1111,7 +1111,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     # estate in a theme that names no such business is said as a theme-scope warning, with its companies, whatever kept it
     scope_warn = [{"layer": _HALF_RX.sub("", v["layer"]), "companies": [c.get("ticker") for c in v.get("companies") or []]}
                   for v in out_vc if not v.get("official") and v.get("layer") and v.get("companies")
-                  and PROPERTY_LAYER.search(_HALF_RX.sub("", v["layer"])) and not PROPERTY_THEME.search(f"{theme} {m.get('sector') or ''}")]
+                  and property_scope_layer(v["layer"], f"{theme} {m.get('sector') or ''}")]
     if scope_warn:
         print("theme base: theme-scope warning:", theme[:40], [x["layer"] for x in scope_warn])
         placements = {**(placements or {}), "scope_warning": scope_warn}
@@ -4443,6 +4443,10 @@ def compute_fit(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[
             # r68e (the live R65 REITs deck: Camden, multifamily apartments, and SBA, towers, sent to "Healthcare property owners" on the
             # words they share with it): never a layer whose name names only property types its words don't
             others_ = [w for w in others if property_fit(_HALF_RX.sub("", w.get("layer") or ""), plain) is not False]
+            # e82 (LIVE18A-004, the live R80 REITs: Pillarstone Capital REIT, "engaged in investing in, owning and operating commercial
+            # properties", put in "Mortgage REITs" on the words it shares with it): a layer of lenders only for one whose words say it lends
+            if not LENDS_SAYS.search(plain):
+                others_ = [w for w in others_ if not LENDING_LAYER.search(_HALF_RX.sub("", w.get("layer") or ""))]
             said = [w for w in others_ if layer_says(w, plain, tw)[1]]
             to, how = (said[0], "its own words say what “{}” is") if len(said) == 1 else (None, "")
             if to is None:
@@ -4909,6 +4913,27 @@ PROPERTY_LAYER = re.compile(r"\bpropert(?:y|ies)\b|\breal\s+estate\b|\brealty\b"
 PROPERTY_THEME = re.compile(r"\bpropert|\breal\s*estate|\brealty|\breit|\bhous|\bhomes?\b|\bconstruct|\binfra|\blandlord|\bbuilding", re.I)
 PROPERTY_SAYS = re.compile(r"\breal\s+estate\b|\brealty\b|\bpropert(?:y|ies)\b|\bresidential\s+(?:projects?|development)|"
                            r"\b(?:housing|township|commercial)\s+(?:projects?|development)", re.I)
+# e82 (LIVE18A-004, the live R80 REITs: Omega Healthcare, a healthcare property owner whose words also name "real estate loans", and
+# Blackstone Real Estate Income Trust, one segment of nine "Investments in Real Estate Debt", moved to "Mortgage REITs" on one phrase):
+# words that say a company owns, leases or invests in property it holds (never "owned by" a borrower or a sponsor). A lender is one whose
+# principal words (its business sentence and the next) say it lends and none of these
+OWNS_SAYS = re.compile(r"\b(?:own|owns|owning|owned)\b(?!\s+(?:and\s+operated\s+)?by\b)[^.;]{0,80}?\b(?:propert(?:y|ies)|facilities|buildings|"
+                       r"communities|portfolio|real\s+estate|farmland|hotels?|apartments?|cent(?:er|re)s)\b|\btriple[- ]net\b|"
+                       r"\bnet[- ]leas(?:e|ed|es|ing)\b|\bowning\s+and\s+(?:operating|leasing)\b|"
+                       r"\b(?:investing|invests?|investments?)\s+in\b[^.;]{0,40}?\b(?:properties|facilities|buildings)\b", re.I)
+# e82 (LIVE18A-004: Medalist Diversified and Presidio Property Trust, owners of retail, office and hotel property, in "Towers, data
+# centres and niche property"): a diversified owner of commercial property, by its name or its principal words
+DIVERSIFIED_NAME = re.compile(r"\bdiversified\b", re.I)
+DIVERSIFIED_SAYS = re.compile(r"\b(?:own|owns|owned|owning)\b[^.;]{0,40}?\bcommercial\s+(?:properties|real\s+estate\s+properties)\b|"
+                              r"\bmixed[- ]use\s+properties\b", re.I)
+
+
+def property_scope_layer(name: str, theme: str) -> bool:
+    """e81/e82: a layer of property or real estate in a theme that names no such business: the theme-scope case. e82 (LIVE18A-008, the live
+    R80 Regional banks: "Real estate-focused lenders (bank)" emptied into "Other" because its banks' words don't say property is their
+    business): a layer of lenders (its name says it lends, LENDING_LAYER) is a layer of a lending business, never of property."""
+    name = _HALF_RX.sub("", str(name or ""))
+    return bool(PROPERTY_LAYER.search(name)) and not LENDING_LAYER.search(name) and not PROPERTY_THEME.search(str(theme or ""))
 
 
 def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
@@ -4917,8 +4942,11 @@ def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
     text = own_text(words or c.get("what") or "")
     nm = str(c.get("name") or "")
     if OWNER_LAYER.search(name) and not LENDING_LAYER.search(name):
-        m = LENDS_SAYS.search(text)
-        if m or (c.get("model") == "lending" and c.get("model_confidence") in ("high", "medium")):
+        # e82: on its principal business (principal_words), never one phrase of a later line: a lender is one whose principal words say it
+        # lends and none says it owns property (OWNS_SAYS); its way of earning read as lending counts only when no word of it says so
+        lead = principal_words(text) if text.strip() else ""
+        m = LENDS_SAYS.search(lead) if not OWNS_SAYS.search(lead) else None
+        if m or (c.get("model") == "lending" and c.get("model_confidence") in ("high", "medium") and not OWNS_SAYS.search(text)):
             said = f"its own words say it lends (“{m.group(0)}”)" if m else "its way of earning is interest on loans it makes"
             return f"{said}; “{name}” is a layer of companies that own property", "lending"
     if SPECIALIST_LAYER.search(name):
@@ -4926,6 +4954,11 @@ def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
         if m or NON_TRADED_NAME.search(nm):
             said = f"its own words say it is a non-traded REIT (“{m.group(0)}”)" if m else "it is a non-traded REIT (its name: an income trust)"
             return f"{said}, a diversified owner, never a layer of towers and data centres", ""
+        if property_fit(name, text) is not True and not says_compute(text):
+            d = DIVERSIFIED_NAME.search(nm) or DIVERSIFIED_SAYS.search(text)
+            if d:
+                return (f"a diversified owner of commercial property (its {'name' if DIVERSIFIED_NAME.search(nm) else 'own words'}: "
+                        f"“{d.group(0)}”), and its own words name no tower, data centre or computing it sells"), ""
     if MAJORS_LAYER.search(name) and re.search(r"\boil\b|\bgas\b|\benergy\b|\bpetroleum\b|\bintegrated\b", name, re.I):
         ind = plain_industry(c.get("industry") or "")
         cap = c.get("cap")
@@ -4933,10 +4966,14 @@ def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
             return f"filed under {ind}, a services company; “{name}” names integrated companies", "services"
         if isinstance(cap, (int, float)) and 0 < cap < MAJOR_MIN:
             return f"its market value ({cap:,.0f} million) is far below any integrated major's; “{name}” names large integrated companies", "services"
-    if PROPERTY_LAYER.search(name) and not PROPERTY_THEME.search(str(theme or "")):
+    if property_scope_layer(name, theme):
         if not PROPERTY_SAYS.search(principal_words(text) if text.strip() else ""):
+            # (e82, LIVE18A-008: a reason quotes the sentence that says its business, never a name alone, a forward-looking statement or an
+            # offering's proceeds; none when no sentence says it)
+            from .theme_changes import work_sentence
+            q = first_line(work_sentence(text)) if text.strip() else ""
             return (f"its own words don't say property is its business"
-                    + (f" (they say “{first_line(text)}”)" if first_line(text) else "") + f"; a {theme} theme holds “{name}” only for those whose do"), ""
+                    + (f" (they say “{q}”)" if q else "") + f"; a {theme} theme holds “{name}” only for those whose do"), ""
     return "", ""
 
 

@@ -225,8 +225,17 @@ def move_memory(got: dict | None) -> dict:
     for e in got.get("log") or []:
         for r in (e.get("moved") or []) if isinstance(e, dict) else []:
             if isinstance(r, dict) and r.get("symbol") and r.get("to"):
+                # e82 (LIVE18A-004, the owner's P0-b: Franklin BSP kept out of "Mortgage REITs" by R80 because R79 had moved it out "with
+                # no figure stored"): a move made for a figure not stored says nothing of the business: it is no memory a later
+                # placement holds (and a later move of the company replaces it as before)
+                if FIGURE_MOVE.search(str(r.get("why") or "")):
+                    out.pop(r["symbol"], None)
+                    continue
                 out[r["symbol"]] = [str(r.get("from") or ""), str(r["to"])]
     return out
+
+
+FIGURE_MOVE = re.compile(r"\bno figure (?:is )?stored\b|\bnot counted as the layer's until it is read\b|\bno stored figure", re.I)
 
 
 def lost_moves(got: dict | None) -> dict:
@@ -661,7 +670,8 @@ def work_sentence(words) -> str:
     flat = " ".join(text.split())
     parts = [y for x in _sentences(flat) for y in re.split(r"(?:(?<=[a-z0-9)”\"])|(?<=[A-Z]{2}))\.\s+(?=[A-Z])", x) if y.strip()]
     for x in parts[:12]:
-        if len(x.split()) < 4 or structure_only(x) or reit_tax_said(x) or _MANAGED.search(x) or not own_words(x.rstrip(".;"), ""):
+        if len(x.split()) < 4 or structure_only(x) or reit_tax_said(x) or _MANAGED.search(x) or _BOILER.search(x) \
+                or not own_words(x.rstrip(".;"), ""):
             continue
         return first_sentence(x)
     return ""
@@ -695,6 +705,11 @@ def layer_quote(words, name: str, layer: str, line: str = "") -> tuple[str, bool
 # and originate our investments…”", Medalist's "“On July 18, 2025, we closed on the acquisition of a Tesla sales, service and delivery
 # facility…”"): a sentence of what an adviser or sub-adviser does, or a dated transaction (a day's deal, never the work it does), is no line
 # of its work either
+# e82 (LIVE18A-008, the live R80 Regional banks deck's reasons: TFS Financial's "statements regarding our business plans and prospects",
+# Gouverneur's "The second-step conversion was completed ... gross proceeds of $7.2 million", Magnolia's "Total net proceeds from the
+# offering"): a filing's forward-looking boilerplate and a share offering's proceeds are no line about a company's work
+_BOILER = re.compile(r"\bforward[- ]looking\b|\bstatements\s+regarding\b|\b(?:gross|net)\s+proceeds\b|\bproceeds\s+from\s+the\s+offering\b|"
+                     r"\b(?:stock|second[- ]step)\s+conversion\s+was\s+completed\b|\binitial\s+public\s+offering\s+was\s+completed\b", re.I)
 _MANAGED = re.compile(r"\b(?:is|are)\s+(?:a|an|the)\s+(?:wholly[- ]owned\s+)?subsidiary\s+of\b|\b(?:externally|internally)\s+managed\b|"
                       r"\b(?:our|its)\s+(?:adviser|advisor|sponsor|manager)\b|\bREIT\s+election\b|\bsole\s+general\s+partner\b|"
                       r"\b(?:sub-?)?advis[eo]r\s+(?:has|have|is|will|shall|may|must|provides|manages|performs)\b|\bsub-?advis[eo]r\b|"
