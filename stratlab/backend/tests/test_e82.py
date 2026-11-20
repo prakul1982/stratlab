@@ -316,5 +316,5 @@ def test_e82_a_public_tally_is_dated_in_the_markets_own_day():
 def test_e82_versions():
     from app import blog_research
     from app.intel import sector_metrics
-    assert theme_base.RULES == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.EARLIER_MAX == 32
-    assert theme_data.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and blog_research.GEN == 10 and sector_metrics.VERSION == 3
+    assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.EARLIER_MAX == 33          # e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)
+    assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and blog_research.GEN == 11 and sector_metrics.VERSION == 3          # e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)

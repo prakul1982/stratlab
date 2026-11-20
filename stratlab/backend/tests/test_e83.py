@@ -320,3 +320,54 @@ def test_e83_a_kept_reason_quoting_no_line_of_work_is_said_again_from_its_words(
     # guards: a reason quoting a line of its work, or only a layer's name, stands
     assert not C.unquotable_reason("its own words say “The Bank offers commercial real estate and residential mortgage loans”")
     assert not C.unquotable_reason("its own words don't say it sells computing, what “Towers, data centres and niche property” is")
+
+
+# ---------- 2. LIVE19A-003: "Description-verified" means its own words say the theme's work, not a word of an AI-picked industry ----------
+def _gold():
+    inds = ["Gold and Silver Ores", "Bituminous Coal & Lignite Surface Mining", "Primary Production Of Aluminum",
+            "Mining & Quarrying Of Nonmetallic Minerals"]
+    co = lambda t, n, ind: {"ticker": t, "name": n, "base": True, "basis": "industry", "industry": ind, "what": ""}      # noqa: E731
+    return {"sector": "Gold miners", "placements": {"industries_by": "ai", "industries": inds},
+            "value_chain": [{"layer": "Exploration and development", "description": "Companies mining and developing gold deposits.",
+                             "companies": [co("MLM", "Martin Marietta Materials", inds[3]), co("BTU", "Peabody Energy", inds[1])]},
+                            {"layer": "Other gold miner companies", "official": True, "basis": "rest",
+                             "companies": [co("SCCO", "Southern Copper", inds[3]), co("AEM", "Agnico Eagle Mines", inds[0])]}]}
+
+
+def test_e83_a_company_of_an_ai_picked_industry_is_description_verified_only_on_the_themes_own_work():
+    from app.intel import theme_data as D
+    m = _gold()
+    words = D.theme_words(m, "Gold miners")
+    about = {"MLM": "Martin Marietta is a natural resource-based building materials company that supplies aggregates from its quarrying and mining operations.",
+             "BTU": "Peabody is a coal producer engaged in surface mining of thermal and metallurgical coal.",
+             "SCCO": "Southern Copper is one of the largest integrated copper producers, mining and smelting copper and molybdenum.",
+             "AEM": "Agnico Eagle is a gold mining company producing gold from mines in Canada, Australia and Finland."}
+    cos = {c["ticker"]: c for v in m["value_chain"] for c in v["companies"]}
+    before = {s: D.evidence_state(c, words, about[s]) for s, c in cos.items()}
+    assert before["MLM"] == before["SCCO"] == "description_verified"          # (the industry names' "quarrying", "mining" said)
+    wt = D.work_test(m, "Gold miners")
+    after = {s: D.work_checked(before[s], c, about[s], wt) for s, c in cos.items()}
+    assert after == {"MLM": "industry_code_supported", "BTU": "industry_code_supported", "SCCO": "industry_code_supported",
+                     "AEM": "description_verified"}, after
+    # the same on the companies checked past the figures' window, and on those an earlier read kept
+    got = D.membership_round(m, set(), words, about.get, 10, wt)
+    assert got["MLM"] == "industry_code_supported" and got["AEM"] == "description_verified"
+    assert D.kept_work_checked(m, {"SCCO": "description_verified"}, about.get, wt) == {"SCCO": "industry_code_supported"}
+
+
+def test_e83_a_curated_themes_evidence_is_unchanged_and_quantum_needs_both_words():
+    from app.intel import theme_data as D
+    assert D.work_test({"placements": {"industries_by": "list"}}, "Semiconductors") is None          # guard: the curated table
+    q = {"placements": {"industries_by": "ai"}, "value_chain": [{"layer": "Other quantum computing companies", "official": True, "companies": []}]}
+    wt = D.work_test(q, "Quantum computing")
+    apple = {"ticker": "AAPL", "name": "Apple Inc.", "base": True}
+    assert not wt(apple, "Apple designs, manufactures and markets smartphones, personal computers, tablets and wearables.")
+    assert wt({"ticker": "IONQ", "name": "IonQ", "base": True}, "IonQ builds quantum computers and sells quantum computing services.")
+
+
+def test_e83_versions():
+    from app import blog_research, deck
+    from app.intel import sector_metrics, theme_base, theme_data, theme_routes
+    assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.EARLIER_MAX == 33
+    assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and blog_research.GEN == 11
+    assert sector_metrics.VERSION == 3 and sector_metrics.REIT_V == 3                    # never sector_metrics.VERSION
