@@ -84,6 +84,11 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
 
   // tax: other income for each year, TDS and advance tax, US trades; money calendar
   for (const fy of [2024, 2025, 2026]) await call(`tax inputs ${fy}`, "put", "/tax/inputs", { fy, regime: "new", other: 1200000, salary: 900000, deductions: 0, age: "below60", resident: true });
+  // LIVE21B-012 (site85): a fund sold under its long name, as a real tax P&L names it, this financial year: R29 measured the sales only with the
+  // owner's short symbols and missed a name that held the first column wide (738 px in a 548 px box live)
+  const fund = "PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN - GROWTH";
+  await call("tax: a fund under its long name", "post", "/tax/import", { filename: "fund-trades.csv",
+    data: Buffer.from(`Date,Symbol,Type,Quantity,Price\n2024-04-10,${fund},BUY,1250,52.35\n2026-06-10,${fund},SELL,1250,84.6\n`).toString("base64") });
   await call("advance tax", "put", "/money/advance-tax", { fy: 2025, tds: 2000, paid: [{ d: "2025-12-12", amount: 4000 }] });
   await call("us trade buy", "post", "/money/us-tax/trades", { d: "2023-03-01", side: "B", sym: "AAPL", qty: 3, price: 150, fees: 1 });
   await call("us trade buy 2", "post", "/money/us-tax/trades", { d: "2024-02-01", side: "B", sym: "MSFT", qty: 2, price: 400, fees: 1 });

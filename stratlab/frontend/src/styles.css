@@ -3371,6 +3371,12 @@ details.k-fold { display: block; }   /* the fold button's flex row (.k-fold, a s
   .k-tbl-wrap.k-fit .k-table :is(button, .btn, .k-badge, .k-chip, .k-delta) { white-space: nowrap; }
 }
 
+/* LIVE21B-012: the tax report's sales name a fund in full ("Parag Parikh Flexi Cap Fund - Direct Plan - Growth"): on a laptop two lines at most,
+   about 16 characters wide (all of it in the title), so the name never holds the first column wide and the table fits its card at 1000 px */
+@media (min-width: 641px) {
+  .tax-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 16ch; white-space: normal; }
+}
+
 /* R15 #3 (owner, 7 Nov): Net worth's "Where you stand": the headline (figure large, its change beside it) on the left half, what you own,
    owe and are worth as a small table on the right; one under the other on a phone */
 .nw-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 32px; }
