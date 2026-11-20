@@ -158,3 +158,13 @@ def test_live21a_005_the_other_prices_are_read_on_their_own_pool_and_a_failed_on
     rows = mood.quote_rows(mood.RISK["IN"], got, "2026-11-20")
     assert [r["label"] for r in rows] == ["India VIX", "USD/INR", "Brent crude", "Gold", "US 10-year yield", "Dollar index"]
     assert asked["BZ=F"] == 2
+
+
+# ---------- LIVE21A-007: no US holiday or early-close row ----------
+def test_live21a_007_thanksgiving_and_the_early_close_are_market_events():
+    from app import market_events
+    got = market_events.holiday_events(date(2026, 11, 20), date(2026, 11, 20), date(2026, 11, 30))
+    us = [(e["date"], e["title"]) for e in got if e.get("market") == "US"]
+    assert ("2026-11-26", "US exchanges closed: Thanksgiving") in [(d, t.split(" Day")[0]) for d, t in us]
+    assert ("2026-11-27", "US exchanges close early, at 13:00 ET") in us
+    assert all(e["kind"] == "holiday" for e in got if e.get("market") == "US")
