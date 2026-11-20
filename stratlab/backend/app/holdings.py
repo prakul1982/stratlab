@@ -66,6 +66,30 @@ def pct_split(values: list[float]) -> list[float]:
     return [x / 10 for x in out]
 
 
+def nested_split(groups: list[list[float]]) -> list[list[float]]:
+    """LIVE20B-010: shares in tenths of a percent, each group's from the groups' own totals (largest remainder, adding to 100) and each
+    item's within its group (largest remainder, adding to the group's). A sector's share is then its value over the total, rounded once
+    (Free's sectors summed their stocks' rounded weights: Financial Services 6.93% of the value shown "6.8%"), and a one-stock sector
+    still shows its stock's weight (LIVE8B-020)."""
+    tot = [sum(g) for g in groups]
+    if not sum(tot):
+        return [[0.0 for _ in g] for g in groups]
+    gs = pct_split(tot)
+    out = []
+    for g, share in zip(groups, gs):
+        units = round(share * 10)
+        t = sum(g)
+        if not g or not t:
+            out.append([0.0 for _ in g])
+            continue
+        raw = [v / t * units for v in g]
+        got = [int(x) for x in raw]
+        for i in sorted(range(len(raw)), key=lambda i: raw[i] - got[i], reverse=True)[:units - sum(got)]:
+            got[i] += 1
+        out.append([x / 10 for x in got])
+    return out
+
+
 def stamp(items: list[dict], before: list[dict], day: str) -> list[dict]:
     """Each holding with the day its quantity was saved (`since`): kept from before while the quantity is the same,
     today's date when it is new or changed. A bonus or split from that day on is offered as an adjustment."""
@@ -583,11 +607,16 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
     # weights and the sector mix are shares of everything held that has a value (a position without a buy price too)
     value = sum((r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r) for r in rows if rate(r) is not None)
     shown = [r for r in rows if rate(r) is not None]
-    shares = pct_split([((r["value"] if r["value"] is not None else r["invested"]) or 0) * rate(r) for r in shown]) if value else []
+    worth = lambda r: ((r["value"] if r["value"] is not None else r["invested"]) or 0) * rate(r)      # noqa: E731
     for r in rows:
         r["weight"] = None
-    for r, w in zip(shown, shares):
-        r["weight"] = w
+    by_sector: dict[str, list[dict]] = {}
+    for r in shown:
+        by_sector.setdefault(r["sector"], []).append(r)
+    if value:
+        for members, ws in zip(by_sector.values(), nested_split([[worth(r) for r in m] for m in by_sector.values()])):
+            for r, w in zip(members, ws):
+                r["weight"] = w
     rows.sort(key=lambda r: -((r["value"] if r["value"] is not None else r["invested"] or 0) * (rate(r) or 0)))
     sectors: dict[str, float] = {}
     for r in rows:

@@ -39,7 +39,7 @@ export function PageLock() {
     setOwn(false);
     setLoading(false);
     if (!locked) return;
-    const partial = !gate?.whole;
+    const partial = !gate?.whole && !gate?.bare;          // LIVE20B-009: a page with no note of its own has nothing to wait for
     // a page that words each of its locks where it applies (Tax tools: Basic's dividend detail, Pro's amounts) says so with
     // data-plan-notes, so its tabs don't get the page's note on one tab and their own on another (DP2-012)
     const look = () => {

@@ -46,7 +46,7 @@ function Aside({ rows, label, note, testId }: { rows: IpoRow[]; label: string; n
   );
 }
 
-function perfCell(r: IpoRow, which: "listing" | "now") {
+function perfCell(r: IpoRow, which: "listing" | "now", newest?: string | null) {
   const p = r.perf;
   const v = which === "listing" ? p?.listing_change_pct : p?.change_pct;
   const px = which === "listing" ? p?.listing_price : p?.latest;
@@ -54,7 +54,10 @@ function perfCell(r: IpoRow, which: "listing" | "now") {
   if (which === "now" && px == null && p?.listing_price != null) return <span className="k-muted" data-testid="ipo-first-close">After its first close</span>;
   if (px == null) return <span className="k-muted">–</span>;
   // the latest close is dated: it is the last session's close, not a live price (RC2A-002)
-  const day = which === "now" && p?.latest_date ? `Close ${fmtDate(p.latest_date, { year: false })} · ` : "";
+  // LIVE20A-007: a close older than the list's newest is the stock's last trade (an SME stock that didn't trade since: Maxwell and HGS "Close 18 Nov"
+  // beside rows of 20 Nov), and says so
+  const older = !!(newest && p?.latest_date && p.latest_date < newest);
+  const day = which === "now" && p?.latest_date ? (older ? `Last traded ${fmtDate(p.latest_date, { year: false })} · ` : `Close ${fmtDate(p.latest_date, { year: false })} · `) : "";
   // no final issue price published yet: the price stands without a change against it (LIVE7A-020: "– · – · –" for a stock that had traded)
   if (v == null) return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day}issue price not published</span></>;
   return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day}<Signed value={v} fmt={(x) => pct(x, 1)} /> on the issue price</span></>;
@@ -90,7 +93,7 @@ export const NO_PAGE_WHY = "NSE has no issue page for it yet; the lot and bids a
 export const bidsMissing = (r: Pick<IpoRow, "page" | "page_at">): string =>
   r.page === false ? "No NSE page yet" : !r.page_at ? "NSE's issue page not read yet" : `None on NSE's issue page, read ${readAt(r.page_at)}`;
 
-function columns(m: Market, tab: Stage): Column<IpoRow>[] {
+function columns(m: Market, tab: Stage, newest: string | null = null): Column<IpoRow>[] {
   const name: Column<IpoRow> = { key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> };
   const band: Column<IpoRow> = { key: "band", header: "Price band", numeric: true, cell: (r) => bandText(r) };
   const lot: Column<IpoRow> = { key: "lot", header: "Lot and minimum", numeric: true, info: "The lot is the fewest shares one bid can be for. The minimum is the lot at the top of the price band.",
@@ -112,7 +115,7 @@ function columns(m: Market, tab: Stage): Column<IpoRow>[] {
     }
     if (tab === "closed") return [name, { key: "d", header: "Priced", cell: (r) => fmtDate(r.priced) }, band, { key: "sh", header: "Shares", numeric: true, cell: (r) => sharesText(r.shares, "US") }, size];
     return [name, { key: "d", header: "First trading day", cell: (r) => fmtDate(r.priced) }, { key: "p", header: "Offer price", numeric: true, cell: (r) => bandText(r) },
-      { key: "l", header: "Opening price", numeric: true, cell: (r) => perfCell(r, "listing") }, { key: "n", header: "Latest close", numeric: true, cell: (r) => perfCell(r, "now") }, size];
+      { key: "l", header: "Opening price", numeric: true, cell: (r) => perfCell(r, "listing") }, { key: "n", header: "Latest close", numeric: true, cell: (r) => perfCell(r, "now", newest) }, size];
   }
   if (tab === "upcoming") {
     return [name, { key: "d", header: "Bidding", cell: (r) => spanText(r.open, r.close) }, band, lot, size,
@@ -127,7 +130,7 @@ function columns(m: Market, tab: Stage): Column<IpoRow>[] {
   }
   return [name, { key: "d", header: "Listed", cell: (r) => fmtDate(r.listing) }, { key: "p", header: "Issue price", numeric: true, cell: (r) => (r.price != null ? bandText({ ...r, low: r.price, high: r.price }) : bandText(r)) },
     { key: "l", header: "Listing price", numeric: true, info: "The first session's opening price against the issue price.", cell: (r) => perfCell(r, "listing") },
-    { key: "n", header: "Latest close", numeric: true, info: "The latest daily close against the issue price.", cell: (r) => perfCell(r, "now") }, times];
+    { key: "n", header: "Latest close", numeric: true, info: "The latest daily close against the issue price.", cell: (r) => perfCell(r, "now", newest) }, times];
 }
 
 function Filed({ rows, m }: { rows: IpoRow[]; m: Market }) {
@@ -227,7 +230,7 @@ export function IposPage() {
       {error ? <ErrorState title="The IPO lists couldn't be read" action={{ label: "Try again", onClick: () => load() }}>{error}</ErrorState>
         : !d ? <Card><Skeleton label="Reading the IPO lists" lines={5} /></Card> : (
         <>
-          {d.problems.length > 0 && <p className="k-callout k-small" role="status" data-testid="ipo-problems">{problemNote(d.problems, d.problems_at ? asOf(d.problems_at, { tz: marketTz(market), year: false }) : null)}</p>}
+          {d.problems.length > 0 && <p className="k-callout k-small" role="status" data-testid="ipo-problems">{problemNote(d.problems, d.problems_at ? asOf(d.problems_at, { tz: marketTz(market), year: false }) : null, d.next_read ? asOf(d.next_read, { tz: marketTz(market), year: false }) : null)}</p>}
           <Card label="IPOs" testId="ipo-list">
             <div className="k-row">
               <Seg label="Stage" value={now} onChange={(v) => { setTab(v as Stage); const p = new URLSearchParams(params); p.set("t", v); setParams(p, { replace: true }); }}
@@ -241,7 +244,7 @@ export function IposPage() {
               </EmptyState>
             ) : (
               <DataTable csv={`IPOs ${now} ${market}`} stack label={`${tabs.find((t) => t.value === now)?.label} IPOs, ${market === "IN" ? "India" : "US"}`} rows={rows} rowKey={(r) => r.id}
-                rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })} columns={columns(market, now)} phonePage={25} />
+                rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })} columns={columns(market, now, rows.reduce<string | null>((a, r) => (r.perf?.latest_date && (!a || r.perf.latest_date > a) ? r.perf.latest_date : a), null))} phonePage={25} />
             )}
             {unpricedShown.length > 0 && (
               <Disclosure summary={`Listed, no prices read yet (${unpricedShown.length})`} testId="ipo-unpriced">

@@ -98,7 +98,7 @@ export function heroSummary(summary: string | null | undefined, caption = ""): s
   const saysFew = /^Only \d+ trades?: too few to judge/i.test(caption);
   return summaryLines(summary).filter((l) => !/^The strategy returned .+ (more than|less than|about the same as) buying and holding over the same period \(.+\)\.$/.test(l)
     && !(saysLost && l === "After costs, the strategy lost money over the period.")
-    && !(saysFew && /^Only \d+ trades? in this period\.$/.test(l)));
+    && !(saysFew && /^Only \d+ (?:trades? in this period|closed trades? here)\.$/.test(l)));     // LIVE20B-005: the journal's "Only 9 closed trades here." too
 }
 
 /** A run's badge words where the plain "Passed the checks" would overstate it: the count when some checks didn't pass

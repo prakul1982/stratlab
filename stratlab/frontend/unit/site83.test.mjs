@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { register } from "node:module";
+
+// a .ts file's extensionless imports, as the build resolves them (as unit/site82.test.mjs)
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 
 // site83 (Release 83): unit checks of the fixes the browser specs (e2e/site83.spec.ts) prove on the pages.
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -67,4 +72,35 @@ test("LIVE20A-006: a filed row with an older quarter kept says previous quarter;
   const rows = Array.from({ length: 30 }, (_, i) => ({ symbol: `S${i}`, mv_days: i < 2 ? 3 : 0 }));
   assert.equal(movesEmpty(rows, {}), true);
   assert.equal(movesEmpty(rows.map((r, i) => ({ ...r, mv_days: i < 5 ? 3 : 0 })), {}), false);           // five could still bring one
+});
+
+test("LIVE20A-007: the IPO banner says when the list is read next; an older close is the stock's last trade", async () => {
+  const { problemNote } = await import("../src/lib/ipoText.ts");
+  const t = problemNote(["SEC filings for Zeno42 Inc.: The SEC is having trouble (500)."], "19 Nov, 22:00 ET", "20 Nov, 11:00 ET");
+  assert.match(t, /It is read again at 20 Nov, 11:00 ET\.$/);
+  assert.doesNotMatch(t, /within the hour/);
+  assert.match(problemNote(["12 Sep calendar: timeout"], null, null), /It is read again at the list's next read\.$/);
+  const page = read("src/pages/IposPage.tsx");
+  assert.match(page, /\(older \? `Last traded \$\{fmtDate\(p\.latest_date, \{ year: false \}\)\} · ` : `Close /);
+  assert.match(page, /d\.next_read \? asOf\(d\.next_read, \{ tz: marketTz\(market\), year: false \}\) : null/);
+});
+
+test("LIVE20B-005 / 007 / 009 / 008: one 'too few', one 'over', 'the trade journal', the expiry notes' room, bare pages' notes at once, the RD so far", async () => {
+  const { heroSummary } = await import("../src/lib/tradeUi.ts");
+  assert.deepEqual(heroSummary("Only 9 closed trades here. That's too few to tell a real edge from a lucky streak, whatever the P&L says.", "Only 9 trades: too few to judge."),
+    ["That's too few to tell a real edge from a lucky streak, whatever the P&L says."]);
+  const j = read("src/pages/trade/JournalPage.tsx");
+  assert.match(j, /heroSummary\(v\.summary, `\$\{v\.headline\}`\)/);
+  assert.match(j, /c\.id === "sample" && c\.status === "fail" \? "Under 15 trades, luck can decide the result; 30 or more make a fair sample\."/);
+  const { lockWords } = await import("../src/lib/lockText.ts");
+  assert.equal(lockWords("Trade journal: every trade, the honesty checks, breakdowns and paper vs real", "Basic", "Free", false),
+    "Basic adds the trade journal: every trade, the honesty checks, breakdowns and paper vs real. Everything else here is on your Free plan.");
+  assert.match(read("src/lib/closingAuction.ts"), /closed: "Final prices are the official closes\.",/);
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(min-width: 641px\) \{\n  \.k-expiry \{ display: grid; grid-template-columns: max-content minmax\(0, 1fr\);[^}]*min-height: 66px; \}/);
+  const { PAGE_GATES } = await import("../src/lib/gates.ts");
+  assert.equal(PAGE_GATES["/trade/positioning"].bare, true);
+  assert.equal(PAGE_GATES["/money/net-worth"].bare, undefined);          // a page with notes of its own still waits (LIVE6-020)
+  assert.match(read("src/components/PageLock.tsx"), /const partial = !gate\?\.whole && !gate\?\.bare;/);
+  assert.match(read("src/pages/money/NetWorthPage.tsx"), /`paid so far \$\{inr\(f\.paid_in\)\} of \$\{inr\(f\.total_in\)\}`/);
 });
