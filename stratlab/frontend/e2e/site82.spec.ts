@@ -145,3 +145,17 @@ test("trend scan on Free: one lock message, drawn once in its place", async ({ p
   expect([...seen].length, `lock messages seen: ${[...seen].join(" | ")}`).toBe(1);
   expect(await shifts(page), "nothing moved").toBeLessThan(0.01);
 });
+
+// LIVE19B-003: on a cold launch public/early.js came after the app's own first calls, and asked them again: /public/data-online, /notebooks,
+// /markets (and Trade's strip) went out twice. Held back here past the app's start, it asks nothing.
+test("signed-in first load: each startup read goes out once, even when early.js comes after the app's own calls", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "the same code on both");
+  await signedIn(page, "site82-2");
+  await held(page, /\/early\.js$/, 3000);
+  const asked: string[] = [];
+  page.on("request", (r) => { if (r.url().startsWith(API)) asked.push(r.url().slice(API.length)); });
+  await page.goto("/trade");
+  await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(4000);
+  for (const p of ["/public/data-online", "/notebooks", "/markets", "/trade/vix?brief=true"]) expect(asked.filter((a) => a === p).length, `${p} asked`).toBeLessThanOrEqual(1);
+});

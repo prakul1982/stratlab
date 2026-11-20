@@ -9,7 +9,8 @@
   var w = window, d = document;
   function go(cfg) {
     try {
-      if (!cfg || !cfg.API_BASE || typeof fetch !== "function" || w.__stratlabEarlyPublic) return;
+      // LIVE19B-003: the app's code already running (this file came late, a cold launch) asks its own reads: asking them here too sent each twice
+      if (!cfg || !cfg.API_BASE || typeof fetch !== "function" || w.__stratlabEarlyPublic || w.__stratlabApp) return;
       var pub = fetch(cfg.API_BASE + "/public/data-online", { headers: { Accept: "application/json" } });
       pub.catch(function () {});
       w.__stratlabEarlyPublic = { "/public/data-online": { at: Date.now(), got: pub } };

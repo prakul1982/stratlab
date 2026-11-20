@@ -78,13 +78,12 @@
     if (once()) location.reload(); else show();
   }
 
-  // a saved sign-in: the page says "Opening StratLab…" while the app starts, never the visitor's marketing words for the seconds
-  // a slow start takes (R29B-019); the style for it is in index.html
+  // a saved sign-in: "Opening StratLab…" while the app starts, never the visitor's words (R29B-019); its style is in index.html
   try {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      // site81: and a saved sign-in's early reads (public/early.js), a file of their own so a visitor's download is unchanged
-      if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); document.head.appendChild(document.createElement("script")).src = "/early.js"; break; }
+      // site81: a saved sign-in's early reads (public/early.js); site82: asked first (it came behind the app's files)
+      if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); var e = document.createElement("script"); e.fetchPriority = "high"; e.src = "/early.js"; document.head.appendChild(e); break; }
     }
   } catch (e) { /* storage off */ }
 

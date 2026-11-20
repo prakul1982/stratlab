@@ -85,7 +85,8 @@ test("LIVE18B-010: while the app or the page is opening it counts as a call out,
 
 test("LIVE18B-002 / LIVE18A-011: a saved sign-in's early reads, from a file of their own the visitor never downloads", () => {
   const boot = read("public/boot.js");
-  assert.match(boot, /document\.documentElement\.setAttribute\("data-saved", "1"\); document\.head\.appendChild\(document\.createElement\("script"\)\)\.src = "\/early\.js"; break; \}/);
+  // (updated on purpose, site82 LIVE19B-003: the file is asked at high priority, it came behind the app's files on a cold launch)
+  assert.match(boot, /document\.documentElement\.setAttribute\("data-saved", "1"\); var e = document\.createElement\("script"\); e\.fetchPriority = "high"; e\.src = "\/early\.js"; document\.head\.appendChild\(e\); break; \}/);
   assert.match(boot, /earlyMe\(v\); if \(window\.__stratlabEarlyGo\) window\.__stratlabEarlyGo\(v\);/);
   const src = read("public/early.js");
   const run = (path, token = { access_token: "tok", expires_at: Math.floor(Date.now() / 1000) + 3600 }, cfgFirst = true) => {

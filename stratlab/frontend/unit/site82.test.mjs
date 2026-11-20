@@ -69,3 +69,26 @@ test("LIVE19A-011: every results row names its quarter, and the day tables share
   // the sort by a column the page doesn't show is not offered
   assert.match(page, /sorts=\{mvEmpty && filters\.sort !== "move" \?/);
 });
+
+test("LIVE19B-003: early.js asks nothing once the app's code is running (it arrived late on a cold launch and asked every read twice)", () => {
+  const src = read("public/early.js");
+  const run = (appRunning) => {
+    const calls = [];
+    const store = new Map([["sb-demo-auth-token", JSON.stringify({ access_token: "tok", expires_at: Math.floor(Date.now() / 1000) + 3600 })]]);
+    const win = { STRATLAB_CONFIG: { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" }, ...(appRunning ? { __stratlabApp: Date.now() } : {}) };
+    const doc = { head: { appendChild: () => undefined }, createElement: () => ({}) };
+    new Function("window", "document", "localStorage", "fetch", "location", src)(win, doc, { getItem: (k) => store.get(k) ?? null },
+      (url) => { calls.push(url.replace("https://api.example", "")); return Promise.resolve({}); }, { pathname: "/trade" });
+    return calls;
+  };
+  assert.equal(run(false).length, 5);
+  assert.deepEqual(run(true), []);
+  assert.match(read("src/main.tsx"), /\(window as unknown as \{ __stratlabApp\?: number \}\)\.__stratlabApp = Date\.now\(\);/);
+  assert.match(read("public/boot.js"), /e\.fetchPriority = "high"; e\.src = "\/early\.js";/);
+});
+
+test("LIVE19A-012: a page load's request goes out while the service worker starts (navigation preload)", () => {
+  const sw = read("public/sw.js");
+  assert.match(sw, /self\.registration\.navigationPreload\.enable\(\)/);
+  assert.match(sw, /const page = Promise\.resolve\(e\.preloadResponse\)\.catch\(\(\) => undefined\)\.then\(\(pre\) => pre \|\| fetch\(req\)\);/);
+});
