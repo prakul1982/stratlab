@@ -87,6 +87,39 @@ def saturday_close(bars: list[dict]) -> list[dict]:
     return [*bars[:-2], merged]
 
 
+def fx_day_closes(bars: list[dict], meta: dict | None) -> list[dict]:
+    """A currency pair's daily candles with each day's real close. The source's daily candle of a pair is the price at the start of its
+    day (London), open and close alike: the 19 Nov 2026 USD/INR candle said 93.47 (the price at 00:00 on 19 Nov) though the rupee traded at
+    93.28 from 06:00 that day, and the 20 Nov candle opened at 93.28 (LIVE18B-001: "USD/INR 93.47 −0.01% on 19 Nov" on My space while
+    /plans said ₹93.28 the same minute). A day's close is the next day's opening price; the newest day's is the quote's price now, the
+    same price /pricing reads (a day the quote is in with no candle yet gets one from the quote)."""
+    if not bars:
+        return bars
+    out = [dict(b) for b in bars]
+    price, at = (meta or {}).get("regularMarketPrice"), (meta or {}).get("regularMarketTime")
+    if isinstance(price, (int, float)) and price > 0 and isinstance(at, (int, float)):
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo((meta or {}).get("exchangeTimezoneName") or "UTC")
+            day, last = datetime.fromtimestamp(at, tz).date().isoformat(), str(out[-1]["t"])[:10]
+        except (OverflowError, OSError, ValueError, KeyError):
+            day, last = None, None
+        if day and last and day > last:
+            t = str(out[-1]["t"])
+            out.append({**out[-1], "t": day + t[10:] if len(t) > 10 else day, "o": float(price), "h": float(price), "l": float(price), "c": float(price), "v": 0})
+        elif day and day == last:
+            out[-1]["c"] = float(price)
+    for i in range(len(out) - 1):
+        nxt = out[i + 1].get("o")
+        if isinstance(nxt, (int, float)) and nxt > 0:
+            out[i]["c"] = float(nxt)
+    for b in out:
+        vals = [v for v in (b.get("o"), b.get("h"), b.get("l"), b.get("c")) if isinstance(v, (int, float))]
+        if vals:
+            b["h"], b["l"] = max(vals), min(vals)
+    return out
+
+
 class YahooProvider:
     max_days = {tf: v[1] for tf, v in INTERVAL.items()}
 
@@ -201,7 +234,8 @@ class YahooProvider:
         except SourceError as e:
             raise DataError(str(e)) from None
         k = self._scale(inst, c["meta"])
-        bars = trading_bars(self.market, saturday_close(c["candles"]) if tf == "1d" else c["candles"], tf)   # never a weekend candle for a weekday market
+        raw = fx_day_closes(c["candles"], c["meta"]) if tf == "1d" and self.market == "FX" else c["candles"]
+        bars = trading_bars(self.market, saturday_close(raw) if tf == "1d" else raw, tf)   # never a weekend candle for a weekday market
         if k == 1.0:
             return bars
         return [{**b, "o": b["o"] * k, "h": b["h"] * k, "l": b["l"] * k, "c": b["c"] * k} for b in bars]
