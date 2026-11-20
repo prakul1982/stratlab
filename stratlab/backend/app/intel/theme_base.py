@@ -3279,9 +3279,8 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
             # own and operate healthcare facilities": its name's "Healthcare", set aside from its words, left them naming no kind of
             # property): a property owner whose own words, its name kept in them, say it owns or runs the kind of property the layer's name
             # names is of that layer, whatever an earlier re-check moved
-            owns_ = owns_named_kind(v, c, ev(c), model_of)
-            if ok and not words_ and owns_:
-                words_ = owns_
+            if ok and not words_:
+                words_ = owns_named_kind(v, c, ev(c), model_of) or words_
             if ok and not words_ and went_out(c, v):
                 # r69e (LIVE13A-001: OSI Systems back in "Fabless chip design" a re-check after one moved it out for its words): an earlier
                 # re-check's move out of this layer is undone only by words of its own that say what the layer sells, never its official
@@ -6959,10 +6958,12 @@ def owns_named_kind(v: dict, c: dict, text, model_of=None) -> str:
     ("we own and operate healthcare facilities"); "" when none do, for one whose name names no such kind, one read to earn another way than
     from property, or a layer whose name names no kind of property."""
     lt = layer_property_types(_HALF_RX.sub("", str(v.get("layer") or "")))
-    model = str((model_of(c) if model_of else c.get("model")) or c.get("model") or "")
     nm = str(c.get("name") or "").lower()
     # (a REIT named for the kind it owns, as named_property: one whose name names no kind keeps the rules of its words alone)
-    if not lt or model not in ("property", "") or not ({t for t, by_name, _ in PROPERTY_TYPES if re.search(by_name, nm)} & lt):
+    if not lt or not ({t for t, by_name, _ in PROPERTY_TYPES if re.search(by_name, nm)} & lt):
+        return ""
+    model = str((model_of(c) if model_of else c.get("model")) or c.get("model") or "")
+    if model not in ("property", ""):
         return ""
     for s_ in re.split(r"(?<=[.;])\s+", own_text(text)):
         if company_property_types(s_) & lt:
