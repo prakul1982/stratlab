@@ -9,28 +9,32 @@ import { Badge } from "./Badge";
  * data is from (a "Data up to 30 Sep 2026" badge, with an (i) for where the numbers come from). `asOf` is an ISO date or
  * time; leave it out for a page without dated data. A time is written in the market's zone with the zone's name
  * ("7 Oct 2026, 13:26 IST"): India's, unless `asOfTz` names another (`marketTz("US")` on a US page). */
-export function PageHeader({ eyebrow, title, lede, asOf, asOfPending = false, asOfLabel = "Data up to", asOfTz, info, infoLabel = "About this data", actions }: {
+export function PageHeader({ eyebrow, title, lede, asOf, asOfPending = false, asOfLabel = "Data up to", asOfTz, info, infoLabel = "About this data", actions, infoRow = false }: {
   /** Left out where it would only repeat the title ("SETTINGS / Settings", DI-019): the breadcrumb gives the place. */
   eyebrow?: string; title: string; lede?: ReactNode; asOf?: string | null; asOfLabel?: string; asOfTz?: string; info?: ReactNode; infoLabel?: string; actions?: ReactNode;
   /** The page's figures (and so its as-of time) are still loading: the badge's place is kept, so the page doesn't move down when
    * it arrives (LIVE3-012: Pulse and Screens moved 33px on a phone). */
   asOfPending?: boolean;
+  /** The (i) sits on the badge's row whether or not a badge comes, so a page whose badge may or may not come once its figures are in keeps
+   *  one header either way (LIVE19B-008: the journal's "Trades up to" row was inserted under the lede on a phone, moving the page 46px). */
+  infoRow?: boolean;
 }) {
   const when = asOfText(asOf, { tz: asOfTz });
   // an (i) with no as-of badge to sit beside ends the lede's line, instead of standing alone on a row of its own or in front of the
   // page's buttons (LIVE4-012: Net worth's (i) floated left of "Add an entry")
   const inline = !!info && !!lede && !when && !asOfPending;
+  const inLede = inline && !infoRow;
   const slot = useRef<HTMLDivElement | null>(null);
   return (
     <>
     <header className="k-page-head">
       {eyebrow && <span className="k-eyebrow">{eyebrow}</span>}
       <h1 className="k-h1">{title}</h1>
-      {lede && (inline ? <div className="k-lede"><Lede lede={lede} /> <Info label={infoLabel}>{info}</Info></div> : <p className="k-lede"><Lede lede={lede} /></p>)}
-      {(when || (info && !inline) || actions || asOfPending) && (
+      {lede && (inLede ? <div className="k-lede"><Lede lede={lede} /> <Info label={infoLabel}>{info}</Info></div> : <p className="k-lede"><Lede lede={lede} /></p>)}
+      {(when || (info && !inLede) || actions || asOfPending) && (
         <div className="k-meta">
           {when ? <Badge>{asOfLabel} {when}</Badge> : asOfPending && <span className="k-meta-wait" aria-hidden="true"><Badge>{asOfLabel}</Badge></span>}
-          {info && !inline && <Info label={infoLabel}>{info}</Info>}
+          {info && !inLede && <Info label={infoLabel}>{info}</Info>}
           {actions}
         </div>
       )}

@@ -254,7 +254,10 @@ def test_e82_a_theme_of_broad_ai_picked_industries_or_an_unfinished_check_is_not
     assert TL.broad_industries(_quantum(3, total=40)) is False         # guard: a small theme
     meta = {"rules": theme_base.RULES, "broad": False}
     assert "not checked yet" in TL.gate_why(meta, {"all": 386, "listed": 197, "unlisted": [["not checked yet", 189]]})
-    assert TL.gate_why(meta, None) == "its membership check is not done yet"
+    # (updated on purpose, e83: with no dive kept there is no count to judge by (the page shows none); a dive kept with no count is judged
+    # on its own tally of companies not checked)
+    assert TL.gate_why(meta, None) == ""
+    assert TL.gate_why(meta, {"total": 386}, unchecked=189) == "189 of its 386 companies not checked yet"
     assert TL.gate_why({**meta, "broad": True}, {"all": 386, "listed": 386, "unlisted": []}).startswith("its companies come almost all")
     assert TL.gate_why(meta, {"all": 24, "listed": 23, "unlisted": [["not checked yet", 1]]}) == ""       # guard: Space and satellites
     assert TL.gate_why({"rules": 76}, None) == ""                                                         # guard: kept before the gate
@@ -313,5 +316,5 @@ def test_e82_a_public_tally_is_dated_in_the_markets_own_day():
 def test_e82_versions():
     from app import blog_research
     from app.intel import sector_metrics
-    assert theme_base.RULES == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.EARLIER_MAX == 32
-    assert theme_data.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and blog_research.GEN == 10 and sector_metrics.VERSION == 3
+    assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.EARLIER_MAX == 33          # e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)
+    assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and blog_research.GEN == 11 and sector_metrics.VERSION == 3          # e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)

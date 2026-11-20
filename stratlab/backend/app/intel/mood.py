@@ -30,7 +30,10 @@ KEEP_FOR = 3 * 86400.0                    # a stored payload older than this is 
 CLOSES_FRESH = 4 * 3600.0                 # daily closes change once a day
 TOP = 5                                   # stocks in each of "adding" and "taking" points
 CHUNK = 24                                # hub.quotes reads at most this many symbols at once
-SECTOR_MEMBERS = {"IN": 4, "US": 3}       # the largest members of a sector read to say what moved it
+# the largest members of a sector read to say what moved it (LIVE19A-007: with the four largest only, a sector up on the day whose four
+# largest fell had nothing but fallers to name)
+SECTOR_MEMBERS = {"IN": 8, "US": 5}
+FLOAT_COVER = 0.5                         # the share of an index's companies with a stored promoter holding needed to weigh by free float
 US_MOVERS_FROM = 24                       # the US index's biggest companies read for the points table
 MIN_COVER = 0.8                           # the share of an index's companies that must be read for its points table
 US_MIN_COVER = 0.9                        # ...and the share of the US index's companies that must have a market value to weigh by
@@ -240,8 +243,43 @@ def sector_table(today: dict, closes: dict, movers: dict | None = None, label=la
             "leader": rows[0]["label"], "laggard": rows[-1]["label"]}
 
 
+FULL_NOTE = "Points are estimated from each company's market value, so they differ a little from the exchange's own free-float figures."
+FLOAT_NOTE = ("Points are estimated from each company's free-float market value (the shares outside its promoter group, from its latest "
+              "shareholding filing), so they differ a little from the exchange's own figures.")
+
+
+def float_caps(caps: dict[str, float], promoter: dict[str, float | None], symbols=None) -> tuple[dict[str, float], bool]:
+    """Market values weighed as an index weighs them: each company's free float, its value less the promoter group's share
+    (LIVE19A-006: by whole market value HDFC Bank, all free float, "added about 44 points" to the NIFTY 50 where the exchange's own weight
+    makes it about 88, and Reliance, half held by its promoters, weighed twice what the index gives it). `promoter` is {symbol: percent of
+    shares the promoter group holds, from the latest shareholding filing}; a company without one takes the median free float of those
+    with one. Returns (values, True) when at least FLOAT_COVER of `symbols` (default: every company in `caps`) have a stored holding, else
+    the whole market values and False."""
+    syms = [s for s in (symbols if symbols is not None else caps) if num(caps.get(s))]
+    known = {s: min(max(100.0 - float(promoter[s]), 0.0), 100.0) / 100 for s in syms if num(promoter.get(s)) is not None}
+    if not syms or len(known) < FLOAT_COVER * len(syms):
+        return dict(caps), False
+    mid = sorted(known.values())[len(known) // 2]
+    out = dict(caps)
+    for s in syms:
+        out[s] = caps[s] * known.get(s, mid)
+    return out, True
+
+
+def moved_by(rows: list[dict], caps: dict[str, float], index_change: float | None, top: int = 2) -> list[dict]:
+    """The members that moved a sector index most in the direction it moved: each one's pull is its weight (free-float value) times its
+    move, and only pulls of the index's own sign count (LIVE19A-007: Nifty Healthcare +0.72% was "moved by" Sun Pharma −0.64% and
+    Divi's −0.74%, its two largest, both falling). An index flat to two decimals takes the largest pulls either way. Empty when none of
+    the members read moved its way: no name is better than a wrong one."""
+    pull = lambda r: r["change_pct"] * (caps.get(r["symbol"]) or 1.0)          # noqa: E731
+    way = sgn(index_change) if index_change is not None else 0
+    if not way:
+        return sorted(rows, key=lambda r: -abs(pull(r)))[:top]
+    return sorted((r for r in rows if sgn(r["change_pct"]) == way), key=lambda r: -abs(pull(r)))[:top]
+
+
 def index_movers(members: list[dict], prev_level: float | None, index_name: str, top: int = TOP, total: int | None = None,
-                 actual_points: float | None = None) -> dict | None:
+                 actual_points: float | None = None, free_float: bool = False) -> dict | None:
     """The stocks adding and taking the most points from an index, estimated from each company's market value:
     weight = value / the index's total value, points = weight x its move x the index's previous level. `members` are
     {"symbol", "name", "market_cap", "change_pct"}; `total` the market value of every company in the index when more
@@ -265,7 +303,7 @@ def index_movers(members: list[dict], prev_level: float | None, index_name: str,
         return None
     return {"index": index_name, "adding": adding, "taking": taking, "of": len(pool), "est_total": est if total is None else None,
             "actual": round(actual, 1) if actual is not None and total is None else None,
-            "note": "Points are estimated from each company's market value, so they differ a little from the exchange's own free-float figures."}
+            "basis": "free_float" if free_float else "market_value", "note": FLOAT_NOTE if free_float else FULL_NOTE}
 
 
 def flows_block(cash: dict | None, days: list[tuple[str, dict]]) -> dict | None:
@@ -812,14 +850,16 @@ class Mood:
         members = {n: (sector_members.IN.get(n) if region == "IN" else sector_members.US.get(n)) or [] for n in names}
         syms = [s for n in names for s in members[n][:per]]
         quotes = self._quotes(region, syms)
+        caps, _ = self._float_caps(region, caps, syms)
         nm = self._names(region)
         moves = {}
         for n in names:
             key = US_NAMES.get(n, n) if region == "US" else n
             rows = [{"symbol": s, "name": nm.get(s) or s, "change_pct": round(num(quotes[s].get("change_pct")), 2)} for s in members[n][:per]
                     if s in quotes and num(quotes[s].get("change_pct")) is not None]
-            if rows:
-                moves[key] = sorted(rows, key=lambda r: -abs(r["change_pct"] * (caps.get(r["symbol"]) or 1.0)))[:2]
+            got = moved_by(rows, caps, num((now.get(key) or now.get(n) or {}).get("change_pct")))
+            if got:
+                moves[key] = got
         closes = self._closes_for(region, names, today, "sectors")
         closes = {US_NAMES.get(n, n): v for n, v in closes.items()} if region == "US" else closes      # the table is keyed by the sector's name
         return sector_table(now, closes, moves, self._label(region)), quotes
@@ -841,6 +881,26 @@ class Mood:
             return {r["symbol"]: float(r["market_cap"]) for r in screens.load_index(region).get("rows") or [] if num(r.get("market_cap"))}
         except Exception:
             return {}
+
+    def _promoters(self, region: str, symbols) -> dict[str, float | None]:
+        """{symbol: the promoter group's percent of shares in its latest stored shareholding filing} (India; the US files no such pattern)."""
+        if region != "IN":
+            return {}
+        try:
+            from .. import shareholders
+        except Exception:
+            return {}
+        out = {}
+        for s in dict.fromkeys(symbols):
+            try:
+                out[s] = shareholders.promoter_share(s)
+            except Exception:
+                out[s] = None
+        return out
+
+    def _float_caps(self, region: str, caps: dict[str, float], symbols) -> tuple[dict[str, float], bool]:
+        syms = [s for s in dict.fromkeys(symbols) if s in caps]
+        return float_caps(caps, self._promoters(region, syms), syms) if region == "IN" else (dict(caps), False)
 
     def _movers(self, region: str, caps: dict[str, float], levels: list[dict], have: dict) -> list[dict] | None:
         """One table of points added and taken for each index of the market (NIFTY 50 and SENSEX; the S&P 500)."""
@@ -865,11 +925,12 @@ class Mood:
                     names = {}
             else:
                 syms, names = next((p["symbols"] for p in universes.PRESETS[region] if p["id"] == kind), []), {}
+            weights, ff = self._float_caps(region, caps, syms) if kind != "sp500" else (caps, False)
             have.update(self._quotes(region, [s for s in syms if s not in have]))          # shared by the indices: read once
-            members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s, region == "US"), "market_cap": caps.get(s),
+            members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s, region == "US"), "market_cap": weights.get(s),
                         "change_pct": (have.get(s) or {}).get("change_pct")} for s in syms]
             block = index_movers(members, lvl["prev_close"], name, total=total,
-                                 actual_points=(num(lvl.get("price")) - lvl["prev_close"]) if num(lvl.get("price")) else None)
+                                 actual_points=(num(lvl.get("price")) - lvl["prev_close"]) if num(lvl.get("price")) else None, free_float=ff)
             if block:
                 out.append(block)
         return out or None

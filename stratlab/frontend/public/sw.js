@@ -48,8 +48,11 @@ const APP_PATH = /^\/(?:mine|all|home|features|trade|invest|money|notebooks|new|
 const isAppPath = (path) => path === "/" || APP_PATH.test(path);
 const shellOr = (fallback) => caches.match("/").then((hit) => hit || fallback()).catch(() => fallback());
 
+// LIVE19A-012 / LIVE19B-003: a page load's request goes out while the worker itself is still starting (navigation preload), not after it:
+// on a browser's first load of the day the worker's start came before the page's own request (document 3.1-4.5 s live, 0.4 s once warm)
+const preloadOn = () => (self.registration && self.registration.navigationPreload ? self.registration.navigationPreload.enable().catch(() => undefined) : Promise.resolve());
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(Promise.all([preloadOn(), caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k))))]).then(() => self.clients.claim()));
 });
 
 // pages: always the network first (so updates show at once); the cached shell when offline, and when the server answers with an
@@ -88,7 +91,9 @@ self.addEventListener("fetch", (e) => {
   }
   if (req.mode !== "navigate") return;
   if (url.pathname.startsWith("/v/")) return;          // shared-verdict previews come from the server, not the app
-  e.respondWith(fetch(req).then((res) => {
+  // the request navigation preload already sent (when on), else the page's own
+  const page = Promise.resolve(e.preloadResponse).catch(() => undefined).then((pre) => pre || fetch(req));
+  e.respondWith(page.then((res) => {
     if (good(res, "text/html")) {
       if (isAppPath(url.pathname)) {
         const copy = res.clone();

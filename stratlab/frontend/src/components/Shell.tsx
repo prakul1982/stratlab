@@ -116,7 +116,10 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
     const onScroll = () => { if (Math.abs(box.scrollTop - mine) > 1) moved = true; };
     box.addEventListener("scroll", onScroll, { passive: true });
     const t = window.setTimeout(reveal, 0);
-    void document.fonts?.ready.then(reveal);
+    // the fonts' look is for the fonts' own change of the rows' heights: a window made another size in between was the reader's doing, and
+    // the menu stays as they left it (e2e/review-r4 R4-016 shrinks the window and expects the menu at its top; on CI the fonts came after)
+    const size = `${window.innerWidth}x${window.innerHeight}`;
+    void document.fonts?.ready.then(() => { if (`${window.innerWidth}x${window.innerHeight}` === size) reveal(); });
     return () => { window.clearTimeout(t); box.removeEventListener("scroll", onScroll); };
   }, [loc.pathname]);
   // the tour opens the phone's menu to point at what is in it (DI-023); held open by the tour, the menu is not a modal of its

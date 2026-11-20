@@ -206,9 +206,10 @@ def test_annual_reports_are_read_a_few_a_minute_and_the_rest_are_owed_never_a_bu
     reads = []
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or f"{sym} Corp is a maker of power chips for cars and factories, sold to makers of vehicles in thirty countries.")
     # e57 (R57, updated on purpose): FILING_READS_PER_MINUTE is 30 (was DESCRIBE_READS, 6), so 40 companies are asked to see the rest owed
-    syms = [f"S{i:02d}" for i in range(40)]
+    # (updated on purpose, e83: 60 a minute (LIVE19A-003), so 80 companies are asked)
+    syms = [f"S{i:02d}" for i in range(80)]
     got, pending = TR.evidence_reader("US", {})(syms)
-    assert len(reads) == TR.FILING_READS_PER_MINUTE == 30 and not pending
+    assert len(reads) == TR.FILING_READS_PER_MINUTE == 60 and not pending
     owed = [s for s in syms if json.loads(store[f"theme:evidence:US:{s}"]).get("owed")]
     assert len(owed) == len(syms) - TR.FILING_READS_PER_MINUTE and set(owed) == set(syms) - set(reads)
     assert all(TR.thin_about(json.loads(store[f"theme:evidence:US:{s}"]), "US") for s in owed)

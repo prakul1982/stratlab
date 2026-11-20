@@ -85,7 +85,8 @@ test("LIVE18B-010: while the app or the page is opening it counts as a call out,
 
 test("LIVE18B-002 / LIVE18A-011: a saved sign-in's early reads, from a file of their own the visitor never downloads", () => {
   const boot = read("public/boot.js");
-  assert.match(boot, /document\.documentElement\.setAttribute\("data-saved", "1"\); document\.head\.appendChild\(document\.createElement\("script"\)\)\.src = "\/early\.js"; break; \}/);
+  // (updated on purpose, site82 LIVE19B-003: the file is asked at high priority, it came behind the app's files on a cold launch)
+  assert.match(boot, /document\.documentElement\.setAttribute\("data-saved", "1"\); var e = document\.createElement\("script"\); e\.fetchPriority = "high"; e\.src = "\/early\.js"; document\.head\.appendChild\(e\); break; \}/);
   assert.match(boot, /earlyMe\(v\); if \(window\.__stratlabEarlyGo\) window\.__stratlabEarlyGo\(v\);/);
   const src = read("public/early.js");
   const run = (path, token = { access_token: "tok", expires_at: Math.floor(Date.now() / 1000) + 3600 }, cfgFirst = true) => {
@@ -134,7 +135,8 @@ test("LIVE18B-012: the menu shows the open page's item, scrolling only its own b
   // arrive, and never after the menu was moved
   assert.match(src, /const cur = box\.querySelector<HTMLElement>\('\[aria-current="page"\]'\);\n      if \(cur\) revealIn\(box, cur\);/);
   assert.match(src, /const onScroll = \(\) => \{ if \(Math\.abs\(box\.scrollTop - mine\) > 1\) moved = true; \};/);
-  assert.match(src, /void document\.fonts\?\.ready\.then\(reveal\);/);
+  // updated on purpose (Release 82 CI): the fonts' look is skipped once the window is another size (the reader's doing, R4-016)
+  assert.match(src, /void document\.fonts\?\.ready\.then\(\(\) => \{ if \(`\$\{window\.innerWidth\}x\$\{window\.innerHeight\}` === size\) reveal\(\); \}\);/);
   const body = src.match(/export function revealIn[\s\S]*?\n}/)[0]
     .replace("export function revealIn(box: HTMLElement, item: HTMLElement, room = 24): void", "function revealIn(box, item, room = 24)");
   const MORE_ROOM = Number(src.match(/export const MORE_ROOM = (\d+);/)[1]);

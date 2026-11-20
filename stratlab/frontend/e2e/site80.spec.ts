@@ -58,6 +58,12 @@ test("/login: the frame's buttons look as they will while their script is on its
   const email = page.getByRole("button", { name: "Email me a code" });
   await expect(google).toBeDisabled({ timeout: 30_000 });
   const look = (b: typeof google) => b.evaluate((e) => { const c = getComputedStyle(e); return { bg: c.backgroundColor, color: c.color, opacity: c.opacity, cursor: c.cursor }; });
+  // once the script runs the app may draw its own buttons in the frame's place; a read taken as the frame's button is removed comes back
+  // empty (getComputedStyle of a detached node), so a look is read again until it is one of a button on the page (Release 82: 2 of 6 runs)
+  const lookSettled = async (b: typeof google) => {
+    for (let i = 0; i < 30; i += 1) { const v = await look(b).catch(() => null); if (v && v.bg) return v; await page.waitForTimeout(100); }
+    return look(b);
+  };
   const waiting = { google: await look(google), email: await look(email) };
   expect(waiting.google.cursor).toBe("progress");
   expect(waiting.email.cursor).toBe("progress");
@@ -65,7 +71,7 @@ test("/login: the frame's buttons look as they will while their script is on its
   early();
   await expect(google).toBeEnabled();
   await expect(email).toBeEnabled();
-  const ready = { google: await look(google), email: await look(email) };
+  const ready = { google: await lookSettled(google), email: await lookSettled(email) };
   // the same fill and words' colour as the pressable button: never the grey of one that can't be pressed
   expect(waiting.google.bg).toBe(ready.google.bg);
   expect(waiting.google.color).toBe(ready.google.color);

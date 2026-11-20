@@ -251,3 +251,17 @@
   .k-tbl-wrap.compact .res-mv { display: inline-flex; gap: 6px; }
   .k-tbl-wrap.compact .res-co { min-width: 0; }
 }
+
+/* LIVE19A-011: every day's results table has the same columns at the same widths, so the stacked tables line up (each sized itself to its
+   own rows: Market value at x 780, 870 and 755 on three days). The columns' order is fixed (company, market value, price, day, quarter, then
+   the page's usual move and implied move, which share what is left) */
+@media (min-width: 900px) {
+  .res-days .k-table { table-layout: fixed; width: 100%; }
+  .res-days .k-table thead th:nth-child(1) { width: 32%; }
+  .res-days .k-table thead th:nth-child(2) { width: 12%; }
+  .res-days .k-table thead th:nth-child(3) { width: 11%; }
+  .res-days .k-table thead th:nth-child(4) { width: 9%; }
+  .res-days .k-table thead th:nth-child(5) { width: 17%; }
+  .res-days .res-q .k-note { white-space: normal; }
+  .res-days .res-co { min-width: 0; max-width: none; }
+}

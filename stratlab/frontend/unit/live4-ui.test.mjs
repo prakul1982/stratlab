@@ -48,7 +48,8 @@ test("LIVE4-010: a link in a table cell never shrinks under its own words (COROM
 test("LIVE4-010: the results calendar is compact on a phone and its headers fit one line on a desktop", () => {
   const page = read("src/pages/ResultsPage.tsx");
   // (updated on purpose, site76 LIVE14A-009: the same Implied rule, and "Usual move" kept per day's table)
-  assert.match(page, /columns=\{columns\.filter\(\(c\) => \(c\.key !== "im" \|\| on\.some\(\(r\) => r\.fo\)\) && \(c\.key !== "mv" \|\| !movesEmpty\(on, moves, on\.length\)\)\)\} stack compact phonePage=\{10\}/);      // R15 #11: no Implied column on a day with no F&O stock
+  // (updated on purpose, LIVE19A-011: one column set for every day of the page (Implied when any row shown has options, Usual move by the page's rows), so the stacked day tables line up)
+  assert.match(page, /columns=\{pageColumns\.filter\(\(c\) => c\.key !== "im" \|\| on\.some\(\(r\) => r\.fo\)\)\} stack compact phonePage=\{10\}/);      // R15 #11: no Implied column on a day with no F&O stock (updated on purpose: Release 82 kept it a day\'s own)
   assert.match(page, /key: "px", header: "Price", numeric: true, brief: true/);
   assert.match(page, /key: "day", header: "Day", numeric: true, brief: true/);
   for (const k of ["cap", "q"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);   // LIVE5-002: rev and pat are one "q" column

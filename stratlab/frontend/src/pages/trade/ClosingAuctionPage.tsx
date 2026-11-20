@@ -140,7 +140,9 @@ function Stocks({ v }: { v: CasView }) {
   // and its band come after (R8B-010: at 400 px only "Stock" and "Reference (band)" fitted on a list sorted by the gap)
   const cols: Column<CasStock>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link> },
-    { key: "price", header: final ? "Final price" : "IEP", numeric: true, cell: (r) => <>{r.price == null ? "–" : price(r.price, "INR")}<span className="k-sub-line">{r.final_out ? "final" : "indicative"}</span></> },
+    // LIVE19B (LIVE18B-014): the column's head says final or indicative; a row says it only where it differs from the head ("final" stood
+    // under every price of a "Final price" column)
+    { key: "price", header: final ? "Final price" : "IEP", numeric: true, cell: (r) => <>{r.price == null ? "–" : price(r.price, "INR")}{!!r.final_out !== final && <span className="k-sub-line">{r.final_out ? "final" : "indicative"}</span>}</> },
     { key: "gap", header: "Gap to reference", numeric: true, cell: (r) => <Gap g={r.gap} /> },
     { key: "ref", header: "Reference (band)", numeric: true, cell: (r) => <>{r.ref == null ? "–" : price(r.ref, "INR")}
       {r.lower != null && r.upper != null && <span className="k-sub-line">{price(r.lower, "INR")}–{price(r.upper, "INR")}</span>}</> },

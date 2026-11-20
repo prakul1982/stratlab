@@ -384,6 +384,21 @@ def company(symbol: str) -> dict:
     return out
 
 
+def promoter_share(symbol: str) -> float | None:
+    """The promoter group's percent of all shares in the company's newest stored filing: the filing's own category total, else (a quarter
+    read before the total was kept) its promoter-group members above 1% added up. None when no filing is stored. The rest is the free float
+    an index weighs a company by (Mood's points, LIVE19A-006)."""
+    qs = company(symbol).get("q") or {}
+    if not qs:
+        return None
+    newest = qs[max(qs)] or {}
+    p = newest.get("ppct")
+    if isinstance(p, (int, float)) and 0 <= p <= 100:
+        return float(p)
+    rows = [r for r in _rows(newest) if r["group"] == "promoter"]
+    return round(min(sum(r["pct"] for r in rows), 100.0), 2)
+
+
 def store(symbol: str, row: dict, parsed: dict) -> tuple[dict | None, dict]:
     """Keep one filing's named holders under its quarter (the newest KEEP_QUARTERS quarters stay). Returns the quarter
     before it (None when none is stored) and the new one, for the followed-holder messages."""

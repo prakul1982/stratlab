@@ -26,6 +26,10 @@ import { importWithRetry } from "./lib/lazyRetry";
 import { closedLine, nextOpenAt, reconnectAt } from "./lib/dataBack";
 import type { Market } from "./lib/types";
 
+// LIVE19B-003: the app's code is running, so it asks its own first reads: public/early.js, when it arrives after this (a cold launch: live it came
+// at 9.8-10.2 s, after the app's own calls), asks nothing (it asked /public/data-online, /notebooks, /markets and Trade's strip a second time)
+(window as unknown as { __stratlabApp?: number }).__stratlabApp = Date.now();
+
 // every page loads when it's opened, so the first visit only downloads the page it shows
 // A page whose file has already arrived (another page of the same file was opened: the company page after Research) is drawn at once,
 // with no loading bar in between: page moves are not transitions (see BrowserRouter below), so a lazy page that waits even a moment

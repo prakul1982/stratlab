@@ -13,7 +13,8 @@ const { latestDue } = await import("../src/lib/format.ts");
 const offer = await import("../src/lib/offer.ts");
 
 test("R33-007: Pro's unlimited AI builds name the daily cap, from the card's constant", () => {
-  assert.equal(unlimitedLabel("pro", "ai_builds_per_month"), `Unlimited (up to ${AI_BUILDS_PER_DAY} a day)`);
+  // (updated on purpose, LIVE19B-004: the cap alone, as /new says it; "Unlimited (up to 200 a day)" put both in one cell)
+  assert.equal(unlimitedLabel("pro", "ai_builds_per_month"), `Up to ${AI_BUILDS_PER_DAY} a day`);
   assert.equal(unlimitedLabel("pro", "backtests_per_month"), "Unlimited");
   assert.ok(FEATURES.pro.some((f) => f.includes(`up to ${AI_BUILDS_PER_DAY} AI builds a day`)));
 });

@@ -778,10 +778,26 @@ def find_issue_pages(rows: list[dict], feed, now: datetime, problems: list[str],
         rhp = [d for d in r.get("docs") or [] if d.get("kind") in ("RHP", "Prospectus") and d.get("source") == "sebi"]
         if tried >= limit:
             break
-        if r["market"] != "IN" or r.get("symbol") or r.get("open") or r.get("bse_code") or not rhp or not r["id"].startswith("in-f-"):
+        # LIVE19A-021 / LIVE19B (LIVE18B-011): a main-board issue only BSE's list names, upcoming or being bid for: on 20 Nov Crystal Crop
+        # Protection (closing that day) had "No NSE page yet" for its lot and bids, which are read from the issue's NSE page. Its page is
+        # looked for the same way; the row keeps its id (follows and alerts are by it) and takes the symbol, as NSE's list would give it
+        bse_only = (r["market"] == "IN" and not r.get("symbol") and r.get("bse_code") and r.get("segment") == "mainboard" and r.get("open")
+                    and stage_of(r, now) in ("upcoming", "open"))
+        if not bse_only and (r["market"] != "IN" or r.get("symbol") or r.get("open") or r.get("bse_code") or not rhp or not r["id"].startswith("in-f-")):
             continue
-        filed = max(d.get("date") or "" for d in rhp)
-        if filed < (today - timedelta(days=PROBE_DAYS)).isoformat() or (r.get("probe_at") or "") >= today.isoformat():
+        filed = max(d.get("date") or "" for d in rhp) if rhp else ""
+        if (not bse_only and filed < (today - timedelta(days=PROBE_DAYS)).isoformat()) or (r.get("probe_at") or "") >= today.isoformat():
+            continue
+        if bse_only:
+            tried += 1
+            r["probe_at"] = today.isoformat()
+            for guess in S.symbol_guesses(r["name"]):
+                got = _try(problems, f"{guess}", lambda guess=guess: S.nse_detail(feed.nse.ipo_detail(guess, "EQ")))
+                sleep(pace)
+                if got and S.name_key(got.get("company")) == r.get("nkey") and (not got.get("open") or got.get("open") == r.get("open")):
+                    r.update(symbol=got.get("symbol") or guess, series="EQ", exchanges=sorted(set((r.get("exchanges") or []) + ["NSE"])))
+                    r.pop("probe_at", None)
+                    break
             continue
         tried += 1
         r["probe_at"] = today.isoformat()

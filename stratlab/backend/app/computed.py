@@ -219,7 +219,10 @@ def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | N
         old = ix["entries"].get(hk) or {}
         entry = {"label": str(label)[:120], "region": region, "size": len(text), "at": at, "first": old.get("first") or at,
                  "hits": old.get("hits", 0), "last": old.get("last") or at, "refreshes": old.get("refreshes", 0) + (1 if by else 0),
-                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate", "versions", "pub", "dups")}}
+                 # e83 (LIVE19A-001): "broad" (theme_library.keep's gate mark) and "generated_at" kept too: the public gate read no "broad"
+                 # from the index, so it judged every entry as one kept before the gate
+                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate", "versions", "pub", "dups",
+                                                                         "broad", "generated_at")}}
         ix["entries"][hk] = entry
         if by:
             ix["refreshes"] += 1

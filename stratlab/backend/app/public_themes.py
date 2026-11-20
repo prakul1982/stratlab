@@ -13,6 +13,7 @@ a slug of one of its aliases answers 301 to it. Rendering reads stored entries o
 for hours (CACHE)."""
 import html
 from collections import Counter
+import json
 import re
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -102,7 +103,7 @@ def entries(region: str | None = None) -> list[dict]:
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
-            gated[key] = theme_library.gate_why(m, pubs.get((e["region"], name)))
+            gated[key] = _gate(row, m, pubs.get((e["region"], name)))
     # e80 (LIVE16A-009: Public sector banks' public page "checked under an earlier version ... being checked again now" for 4 h and more while
     # its app page said "checked 19 Nov"): an entry kept under older rules whose theme the library now finds under today's rules by another
     # name (the re-check kept it there) stands for nothing: its address answers 301 to that theme's page
@@ -121,6 +122,38 @@ def entries(region: str | None = None) -> list[dict]:
             best.pop(k, None)
     # e82 (LIVE18A-002): a theme is offered here only once its newest entry passes the quality gate (theme_library.gate_why)
     return sorted((row for k, (_, row) in best.items() if not gated.get(k)), key=lambda x: (x["region"], x["label"].lower()))
+
+
+_GATE_MEMO: dict = {}
+
+
+def _gate(row: dict, m: dict, pub: dict | None) -> str:
+    """e83 (LIVE19A-001): the quality gate on a theme's newest entry, every entry in full (theme_library.gate_why): an entry kept before the
+    gate is judged on its stored read (broad industries) and its dive's own tally of companies not checked, read once per entry and dive
+    count (memoised), only where its index meta and kept count don't say them."""
+    need_p = "broad" not in m
+    need_t = not (isinstance(pub, dict) and isinstance(pub.get("unchecked"), int))
+    if not (need_p or need_t):
+        return theme_library.gate_why(m, pub)
+    k = (row.get("hk"), str(row.get("at") or ""), json.dumps(pub, sort_keys=True, default=str))
+    if k not in _GATE_MEMO:
+        p = dive = None
+        try:
+            p = payload(row)
+            if need_t and isinstance(p, dict):
+                dive = _dive(row["region"], row["name"], p)
+        except Exception:
+            p = p if isinstance(p, dict) else None
+        dt = (dive or {}).get("tally") if isinstance((dive or {}).get("tally"), dict) else None
+        if len(_GATE_MEMO) > 2000:
+            _GATE_MEMO.clear()
+        _GATE_MEMO[k] = (theme_library.broad_industries(p) if need_p and isinstance(p, dict) else None,
+                         int(dt.get("membership_unverified") or 0) if dt and dt.get("total") else None,
+                         int(dt["total"]) if dt and dt.get("total") else None)
+    broad, unchecked, total = _GATE_MEMO[k]
+    if not isinstance(pub, dict):
+        pub = {"total": total} if total else None
+    return theme_library.gate_why(m, pub, unchecked=unchecked, broad=broad)
 
 
 def _dive_pubs() -> dict:
@@ -607,14 +640,15 @@ def render(v: dict) -> str:
     # stacked card (name, then ticker, market value, revenue), never a table wider than the screen
     has_rev = any(c.get("revenue") for x in v["layers"] for c in x["companies"])
     has_ffo = any(c.get("ffo") for x in v["layers"] for c in x["companies"])       # e82: a property owner's reported FFO
-    if has_ffo:
-        body += f'<p class="muted small" data-ffo-note>{e(FFO_LINE)}</p>'
+    # e83 (LIVE19A-010: four grey notes above the first table, in a column half the tables' width): the notes on the tables' columns (FFO,
+    # the Membership mark) come after the tables they explain
+    notes = f'<p class="muted small" data-ffo-note>{e(FFO_LINE)}</p>' if has_ffo else ""
     # r69e (LIVE13A-013: Semiconductors' layer tables of 4 and 5 columns, the Ticker edge jumping from x 662 to 555, "description-verified"
     # on 31 of 39 rows): one set of columns on every layer table of the page, and a Membership cell only for a company that is not
     # description-verified (the page's line says so once)
     state_page = any(c.get("evidence") and c["evidence"] != "description_verified" for x in v["layers"] for c in x["companies"])
     if state_page:
-        body += f'<p class="muted small" data-membership-note>{e(MARK_NOTE)}</p>'
+        notes += f'<p class="muted small" data-membership-note>{e(MARK_NOTE)}</p>'
     for x in v["layers"]:
         state = state_page
         rows = ""
@@ -632,7 +666,8 @@ def render(v: dict) -> str:
             # empty cell keeps the table's columns and carries no label, so a phone's stacked card shows no row for it
             rows += (f'<tr><td>{name}</td><td class="l" data-label="Ticker">{e(c["symbol"])}</td><td data-label="Market value">{e(c["cap"]) if c["cap"] else "–"}</td>'
                      + (f'<td data-label="Revenue">{rev}</td>' if has_rev else "")
-                     + ((f'<td data-label="FFO">{e(c["ffo"])}</td>' if c.get("ffo") else "<td>–</td>") if has_ffo else "") + f"{ev}</tr>")
+                     # e83 (LIVE19A-010: every phone card of a company with no FFO ended on a lone unlabelled "–", R78's fix undone): labelled
+                     + ((f'<td data-label="FFO">{e(c["ffo"])}</td>' if c.get("ffo") else '<td data-label="FFO">–</td>') if has_ffo else "") + f"{ev}</tr>")
         thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th>'
                 + ('<th scope="col">Revenue</th>' if has_rev else "") + ('<th scope="col">FFO</th>' if has_ffo else "")
                 + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
@@ -641,6 +676,7 @@ def render(v: dict) -> str:
                if x.get("evidence") and any(c.get("evidence") and c["evidence"] != "description_verified" for c in x["companies"]) else "")
         body += (f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<div class="cotbl" data-stack><table aria-label="{e(x["name"])}">'
                  f"<thead>{thead}</thead><tbody>{rows}</tbody></table></div></section>")
+    body += notes
     if not v["layers"]:
         body += '<p class="note">No company in this theme has been checked yet.</p>'
     if v["summary"]:

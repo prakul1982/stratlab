@@ -52,6 +52,8 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
         {phone && <button type="button" className="btn quiet sm" aria-expanded={open} onClick={() => setOpen((s) => !s)}>{open ? "Hide filters" : "Filters"}{active ? ` (${active})` : ""}</button>}
         {active > 0 && <button type="button" className="btn quiet sm" onClick={onClear}>Clear filters</button>}
       </div>
+      {/* LIVE19A-011: the search above the filters, which come with the page's figures: under them it moved 265px down when they came (CLS) */}
+      {search}
       {(!phone || open) && facets && (
         <div className="res-filter-grid">
           <div className="k-field wide">
@@ -88,7 +90,6 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
           )}
         </div>
       )}
-      {search}
     </Card>
   );
 }

@@ -73,8 +73,16 @@ def fin_keys(family: str | None, region: str) -> tuple:
 
 
 def _value(c: dict, k: str):
-    v = c.get(FILED[k]) if k in FILED and c.get(FILED[k]) is not None else c.get(k)
-    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+    """A company's figure as its layer's median, range, count and top/bottom take it. e83 (LIVE19B-005: the sample Consumer durables deck's
+    "EBITDA margin 6.4% (11 of 11) ... bottom Universus Photo Imagings Ltd −530% (of 11)" while its row printed n.m. and the legend said
+    such figures are out of every median, range and aggregate): the figure every median takes (theme_data.in_median: n.m., a figure not
+    reconciled, a developer's or a distressed company's apart), never one printed apart."""
+    from .theme_data import in_median
+    key = FILED[k] if k in FILED and c.get(FILED[k]) is not None else k
+    v = c.get(key)
+    if not (isinstance(v, (int, float)) and not isinstance(v, bool)):
+        return None
+    return v if in_median({**c, k: v}, k) is not None else None          # (a filed figure judged as the figure it stands for)
 
 
 def in_calc(c: dict) -> bool:

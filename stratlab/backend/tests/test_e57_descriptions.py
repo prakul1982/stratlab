@@ -119,7 +119,7 @@ def test_the_background_read_waits_for_the_next_minutes_reports_within_its_deadl
 
 
 def test_annual_reports_for_descriptions_are_thirty_a_minute():
-    assert TR.FILING_READS_PER_MINUTE == 30                        # was 6 (DESCRIBE_READS)
+    assert TR.FILING_READS_PER_MINUTE == 60                        # was 6 (DESCRIBE_READS); (updated on purpose, e83: 60, LIVE19A-003)
 
 
 # ---------- India: the profile page under the symbol alone (a name/ticker match failure) ----------

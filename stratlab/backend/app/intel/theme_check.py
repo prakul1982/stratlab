@@ -41,6 +41,7 @@ MAX_QUOTE_WORDS = 40
 EVIDENCE_CHARS = 700          # a company's description as sent to the AI (and kept): enough to say what it does
 EVIDENCE_MAX = 1200           # ...with the lines of its own filings after it (theme_routes.own_filings, THEMES item 6)
 BATCH = 6                     # companies per AI request: small enough for a free model to read each description carefully
+CHECK_WORKERS = 3             # e83: batches asked at once (LIVE19A-003: a fresh theme's check waited on each batch in turn)
 EVIDENCE_BUDGET = 40.0        # seconds a request may spend reading company descriptions before it answers with what it has
 
 
@@ -254,12 +255,22 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         if need:
             todo.append({"symbol": sym, "name": names[sym], "about": ev["about"], "industry": ev.get("industry") or "", "groups": need})
     failed = False
-    for i in range(0, len(todo), BATCH):
-        batch = todo[i:i + BATCH]
+    # e83 (LIVE19A-003: a fresh theme not ready at ~200 s, still "Checking each company against its own description…"): its batches asked
+    # one after another, each a model's whole answer; now up to CHECK_WORKERS at once, each batch's answer read as before
+    batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
+
+    def one(batch):
         try:
-            res = verdicts(batch, by_id, ask, theme)
+            return verdicts(batch, by_id, ask, theme)
         except AIError:
-            res = None
+            return None
+    if len(batches) > 1 and CHECK_WORKERS > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(CHECK_WORKERS, len(batches))) as pool:
+            answers = list(pool.map(one, batches))
+    else:
+        answers = [one(b) for b in batches]
+    for batch, res in zip(batches, answers):
         if not res:              # no answer, or none that could be read: not a "no" for every company, so they wait for the next request
             failed = True
             for c in batch:

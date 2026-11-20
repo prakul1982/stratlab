@@ -673,8 +673,22 @@ def work_sentence(words) -> str:
         if len(x.split()) < 4 or structure_only(x) or reit_tax_said(x) or _MANAGED.search(x) or _BOILER.search(x) \
                 or not own_words(x.rstrip(".;"), ""):
             continue
+        # e83 (LIVE19A-009, the R81 Regional banks deck: BankUnited's "with total consolidated assets of $35 billion at December 31, 2025",
+        # Beacon's "a Delaware corporation", Provident's "became the holding company for Provident Bank on January 15, 2003"): a sentence of
+        # its legal form, its size or how it came to hold a bank, with no word of a business done, is no line of its work
+        if _FORM_ONLY.search(x) and not _WORK_SAID.search(_FORM_ONLY.sub(" ", x)):
+            continue
         return first_sentence(x)
     return ""
+
+
+_WORK_SAID = re.compile(r"\b(?:manufactur\w*|mak(?:e|es|er|ers|ing)|produc\w*|sell\w*|suppl\w*|provid(?:e|es|ed|er|ers|ing)|offer\w*|engaged|develop\w*|"
+                        r"design\w*|distribut\w*|operat\w*|own(?:s|ing)?|leas\w*|lend\w*|loans?|invest\w*|serv(?:e|es|ing|ices?)|"
+                        r"speciali[sz]\w*|focus\w*|generat\w*|build\w*|deliver\w*|manag\w*)\b", re.I)
+_FORM_ONLY = re.compile(r"\b(?:an?|the)\s+(?:[A-Z][a-z]+\s+){0,2}(?:corporation|company|trust)\s+(?:organized|incorporated|formed)\b|"
+                        r"\b(?:an?\s+)?(?:Delaware|Maryland|Virginia|Pennsylvania|New\s+Jersey|New\s+York|[A-Z][a-z]+)\s+(?:corporation|statutory\s+trust|"
+                        r"limited\s+liability\s+company)\b|\b(?:bank\s+|financial\s+)?holding\s+company\b|\btotal\s+(?:consolidated\s+)?assets\s+of\b|"
+                        r"\bbecame\s+the\b|\bheadquartered\s+in\b")
 
 
 def layer_quote(words, name: str, layer: str, line: str = "") -> tuple[str, bool]:
@@ -691,13 +705,15 @@ def layer_quote(words, name: str, layer: str, line: str = "") -> tuple[str, bool
         return q, True
     text = re.sub(r"^\s*Industry:[^.]*\.\s*", "", str(words or "")).strip()
     alt = layer_line("", text, name, layer) if text and not text.startswith("From its own filings:") else ""
-    if alt and says(alt) and not _MANAGED.search(alt):
+    if alt and says(alt) and not _MANAGED.search(alt) and not (_FORM_ONLY.search(alt) and not _WORK_SAID.search(_FORM_ONLY.sub(" ", alt))):
         from .sec import reit_tax_said, structure_only
         if not structure_only(alt) and not reit_tax_said(alt):
             return first_sentence(alt), True
     # (a work line in other words than the name's, General Dynamics' "a developer and producer of advanced military equipment" of "Defense
     # prime contracting", is still its reason; none at all is said so)
-    return q, bool(q)
+    # e83 (LIVE19A-009: a move into "Real estate-focused lenders (bank)" quoting "BankUnited, Inc., with total consolidated assets of $35
+    # billion ..."): only a line of what it does: one of its form, size or history is no reason (the move is then said as the map's)
+    return q, bool(q) and bool(_WORK_SAID.search(q))
 
 
 # e80: a sentence of who a company is a subsidiary of, who manages or advises it, or its REIT election, is no line of its work
@@ -718,7 +734,27 @@ _MANAGED = re.compile(r"\b(?:is|are)\s+(?:a|an|the)\s+(?:wholly[- ]owned\s+)?sub
 _POSITIVE_LAYER = re.compile(r"(?:its own words say it sells what|its official industry or way of earning says it sells what|its own words say what|"
                              r"the map placed it in|its own words were checked to show it is of|its official industry is what|by how it earns:|"
                              r"of its official industry, the one|the theme's map places it in)\s+“([^”]+)”")
-_NEGATIVE_LAYER = re.compile(r"(?:don't say (?:it sells|they sell) (?:[^“]{0,80}?)what|say no word of|moved it out of)\s+“([^”]+)”")
+_NEGATIVE_LAYER = re.compile(r"(?:don't say (?:it sells|they sell) (?:[^“]{0,80}?)what|say no word of|moved it out of|"
+                             r"never in a specialist layer such as)\s+“([^”]+)”|“([^”]+)” is a layer of companies that\b")
+
+
+_QUOTED = re.compile(r"(?:\bsays?\s+|\bwords:\s+|\()“([^”]{12,})”")          # a quote of its words, never a layer's name
+
+
+def unquotable_reason(why: str) -> bool:
+    """e83 (LIVE19A-009: the stored 15-20 Nov moves still quoting FB Bancorp's "New Orleans has one of the busiest ports in the world…" and
+    TFS Financial's "statements regarding our business plans…"): a kept reason that quotes as its words a line of no work of its own
+    (boilerplate, a sentence of its legal form, size or history, an encyclopedia's opening, or one that names nothing it does) is said again
+    from its words as they are read now."""
+    from .theme_base import encyclopedia_like
+    for m in _QUOTED.finditer(str(why or "")):
+        q = m.group(1).rstrip("…").strip()
+        if len(q.split()) < 4:
+            continue                        # a layer's name or a short phrase of its words ("non-listed"), no sentence
+        if _BOILER.search(q) or encyclopedia_like(q) or (_FORM_ONLY.search(q) and not _WORK_SAID.search(_FORM_ONLY.sub(" ", q))) \
+                or not _WORK_SAID.search(q):
+            return True
+    return False
 
 
 def fit_reason(why: str, frm: str, to: str) -> str | None:
@@ -735,7 +771,7 @@ def fit_reason(why: str, frm: str, to: str) -> str | None:
         if _HALF_NAME.sub("", m.group(1)) not in (b, a) or (_HALF_NAME.sub("", m.group(1)) == a and a != b):
             out = out.replace(f"“{m.group(1)}”", f"“{to}”", 1)
     for m in _NEGATIVE_LAYER.finditer(out):
-        if _HALF_NAME.sub("", m.group(1)) != a:
+        if _HALF_NAME.sub("", m.group(1) or m.group(2)) != a:
             return None
     return out
 
@@ -806,7 +842,7 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
             r = {**{k: x for k, x in r.items() if k != "why"}, "outside": True}
         if r.get("why"):
             fit = fit_reason(str(r["why"]), r.get("from") or "", r.get("to") or "")          # e80: the layer it moved to (or from)
-            if fit:
+            if fit and not unquotable_reason(fit):
                 return {**r, "why": fit}
             r = {k: x for k, x in r.items() if k != "why"}
         a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))

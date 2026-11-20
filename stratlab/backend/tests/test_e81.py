@@ -171,8 +171,10 @@ def test_e81_a_themes_card_says_its_pages_count(w, monkeypatch):
     p["value_chain"][0]["companies"][1]["verified"] = False           # one not confirmed: listed on neither
     keep("ships", p)
     stored = theme_library.stored("IN", "ship")["payload"]
+    # (updated on purpose, e83: the public gate now judges every entry (LIVE19A-001), and with no evidence kept the one not listed was "not
+    # checked yet", 1 of 7, over the gate's 10%: here its own words describe other work, the case this test is about: listed on neither)
     dive = {"sector": "Ships", "layers": [], "duplicates": [{"symbol": stored["value_chain"][0]["companies"][2]["ticker"], "kept": "X"}],
-            "evidence": {}, "tally": {"total": 7}}
+            "evidence": {stored["value_chain"][0]["companies"][1]["ticker"]: "not_confirmed"}, "tally": {"total": 7}}
     key = theme_routes.dive_key("IN", "ship", {**stored, "_library": "ship"})
     computed.put(theme_library.DIVE, key, {"dive": dive, "pieces": {}}, label="Ships", region="IN",
                  meta={"q": "ship", "rules": theme_base.RULES, "pub": public_themes.counts(stored, dive)})
@@ -299,8 +301,8 @@ def test_e81_deck_check_reads_a_reason_after_a_name_ending_in_inc():
 
 def test_e81_versions():
     from app.intel import sector_metrics
-    assert theme_base.RULES == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 32          # (updated on purpose: e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
-    assert theme_data.DIVE_TEXT == 48 and deck.THEME_DECK_VERSION == 88 and sector_metrics.VERSION == 3
+    assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 33          # (e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
+    assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and sector_metrics.VERSION == 3          # e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)
 
 
 # ---------- owner P0-a (R79 REITs deck): the FFO Camden reports, $744.8 m, first; the derived proxy with its gains deducted ----------

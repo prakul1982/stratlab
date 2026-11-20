@@ -56,7 +56,9 @@ test("Closing auction: stocks by gap, indices, timetable, search and the history
   await expect(rows.first()).toHaveAttribute("data-cas-stock", "TCS");        // the widest gap first
   await expect(stocks.locator("tr[data-cas-stock=TCS]")).toContainText("−1.20%");
   await expect(stocks.locator("tr[data-cas-stock=RELIANCE]")).toContainText("+0.50%");
-  await expect(stocks.locator("tr[data-cas-stock=RELIANCE]")).toContainText("final");
+  // (updated on purpose, LIVE19B: the column's head says the prices are final; a row says "final" or "indicative" only where it differs from it)
+  await expect(stocks.getByRole("columnheader", { name: "Final price" })).toBeVisible();
+  await expect(stocks.locator("tr[data-cas-stock=RELIANCE]")).not.toContainText("final");
   await stocks.getByLabel("Find a stock").fill("inf");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("0.00%");
