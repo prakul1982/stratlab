@@ -104,3 +104,10 @@ test("LIVE20B-005 / 007 / 009 / 008: one 'too few', one 'over', 'the trade journ
   assert.match(read("src/components/PageLock.tsx"), /const partial = !gate\?\.whole && !BARE_PAGES\.has\(/);
   assert.match(read("src/pages/money/NetWorthPage.tsx"), /`paid so far \$\{inr\(f\.paid_in\)\} of \$\{inr\(f\.total_in\)\}`/);
 });
+
+test("LIVE20B-012 / 006: the no-JS plans words say a dollar figure, not today's rate; the watchlist says Close once the market has shut", () => {
+  const seo = read("src/content/seo.ts");
+  assert.match(seo, /"Prices are in Indian rupees, with a dollar figure beside each, and the payment is charged in rupees\./);
+  assert.doesNotMatch(seo, /beside each at today's rate/);
+  assert.match(read("src/pages/Research.tsx"), /const at = shut \? "Close" : quoteAt\(q\.at, marketTz\(region\)\);/);
+});
