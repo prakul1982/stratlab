@@ -303,3 +303,20 @@ def test_e83_an_encyclopedias_opening_is_never_the_quote_that_moves_a_company():
     why = {r["ticker"]: r["why"] for r in got[1]}
     assert "American publicly traded" not in why["AMRX"] and why["AMRX"].startswith("its description calls it")
     assert why["MRK"].startswith("its own words call it") and "“is a global pharmaceutical company”" in why["MRK"]
+
+
+def test_e83_a_kept_reason_quoting_no_line_of_work_is_said_again_from_its_words():
+    """The stored 15-20 Nov Regional banks moves still quoting FB Bancorp's "New Orleans has one of the busiest ports in the world…" and TFS
+    Financial's "statements regarding our business plans…"."""
+    from app.intel import theme_changes as C
+    lay = "Real estate-focused lenders (bank)"
+    old = (f"its own words don't say property is its business (they say “New Orleans has one of the busiest ports in the world…”); a Regional "
+           f"banks theme holds “{lay}” only for those whose do")
+    log = [{"d": "2026-11-16", "moved": [{"symbol": "FBLA", "name": "FB Bancorp", "from": lay, "to": "Other regional bank companies", "why": old}]}]
+    got = C.reasoned(log, words_of=lambda s: "FB Bancorp is the holding company. The Bank offers residential mortgage and commercial loans.")
+    why = got[0]["moved"][0]["why"]
+    assert "New Orleans" not in why and "The Bank offers residential mortgage and commercial loans" in why
+    assert C.unquotable_reason("its own words don't say property is its business (they say “statements regarding our business plans and prospects…”)")
+    # guards: a reason quoting a line of its work, or only a layer's name, stands
+    assert not C.unquotable_reason("its own words say “The Bank offers commercial real estate and residential mortgage loans”")
+    assert not C.unquotable_reason("its own words don't say it sells computing, what “Towers, data centres and niche property” is")

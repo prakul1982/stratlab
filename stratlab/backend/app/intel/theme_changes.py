@@ -738,6 +738,25 @@ _NEGATIVE_LAYER = re.compile(r"(?:don't say (?:it sells|they sell) (?:[^“]{0,8
                              r"never in a specialist layer such as)\s+“([^”]+)”|“([^”]+)” is a layer of companies that\b")
 
 
+_QUOTED = re.compile(r"(?:\bsays?\s+|\bwords:\s+|\()“([^”]{12,})”")          # a quote of its words, never a layer's name
+
+
+def unquotable_reason(why: str) -> bool:
+    """e83 (LIVE19A-009: the stored 15-20 Nov moves still quoting FB Bancorp's "New Orleans has one of the busiest ports in the world…" and
+    TFS Financial's "statements regarding our business plans…"): a kept reason that quotes as its words a line of no work of its own
+    (boilerplate, a sentence of its legal form, size or history, an encyclopedia's opening, or one that names nothing it does) is said again
+    from its words as they are read now."""
+    from .theme_base import encyclopedia_like
+    for m in _QUOTED.finditer(str(why or "")):
+        q = m.group(1).rstrip("…").strip()
+        if len(q.split()) < 4:
+            continue                        # a layer's name or a short phrase of its words ("non-listed"), no sentence
+        if _BOILER.search(q) or encyclopedia_like(q) or (_FORM_ONLY.search(q) and not _WORK_SAID.search(_FORM_ONLY.sub(" ", q))) \
+                or not _WORK_SAID.search(q):
+            return True
+    return False
+
+
 def fit_reason(why: str, frm: str, to: str) -> str | None:
     """e80 (LIVE16A-006: Essex "→ Residential landlords: its own words say it sells what “Manufactured housing and RV communities” is", Armour
     "→ Mortgage REITs: its own words don't say it sells what “Digital infrastructure owners” is" for a move from "Other"): a move's reason as
@@ -823,7 +842,7 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
             r = {**{k: x for k, x in r.items() if k != "why"}, "outside": True}
         if r.get("why"):
             fit = fit_reason(str(r["why"]), r.get("from") or "", r.get("to") or "")          # e80: the layer it moved to (or from)
-            if fit:
+            if fit and not unquotable_reason(fit):
                 return {**r, "why": fit}
             r = {k: x for k, x in r.items() if k != "why"}
         a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))
