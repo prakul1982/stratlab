@@ -1925,6 +1925,35 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
             "rechecked": sum(1 for s_, x in {**kept, **again}.items() if s_ in kept0 and x != kept0[s_]), "rule": theme_data.EVIDENCE_RULE}
 
 
+EVIDENCE_DOWN_MAX = 150           # e85: companies whose fall from description-verified is said with its reason, at most, a read
+
+
+def evidence_down(before: dict | None, dive: dict, about, region: str, names: dict) -> list[dict]:
+    """e85: [{symbol, name, to, why}] of the companies the stored version (theme_changes' snapshot "ev", the window's states too since e85)
+    held description-verified and this read holds in another state, by symbol, with why: no words stored now, no line of its stored words a
+    page may quote (its annual report is read for one: quote_due), or its words read now not saying the theme's work."""
+    was = {s_: theme_changes.EV_STATE.get(x, x) for s_, x in ((before or {}).get("ev") or {}).items()}
+    now = {**((dive.get("membership_check") or {}).get("outside") or {}), **(dive.get("evidence") or {})}
+    out = []
+    for s_ in sorted(s_ for s_, x in was.items() if x == "description_verified" and s_ in now and now[s_] != "description_verified"):
+        if len(out) >= EVIDENCE_DOWN_MAX:
+            break
+        try:
+            words = about(s_) or ""
+        except Exception:
+            words = ""
+        q = theme_base.quotable(words, region) if words else ""
+        if not words:
+            why = "no words of its own are stored now"
+        elif not (q and theme_base.has_own_line(q, names.get(s_) or "")):
+            why = ("no line of its stored words is one a page may quote as its own (an encyclopedia's sentence, or cut short); "
+                   "its annual report is read for one")
+        else:
+            why = "its own words, as read now, don't say the theme's work"
+        out.append({"symbol": s_, "name": names.get(s_) or s_, "to": now[s_], "why": why})
+    return out
+
+
 # LIVE10A-008: a kept dive behind a newer close or a rebuilt page was worked out again inside the page's request (Semiconductors 44 s,
 # Automotive 65 s, Private banks 67 s: the first visit after each close paid for the whole theme); the page now gets the kept dive at once,
 # marked "updating", and one worker reads the new one behind it, one theme at a time in the memory guard's turn
@@ -2111,6 +2140,13 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     # e54 (R54): the membership check moves on through the companies not checked yet, membership_step a stored read (membership_check)
     hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
                                                getattr(src, "today", None) or datetime.now(timezone.utc).date(), r)
+    # e85 (the owner's review of the R84 decks, P0: Software, Restaurants, Building materials, Beverages lost description-verified with no
+    # reason given): each company description-verified in the stored version and not now, with why, kept with the dive (the deck says it,
+    # the change log keeps it: theme_changes.snapshot "ev_down")
+    try:
+        hit["evidence_down"] = evidence_down(before, hit, getattr(src, "about", lambda s_: None), r, _map_names(m))
+    except Exception as e:
+        print("theme dive: evidence falls not said:", type(e).__name__, str(e)[:100])
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
     # r65e: every member of the map with its layer, so a fall says why for the members past the figures' window too
     now_all = {c["ticker"]: {"layer": v.get("layer") or "", "refit": c.get("refit"), "unread": c.get("unread")}
@@ -2486,6 +2522,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
             "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
             "membership_check": dive.get("membership_check") or {},
+            "evidence_down": dive.get("evidence_down") or [],          # e85: each fall from description-verified with why
             "tally": dive.get("tally"), "tally_at": dive.get("tally_at"),          # r69e (LIVE13A-002): the one count every surface says
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 

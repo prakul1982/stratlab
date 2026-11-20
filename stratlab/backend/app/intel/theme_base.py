@@ -4935,7 +4935,13 @@ MAJOR_MIN = 1000.0              # a market value under this (in $ million or ₹
 PROPERTY_LAYER = re.compile(r"\bpropert(?:y|ies)\b|\breal\s+estate\b|\brealty\b", re.I)
 PROPERTY_THEME = re.compile(r"\bpropert|\breal\s*estate|\brealty|\breit|\bhous|\bhomes?\b|\bconstruct|\binfra|\blandlord|\bbuilding", re.I)
 PROPERTY_SAYS = re.compile(r"\breal\s+estate\b|\brealty\b|\bpropert(?:y|ies)\b|\bresidential\s+(?:projects?|development)|"
-                           r"\b(?:housing|township|commercial)\s+(?:projects?|development)", re.I)
+                           r"\b(?:housing|township|commercial)\s+(?:projects?|development)|"
+                           # e85 (the owner's review of the R84 Hotels & Casinos deck, P0: Host Hotels, "the largest publicly traded lodging
+                           # REIT, with a ... portfolio of luxury and upper-upscale hotels", Ryman and Sunstone out of "Hotel property owners
+                           # (lodging REITs)" as words that "don't say property is its business"): a REIT, or a portfolio of hotels, resorts
+                           # or casinos it owns, is property as its business
+                           r"\breits?\b|\breal\s+estate\s+investment\s+trusts?\b|"
+                           r"\b(?:portfolio|own|owns|owned|owning|invests?\s+in|investing\s+in)\b(?!\s+(?:and\s+operated\s+)?by\b)[^.;]{0,80}?\b(?:hotels?|resorts?|casinos?)\b", re.I)
 # e82 (LIVE18A-004, the live R80 REITs: Omega Healthcare, a healthcare property owner whose words also name "real estate loans", and
 # Blackstone Real Estate Income Trust, one segment of nine "Investments in Real Estate Debt", moved to "Mortgage REITs" on one phrase):
 # words that say a company owns, leases or invests in property it holds (never "owned by" a borrower or a sponsor). A lender is one whose

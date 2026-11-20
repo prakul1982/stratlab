@@ -367,3 +367,44 @@ def test_the_sample_deck_is_made_again_at_its_themes_newer_close(monkeypatch):
     row["meta"]["prices"] = "2026-11-20"
     dive.pop("updating")
     assert TR.refresh_sample({"id": ""}) is None and len(made) == 1  # already at the newest close
+
+
+# ---------- the owner's review of the R84 decks (P0/P1) ----------
+def test_a_hotel_reit_s_words_say_property_is_its_business():
+    """Fails on R84: Host Hotels, Ryman, Sunstone and Xenia out of "Hotel property owners (lodging REITs)" as words that "don't say property
+    is its business"."""
+    for w in ("We are the largest publicly traded lodging REIT, with a geographically diverse portfolio of luxury and upper-upscale hotels.",
+              "We specialize in group-oriented, destination hotel assets in urban and resort markets. As a REIT, we generally will not be "
+              "subject to federal corporate income taxes.",
+              "Xenia Hotels & Resorts, Inc. is a Maryland corporation that primarily invests in uniquely positioned luxury and upper upscale "
+              "hotels and resorts."):
+        assert B.PROPERTY_SAYS.search(B.principal_words(w)), w
+    assert not B.PROPERTY_SAYS.search("We operate casinos and hotels owned by third parties under management contracts")   # guard
+
+
+def test_the_decks_rule_says_list_supported_members_count_as_they_do():
+    """Fails on R84: "Only description-verified and industry-supported companies count" beside 6 list-supported core members with figures."""
+    from app import deck as K
+    assert "list-supported" in K.EVIDENCE_RULE_SAID
+
+
+def test_ffo_columns_only_in_a_reit_themes_value_chain():
+    """Fails on R84: the US Insurance deck's value chain carried P/FFO."""
+    from app import deck as K
+    rows = [{"layer": "A", "p_ffo": 14.0, "combined_ratio": 95.0}]
+    assert [c[0] for c in K.chain_family_cols(rows, "Insurance")] == ["combined_ratio"]
+    assert "p_ffo" in [c[0] for c in K.chain_family_cols(rows, "Real estate investment trusts")]
+
+
+def test_every_fall_from_description_verified_is_kept_with_its_reason():
+    """Fails on R84: Software's 467 -> 395 fell with no reason in the deck or the change log."""
+    from app.intel import theme_changes as C
+    before = {"ev": {"MSFT": "d", "ADBE": "d", "ORCL": "i"}}
+    dive = {"evidence": {"MSFT": "industry_code_supported", "ADBE": "description_verified", "ORCL": "description_verified"}}
+    down = TR.evidence_down(before, dive, lambda s: MSFT_ARTICLE, "US", {"MSFT": MSFT})
+    assert [x["symbol"] for x in down] == ["MSFT"] and "may quote" in down[0]["why"]
+    snap = C.snapshot({"layers": [{"layer": "L", "companies": [{"symbol": "MSFT", "name": MSFT}]}], "evidence_down": down,
+                       "evidence": dive["evidence"]}, ["MSFT"], 1, B.RULES)
+    assert snap["ev_down"][0][0] == "MSFT" and snap["ev"]["ADBE"] == "d"
+    got = C.apply({"snap": {**snap, "ev_down": None}}, snap)
+    assert got["log"][-1]["down"][0]["symbol"] == "MSFT" and "ev_down" not in got["snap"]
