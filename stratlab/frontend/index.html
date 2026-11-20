@@ -66,6 +66,15 @@ html, body { margin: 0; background: var(--b-paper); }
 @media (scripting: none) { .boot-login [data-boot-google], .boot-login [data-boot-email] { display: none; } }
 html[data-email-off] .boot-login [data-boot-email], html[data-email-off] .boot-login [data-boot-or] { display: none; }
 .boot-login .boot-foot a { color: inherit; }
+/* LIVE18B-003: a visitor's /plans while its code downloads is the Plans page itself as the app first draws it (scripts/seoPages.mjs plansFrame):
+ * the cards, their names and lines, the price placeholders. Its prose and plain list are for a reader with no script; each card's five lines
+ * are one fold on a phone, as the app's PhoneFold draws them, and in view on a wider screen. */
+@media (scripting: enabled) { .boot-plans .boot-text, .boot-plans ul.boot-links.boot-text { display: none; } }
+@media (scripting: none) { .boot-plans [data-boot-js] { display: none; } }
+@media (max-width: 640px) { .boot-plans .boot-wide { display: none; } }
+@media (min-width: 641px) { .boot-plans .lp-phone-fold { display: none; } }
+html[data-email-off] .boot-plans .email-way { display: none; }
+.boot-plans .boot-foot a { color: inherit; }
 /* scripts off: the page's links as one row of buttons under the words */
 .boot-hero ul.boot-links { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .boot-hero ul.boot-links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border: 1px solid var(--line-2, currentColor); border-radius: 10px; color: inherit; text-decoration: none; font-weight: 600; }

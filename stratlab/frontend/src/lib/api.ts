@@ -42,11 +42,28 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
 /** The account asked for while the app's code downloaded (lib/accountEarly.ts, LIVE13B-004), taken once by the first GET of /me with the same
  * token, and only while fresh; read from the window so this file doesn't depend on that one. */
 function takeEarlyMe(path: string, method: string, token: string | undefined): Promise<Response> | null {
-  const w = window as unknown as { __stratlabEarlyMe?: { token: string; at: number; got: Promise<Response> } | null };
-  const e = w.__stratlabEarlyMe;
-  if (!e || path !== "/me" || method !== "GET") return null;
-  w.__stratlabEarlyMe = null;
+  type Early = { token: string; at: number; got: Promise<Response> };
+  const w = window as unknown as { __stratlabEarlyMe?: Early | null; __stratlabEarlyReads?: Record<string, Early | undefined> };
+  if (method !== "GET") return null;
+  // site81: the page's first reads public/early.js asked beside /me (the app-wide lists, Trade's strip), each taken once the same way
+  const e = path === "/me" ? w.__stratlabEarlyMe : w.__stratlabEarlyReads?.[path];
+  if (!e) return null;
+  if (path === "/me") w.__stratlabEarlyMe = null; else delete w.__stratlabEarlyReads![path];
   return e.token === token && Date.now() - e.at < 30_000 ? e.got : null;
+}
+
+/** site81: a public read public/early.js asked as /config.js ran (a saved sign-in's /public/data-online), taken once while fresh (30 s), as the
+ * page's own publicGet would answer it; null when there is none. Here, in the app's code, so a visitor's download is unchanged. */
+export function bootPublic<T>(path: string): Promise<T> | null {
+  const w = window as unknown as { __stratlabEarlyPublic?: Record<string, { at: number; got: Promise<Response> } | undefined> };
+  const e = w.__stratlabEarlyPublic?.[path];
+  if (!e || Date.now() - e.at >= 30_000) return null;
+  delete w.__stratlabEarlyPublic![path];
+  return e.got.then(async (r) => {
+    const body = await r.json().catch(() => null);
+    if (!r.ok) { const x = new ApiError(body?.detail?.message || `Something went wrong (${r.status}). Try again.`); x.status = r.status; throw x; }
+    return body as T;
+  }, () => { const x = new ApiError("Can't reach the StratLab server. Check your connection and try again."); x.code = "network"; throw x; });
 }
 
 /** Every call to the server, counted while it is out (lib/inflight: a page's later cards start once the first screen's are back). */

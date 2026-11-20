@@ -99,6 +99,15 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
   // the menu scrolls inside its own box: the edge with more behind it fades out, so a half-hidden row reads as "more below"
   const sideScroll = useRef<HTMLElement>(null);
   const fade = useScrollFade(sideScroll);
+  // LIVE18B-012: the open page's own item is in view in the menu: on /invest/ipos at 1440×900 "Calendar › IPOs" sat below the fold under
+  // "More below". The menu's own box scrolls (never the page), only when the item is out of view, and not while the reader scrolls it.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const box = sideScroll.current, cur = box?.querySelector<HTMLElement>('[aria-current="page"]');
+      if (box && cur) revealIn(box, cur);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [loc.pathname]);
   // the tour opens the phone's menu to point at what is in it (DI-023); held open by the tour, the menu is not a modal of its
   // own, so the tour's note keeps the keyboard and Esc
   const [tourMenu, setTourMenu] = useState(false);
@@ -384,6 +393,14 @@ export function mainAction(space: SpaceView, focus: string | null | undefined, h
     // the next real step: add them when there are none, update them when there are (LIVE1C-055: "Add your holdings" beside three holdings)
     : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: hasHoldings ? "Update holdings" : "Add your holdings" }
     : { to: "/new", icon: <Plus size={16} />, label: "New notebook" };
+}
+
+/** Scrolls `box` (only it) so `item` is inside it with a little room, when it isn't already. */
+export function revealIn(box: HTMLElement, item: HTMLElement, room = 24): void {
+  const b = box.getBoundingClientRect(), r = item.getBoundingClientRect();
+  if (box.scrollHeight <= box.clientHeight + 1 || (r.top >= b.top && r.bottom <= b.bottom)) return;
+  const top = box.scrollTop + (r.top - b.top) - (r.bottom > b.bottom ? Math.max(room, box.clientHeight - r.height - room) : room);
+  box.scrollTop = Math.max(0, top);
 }
 
 /** Which edges of a scrolling box have more behind them ("top", "bottom", "both" or "none"): kept as the box scrolls, resizes

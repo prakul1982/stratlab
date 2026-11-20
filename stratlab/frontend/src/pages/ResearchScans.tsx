@@ -1,4 +1,5 @@
 import { stageDaysText } from "../lib/stageDays";
+import { SCAN_LIST } from "../lib/scanList";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { SCOPE_OPTIONS } from "../lib/companyScope";
@@ -68,7 +69,8 @@ const SIGNAL: Record<string, ["ok" | "plain", string]> = {
   fresh: ["ok", "Fresh Stage 2 + Supertrend"], st_s2: ["ok", "In Stage 2 + Supertrend"], stage2: ["plain", "Stage 2, Supertrend down"],
 };
 const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
-const FIRST_SCAN: ScanInfo = { id: "st_s2", name: "Stage 2 + Supertrend", text: "", rules: [], within: 1 };
+// LIVE18B-009: every ready-made scan, as the server lists them, until /research/scan/sets answers (lib/scanList)
+const FIRST_SCANS: ScanInfo[] = SCAN_LIST;
 const sessions = (n: number, mode?: "live" | "whole") => (n === 0 ? (mode === "live" ? "On today's last price, session still going" : mode === "whole" ? "On the last whole session" : "On the latest close")
   : `${n} session${n === 1 ? "" : "s"} before the ${mode === "live" ? "latest" : mode === "whole" ? "last whole session" : "latest close"}`);
 
@@ -118,7 +120,7 @@ export function ScanPage() {
   const [scanOffline, setScanOffline] = useState(false);
   const [only, setOnly] = useState(false);
   const pro = !!me?.plan_info?.features?.scans;
-  const scans = [...(sets?.scans?.length ? sets.scans : [FIRST_SCAN]), CUSTOM_SCAN];
+  const scans = [...(sets?.scans?.length ? sets.scans : FIRST_SCANS), CUSTOM_SCAN];
   const scan = scans.find((s) => s.id === scanId) ?? scans[0];
   const custom = scan.id === CUSTOM_ID;
   // the person's own rules: what is being built, the saved ones, and what the server or the box says is wrong with them

@@ -62,3 +62,15 @@ export function storedDailyLine(marketName: string, note: DataNote | null | unde
   const back = reconnectAt(note, localTz);
   return `Live ${marketName} data is offline right now${back ? `; it reconnects on ${back}` : ""}. Daily tests run now on the stored daily closes, up to the last close; intraday timeframes, futures and options need the live data.`;
 }
+
+/** The server's offline line for option quotes (main.py options_ready + offline_when), from the data note the app already has: drawn while the
+ * underlyings are on their way, so the note is there from the page's first frame. */
+export function optionsOfflineLine(note: Pick<DataNote, "back_at"> | null | undefined): string {
+  const base = "Option quotes come from the live feed, which is offline until the daily data login completes.";
+  const at = note?.back_at ? new Date(note.back_at) : null;
+  if (!at || Number.isNaN(at.getTime())) return base;
+  const tz = "Asia/Kolkata";
+  const day = `${at.toLocaleDateString("en-GB", { weekday: "short", timeZone: tz })} ${at.toLocaleDateString("en-GB", { day: "numeric", timeZone: tz })} ${at.toLocaleDateString("en-GB", { month: "short", timeZone: tz })}`;
+  const hm = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: tz });
+  return `${base.replace(/\.$/, "")}. Indian market data comes back with the daily data login, on ${day.replace(/\bSept\b/, "Sep")} at ${hm} IST.`;
+}

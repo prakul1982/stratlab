@@ -125,7 +125,9 @@ def test_usd_inr_tile_ends_on_fridays_close_not_thursdays():
     prov = YahooProvider("FX", y)
     bars = prov.history(prov.instrument("USDINR=X"), "1d", 10)
     assert bars[-1]["t"][:10] == "2026-10-23" and round(bars[-1]["c"], 2) == 94.94        # RBI's reference rate that day: 94.9432
-    assert round(bars[-2]["c"], 2) == 94.31 and all(datetime.fromisoformat(b["t"][:10]).weekday() < 5 for b in bars)
+    # (updated on purpose, site81 LIVE18B-001: a pair's daily candle is its price at the start of the London day, so a day closes at the next
+    # day's opening price: 22 Oct at 94.71, the 23 Oct candle's open, not 94.31, the price at the start of 22 Oct)
+    assert round(bars[-2]["c"], 2) == 94.71 and all(datetime.fromisoformat(b["t"][:10]).weekday() < 5 for b in bars)
 
 
 # ---------- DG-011, DG-012, DG-013: a floating loan on its rate path everywhere ----------

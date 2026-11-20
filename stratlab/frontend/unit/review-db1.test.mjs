@@ -15,7 +15,8 @@ test("DB-001: offline, the builder lists the recorded indices, prices on their l
   assert.match(recordedLine("Fri 23 Oct, 15:41 IST"), /^Priced on the last recorded option chain, as of Fri 23 Oct, 15:41 IST \(the last close\)/);
   assert.match(recordedLine("x"), /the broker's margin and paper trading need the live feed/);
   const src = read("src/pages/OptionsPage.tsx");
-  assert.match(src, /api<Underlying\[\]>\("\/options\/recorded"\)/);
+  // (updated on purpose, site81 LIVE18B-008: one call, ?offline=list, answers the recorded list with the feed offline: no 503 then /options/recorded)
+  assert.match(src, /"\/options\/underlyings\?offline=list"/);
   assert.match(src, /disabled=\{pricing \|\| \(!!offline && !recordedUnd\)\}/);            // pricing on the recording
   assert.match(src, /disabled=\{starting \|\| !!offline/);                                 // never a session on it
   assert.match(src, /recorded chain as of \$\{recordedAt\(chain\.as_of\)\} \(last close\)/);

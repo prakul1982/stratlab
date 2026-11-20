@@ -28,14 +28,14 @@ const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(
 function Status({ v }: { v: CasView }) {
   const n = v.next;
   const auction = v.phase === "transition" || v.phase === "entry" || v.phase === "matching";
-  const closed = v.phase === "preopen" || v.phase === "holiday";
   return (
     <Card label="Status">
       <div className="k-row">
-        <Badge tone={auction ? "live" : v.phase === "closed" ? "ok" : "plain"}>{auction ? "Auction session" : v.phase === "closed" ? "Auction over for today" : closed ? "Market closed" : v.phase === "before" ? "Continuous trading" : "No auction today"}</Badge>
+        <Badge tone={auction ? "live" : v.phase === "closed" ? "ok" : "plain"}>{auction ? "Auction session" : v.phase === "closed" ? "Auction over for today" : v.phase === "preopen" ? "Before the open" : v.phase === "holiday" ? "Not a trading day" : v.phase === "before" ? "Continuous trading" : "No auction today"}</Badge>
         <span className="k-small" data-testid="cas-phase">{PHASE_TEXT[v.phase]}</span>
       </div>
-      {n && <p className="k-small" data-testid="cas-next">{closed ? "Closed, next" : "Next"} auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> IST.</p>}
+      {/* LIVE18B-014: "closed" once, in the line beside the badge (badge, line and the next window each said it before) */}
+      {n && <p className="k-small" data-testid="cas-next">Next auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> IST.</p>}
       {v.day && !v.fresh && <p className="k-note">Showing the auction of {asOf(v.day)}{v.from_stored ? ", from an earlier day" : ""}.</p>}
     </Card>
   );

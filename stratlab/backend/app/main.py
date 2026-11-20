@@ -6337,7 +6337,17 @@ def stored_underlyings() -> list[dict] | None:
 
 
 @app.get("/options/underlyings")
-def options_underlyings(profile=Depends(current_profile)):
+def options_underlyings(offline: str | None = Query(None, max_length=8), profile=Depends(current_profile)):
+    """The option underlyings the live contract list has. With `offline=list` the answer is always a list, never a 503 while the live feed is
+    offline: {"offline": the offline line or null, "rows": the live list, or offline the recorded and kept ones /options/recorded gives}
+    (LIVE18B-008: every load of /options got a 503 here and then asked /options/recorded, a second round trip before its offline note)."""
+    if offline == "list":
+        if not options_data.ready():
+            return {"offline": offline_when("Option quotes come from the live feed, which is offline until the daily data login completes."),
+                    "rows": options_recorded(profile)}
+        got = options_data.underlyings()
+        keep_underlyings(got)
+        return {"offline": None, "rows": got}
     options_ready()
     got = options_data.underlyings()
     keep_underlyings(got)              # for the hours the feed is offline (/options/recorded lists it then)
