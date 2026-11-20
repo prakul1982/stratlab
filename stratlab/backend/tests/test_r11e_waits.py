@@ -572,6 +572,11 @@ def test_peek_keeps_a_fresh_stored_page_in_memory(fake_db, monkeypatch):
     facts = {"symbol": "ZZZ", "pe": 12, "v": stock_pages.FACTS_VERSION}
     stock_pages._put("stocks:page:US:ZZZ", {"ts": time.time(), "facts": facts})
     assert stock_pages.fresh(stock_pages._setting("stocks:page:US:ZZZ"), "US")
+    # e83 (updated on purpose: failed when run alone, passed only in suite order): the reporting names' list (e77, kept in memory ten
+    # minutes, read by every peek) is read once here first, as an earlier test in the suite left it, so the count below is of the page
+    # itself whichever tests ran before; the page is still parsed exactly once
+    monkeypatch.setattr(stock_pages, "_reporting", {})
+    stock_pages.reporting_rows("US")
     reads = []
     real = stock_pages._setting
     monkeypatch.setattr(stock_pages, "_setting", lambda k: reads.append(k) or real(k))
