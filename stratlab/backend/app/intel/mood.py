@@ -755,6 +755,7 @@ class Mood:
     def _build_kept(self, region: str, force: bool = False) -> dict:
         hit = self.payloads.kept(region)
         value = carry_over(hit[1] if hit else None, self.build(region))      # LIVE11A-001: a re-read never drops a section
+        value["method"] = METHOD                  # LIVE20A-002: a read this release made, whatever built it, is one a restart may answer with
         value["final"] = is_final(value)
         if value["final"] and not (hit and (hit[1] or {}).get("final")):
             force = True                          # the session's final read is kept at once: a restart serves it, never re-reads it
