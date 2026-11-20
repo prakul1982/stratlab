@@ -2040,6 +2040,34 @@ def prefs_view(profile: dict) -> dict:
             "plan": PLANS[FEATURE_PLAN["ipo_alerts"]]["name"], "channels": channels_of(profile), "event_names": EVENTS}
 
 
+def next_read(market: str, now: datetime, problems: list[str] | None = None, read_at: str | None = None) -> str | None:
+    """LIVE20A-007: when the market's list is read next (ISO, with its offset): the job's next slot for that market, or the retry of a read that
+    met a busy source when it comes first. The note under a read with problems said "It is read again within the hour" at 08:24 ET, 10.4 h
+    after the read, while the next US read was the 21:30 IST slot; it now says when."""
+    local = now.astimezone(IST)
+    slots = [(n, a) for n, a in Job.SLOTS if n.startswith(market.lower()) and not n.endswith("-alert") and n != "in-final"]
+    best = None
+    for days in range(0, 3):
+        day = (local + timedelta(days=days)).date()
+        for n, a in slots:
+            hh, mm = (int(x) for x in a.split(":"))
+            t = datetime(day.year, day.month, day.day, hh, mm, tzinfo=IST)
+            if t <= local or (n in SLOT_UNTIL and a > SLOT_UNTIL[n]):
+                continue
+            best = t if best is None or t < best else best
+        if best:
+            break
+    if problems and read_at and any(busy(x) for x in problems):
+        try:
+            retry = datetime.fromisoformat(read_at) + timedelta(seconds=RETRY_AFTER)
+            r_local = max(retry, now).astimezone(IST)
+            if "08:15" <= r_local.strftime("%H:%M") <= "22:00" and (best is None or r_local < best):
+                best = r_local
+        except ValueError:
+            pass
+    return best.isoformat(timespec="minutes") if best else None
+
+
 @router.get("/invest/ipos")
 def ipos_list(market: str = "IN", profile=Depends(current_profile)):
     """One market's issues in their stages (upcoming, open, closed and awaiting listing, recently listed, and offer documents filed with no dates
@@ -2058,7 +2086,9 @@ def ipos_list(market: str = "IN", profile=Depends(current_profile)):
     # the bids of the open issues are read through the day, the lists twice: when the newest bids were read, and when the lists' problems were noted
     reads = [r.get("sub_read") for r in tabs.get("open", []) if r.get("sub_read")]
     return ok({"market": market, "as_of": got["as_of"], "bids_read": max(reads) if reads else None, "tabs": out, "counts": {k: len(v) for k, v in tabs.items()}, "note": NOTE[market],
-               "problems": (got["checked"].get("problems") or [])[:3], "problems_at": got["checked"].get("read") if got["checked"].get("problems") else None, "prefs": prefs_view(profile), "today": now.astimezone(IST if market == "IN" else NY).date().isoformat()})
+               "problems": (got["checked"].get("problems") or [])[:3], "problems_at": got["checked"].get("read") if got["checked"].get("problems") else None,
+               "next_read": next_read(market, now, got["checked"].get("problems"), got["checked"].get("read")),
+               "prefs": prefs_view(profile), "today": now.astimezone(IST if market == "IN" else NY).date().isoformat()})
 
 
 _live: dict[str, float] = {}

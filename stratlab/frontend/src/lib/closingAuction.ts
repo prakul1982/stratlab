@@ -48,7 +48,7 @@ export const PHASE_TEXT: Record<Phase, string> = {
   transition: "Continuous trading has ended for F&O stocks. The exchange is setting reference prices; orders open at 15:20.",
   entry: "Order entry is open. Indicative prices change until the auction ends.",
   matching: "Order entry has closed. Orders are being matched at each stock's equilibrium price.",
-  closed: "The auction is over: final prices are the official closes.",
+  closed: "Final prices are the official closes.",      // LIVE20B-005: the badge beside it says "Auction over for today" (it said "over" twice)
 };
 
 /** "+0.42%" / "−1.10%" / "0.00%", or "–" for none. */

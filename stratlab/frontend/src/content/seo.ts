@@ -49,7 +49,8 @@ export type PageMeta = {
 /** Pages anyone can open, and what each says about itself. */
 // words two or more pages share, written once so the landing page's download carries them once (R17-003: the landing budget)
 const PLANS_SUMMARY = ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
-  "Prices are in Indian rupees, with the dollar figure beside each at today's rate, and the payment is charged in rupees. You can cancel any time from Account."];
+  // LIVE20B-012: the cards show StratLab's own US price beside each (US price $8), not the rupees at today's rate: the no-JS words say neither way
+  "Prices are in Indian rupees, with a dollar figure beside each, and the payment is charged in rupees. You can cancel any time from Account."];
 const CONTACT_LINE = "How to reach StratLab for help, billing and refunds, or a privacy request, with the email address for each.";
 
 export const PAGES: PageMeta[] = [

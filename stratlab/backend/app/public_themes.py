@@ -217,6 +217,29 @@ def _index_caps(region: str) -> dict:
         return {}
 
 
+def _index_days(region: str) -> dict:
+    """e84: {symbol: the close its market value in the screens' index is at (its price day)}."""
+    try:
+        from . import screens
+        return {r["symbol"]: str(r.get("price_at") or "")[:10] for r in screens.load_index(region).get("rows") or []
+                if r.get("symbol") and re.match(r"^\d{4}-\d\d-\d\d$", str(r.get("price_at") or "")[:10])}
+    except Exception:
+        return {}
+
+
+def dive_days(dive: dict) -> dict:
+    """e84: {symbol: the close the stored dive's market value of it is at (its row's price day)}."""
+    out: dict = {}
+    for x in (dive.get("layers") or []) + (dive.get("subs") or []) + [{"companies": (dive.get("sections") or {}).get("leaders") or []}]:
+        for c in (x or {}).get("companies") or []:
+            if not isinstance(c, dict):
+                continue
+            d_ = str(c.get("price_at") or "")[:10]
+            if c.get("symbol") and re.match(r"^\d{4}-\d\d-\d\d$", d_):
+                out.setdefault(c["symbol"], d_)
+    return out
+
+
 def _index_newer(region: str, day: str | None) -> dict:
     """r69e (LIVE13A-004: the US theme pages "market values at the 13 Nov 2026 close", the dive's own, while the app and the heatmap showed
     the 17 Nov close): {symbol: (market value, price day)} of the screens' index rows priced at a later close than `day` (the stored dive's
@@ -510,7 +533,11 @@ def view(entry: dict, p: dict) -> dict:
                 continue
             rev = revs.get(sym)
             # e54: what its place rests on; a company the map added is shown only confirmed by its own words (share.checked)
-            state = "description_verified" if c.get("verified") is True else (ev(sym) if ev else None)
+            # e84 (LIVE20A-001: Capital goods' layers summed to 180 description-verified and 137 industry-supported beside its headline's 178
+            # and 139): the stored dive's state first, the one its tally counts; the map's own check only for a company the dive has none for
+            state = ev(sym) if ev else None
+            if c.get("verified") is True and state in (None, "membership_unverified"):
+                state = "description_verified"
             nm_ = stock_pages.reporting_name(region, sym) or named.get(sym) or c.get("name") or sym
             rows.append({"symbol": sym, "name": clean_name(public_words(nm_, 100) or sym),
                          "page": stock_pages.path(region, sym) if sym in known else None,
@@ -550,11 +577,27 @@ def view(entry: dict, p: dict) -> dict:
             "all": cn["all"], "counts": cn,
             "tally_at": str(dive.get("tally_at") or "")[:10] if dt else None,
             # (the close most of its market values are at: each company's own, the index's later one or the dive's)
-            "prices": (Counter(newer[k][1] if k in newer else dive_day for k in once if caps.get(k)).most_common(1)[0][0]
-                       if any(k in once for k in newer) else dive_day)
-            or _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}),
+            # e84 (LIVE20A-020: India pages "market values at the 19 Nov 2026 close" over UltraTech's and TCS's 20 Nov values): each value's
+            # own close (the dive row's, the index's later one, or the index's for a company the dive holds none of), and how many are at
+            # another close
+            **_price_label(once, caps, dcaps, newer, dive_days(dive), _index_days(region), dive_day, region, layers),
             "day": _map_day(region, p, entry),
             "indexable": len(layers) >= MIN_LAYERS and n >= MIN_MEMBERS}
+
+
+def _price_label(once, caps, dcaps, newer, ddays, idays, dive_day, region, layers) -> dict:
+    """e84: {"prices": the close most of the page's market values are at, "prices_other": [[another close, how many], ...]}."""
+    days = []
+    for k in once:
+        if not caps.get(k):
+            continue
+        d_ = newer[k][1] if k in newer else (ddays.get(k) or dive_day) if k in dcaps else idays.get(k) or dive_day
+        if d_:
+            days.append(d_)
+    if not days:
+        return {"prices": dive_day or _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}), "prices_other": []}
+    got = Counter(days).most_common()
+    return {"prices": got[0][0], "prices_other": [[d_, n] for d_, n in sorted(got[1:], reverse=True)]}
 
 
 def _map_day(region: str, p: dict, entry: dict) -> str | None:
@@ -627,7 +670,8 @@ def render(v: dict) -> str:
                if (v.get("all") or 0) > v["members"] else "")
             + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "")
             # LIVE9A-011: the close the market values are at, said once
-            + (f" · market values at the {e(day_text(v['prices']))} close" if v.get("prices") else "") + "</p>")
+            + (f" · market values at the {e(day_text(v['prices']))} close" if v.get("prices") else "")
+            + ("".join(f" ({n} at the {e(day_text(d_))} close)" for d_, n in v.get("prices_other") or []) if v.get("prices") else "") + "</p>")
     if v.get("older"):             # r66e (LIVE12A-001): a theme shown from its read under an earlier version of the checks says so
         body += ('<p class="note" data-older>' + e(OLDER_LINE + (" " + RECHECKING_LINE if v.get("rechecking") else "")) + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown

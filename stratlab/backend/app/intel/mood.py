@@ -27,6 +27,12 @@ FRESH_OPEN, FRESH_SHUT = 60.0, 900.0      # seconds a finished payload is served
 KEEP_KEY = "mood:last:"                   # the last finished payload per region, in the database: a new server answers with it at once
 KEEP_EVERY = 600.0                        # seconds between two writes of it (each read is a minute apart in market hours)
 KEEP_FOR = 3 * 86400.0                    # a stored payload older than this is not answered with
+# LIVE20A-002: how the card's figures are worked out. A read kept in the database by a release that worked them out another way is never
+# answered with: at 18:44 IST, an hour after Release 82 changed the NIFTY points to free-float weights, the first visitor still got the
+# 15:48 IST read with whole-market-value points (HDFC Bank 47, not 77) and fallers under "Moved by", beneath the new (i) text; it was read
+# again only then. A new server reads such a card again as it starts (mood_job's first pass), and a visit before that read is back waits
+# for it. Raise it with any change to what a stored card's figures or words mean.
+METHOD = 83
 CLOSES_FRESH = 4 * 3600.0                 # daily closes change once a day
 TOP = 5                                   # stocks in each of "adding" and "taking" points
 CHUNK = 24                                # hub.quotes reads at most this many symbols at once
@@ -568,6 +574,12 @@ def missing_parts(p: dict | None) -> list[str]:
     return out
 
 
+def of_method(p: dict | None) -> bool:
+    """LIVE20A-002: a read worked out the way this release works the card out (a read kept by an earlier release has no `method`, or an
+    older one)."""
+    return bool(p) and p.get("method") == METHOD
+
+
 def is_final(p: dict | None) -> bool:
     return not missing_parts(p)
 
@@ -727,13 +739,23 @@ class Mood:
             return
         at, value = got.get("at"), got.get("value")
         if isinstance(value, dict) and isinstance(at, (int, float)) and time.time() - at < KEEP_FOR:
+            if not of_method(value):
+                # LIVE20A-002: kept by a release that worked the figures out another way: read again now, never answered with
+                self.payloads._start(region, lambda: self._build_kept(region, force=True))
+                return
             value = mend_lines(value)            # LIVE18A-001: a read kept before a release is served in today's words
             self.payloads.put(region, value, at)
             self._kept_at[region] = at
 
+    def warm(self, region: str) -> None:
+        """LIVE20A-002: as a server starts (mood_job's first pass): the kept read taken up, and one kept by an earlier release read again
+        at once, so the first visit after a deploy neither gets the old card nor waits for the new one."""
+        self._seed(region)
+
     def _build_kept(self, region: str, force: bool = False) -> dict:
         hit = self.payloads.kept(region)
         value = carry_over(hit[1] if hit else None, self.build(region))      # LIVE11A-001: a re-read never drops a section
+        value["method"] = METHOD                  # LIVE20A-002: a read this release made, whatever built it, is one a restart may answer with
         value["final"] = is_final(value)
         if value["final"] and not (hit and (hit[1] or {}).get("final")):
             force = True                          # the session's final read is kept at once: a restart serves it, never re-reads it
@@ -1041,7 +1063,7 @@ class Mood:
             cal = {"results": [], "ipos": [], "events": []}
         # the session the figures are of: the index's own day (LIVE7A-001: read before the open, every table was the last session's
         # figures under the new day's date; the page labels each block with this, never with the calendar day)
-        p = {"region": region, "is_open": market_open(region), "today": today_s, "session": session_of(levels, name),
+        p = {"region": region, "method": METHOD, "is_open": market_open(region), "today": today_s, "session": session_of(levels, name),
              "levels_at": max((i["at"] for i in levels if i.get("at")), default=None),
              "compare": cmp, "breadth": b, "sectors": sectors, "movers": movers, "flows": flows,
              "risk": {"rows": risk} if risk else None, "global": {"rows": glob} if glob else None,

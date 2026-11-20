@@ -942,7 +942,9 @@ export function WatchlistPage() {
                 const q = quotes?.[w.symbol];
                 if (quotes == null || !(w.symbol in quotes)) return "…";       // its batch hasn't come yet
                 if (q?.price == null) return "–";
-                const at = quoteAt(q.at, marketTz(region));
+                // LIVE20B-006: once the market has shut the price is the session's close: "Close", not the time it was last read ("15:59 IST"
+                // under a close made at 15:30); its day is on the change's line
+                const at = shut ? "Close" : quoteAt(q.at, marketTz(region));
                 // out of hours the change is the last completed session's, and says its day (R41A): "today" only of today's
                 // a quote from an earlier day in the market's own time zone (a US quote on a Saturday) is that session's
                 // too, though the server needn't say so: its change is already the session's (R42-004: "Today" over Friday)
