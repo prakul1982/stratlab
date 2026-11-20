@@ -40,7 +40,8 @@ MAX_QUEUE = 200
 # r69e (the live REITs theme: FFO and P/FFO missing for most property owners, their US pieces read before a property owner's FFO lines were
 # part of the read, kept under VERSION 3 and never read again): the lines a US piece's read holds, kept with it; a property owner's piece
 # read before them is read once more (stale_for_property), within the memory guard's turn, never the whole sector's figures (VERSION stays)
-REIT_V = 2                      # e81: 2, disposition gains deducted and the FFO the company reports read from its annual report
+REIT_V = 3                      # e81: 2, disposition gains deducted and the FFO the company reports read from its annual report
+#                                 e83: 3, the reported FFO read from the row that is the FFO itself (Essex, American Tower: LIVE19A-002/005)
 # e79 (LIVE15A-008, the live R77 REITs deck: Camden Property Trust "SBC / revenue 130.8%", its stock pay over the $13 m of fee income its
 # piece was read on, beside the $1.57 bn of property revenue its rebuilt page and the appendix give): a US piece keeps the revenue its shares of
 # revenue were worked out on ("rev", USD million, REV_V); a piece whose revenue is not the row's own, or one read before it was kept for a
@@ -516,35 +517,96 @@ def us_revenue(facts: dict, end: str | None) -> float | None:
 # e81 (the owner's review of the R79 REITs deck, P0 "reported Nareit FFO first"): the FFO a property owner reports, from its annual report's
 # reconciliation (Item 7: "FFO attributable to common shareholders ... $ 744,814", "Funds from operations (as defined by Nareit) ..."), the
 # fiscal year's column first; never a Core, Normalized, Adjusted or per-share line. Amounts in thousands unless the text says millions
-_FFO_LINE = re.compile(r"(?<![A-Za-z])(?:Nareit\s+)?(?:funds\s+from\s+operations|FFO)(?:\s*\((?:as\s+defined\s+by\s+)?(?:Nareit|NAREIT|FFO)\)|\s*-\s*Nareit|"
-                       r"\s*\(Nareit\s+defined\))?(?:\s+attributable\s+to\s+(?:common\s+)?(?:shareholders|stockholders|unitholders)"
-                       r"(?:\s+and\s+(?:common\s+)?(?:unitholders|noncontrolling\s+interests))?)?\s*[:\-–]?\s*\$?\s*(\(?[\d,]{3,}(?:\.\d+)?\)?)", re.I)
+# e83 (LIVE19A-002/005: Essex "$305 m (reported)", P/FFO 56.80x, read from its line "Gains not included in FFO (305,043)" while its 10-K's
+# "Funds from operations attributable to common stockholders and unitholders $ 1,065,136" was passed over; American Tower's "Nareit FFO
+# attributable to American Tower Corporation common stockholders $ 4,160.9" (in millions) missed, as were Prologis' "NAREIT defined FFO
+# attributable to common stockholders/unitholders", Public Storage's "FFO allocable to common shares", Digital Realty's "FFO available to
+# common stockholders and unitholders" and Simon's "FFO of the Operating Partnership"): a reported FFO is the amount of a reconciliation row
+# whose label is the FFO itself: nothing before "FFO" but "Nareit" (or "Nareit defined", "Total"; never "Gains not included in",
+# "Core", "share of"), after it only how it is defined ("(Nareit)", "as defined by Nareit", a footnote mark), whom it is attributable,
+# available or allocable to, "of the Operating Partnership" or ", basic"/", diluted"; its amount positive, in the table's own unit (the
+# nearest "in thousands" or "in millions" before it); and, where StratLab's derived FFO is known, of its order (FFO_NEAR): a figure a
+# fraction or a multiple of it is another line's (one quarter's, a joint venture's), never the company's year
+_FFO_WORD = re.compile(r"(?:funds\s+from\s+operations|\bFFO\b(?!A))", re.I)
+_FFO_TAIL = re.compile(r"(?:\s*\(\s*[a-z0-9]{1,2}\s*\)|\s*[⁽⁾⁰¹²³⁴⁵⁶⁷⁸⁹]+|\s*\(\s*[“\"']?(?:Nareit\s+)?FFO[”\"']?\s*\)|\s*\(\s*as\s+defined\s+by\s+nareit\s*\)"
+                       r"|\s*\(\s*nareit(?:[\s-]+defined)?\s*\)|\s*,?\s*as\s+defined\s+by\s+nareit\s*,?|\s*[-–—]\s*nareit)*"
+                       r"(?:\s+(?:attributable|available|allocable)\s+(?:to|for)\s+(?P<who>[^$\d:;()%]{1,100}?))?"
+                       r"(?:\s+of\s+the\s+operating\s+partnership)?(?:\s*[,–—-]\s*(?:basic|diluted))?"
+                       r"(?:\s*\(\s*[a-z0-9]{1,2}\s*\)|\s*[⁽⁾⁰¹²³⁴⁵⁶⁷⁸⁹]+)*\s*[:\-–]?\s*(?P<dollar>\$)?\s*(?P<amt>\(?\d[\d,]*(?:\.\d+)?\)?)(?![\d,.]*\s*%)", re.I)
+_FFO_HEAD_OK = {"", "nareit", "nareit defined", "nareitdefined", "total"}
+_FFO_WHO_NOT = re.compile(r"\b(?:net\s+income|net\s+earnings|income|loss|core|adjusted|normali[sz]ed|non-?controlling|limited\s+partners)\b", re.I)
 _FFO_NOT = re.compile(r"\b(?:core|normali[sz]ed|adjusted|as\s+adjusted|per\s+(?:diluted\s+)?(?:share|unit)|AFFO|modified|recurring)\b", re.I)
+_SCALE = re.compile(r"in\s+millions|\(\s*millions|millions\s+of\s+(?:U\.S\.\s+)?dollars|in\s+thousands|\(\s*thousands|thousands\s+of\s+(?:U\.S\.\s+)?dollars"
+                    r"|\$\s*000s?\b|\(\s*\$\s*000", re.I)
+FFO_NEAR = (0.4, 2.5)              # e83: a reported FFO this far (a share or a multiple) from the derived one is another line's figure
+FFO_SHARE = (0.05, 1.5)            # e83: ... and, with no derived FFO to hold it to, one this small or large a share of revenue (a joint venture's)
 
 
-def reported_ffo(text: str) -> float | None:
-    """e81: a property owner's FFO as its annual report states it ($ million), or None: the first FFO line of its reconciliation (not a
-    Core, Normalized or Adjusted one, nor a per-share one) with its amount in thousands (or in millions where the text says so)."""
-    t = " ".join(str(text or "").split())
-    for m in _FFO_LINE.finditer(t):
-        before = t[max(0, m.start() - 40):m.start()]
-        if _FFO_NOT.search(before) or _FFO_NOT.search(m.group(0)):
+def _ffo_scale(t: str, at: int) -> str | None:
+    """e83: the unit of a table, from the nearest "in thousands"/"in millions" (or "$000") said before position `at`; None with none."""
+    last = None
+    for m in _SCALE.finditer(t, max(0, at - 8000), at):
+        last = m
+    if last is None:
+        return None
+    return "m" if "million" in last.group(0).lower() else "k"
+
+
+def reported_ffo(text: str, near: float | None = None, revenue: float | None = None) -> float | None:
+    """e81: a property owner's FFO as its annual report states it ($ million), or None. e83: the first row of its reconciliation whose label is
+    the FFO itself (see above), its amount positive and in the table's unit; with `near` (StratLab's derived FFO, $ million, positive) only
+    a figure within FFO_NEAR of it, else with `revenue` ($ million) only one within FFO_SHARE of it."""
+    t = " ".join(str(text or "").replace("\u200b", " ").replace("\xa0", " ").split())
+    # a row that says whom the FFO is attributable (or available, allocable) to first: a bare "Funds from operations" row of a report that has
+    # one is a joint venture's or a segment's table; the bare rows only where no such row is the company's FFO
+    for whose in (True, False):
+        got = _ffo_rows(t, near, revenue, whose)
+        if got is not None:
+            return got
+    return None
+
+
+def _ffo_rows(t: str, near: float | None, revenue: float | None, whose: bool) -> float | None:
+    for w in _FFO_WORD.finditer(t):
+        m = _FFO_TAIL.match(t, w.end())
+        if not m or bool(m.group("who")) != whose:
             continue
-        raw = m.group(1).strip("()").replace(",", "")
-        try:
-            v = float(raw)
-        except ValueError:
+        # the row's label before "FFO": back to the previous row's last figure (or a mark that ends a label)
+        lead = t[max(0, w.start() - 80):w.start()]
+        cut = max((lead.rfind(ch) for ch in "0123456789)]—–$%:"), default=-1)
+        head = re.sub(r"[^a-z ]+", "", lead[cut + 1:].lower()).strip()
+        head = " ".join(head.split())
+        if head not in _FFO_HEAD_OK or _FFO_NOT.search(m.group(0)) or (m.group("who") and _FFO_WHO_NOT.search(m.group("who"))):
             continue
-        near = t[max(0, m.start() - 4000):m.start()].lower()
-        if "in millions" in near[-1500:] or "(millions" in near[-1500:]:
-            mn = v
-        elif v >= 1000:
-            mn = v / 1000.0                           # "(in thousands)", the usual table
-        else:
-            continue
-        if 1 <= mn <= 50000:
+        unit = _ffo_scale(t, w.start())
+        # the row's figures: the fiscal year's column first; a later column (a table of quarters, then the year) only where the first is
+        # not of the derived FFO's order
+        row = [m.group("amt")] + _ROW_MORE.match(t, m.end()).group(0).replace("$", " ").split()[:4]
+        for raw in row:
+            if raw.startswith("(") or raw.endswith(")"):
+                break                                 # a negative figure: a deduction's row, never the year's FFO
+            try:
+                v = float(raw.replace(",", ""))
+            except ValueError:
+                break
+            if unit == "m" or (unit is None and re.search(r"\.\d$", raw) and "," in raw):
+                mn = v                                # "(in millions)", or a table of figures to one decimal (never one of thousands)
+            elif v >= 1000 and "," in raw:
+                mn = v / 1000.0                       # "(in thousands)", the usual table
+            else:
+                break
+            if not 1 <= mn <= 50000:
+                break
+            if isinstance(near, (int, float)) and near > 0:
+                if not FFO_NEAR[0] * near <= mn <= FFO_NEAR[1] * near:
+                    continue
+            elif isinstance(revenue, (int, float)) and revenue > 0 and not FFO_SHARE[0] * revenue <= mn <= FFO_SHARE[1] * revenue:
+                continue
             return round(mn, 1)
     return None
+
+
+_ROW_MORE = re.compile(r"(?:\s*\$?\s*\(?\d[\d,]*(?:\.\d+)?\)?(?![\d,.]*\s*%))*")
 
 
 def with_reported_ffo(got: dict, text: str, r_million: float | None) -> dict:
@@ -552,7 +614,8 @@ def with_reported_ffo(got: dict, text: str, r_million: float | None) -> dict:
     its basis ("reported" or "derived"); the figures as they are with no FFO."""
     if not isinstance(got.get("ffo"), dict):
         return got
-    rep = reported_ffo(text) if text else None
+    der = got["ffo"].get("v")
+    rep = reported_ffo(text, der if isinstance(der, (int, float)) and der > 0 else None, r_million) if text else None
     if rep is None:
         return {**got, "ffo": {**got["ffo"], "basis": "derived"}}
     period = got["ffo"].get("period")
