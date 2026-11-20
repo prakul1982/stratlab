@@ -65,7 +65,7 @@ test("LIVE11A-023: a mid-size heatmap tile names a long symbol at 9px instead of
   const width = (text) => text.length * 6.5;
   assert.deepEqual(tileWords("POWERGRIDX", "+1.2%", 70, 50, width), { px: 9, fig: true });
   // (updated on purpose, fix18 LIVE13A-012: ten letters don't fit one line at 60px, and a 40px-tall tile now names them over two lines)
-  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 10, fig: false, split: 5 });
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 10, fig: false, clip: true }); // (changed on purpose, site85: owner, 20 Nov, never split inside a ticker: one line cut with "…")
   assert.match(read("src/components/chart/Treemap.tsx"), /px === 9 \? " xs"/);
 });
 

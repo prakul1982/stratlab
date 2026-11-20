@@ -107,5 +107,6 @@
 /* LIVE10A-012: a tall, narrow tile names its symbol down its length */
 /* LIVE12A-010: a long symbol over two lines in a mid-size tile, broken only where the tile's words put a break (one word still when copied) */
 .hm-sym.two { white-space: normal; width: min-content; line-height: 1.15; text-align: center; }
+.hm-sym.clip { text-overflow: ellipsis; }   /* owner, 20 Nov: a long ticker on a small tile is cut with "…", never split inside itself; the hover names it */
 .hm-tile.vert { justify-content: center; align-items: center; }
 .hm-tile.vert .hm-sym { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
