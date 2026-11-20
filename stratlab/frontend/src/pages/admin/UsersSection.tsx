@@ -182,7 +182,7 @@ export function UsersSection() {
     // long names and addresses break inside the card, so the Stop buttons stay in view (DJ-013)
     { key: "name", header: "Session", rowHeader: true, wrap: true, cell: (s) => <span className="adm-break">{s.name}</span> },
     { key: "user", header: "User", wrap: true, cell: (s) => <span className="adm-break">{s.email}</span> },
-    { key: "sym", header: "Instrument", wrap: true, cell: (s) => s.symbol },
+    { key: "sym", header: "Instrument", cell: (s) => s.symbol },          // a symbol: no 7rem column of words (site83: the table fits the centred column at 1280)
     { key: "at", header: "Started", cell: (s) => ago(s.started_at) },
     { key: "eq", header: "Equity", numeric: true, cell: (s) => (s.equity != null ? money(s.equity, s.currency ?? "INR") : "–") },
     { key: "tr", header: "Trades", numeric: true, cell: (s) => s.trades ?? 0 },

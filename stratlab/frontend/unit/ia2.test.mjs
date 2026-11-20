@@ -13,9 +13,10 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 test("items 37, 43: on a laptop the page column keeps an 80px right margin with the round button centred in it", () => {
   const css = read("src/components/watch/launcher.css");
   const block = css.match(/@media \(min-width: 901px\) and \(max-width: 1599px\) \{\n([^]*?)\n\}/)[1];
-  // 80px margin, 44px button: (80 - 44) / 2 = 18px either side
-  assert.match(block, /\.mw-launch\.app, \.mw-launch\.public \{ width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; \}/);   // LIVE5-007: a public page's too
-  assert.match(block, /body:not\(\.mw-docked\) \.shell > \.main \{ padding-right: 80px; \}/);
+  // updated on purpose (site83): a 76px margin each side, 44px button: (76 - 44) / 2 = 16px either side
+  assert.match(block, /\.mw-launch\.app, \.mw-launch\.public \{ width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 16px; \}/);   // LIVE5-007: a public page's too
+  // updated on purpose (site83, owner 20 Nov "centre aligned"): the same margin on the left as on the right, so the column is centred
+  assert.match(block, /body:not\(\.mw-docked\) \.shell > \.main \{ padding-inline: 76px; \}/);
 });
 
 test("item 43: the menu-button way is gone: no switch, no address word, no menu Markets button", () => {
