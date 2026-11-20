@@ -68,3 +68,13 @@ export function priorQuarter(of: string | null | undefined, resultsDay: string):
   if (!Number.isFinite(day)) return null;
   return (day - end) / 86400000 > REPORTED_WITHIN_DAYS ? `${m[1]} ${m[2]}` : null;
 }
+
+/** LIVE19A-011: the quarter every row's growth figures are of, on the row itself: "quarter to Oct 2026", or "previous quarter, to Jul 2026" when
+ * the figures are of the quarter before the one this day reports (priorQuarter; a row whose results are filed is of its own quarter). BJ's
+ * "Rev +15.7% Profit +15.4%" stood unlabelled beside rows that said "previous quarter, to Jul 2026". null when the figures name no quarter. */
+export function quarterLabel(of: string | null | undefined, resultsDay: string, filed: boolean): { text: string; prior: boolean } | null {
+  const m = /^([A-Z][a-z]{2}) (\d{4})/.exec(String(of ?? "").trim());
+  if (!m || MONTHS.indexOf(m[1]) < 0) return null;
+  const p = filed ? null : priorQuarter(of, resultsDay);
+  return p ? { text: `previous quarter, to ${p}`, prior: true } : { text: `quarter to ${m[1]} ${m[2]}`, prior: false };
+}

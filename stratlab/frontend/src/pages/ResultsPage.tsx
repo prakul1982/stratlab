@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { capAt, laterDays, movesEmpty, priorQuarter, purposeShown, whenShort } from "../lib/resultsRows";
+import { capAt, laterDays, movesEmpty, priorQuarter, purposeShown, quarterLabel, whenShort } from "../lib/resultsRows";
 import { resultDay } from "../lib/resultDay";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
@@ -258,7 +258,9 @@ export function ResultsPage() {
       r.q?.unreported ? <span className="k-muted" data-testid="res-q-unreported" title={r.q.of ? `The latest quarter kept is ${r.q.of.replace(/ vs .*/, "")}` : undefined}>Not reported</span> :
       <span className="res-q"><span><span className="k-muted">Rev </span><Growth v={r.q?.sales} of={r.q?.of} /></span><span><span className="k-muted">Profit </span><Growth v={r.q?.profit} of={r.q?.of} /></span>
         {/* LIVE14A-009: the quarter before the one this day reports says so (PANW's figures to Jul 2026 on its 18 Nov row) */}
-        {(() => { const p = r.q && !r.out ? priorQuarter(r.q.of, r.date) : null; return p && <span className="k-note k-muted" data-testid="res-q-prior">previous quarter, to {p}</span>; })()}</span>) },
+        {(() => { const p = r.q && !r.out ? priorQuarter(r.q.of, r.date) : null; return p && <span className="k-note k-muted" data-testid="res-q-prior">previous quarter, to {p}</span>; })()}
+        {/* LIVE19A-011: a row of the quarter this day reports says which quarter too (BJ's figures stood unlabelled) */}
+        {(() => { const l = r.q && (r.q.sales != null || r.q.profit != null) ? quarterLabel(r.q.of, r.date, !!r.out) : null; return l && !l.prior && <span className="k-note k-muted" data-testid="res-q-of">{l.text}</span>; })()}</span>) },
     { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} />, csv: (r) => r.q?.sales ?? null },
     { key: "pat", header: "Profit", csvHeader: "Profit YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} />, csv: (r) => r.q?.profit ?? null },
     // LIVE10A-020: no row with a past results-day move once every row's read is back (US: "–" on every row): no column for it
@@ -285,6 +287,8 @@ export function ResultsPage() {
     } } as Column<ResultRow>] : []),
   ];
 
+  const dayColumns = columns.filter((c) => c.key !== "im" || shown.some((r) => r.fo));
+
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/results")} title="Results this week and next"
@@ -296,7 +300,7 @@ export function ResultsPage() {
         <Seg label="Which companies" value={scope} onChange={setScope} options={SCOPE_OPTIONS} />
       </div>
       {(scope === "all" || data) && (
-        <CalendarFilters region={region} facets={data?.facets ?? null} filters={filters} set={set} firstSort="cap" sorts={SORT_NAME} active={n}
+        <CalendarFilters region={region} facets={data?.facets ?? null} filters={filters} set={set} firstSort="cap" sorts={mvEmpty && filters.sort !== "move" ? Object.fromEntries(Object.entries(SORT_NAME).filter(([k]) => k !== "move")) : SORT_NAME} active={n}
           total={data?.total ?? null} matching={data?.matching ?? null} unknownSize={data?.unknown_size ?? 0} onClear={() => set(NO_FILTERS)} testId="results-count"
           days={[{ value: "", label: "Every day" }, { value: "today", label: "Today" }, { value: "tomorrow", label: "Tomorrow" },
             // today is the "Today" chip above, not again by its date (LIVE8A-025: "Today" and "Sat 14 Nov" both)
@@ -343,13 +347,14 @@ export function ResultsPage() {
           const on = w.rows.filter((r) => r.date === d);
           const info = about(d) ?? { date: d, count: on.length, shown: on.length };
           return (
-            <div key={d} className="inv-day" data-testid="results-day">
+            <div key={d} className="inv-day res-days" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
               <ReportScope section={`Results on ${resultDay(d)}`} source="Results filed with the exchange and the day's prices">
-              {/* LIVE14A-009: each day's table keeps "Usual move" only when its own rows have enough of them (one value on the whole US page,
-                  DRCT's, kept the column on every day's table) */}
+              {/* LIVE19A-011: one column set for every day's table, fixed widths (styles-invest .res-days), so the stacked tables line up: each
+                  day's own set and widths put Market value at x 780, 870 and 755 on three days. "Usual move" is the page's (movesEmpty over every
+                  row shown, LIVE14A-009's rule for a column of one value), "Implied" when any row shown has options */}
               <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`}
-                columns={columns.filter((c) => (c.key !== "im" || on.some((r) => r.fo)) && (c.key !== "mv" || !movesEmpty(on, moves, on.length)))} stack compact phonePage={10} />
+                columns={dayColumns} stack compact phonePage={10} />
               </ReportScope>
               {(info.count > info.shown || (openDay === d && dayRows > 0)) && (
                 <div className="k-row">
