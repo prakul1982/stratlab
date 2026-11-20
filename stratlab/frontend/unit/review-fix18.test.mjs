@@ -28,10 +28,10 @@ test("LIVE13A-012: a 40-46 px heatmap tile names its symbol (over two lines when
   const { tileWords } = await import("../src/lib/heatmap.ts");
   const width = (text) => text.length * 6.5;
   // the review's blank tiles: about 45 × 45 px boxes, so 43 × 43 px tiles
-  assert.deepEqual(tileWords("BHARATFORG", "+1.2%", 43, 43, width), { px: 10, fig: false, split: 5 });
-  assert.deepEqual(tileWords("SIEMENS", "+1.2%", 43, 43, width), { px: 10, fig: false, split: 4 });
+  assert.deepEqual(tileWords("BHARATFORG", "+1.2%", 43, 43, width), { px: 10, fig: false, clip: true }); // (changed on purpose, site85: owner, 20 Nov, never split inside a ticker: one line cut with "…")
+  assert.deepEqual(tileWords("SIEMENS", "+1.2%", 43, 43, width), { px: 10, fig: false, clip: true }); // (changed on purpose, site85: owner, 20 Nov, never split inside a ticker: one line cut with "…")
   assert.deepEqual(tileWords("ABB", "+1.2%", 43, 43, width), { px: 10, fig: true });
-  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 28, width), { px: 0, fig: false });       // under two lines' height: none
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 28, width), { px: 10, fig: false, clip: true });       // under two lines' height: none // (changed on purpose, site85: one line cut with "…" where two did not fit)
 });
 
 test("LIVE13A-006: the Markets panel never opens on a price read hours earlier in the same session", async () => {

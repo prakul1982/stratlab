@@ -162,3 +162,49 @@ test("Safari: a link followed while a late file is still downloading opens that 
     expect(served).toBe(1);
   } finally { await browser?.close(); }
 });
+
+async function countShifts(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __moves: number; __shifted: string[] };
+    w.__moves = 0; w.__shifted = [];
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries() as unknown as { value: number; hadRecentInput: boolean; sources?: { node?: Node; previousRect: DOMRect; currentRect: DOMRect }[] }[]) {
+        if (e.hadRecentInput) continue;
+        w.__moves += e.value;
+        for (const s of e.sources ?? []) w.__shifted.push(`${e.value.toFixed(4)} ${(s.node as Element | undefined)?.className ?? s.node?.nodeName ?? "?"} ${Math.round(s.previousRect.y)}->${Math.round(s.currentRect.y)}`);
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  });
+}
+const shifts = (page: Page) => page.evaluate(() => { const w = window as unknown as { __moves: number; __shifted: string[] }; return { __moves: w.__moves, __shifted: w.__shifted }; });
+
+// LIVE21B-008 (Medium): a Free account's /money/net-worth moved everything under the lede 33 px (CLS 0.116) when the "Prices as of" pill and the
+// "Add an entry" row came with the totals at 4.9-5.5 s. The row is drawn with the first frame now; the totals are held back 2.5 s here.
+test("net worth on Free: the button's row is there from the first frame, and nothing moves when the totals come", async ({ page, request }, info) => {
+  test.skip(info.project.name !== "desktop", "measured at 1440 as live");
+  const token = "site85-12", h = { Authorization: `Bearer ${token}` };
+  const file = new URL("../../backend/tests/fixtures/holdings/zerodha_console_holdings.xlsx", import.meta.url);
+  const r = await request.post(`${API}/holdings/import`, { headers: h, data: { filename: "zerodha_console_holdings.xlsx", data: readFileSync(file).toString("base64") } });
+  expect(r.ok() || r.status() === 409).toBeTruthy();
+  await signedIn(page, token);
+  await countShifts(page);
+  await page.route(/\/money\/net-worth(\?|$)/, async (q) => { await new Promise((ok) => setTimeout(ok, 2500)); await q.fallback(); });
+  await page.goto("/money/net-worth");
+  await expect(page.getByRole("heading", { level: 1, name: "Net worth" })).toBeVisible({ timeout: 30_000 });
+  // while the totals are still being added up: the row is there, and the placeholder card sits where the totals card will
+  await expect(page.getByText("Adding up your net worth")).toBeVisible();
+  const first = await page.evaluate(() => {
+    const card = [...document.querySelectorAll(".k-card")].find((e) => /Adding up your net worth/.test(e.textContent || ""));
+    const add = [...document.querySelectorAll(".k-page-head .k-meta button")].some((b) => /Add an entry/.test(b.textContent || ""));
+    return { add, top: card ? Math.round(card.getBoundingClientRect().top + scrollY) : null };
+  });
+  expect(first.add, "the Add an entry row with the first frame").toBe(true);
+  await expect(page.getByText("Where you stand")).toBeVisible({ timeout: 15_000 });
+  const after = await page.locator(".k-card").filter({ hasText: "Where you stand" }).first().evaluate((e) => Math.round(e.getBoundingClientRect().top + scrollY));
+  expect(Math.abs(after - (first.top ?? -99)), `the totals card at ${after} px, its placeholder at ${first.top} px`).toBeLessThanOrEqual(1);
+
+  await expect(page.getByText(/Prices as of/)).toBeVisible();
+  await page.waitForTimeout(1500);
+  const s = await shifts(page);
+  expect(s.__moves, `nothing moved when the totals came: ${s.__shifted.join("; ")}`).toBeLessThan(0.01);
+});
