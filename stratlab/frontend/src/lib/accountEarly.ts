@@ -4,7 +4,12 @@
  * and the app's first /me (lib/api.ts) takes this answer when its token is the same. A token near its end is left to the sign-in library
  * to renew first, and an answer older than EARLY_ME_MS is not used. */
 import { CFG, sessionKey } from "./config";
-import { prefetchPublic } from "./http";
+import { prefetchPublic as prefetchNow } from "./http";
+
+/** A public read asked now, unless public/early.js has already asked it (site81: lib/app.tsx takes that one). */
+const prefetchPublic = (path: string): void => {
+  if (!(window as unknown as { __stratlabEarlyPublic?: Record<string, unknown> }).__stratlabEarlyPublic?.[path]) prefetchNow(path);
+};
 import { VIEW_AS_HEADER, readViewAs } from "./viewAs";
 
 // kept on the window, not in this module, so the app's own request code (lib/api.ts) reads it without depending on this file

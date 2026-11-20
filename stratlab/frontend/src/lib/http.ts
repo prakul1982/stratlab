@@ -22,7 +22,7 @@ const early = new Map<string, Promise<unknown>>();
  * for about 3 s, its one question to the server asked only after some forty files). The page's own `publicGet` for the
  * same address then takes this answer instead of asking again. */
 export function prefetchPublic(path: string): void {
-  if (!CFG.API_BASE || early.has(path) || earlyFromBoot(path, false)) return;
+  if (!CFG.API_BASE || early.has(path)) return;
   const got = readPublic(path);
   got.catch(() => undefined);             // a failure is the page's to report, when it asks
   early.set(path, got);
@@ -33,18 +33,7 @@ export function prefetchPublic(path: string): void {
 export const publicPost = <T = any>(path: string, body: unknown): Promise<T> =>
   readPublic<T>(path, undefined, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
 
-/** site81: a public read public/boot.js asked as /config.js ran (a saved sign-in's /public/data-online), fresh for 30 s; `take` takes it, once. */
-function earlyFromBoot(path: string, take: boolean): Promise<Response> | null {
-  const w = window as unknown as { __stratlabEarlyPublic?: Record<string, { at: number; got: Promise<Response> } | undefined> };
-  const e = w.__stratlabEarlyPublic?.[path];
-  if (!e || Date.now() - e.at >= 30_000) return null;
-  if (take) delete w.__stratlabEarlyPublic![path];
-  return e.got;
-}
-
 export async function publicGet<T = any>(path: string, signal?: AbortSignal): Promise<T> {
-  const booted = earlyFromBoot(path, true);
-  if (booted) return readPublic<T>(path, signal, undefined, booted);
   const ahead = early.get(path);
   if (ahead) {
     early.delete(path);                    // once: asking again (a retry, a later visit) reads afresh
@@ -53,7 +42,7 @@ export async function publicGet<T = any>(path: string, signal?: AbortSignal): Pr
   return readPublic<T>(path, signal);
 }
 
-async function readPublic<T = any>(path: string, signal?: AbortSignal, init?: RequestInit, asked?: Promise<Response>): Promise<T> {
+async function readPublic<T = any>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
   if (!CFG.API_BASE) {
     const e = new ApiError(NO_BACKEND_MESSAGE);
     console.warn("StratLab: API_BASE is missing from config.js, so no request can be sent.");
@@ -62,7 +51,7 @@ async function readPublic<T = any>(path: string, signal?: AbortSignal, init?: Re
   }
   let r: Response;
   try {
-    r = await (asked ?? fetch(CFG.API_BASE + path, init ?? { headers: { Accept: "application/json" }, signal }));
+    r = await fetch(CFG.API_BASE + path, init ?? { headers: { Accept: "application/json" }, signal });
   } catch (x) {
     if ((x as Error)?.name === "AbortError") throw x;
     const e = new ApiError("Can't reach the StratLab server. Check your connection and try again.");

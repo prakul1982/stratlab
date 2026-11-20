@@ -83,7 +83,8 @@
   try {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); break; }
+      // site81: and a saved sign-in's early reads (public/early.js), a file of their own so a visitor's download is unchanged
+      if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); document.head.appendChild(document.createElement("script")).src = "/early.js"; break; }
     }
   } catch (e) { /* storage off */ }
 
@@ -138,45 +139,12 @@
       var got = fetch(cfg.API_BASE + "/me", { headers: headers });
       got.catch(function () {});
       window.__stratlabEarlyMe = { token: token, at: Date.now(), got: got };
-      // site81 (LIVE18B-002): the page's own first reads too, with the same token, beside /me: the app asked them only once its code and the
-      // page's had come (Trade's India VIX tile asked /trade/vix at 9.5 s live and filled at 10.1 s). lib/api.ts takes each once, same token.
-      var path = location.pathname.replace(/(.)\/$/, "$1"), want = [];
-      if (/^\/(?:mine|all|home|trade|invest|money|notebooks|new|n|import|options|paper|tour|account|settings|assistant|app|news|holdings|tax-report|alerts|research|scans|watchlist|calendar)(?:\/|$)/.test(path))
-        want.push("/notebooks", "/markets");
-      if (path === "/trade") want.push("/trade/vix?brief=true", "/trade/positioning?brief=true&pcr=false");
-      var reads = window.__stratlabEarlyReads = window.__stratlabEarlyReads || {};
-      for (var i = 0; i < want.length; i++) {
-        if (reads[want[i]]) continue;
-        var r = fetch(cfg.API_BASE + want[i], { headers: headers });
-        r.catch(function () {});
-        reads[want[i]] = { token: token, at: Date.now(), got: r };
-      }
-    } catch (x) { /* no saved sign-in to read */ }
-  }
-  // site81: whether Indian data is live, for a saved sign-in, asked as /config.js runs (it needs no token, so an expired one, the first visit of
-  // the day, asks it too): the app holds "Opening StratLab" until it answers (at most 1.5 s), and its own ask went out only once ~40 of the
-  // app's files had come (3.2 s on a throttled link). lib/http.ts takes it once.
-  function earlyPublic(cfg) {
-    try {
-      if (!cfg || !cfg.API_BASE || typeof fetch !== "function" || !document.documentElement.hasAttribute("data-saved")) return;
-      var pub = window.__stratlabEarlyPublic = window.__stratlabEarlyPublic || {};
-      if (pub["/public/data-online"]) return;
-      var got = fetch(cfg.API_BASE + "/public/data-online", { headers: { Accept: "application/json" } });
-      got.catch(function () {});
-      pub["/public/data-online"] = { at: Date.now(), got: got };
-      // and the sign-in service's connection opened now: a saved sign-in past its end is renewed there once the app's code has come (the
-      // first visit of a day: 8.6-9.9 s live), and that request then doesn't wait for a new connection as well
-      if (cfg.SUPABASE_URL && document.head) {
-        var l = document.createElement("link");
-        l.rel = "preconnect"; l.href = new URL(String(cfg.SUPABASE_URL)).origin; l.crossOrigin = "anonymous";
-        document.head.appendChild(l);
-      }
     } catch (x) { /* no saved sign-in to read */ }
   }
   try {
     var cfgNow = window.STRATLAB_CONFIG;
     Object.defineProperty(window, "STRATLAB_CONFIG", { configurable: true, enumerable: true,
-      get: function () { return cfgNow; }, set: function (v) { cfgNow = v; earlyMe(v); earlyPublic(v); } });
+      get: function () { return cfgNow; }, set: function (v) { cfgNow = v; earlyMe(v); if (window.__stratlabEarlyGo) window.__stratlabEarlyGo(v); } });
   } catch (e) {}
 
   // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme
