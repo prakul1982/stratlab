@@ -155,6 +155,11 @@ def test_a_cautionary_note_and_where_a_company_is_registered_are_not_its_opening
               "Our principal business offices are located at 70 St. Mary Axe, London EC3A 8BE, United Kingdom."):
         assert sec._REPORT_TALK.search(x), x
     assert not sec._REPORT_TALK.search("Shopify provides essential internet infrastructure for commerce.")
+    # the opening starts at the company's own name doing its work, or a sentence opening "We operate ..." (PayPal's opening began at its
+    # fourth sentence, "When shopping, we offer consumers ...")
+    assert sec._SAYS_WORK.search("Shopify provides essential internet infrastructure for commerce.")
+    assert sec._SAYS_WORK.search("We operate a global, two-sided network at scale that connects consumers and merchants.")
+    assert not sec._SAYS_WORK.search("This segment provides services to the group.")
 
 
 def test_words_read_again_move_no_company_on_a_fixed_rule():

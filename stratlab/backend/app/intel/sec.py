@@ -2349,10 +2349,10 @@ _REPORT_TALK = re.compile(r"forward[- ]looking|unless the context|unless otherwi
                           r"\bemerging growth company\b|\bblank check\b", re.I)
 # a sentence that says what the company is or does: the opening starts at the first one (a report can open with cautions and definitions)
 _SAYS_WORK = re.compile(
-    r"\bwe are (?:a|an|the|one of|primarily|principally|engaged)\b|"
+    r"\b[Ww]e are (?:a|an|the|one of|primarily|principally|engaged)\b|"          # e85: "We" opening a sentence too (PayPal's "We operate ...")
     r"(?:\b(?:company|corporation|group)|\)) (?:is|are) (?:a|an|the|one of|primarily|principally|engaged)\b|"
     r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That)\b)[A-Z][\w&.,’' -]{1,60}? (?:is|are) (?:a|an|one of|the)\b|"
-    r"\bwe (?:\w+ly )?(?:design|develop|manufactur|produce|provide|offer|sell|operate|supply|make|deliver|own|serve)|"
+    r"\b[Ww]e (?:\w+ly )?(?:design|develop|manufactur|produce|provide|offer|sell|operate|supply|make|deliver|own|serve)|"
     r"(?:\b(?:company|corporation)|\)),? (?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers)\b|"
     # e85 (Shopify's 10-K opening, read again: "Shopify provides essential internet infrastructure for commerce.", passed over for the
     # cautionary note before it): the company's own name doing its work

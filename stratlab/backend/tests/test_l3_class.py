@@ -238,12 +238,16 @@ def test_which_stored_descriptions_are_read_once_more():
     assert not TR.thin_about({"at": now, "about": "", "v": TR.ABOUT_V}, "US")                       # read in this format already: kept its time
     assert not TR.thin_about({"at": now, "about": " ".join(["word"] * 40), "v": 2}, "IN")
     myth = "In Greek mythology, ichor is the ethereal fluid making up the blood of the gods and/or immortals. " * 3
-    assert TR.thin_about({"at": now, "about": myth, "v": 2}, "US") and not TR.thin_about({"at": now, "about": myth, "v": TR.ABOUT_V}, "US")
+    # (updated on purpose, e85 LIVE21A-002: words with no line a page may quote are read once more by the reader of quotable words, QUOTE_V;
+    # a record that reader kept is not read again)
+    assert TR.thin_about({"at": now, "about": myth, "v": 2}, "US") and not TR.thin_about({"at": now, "about": myth, "v": TR.ABOUT_V,
+                                                                                       "qv": TR.QUOTE_V}, "US")
     full = "Lam Research Corporation is an American supplier of wafer-fabrication equipment and related services to the semiconductor industry. " * 2
     # gl52 (R52, updated on purpose): an encyclopedia's opening alone, kept before format 5, is read once more (its annual report added)
-    assert TR.thin_about({"at": now, "about": full, "v": 2}, "US") and not TR.thin_about({"at": now, "about": full, "v": TR.ABOUT_V}, "US")
+    assert TR.thin_about({"at": now, "about": full, "v": 2}, "US") and not TR.thin_about({"at": now, "about": full, "v": TR.ABOUT_V,
+                                                                                       "qv": TR.QUOTE_V}, "US")
     own = full + "It sells etch and deposition systems to chip makers."
-    assert not TR.thin_about({"at": now, "about": own, "v": 2}, "US")
+    assert not TR.thin_about({"at": now, "about": own, "v": 2, "qv": TR.QUOTE_V}, "US")          # (e85: "qv", as above)
     assert TR.thin_about({"at": now, "about": "", "v": TR.ABOUT_V, "owed": True}, "US")
 
 
