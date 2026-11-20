@@ -351,6 +351,17 @@ class Job:
         """One pass: the queue made when the versions changed, then one theme of it, in the memory guard's turn."""
         queue()
         if not _load().get("todo"):
+            # e85 (LIVE21A-018): with no theme to re-check, the sample deck made again at its theme's newer close
+            try:
+                from . import theme_routes
+                with _turn("sample deck"):
+                    made = theme_routes.refresh_sample(SYSTEM)
+                if made:
+                    print(f"theme re-check: the sample deck made again at the {made} close")
+            except Yielded:
+                pass
+            except Exception as e:
+                print("theme re-check: sample deck not made again:", type(e).__name__, str(e)[:120])
             return None
         # r69e: no turn held around the whole theme: each phase of the rebuild takes the memory guard's turn only when no other job holds
         # or waits for it (_turn), so a page's price job never waits behind the re-check

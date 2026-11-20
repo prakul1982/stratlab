@@ -209,3 +209,155 @@ def test_the_app_counts_every_company_at_an_earlier_close_as_the_page_does():
     idx = [{"symbol": "C", "market_cap": 3, "price_at": "2026-11-17"}, {"symbol": "D", "market_cap": 2, "price_at": "2026-11-20"},
            {"symbol": "E", "market_cap": None, "price_at": "2026-11-01"}]
     assert D.older_count("2026-11-20", rows, ["A", "B", "C", "D", "E"], idx) == 2
+
+
+# ---------- 4. LIVE21A-009/020: moves that hold, reasons of the work, one state, foreign banks apart ----------
+def test_a_move_of_the_last_days_under_the_same_rules_is_not_moved_back():
+    """Fails on R84: the REITs log moved Omega Healthcare to Mortgage REITs on 19 Nov and back on 20 Nov (Alexandria, Medalist the same)."""
+    from datetime import date
+    from app.intel import theme_changes as C
+    log = {"log": [{"d": "2026-11-19", "rules": B.RULES, "moved": [{"symbol": "ARE", "from": "Other real estate investment trust companies",
+                                                                    "to": "Healthcare property owners"}]},
+                   {"d": "2026-11-10", "rules": B.RULES, "moved": [{"symbol": "MDRR", "from": "Other", "to": "Towers"}]},
+                   {"d": "2026-11-19", "moved": [{"symbol": "OHI", "from": "Healthcare property owners", "to": "Mortgage REITs"}]}]}
+    got = C.recent_moves(log, B.RULES, date(2026, 11, 20))
+    assert got == {"ARE": ["Other real estate investment trust companies", "Healthcare property owners"]}     # an old move, or one kept
+    assert C.recent_moves(log, B.RULES + 1, date(2026, 11, 20)) == {}          # before e85 with no version, holds nothing; new rules: none
+    vc = [{"layer": "Healthcare property owners", "companies": [{"ticker": "WELL"}]},
+          {"layer": "Other real estate investment trust companies", "official": True, "basis": "rest", "companies": [{"ticker": "ARE"}]}]
+    vc, rows = B.hold_reversals(vc, got)
+    assert [c["ticker"] for c in vc[0]["companies"]] == ["WELL", "ARE"] and not vc[1]["companies"] and rows[0]["to"] == "Healthcare property owners"
+    assert C._entry({"counts": {}, **{k: [] for k in C.KINDS}}, "rules", datetime(2026, 11, 20, tzinfo=timezone.utc), 79)["rules"] == 79
+
+
+def test_a_reason_quoting_how_a_company_is_held_or_cut_after_its_subsidiaries_is_said_again():
+    """Fails on R84: Franklin BSP "→ Mortgage REITs: its own words say “The Company is the managing member of the OP ...”"; Redwood's
+    "“Redwood Trust, Inc., together with its subsidiaries, is …”"."""
+    from app.intel import theme_changes as C
+    assert C.unquotable_reason("its own words say “The Company is the managing member of the OP and directly or indirectly held 91% of the "
+                               "common units of membership interests in the OP as of December 31, 2025”", "Franklin BSP Realty Trust")
+    assert C.unquotable_reason("its own words say “Redwood Trust, Inc., together with its subsidiaries, is…”", "Redwood Trust")
+    assert not C.unquotable_reason("its own words say “We originate and acquire commercial real estate loans across the United States”", "X")
+    words = ("Redwood Trust, Inc., together with its subsidiaries, is a specialty finance company focused on several distinct areas of "
+             "housing credit, with a mission to make quality housing accessible.")
+    e = [{"moved": [{"symbol": "RWT", "name": "Redwood Trust", "from": "Other real estate investment trust companies", "to": "Mortgage REITs"}]}]
+    why = C.reasoned(e, words_of=lambda s: words)[0]["moved"][0]["why"]
+    assert "together with its subsidiaries" not in why and "specialty finance company" in why
+
+
+def test_a_row_placed_on_words_a_page_does_not_quote_is_not_marked_on_its_words():
+    """Fails on R84: Welltower "(on its words)" in the REITs deck beside "industry-supported" on its page."""
+    from app import deck as K
+    assert K.on_words({"by_words": True, "evidence": "description_verified"})
+    assert not K.on_words({"by_words": True, "evidence": "industry_code_supported"})
+
+
+def test_a_foreign_issuer_in_a_us_banks_layer_goes_to_the_foreign_banks_layer():
+    """Fails on R84: UBS in "Custody and asset servicing banks", Banco Santander (Brasil) in "Mid-sized banks", HSBC and RBC apart."""
+    vc = [{"layer": "Foreign banking groups earning loan interest", "companies": [{"ticker": "HSBC", "cap": 200}, {"ticker": "RY", "cap": 180}]},
+          {"layer": "Custody and asset servicing banks", "companies": [{"ticker": "BK", "cap": 80}, {"ticker": "UBS", "cap": 100}]},
+          {"layer": "Other regional bank companies", "official": True, "basis": "rest", "companies": []}]
+    filings = {"HSBC": "Annual report (20-F)", "RY": "Annual report (40-F)", "BK": "Annual report (10-K)", "UBS": "Annual report (20-F). (6-K)"}
+    vc, rows = B.domicile_moves(vc, lambda s: {"filings": filings.get(s, "")})
+    assert [c["ticker"] for c in vc[0]["companies"]] == ["HSBC", "RY", "UBS"] and [c["ticker"] for c in vc[1]["companies"]] == ["BK"]
+    assert rows == [{"ticker": "UBS", "name": None, "from": "Custody and asset servicing banks", "to": "Foreign banking groups earning loan interest",
+                     "why": rows[0]["why"]}] and "foreign issuer's (20-F, 6-K)" in rows[0]["why"]
+
+
+# ---------- 5. The R84 decks: insurers' ratios are no margins; a layer added and removed the same day is no change ----------
+def test_a_combined_ratio_under_a_wrapped_head_and_an_roe_are_not_read_as_margins():
+    """Fails on R84: the Insurance deck's "financial margin" (3): Employers Holdings' combined ratio 114.3%, its range, Verisk's ROE 293.9%."""
+    import pathlib
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+    import deck_check
+    cover = "\n\nTHEME DEEP DIVE\nInsurance\n"
+    page = ("                         Revenue\n"
+            "                                        EBITDA                                                                       Combined      SBC /        FCF\n"
+            " Company                     (US                            Net margin            Loss ratio    Expense ratio                                                Year\n"
+            "                                        margin                                                                           ratio     revenue      margin\n"
+            " Employers Holdings, Inc.  $859 m        –                        1.3%                 76.4%            37.9%            114.3%     –            –            Dec 2025\n"
+            "                                                                                                                      69.0% to\n"
+            " Range                                                 −11.8% to 29.6%    50.4% to 76.4%       9.5% to 37.9%\n"
+            "                                                                                                                       114.3%\n")
+    app = (" Company                                    Layer                                       Revenue    Growth     EBITDA         Net     ROCE         ROE         P/E        P/B\n"
+           " Verisk Analytics, Inc.                     Risk data and software           $25.7 bn   $3.07 bn    +6.6%      52.2%      29.6%     26.4%      293.9%       30.4x      86.2x\n")
+    got = deck_check.check_text("\f".join([cover, page, app]))
+    assert not got["counts"]["financial margin"], got["findings"]
+    bank = (" Company           Revenue      EBITDA margin      Net margin\n"
+            " Fifth Third Bancorp   $80 m        –              3152.5%\n")
+    assert deck_check.check_text("\f".join(["\n\nTHEME DEEP DIVE\nRegional banks\n", bank]))["counts"]["financial margin"] == 1   # guard
+
+
+def test_a_layer_added_and_removed_the_same_day_is_no_change_of_the_day():
+    """Fails on R84: the Capital markets deck's "“Other capital market companies” added (2 companies); ... removed (2 companies ...)"."""
+    from app.intel import theme_changes as C
+    other = "Other capital market companies"
+    es = [{"d": "2026-11-20", "cause": "rules", "counts": {"layers": 1}, "layers": [{"kind": "added", "from": [], "to": [other], "n": 2}]},
+          {"d": "2026-11-20", "cause": "rules", "counts": {"layers": 2}, "layers": [{"kind": "removed", "from": [other], "to": [], "n": 2},
+                                                                                  {"kind": "renamed", "from": ["A"], "to": ["B"], "n": 3}]}]
+    got = C.one_a_day(es)
+    assert len(got) == 1 and got[0]["layers"] == [{"kind": "renamed", "from": ["A"], "to": ["B"], "n": 3}] and got[0]["counts"]["layers"] == 1
+
+
+# ---------- 6. LIVE21A-015/018: the brief's 52-week gap from its own close; the sample deck at the newer close ----------
+def test_the_briefs_52_week_gap_is_from_the_days_close(monkeypatch):
+    """Fails on R84: the 18 Nov US post "S&P 500 7,323.63 ... 6.9% below" (the 19 Nov 10:52 ET level's gap, kept when the level was set to
+    the close); from the close and the 7,844.52 high, 6.6%."""
+    from datetime import date, timedelta
+    from app.newsletter import content
+    day = date(2026, 11, 18)
+    candles = [{"t": (day - timedelta(days=400 - i)).isoformat() + "T00:00:00", "c": 7000.0, "h": 7050.0} for i in range(399)]
+    candles[200]["h"] = 7844.52
+    candles += [{"t": "2026-11-17T00:00:00", "c": 7340.53, "h": 7400.0}, {"t": "2026-11-18T00:00:00", "c": 7323.63, "h": 7360.0}]
+    candles = [c for c in candles if c["t"][:10] <= "2026-11-18"]
+    monkeypatch.setattr(main.research_hub, "yahoo", types.SimpleNamespace(closing_chart=lambda sym, back: {"candles": candles}))
+    got = content.index_close("^GSPC", day, prev="2026-11-17")
+    assert got["price"] == 7323.63 and got["from_high_pct"] == -6.6 and got["high52"] == 7844.52
+
+
+def test_a_stored_brief_with_the_gap_of_another_level_is_set_to_its_closes_gap_keeping_its_words(monkeypatch):
+    """Fails on R84: repair_closes set the level and kept the old gap; a gap-only repair keeps the issue's words (its AI summary)."""
+    from datetime import date
+    from app import blog, db
+    from app.newsletter import content, job
+    monkeypatch.setattr(content, "INDICES", {"US": [("S&P 500", "^GSPC")]})
+    monkeypatch.setattr(content, "index_close", lambda sym, day, since=None, prev=None:
+                        {"price": 7323.63, "change_pct": -0.23, "high52": 7844.52, "from_high_pct": -6.6})
+    monkeypatch.setattr(content, "reference_day", lambda r, d, w: date(2026, 11, 17))
+    today = date.today().isoformat()
+    iid = f"market.US.{today}"
+    issue = {"id": iid, "kind": "market", "region": "US", "day": today, "weekly": False, "subject": "S", "summary": "s", "ai": True,
+             "ai_summary": "The S&P 500 fell 0.23%.", "indices": [{"name": "S&P 500", "price": 7323.63, "change_pct": -0.23, "from_high_pct": -6.9}],
+             "sections": []}
+    store = {"news-index:market:US": json.dumps([iid]), f"news:market:US:{today}": json.dumps(issue)}
+    monkeypatch.setattr(db, "get_setting", store.get)
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(blog, "rewrite_brief", lambda i: True)
+    assert job.repair_closes("US") == [iid]
+    kept = json.loads(store[f"news:market:US:{today}"])
+    assert kept["indices"][0]["from_high_pct"] == -6.6 and kept["ai_summary"] == "The S&P 500 fell 0.23%." and kept["subject"] == "S"
+    assert job.repair_closes("US") == []
+
+
+def test_the_sample_deck_is_made_again_at_its_themes_newer_close(monkeypatch):
+    """Fails on R84: nothing made the sample again; "Prices as of 19 Nov 2026" 5 h after the 20 Nov closes landed."""
+    from app import sample_deck
+    row = {"id": "d1", "region": "IN", "label": "Consumer durables (PDF, 2026-11-20)", "meta": {"prices": "2026-11-19"}}
+    monkeypatch.setattr(sample_deck, "chosen", lambda deck_id=None: row)
+    m = {"placements": {"checked": True}, "generated_at": 1}
+    monkeypatch.setattr(TR, "map_for_deck", lambda R, p, region, q, wait=0, pending=None: ("IN", "Consumer durables", m))
+    monkeypatch.setattr(TR, "_routes", lambda: types.SimpleNamespace(IST=timezone.utc))
+    dive = {"as_of": "2026-11-20"}
+    monkeypatch.setattr(TR, "dive_of", lambda r, t, m_: dive)
+    made = []
+    monkeypatch.setattr(TR, "deck_file", lambda R, r, t, m_, p, f, b: made.append((r, t, f, b)) or b"%PDF")
+    TR._SAMPLE_TRIED.clear()
+    assert TR.refresh_sample({"id": ""}) == "2026-11-20" and made == [("IN", "Consumer durables", "pdf", False)]
+    assert TR.refresh_sample({"id": ""}) is None                     # once a close
+    TR._SAMPLE_TRIED.clear()
+    dive["updating"] = True
+    assert TR.refresh_sample({"id": ""}) is None                     # its dive still being worked out
+    row["meta"]["prices"] = "2026-11-20"
+    dive.pop("updating")
+    assert TR.refresh_sample({"id": ""}) is None and len(made) == 1  # already at the newest close
