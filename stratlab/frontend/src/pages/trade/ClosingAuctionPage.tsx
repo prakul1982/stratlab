@@ -28,14 +28,14 @@ const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(
 function Status({ v }: { v: CasView }) {
   const n = v.next;
   const auction = v.phase === "transition" || v.phase === "entry" || v.phase === "matching";
-  const closed = v.phase === "preopen" || v.phase === "holiday";
   return (
     <Card label="Status">
       <div className="k-row">
-        <Badge tone={auction ? "live" : v.phase === "closed" ? "ok" : "plain"}>{auction ? "Auction session" : v.phase === "closed" ? "Auction over for today" : closed ? "Market closed" : v.phase === "before" ? "Continuous trading" : "No auction today"}</Badge>
+        <Badge tone={auction ? "live" : v.phase === "closed" ? "ok" : "plain"}>{auction ? "Auction session" : v.phase === "closed" ? "Auction over for today" : v.phase === "preopen" ? "Before the open" : v.phase === "holiday" ? "Not a trading day" : v.phase === "before" ? "Continuous trading" : "No auction today"}</Badge>
         <span className="k-small" data-testid="cas-phase">{PHASE_TEXT[v.phase]}</span>
       </div>
-      {n && <p className="k-small" data-testid="cas-next">{closed ? "Closed, next" : "Next"} auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> IST.</p>}
+      {/* LIVE18B-014: "closed" once, in the line beside the badge (badge, line and the next window each said it before) */}
+      {n && <p className="k-small" data-testid="cas-next">Next auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> IST.</p>}
       {v.day && !v.fresh && <p className="k-note">Showing the auction of {asOf(v.day)}{v.from_stored ? ", from an earlier day" : ""}.</p>}
     </Card>
   );
@@ -140,7 +140,8 @@ function Stocks({ v }: { v: CasView }) {
   // and its band come after (R8B-010: at 400 px only "Stock" and "Reference (band)" fitted on a list sorted by the gap)
   const cols: Column<CasStock>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link> },
-    { key: "price", header: final ? "Final price" : "IEP", numeric: true, cell: (r) => <>{r.price == null ? "–" : price(r.price, "INR")}<span className="k-sub-line">{r.final_out ? "final" : "indicative"}</span></> },
+    { key: "price", header: final ? "Final price" : "IEP", numeric: true, cell: (r) => <>{r.price == null ? "–" : price(r.price, "INR")}{/* LIVE18B-014: under a "Final price" head a final price says nothing more;
+      only a row that differs from its head says so */}{final && r.final_out ? null : <span className="k-sub-line">{r.final_out ? "final" : "indicative"}</span>}</> },
     { key: "gap", header: "Gap to reference", numeric: true, cell: (r) => <Gap g={r.gap} /> },
     { key: "ref", header: "Reference (band)", numeric: true, cell: (r) => <>{r.ref == null ? "–" : price(r.ref, "INR")}
       {r.lower != null && r.upper != null && <span className="k-sub-line">{price(r.lower, "INR")}–{price(r.upper, "INR")}</span>}</> },

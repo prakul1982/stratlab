@@ -31,5 +31,6 @@ test("R82-005: on Free and Basic the instrument search says F&O contracts are on
 });
 
 test("R82-009: Pro's AI builds line names the daily cap the Plans page names", () => {
-  assert.match(read("src/components/IdeaComposer.tsx"), /`Unlimited AI builds\$\{u\.ai_builds_per_day \? ` \(up to \$\{u\.ai_builds_per_day\} a day\)` : ""\}`/);
+  // (updated on purpose, site81 LIVE18B-007: "Unlimited AI builds (up to 200 a day)" said unlimited and a cap in one phrase; the cap is the line)
+  assert.match(read("src/components/IdeaComposer.tsx"), /u\.ai_builds_per_day \? `Up to \$\{u\.ai_builds_per_day\} AI builds a day` : "Unlimited AI builds"/);
 });

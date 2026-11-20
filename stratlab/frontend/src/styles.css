@@ -1699,6 +1699,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .tax-controls > .k-card-head > .k-card-actions { flex: 1 1 100%; }
   .tax-controls > .k-card-head > .k-card-actions > .k-seg, .tax-controls > .k-card-head > .k-card-actions > select.k-input,
   .tax-controls > .k-card-head > .k-card-actions > .btn, .tax-controls .k-row > .k-upload { width: 100%; box-sizing: border-box; }
+  /* LIVE18B-004: on its own row under the title the switch takes the card's width too: the head's room for its move and fold buttons (top
+     right, on the title's row only) left it 248px against 324px for everything under it */
+  .tax-controls > .k-card-head:has(> .k-sec) > .k-card-actions { margin-right: -76px; max-width: none; }
 }
 /* a table in a compact card (a strip of a few figures) fills the card's width, not the width of its words (owner, 5 Nov: the tax
    report's two-figure table stopped two thirds of the way across its card) */

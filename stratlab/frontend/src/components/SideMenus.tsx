@@ -59,7 +59,14 @@ function usePop() {
 function when(m: Market, now: number) {
   const st = marketState(m);
   if (st.always) return { st, text: "Open 24/7" };
-  if (st.offline) return { st, text: "Data offline" };
+  if (st.offline) {
+    // LIVE18A-021: offline on a trading day still says when the market opens or that it is open, by its hours ("Data offline" alone at 05:55 IST
+    // while the page's banner said data reconnects at 08:00); the data's state follows
+    const h = m.hours?.open ? marketState({ ...m, status: "live" }) : null;
+    const left = h?.change ? (h.change.getTime() - now) / 60000 : null;
+    if (!h || left === null) return { st, text: "Data offline" };
+    return { st, text: `${h.open ? "Open" : `Opens in ${inWords(left)}`} · data offline` };
+  }
   const mins = st.change ? (st.change.getTime() - now) / 60000 : null;
   if (st.open) return { st, text: mins === null ? "Open" : `Closes in ${inWords(mins)}` };
   const opens = mins === null ? "Closed" : `Opens in ${inWords(mins)}`;

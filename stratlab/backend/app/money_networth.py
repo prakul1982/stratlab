@@ -878,13 +878,15 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
             basis, more = stock_basis("in")
             linked.append({"id": "stocks_in", "kind": "stocks_in", "label": "Indian stocks", "name": "My Holdings: Indian stocks", "class": "stocks_in",
                            "value": _r(stocks["in"]), "as_of": stocks.get("as_of"), "basis": basis,
-                           "rule": ("From My Holdings, at today's prices" + more) if basis == "market price" else "From My Holdings, at cost (no price right now)",
+                           # LIVE18B-013: "today's prices" beside "as of 19 Nov 2026, 15:30 IST" at 05:45 IST on 20 Nov: the latest prices (the
+                           # row's own time says which)
+                           "rule": ("From My Holdings, at the latest prices" + more) if basis == "market price" else "From My Holdings, at cost (no price right now)",
                            "facts": {}, "linked": "/holdings"})
         if stocks.get("us"):
             basis, more = stock_basis("us")
             linked.append({"id": "stocks_us", "kind": "stocks_us", "label": "US stocks", "name": "My Holdings: US stocks", "class": "stocks_us",
                            "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": basis,
-                           "rule": ("From My Holdings, at today's prices in rupees" if basis == "market price" else "From My Holdings, at cost in rupees (no price right now)")
+                           "rule": ("From My Holdings, at the latest prices in rupees" if basis == "market price" else "From My Holdings, at cost in rupees (no price right now)")
                                    + (f", at ₹{stocks['usd_inr']:.2f} a dollar" + rate_day(stocks.get("usd_inr_at")) if stocks.get("usd_inr") else "") + more,
                            "facts": {}, "linked": "/holdings"})
     if mf and mf.get("value"):
