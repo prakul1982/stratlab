@@ -13,9 +13,10 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 test("items 37, 43: on a laptop the page column keeps an 80px right margin with the round button centred in it", () => {
   const css = read("src/components/watch/launcher.css");
   const block = css.match(/@media \(min-width: 901px\) and \(max-width: 1599px\) \{\n([^]*?)\n\}/)[1];
-  // 80px margin, 44px button: (80 - 44) / 2 = 18px either side
-  assert.match(block, /\.mw-launch\.app, \.mw-launch\.public \{ width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; \}/);   // LIVE5-007: a public page's too
-  assert.match(block, /body:not\(\.mw-docked\) \.shell > \.main \{ padding-right: 80px; \}/);
+  // updated on purpose (site83): a 76px margin each side, 44px button: (76 - 44) / 2 = 16px either side
+  assert.match(block, /\.mw-launch\.app, \.mw-launch\.public \{ width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 16px; \}/);   // LIVE5-007: a public page's too
+  // updated on purpose (site83, owner 20 Nov "centre aligned"): the same margin on the left as on the right, so the column is centred
+  assert.match(block, /body:not\(\.mw-docked\) \.shell > \.main \{ padding-inline: 76px; \}/);
 });
 
 test("item 43: the menu-button way is gone: no switch, no address word, no menu Markets button", () => {
@@ -149,6 +150,6 @@ test("item 43: a tile's F&O note fits one line and the Money calendar's two card
   assert.match(read("src/pages/Research.tsx"), /<FoBadges region=\{region\} symbol=\{w\.symbol\} plain \/>/);          // the F&O note is the watchlist page's since LIVE3-015
   assert.match(read("src/styles.css"), /@media \(max-width: 1360px\) \{ \.k-two\.mc-grid \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
   const allow = JSON.parse(read("e2e/ui-lint.allow.json")).allow;
-  assert.equal(allow.filter((a) => a.rule !== "R27").length, 1);                   // LIVE5: R27's wide-table entries aside, still the one
+  assert.equal(allow.filter((a) => a.rule !== "R27" && a.rule !== "R29").length, 1);   // LIVE5: R27's wide-table entries aside (and R29's twins of them, site83: updated on purpose), still the one
   for (const a of allow) assert.ok(a.reason && a.reason.length > 60, a.element);
 });

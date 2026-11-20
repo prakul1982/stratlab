@@ -159,7 +159,8 @@ export function UsersSection() {
 
   const mon = monthShort();
   const cols: Column<UserRow>[] = [
-    { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => <>{u.email ?? "–"}{u.test && <> <Badge dot={false}>Test</Badge></>}</> },
+    // a long address breaks inside its cell, so the ⋯ button stays in view at 1280 on any font (site83 CI)
+    { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => <><span className="adm-break">{u.email ?? "–"}</span>{u.test && <> <Badge dot={false}>Test</Badge></>}</> },
     // the badge with its note under it, always: a note that sometimes wrapped made uneven rows (DJ-014)
     { key: "plan", header: "Plan", cell: (u) => (
       <span className="k-stack adm-plan"><Badge tone={u.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[u.plan]}</Badge>
@@ -182,7 +183,7 @@ export function UsersSection() {
     // long names and addresses break inside the card, so the Stop buttons stay in view (DJ-013)
     { key: "name", header: "Session", rowHeader: true, wrap: true, cell: (s) => <span className="adm-break">{s.name}</span> },
     { key: "user", header: "User", wrap: true, cell: (s) => <span className="adm-break">{s.email}</span> },
-    { key: "sym", header: "Instrument", wrap: true, cell: (s) => s.symbol },
+    { key: "sym", header: "Instrument", cell: (s) => s.symbol },          // a symbol: no 7rem column of words (site83: the table fits the centred column at 1280)
     { key: "at", header: "Started", cell: (s) => ago(s.started_at) },
     { key: "eq", header: "Equity", numeric: true, cell: (s) => (s.equity != null ? money(s.equity, s.currency ?? "INR") : "–") },
     { key: "tr", header: "Trades", numeric: true, cell: (s) => s.trades ?? 0 },

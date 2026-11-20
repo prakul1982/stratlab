@@ -58,6 +58,7 @@ By default it only reports. With `UI_LINT_STRICT=1` any problem that is not acce
 | R26 | Content past its card: a table, picture, control or tile whose right edge is more than 3px past the right edge of the card that holds it, with no scrolling or clipping box between |
 | R27 | A table cut on a desktop: a list table (not a grid read across on purpose) with a column past its scrolling box's edge at 1440 or 1280, or a row's name cut by an ellipsis to under 56 px |
 | R28 | Off-centre (owner, 18 Nov: "center align everything properly"): a table header aligned otherwise than most of its column's cells, or a card head's controls more than 2 px off the middle of the title's line while beside it |
+| R29 | Off its row's centre (owner, 20 Nov: "I told you to get everything centre aligned"): a table cell's contents more than 2 px off the cell's centre; two cells of a fold row side by side whose centres differ by more than 2 px, or its chevron not centred; an opened fold whose left and right insets differ by more than 2 px, or (beside a chevron column) whose tables don't run to the row's own left and right edges; on a desktop, a table wider than its box (a sideways scroll or a column cut off) |
 
 The thresholds live in `ui-lint-rules.ts`; the table above is the same text as the rule list at the top of
 `ui-lint.spec.ts`, which is what the report prints.

@@ -3018,7 +3018,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* MF-1 (RC2B-047): the fold list, one row for each thing with its main figures, the rest folded under it. A header row over the
    columns on a wide screen; on a phone each row is a card, its figures two across, each under its own name (never a sideways table) */
-.k-fold-head, .k-fold-sum { display: grid; grid-template-columns: var(--fold-cols); column-gap: var(--s4); align-items: start; padding-inline: var(--s3) var(--s6); }
+/* Centre alignment (owner, 20 Nov: "I told you to get everything centre aligned"): every cell of a row on the row's centre (a one-line XIRR sat
+   on the top line beside two-line Gain and Against), the chevron a column of its own, centred too (it was 22px from the top), and the same
+   insets left and right, so the opened body's tables run to the row's right edge */
+.k-fold-head, .k-fold-sum { display: grid; grid-template-columns: var(--fold-cols) 10px; column-gap: var(--s4); align-items: center; padding-inline: var(--s3); }
+details.k-fold { display: block; }   /* the fold button's flex row (.k-fold, a shared name) made the opened body as wide as its tables' content: past the card at 1000px */
 .k-fold-head { font-size: var(--t-note); color: var(--muted); padding-block: var(--s1) var(--s2); border-bottom: 1px solid var(--line); }
 .k-fold-head .k-num, .k-fold-cell.k-num { text-align: right; }
 /* VR2-016: a right-aligned head's (i) is before its words (as DataTable's, VR1-114): the gap goes between them, not on the far side, where the (i) touched "XIRR" */
@@ -3027,10 +3031,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-fold-rows > li + li { border-top: 1px solid var(--line); }
 .k-fold-sum { position: relative; min-height: 44px; padding-block: var(--s3); cursor: pointer; list-style: none; }
 .k-fold-sum::-webkit-details-marker { display: none; }
-.k-fold-sum::after { content: ""; position: absolute; right: var(--s4); top: 22px; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
+.k-fold-sum::after { content: ""; justify-self: end; align-self: center; width: 7px; height: 7px; margin-right: 2px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
 .k-fold[open] > .k-fold-sum::after { transform: rotate(45deg); }
 .k-fold-sum:hover { background: var(--paper-2); }
 .k-fold-name, .k-fold-cell { min-width: 0; overflow-wrap: anywhere; }
+.k-fold-cell, .k-fold-head > span { overflow-wrap: normal; }   /* a figure breaks between its words only (its column is as wide as its longest) */
 .k-fold-name b { display: block; font-weight: 600; }
 /* R15 #7: a scheme's name and its note one line each, cut with … (the whole on hover); a figure with nothing to show is a muted dash */
 .k-fold-name .mf-name, .k-fold-name .mf-name-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3044,7 +3049,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 720px) {
   .k-fold-head { display: none; }
   .k-fold-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--s2); padding-inline: var(--s2) var(--s6); }
-  .k-fold-sum::after { top: 24px; }
+  .k-fold-sum::after { position: absolute; right: var(--s4); top: calc(50% - 5px); margin: 0; }   /* a phone's card: the chevron on its centre */
   .k-fold-name, .k-fold-wide { grid-column: 1 / -1; }
   .k-fold-cell.k-num { text-align: left; }
   .k-fold-k { position: static; display: block; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; font-size: var(--t-note); color: var(--muted); }
@@ -3355,8 +3360,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* LIVE5-002 (globally): a list table that ran past its box on a desktop (DataTable's k-fit): words wrap, figures stay on one line,
    padding narrows and a row's buttons may take two lines, so every column is in view at 1280 */
 @media (min-width: 641px) {
-  .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { white-space: normal; padding-left: 10px; padding-right: 10px; }
+  .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { white-space: normal; padding-left: 8px; padding-right: 8px; }   /* site83: 8px (was 10), so a fit table keeps ~40px of room at 1280 in the centred column on CI's wider fonts */
   .k-tbl-wrap.k-fit .k-table td.k-num { white-space: nowrap; }
+  .k-tbl-wrap.k-fit .k-table td.k-num .k-sub-line { white-space: normal; }   /* the figure on one line; the note under it may take two (the US sales' "$300.67 at ₹99.80 (28 Feb 2023)" in the centred column) */
   .k-tbl-wrap.k-fit .k-table td.k-wrap, .k-tbl-wrap.k-fit .k-table th.k-wrap { min-width: 7rem; }
   .k-tbl-wrap.k-fit .k-table td.k-act .k-row { flex-wrap: wrap; justify-content: flex-end; }
   /* a word never breaks inside itself: a row's name (a symbol), a header word, a button or a tag keep their letters together */
@@ -3426,7 +3432,7 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 }
 /* Owner (18 Nov): Holdings' totals on a laptop are one row across the card (each amount under its heading, its change under it), the notes under */
 @media (min-width: 900px) { .h-sum.wide { grid-template-columns: minmax(0, 1fr); } }
-.h-sum.wide .k-table td { vertical-align: top; }
+.h-sum.wide .k-table td { vertical-align: middle; }   /* centre alignment (owner, 20 Nov): an amount without a change line on its row's centre too */
 .h-total { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* Owner (18 Nov, "center align everything properly"): each total, its heading and its change centred in its column */
 .h-sum.wide .k-table th, .h-sum.wide .k-table td { text-align: center; }

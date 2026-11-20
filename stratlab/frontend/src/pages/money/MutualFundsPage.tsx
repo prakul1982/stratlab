@@ -434,14 +434,14 @@ function SchemeSales({ sales, name }: { sales: SaleIn[]; name: string }) {
   if (!sales.length) return null;
   const cols: Column<SaleIn & { i: number }>[] = [
     { key: "fy", header: "Year", rowHeader: true, cell: (r) => <>{r.fy}{r.gf === "applied" && <span className="k-note"> grandfathered</span>}{r.gf === "missing" && <span className="k-note k-down"> 31 Jan 2018 NAV missing</span>}</> },
-    { key: "bought", header: "Bought", numeric: true, cell: (r) => dateOnly(r.bought) },
-    { key: "sold", header: "Sold", numeric: true, cell: (r) => dateOnly(r.sold) },
+    // site83 (owner, 20 Nov): nine columns ran past the opened scheme's row at 1000px ("Ga…" cut off): the two dates share a column (bought,
+    // then sold under it) and the term its rate, so the table is the row's width with nothing cut
+    { key: "held", header: "Bought, sold", numeric: true, cell: (r) => <>{dateOnly(r.bought)}<span className="k-sub-line">{dateOnly(r.sold)}</span></> },
     { key: "units", header: "Units", numeric: true, cell: (r) => qtyText(r.qty) },
     { key: "cost", header: "Cost", numeric: true, cell: (r) => inr(r.cost) },
     { key: "sale", header: "Sale", numeric: true, cell: (r) => inr(r.sale) },
     { key: "gain", header: "Gain or loss", numeric: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
-    { key: "term", header: "Term", cell: (r) => (r.term === "LT" ? "Long" : "Short") },
-    { key: "rate", header: "Rate", numeric: true, cell: (r) => rate(r.rate) },
+    { key: "term", header: "Term", cell: (r) => <>{r.term === "LT" ? "Long" : "Short"}<span className="k-sub-line">{rate(r.rate)}</span></> },
   ];
   return (
     <section aria-label={`Sales, ${name}`}>
