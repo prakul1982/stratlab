@@ -80,6 +80,15 @@ export async function misaligned(page: Page): Promise<string[]> {
         if (Math.abs(tr.left - rowL) > TOL || Math.abs(tr.right - rowR) > TOL) out.push(`fold body: table ${tr.left.toFixed(0)}-${tr.right.toFixed(0)} vs the row above ${rowL.toFixed(0)}-${rowR.toFixed(0)}`);
       }
     }
+    // 4. (owner, 20 Nov) a table never wider than its box at a desktop width: no sideways scroll and no column cut off (Mutual funds'
+    // "Redemptions matched to purchases" and the capital gains "Kind" table at 1000px); a grid read across on purpose (data-grid) is left out
+    if (document.documentElement.clientWidth > 720) {
+      for (const w of document.querySelectorAll("main .k-tbl-wrap")) {
+        if (!box(w) || !shown(w) || w.hasAttribute("data-grid") || w.closest("details:not([open]) > :not(summary)")) continue;
+        const he = w as HTMLElement;
+        if (he.scrollWidth > he.clientWidth + 1) out.push(`table wider than its box: "${(w.querySelector("table")?.getAttribute("aria-label") || w.getAttribute("aria-label") || "").slice(0, 40)}" ${he.scrollWidth} in ${he.clientWidth} px`);
+      }
+    }
     return out;
   });
 }

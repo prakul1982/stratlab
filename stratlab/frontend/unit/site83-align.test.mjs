@@ -19,3 +19,16 @@ test("Centre alignment (owner, 20 Nov): fold rows centred with the chevron a col
   assert.match(read("e2e/ui-lint-rules.ts"), /add\("R29", cell, `the cell's contents sit/);
   assert.match(read("e2e/site83-align.spec.ts"), /fold body: insets/);
 });
+
+test("No table wider than its box (owner, 20 Nov): Mutual funds' redemptions, the tax report's sales and the brief's short columns fit", () => {
+  const mf = read("src/pages/money/MutualFundsPage.tsx");
+  assert.match(mf, /\{ key: "held", header: "Bought, sold", numeric: true, cell: \(r\) => <>\{dateOnly\(r\.bought\)\}<span className="k-sub-line">\{dateOnly\(r\.sold\)\}<\/span><\/> \}/);
+  assert.doesNotMatch(mf.slice(mf.indexOf("function SchemeSales")), /\{ key: "rate", header: "Rate"/);     // the rate is under the term now
+  const tax = read("src/pages/TaxReportPage.tsx");
+  assert.match(tax, /\{salesMore\.on && <span className="k-sub-line">\{qtyText\(r\.qty\)\} \{r\.qty === 1 \? "share" : "shares"\}<\/span>\}/);
+  const sales = tax.slice(tax.indexOf("const saleCols"), tax.indexOf("const lotCols"));
+  assert.doesNotMatch(sales, /\{ key: "qty", header: "Qty"/);
+  assert.doesNotMatch(sales, /\{ key: "rate", header: "Rate"/);
+  assert.match(read("src/components/BriefTables.tsx"), /wrap: t\.align\[k\] === "l" && k > 0 && longest\(t\.rows, k\) > WRAP_FROM/);
+  assert.match(read("e2e/ui-lint-rules.ts"), /add\("R29", w, `a table \$\{he\.scrollWidth\}px wide in its \$\{he\.clientWidth\}px box`\)/);
+});

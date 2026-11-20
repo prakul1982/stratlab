@@ -3360,7 +3360,7 @@ details.k-fold { display: block; }   /* the fold button's flex row (.k-fold, a s
 /* LIVE5-002 (globally): a list table that ran past its box on a desktop (DataTable's k-fit): words wrap, figures stay on one line,
    padding narrows and a row's buttons may take two lines, so every column is in view at 1280 */
 @media (min-width: 641px) {
-  .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { white-space: normal; padding-left: 10px; padding-right: 10px; }
+  .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { white-space: normal; padding-left: 8px; padding-right: 8px; }   /* site83: 8px (was 10), so a fit table keeps ~40px of room at 1280 in the centred column on CI's wider fonts */
   .k-tbl-wrap.k-fit .k-table td.k-num { white-space: nowrap; }
   .k-tbl-wrap.k-fit .k-table td.k-num .k-sub-line { white-space: normal; }   /* the figure on one line; the note under it may take two (the US sales' "$300.67 at ₹99.80 (28 Feb 2023)" in the centred column) */
   .k-tbl-wrap.k-fit .k-table td.k-wrap, .k-tbl-wrap.k-fit .k-table th.k-wrap { min-width: 7rem; }

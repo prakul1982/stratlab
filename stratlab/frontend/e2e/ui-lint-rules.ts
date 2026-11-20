@@ -60,7 +60,7 @@
 //   R29 off its row's centre                a table cell's contents (the block their lines make) > 2px off the cell's centre; two cells of a
 //                                            fold row side by side whose centres differ by > 2px, or its chevron not centred; a fold's opened body
 //                                            whose left and right insets differ by > 2px, or (beside a chevron column) whose tables don't run to
-//                                            the row's own left and right edges
+//                                            the row's own left and right edges; (desktop) a table wider than its box
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
 export interface PageFrame { h1Top: number; h1Left: number; right: number }
@@ -859,6 +859,15 @@ export function lintPage(opts: LintOpts): LintResult {
             if (Math.abs(mid - R(row).height / 2) > TOL) add("R29", row, `its chevron's centre is ${Math.round(Math.abs(mid - R(row).height / 2))}px off the row's`);
           } else if (a.alignSelf !== "center") add("R29", row, `its chevron is not centred on the row (align-self ${a.alignSelf})`);
         }
+      }
+    }
+    // (owner, 20 Nov) a table never wider than its box at a desktop width: no sideways scroll, nothing cut off (Mutual funds' redemptions at
+    // 1000px); a grid read across on purpose (data-grid) is left out, and a phone's stacked cards are R18's
+    if (!opts.phone) {
+      for (const w of Array.from(mainEl.querySelectorAll(".k-tbl-wrap"))) {
+        const he = w as HTMLElement;
+        if (!shown(w) || closedDetails(w) || w.hasAttribute("data-grid") || R(w).width < 1) continue;
+        if (he.scrollWidth > he.clientWidth + 1) add("R29", w, `a table ${he.scrollWidth}px wide in its ${he.clientWidth}px box`);
       }
     }
     for (const body of Array.from(mainEl.querySelectorAll(".k-fold-body"))) {
