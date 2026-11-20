@@ -3434,13 +3434,15 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .k-phone-fold > summary { list-style: none; display: inline-flex; margin: 8px 0; cursor: pointer; }   /* r69e: a layer's tables a press away on a phone */
 .k-phone-fold > summary::-webkit-details-marker { display: none; }
 
-/* LIVE19B-006: the options builder on a phone. The expiry choices share the row in equal parts, each label wrapping inside its part, so the row
-   is one height before the expiries come (bare "Nearest / Next / Monthly") and after (with their dates), on any font: it turned from a row
-   into three full-width rows at 5.1 s and pushed the page down. Export, Start over and Import a structure: two equal halves and a full row,
+/* LIVE19B-006: the options builder on a phone. The expiry choices are one under another from the first frame, with the room of three and their
+   line under them held, so the block is one height before the expiries come (bare "Nearest / Next / Monthly") and after (with their dates,
+   or two choices when Next is the monthly), on any font: it turned from a row into three full-width rows at 5.1 s and pushed the page down. Export, Start over and Import a structure: two equal halves and a full row,
    not two uneven rows */
 @media (max-width: 640px) {
-  .k-expiry > .k-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
-  .k-expiry > .k-seg button { min-width: 0; white-space: normal; text-wrap: balance; line-height: 1.2; padding-inline: 6px; min-height: 44px; }
+  .k-expiry { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-height: 174px; }
+  .k-expiry > .k-note { align-self: flex-start; text-align: left; }
+  .k-expiry > .k-seg { display: flex; flex-direction: column; width: 100%; }
+  .k-expiry > .k-seg button { width: 100%; min-height: 44px; justify-content: flex-start; text-align: left; }   /* the dates add to the words, not move them */
   .opt-setup > .k-card-head > .k-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 1 1 100%; }
   .opt-setup > .k-card-head > .k-card-actions > :last-child { grid-column: 1 / -1; }
   .opt-setup > .k-card-head > .k-card-actions > .btn { justify-content: center; }

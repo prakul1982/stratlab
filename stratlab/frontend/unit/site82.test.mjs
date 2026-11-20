@@ -36,7 +36,8 @@ test("LIVE19B-006: the options builder draws its underlyings list from the first
   assert.doesNotMatch(o, /\{!!unds\?\.length && \(\s*<Select small label="Other underlyings"/);
   assert.match(o, /<Select small label="Other underlyings" value=\{onPopular \? "" : `\$\{s\.exchange\}:\$\{s\.underlying\}`\} disabled=\{!unds\?\.length\}/);
   assert.match(o, /\{!und && <span className="k-note" aria-hidden="true">&nbsp;<\/span>\}/);
-  assert.match(css, /\.k-expiry > \.k-seg \{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax\(0, 1fr\); width: 100%; \}/);
+  assert.match(css, /\.k-expiry \{ display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-height: 174px; \}/);
+  assert.match(css, /\.k-expiry > \.k-seg \{ display: flex; flex-direction: column; width: 100%; \}/);
 });
 
 test("LIVE19B-007: holdings' import card waits for the sectors and positions, so nothing under the second loading card moves", () => {
@@ -109,4 +110,10 @@ test("LIVE19B accessibility: a checkbox is a 24px target on a desktop too", () =
 
 test("LIVE19B: the closing auction's rows say final or indicative only where it differs from the column's head", () => {
   assert.match(read("src/pages/trade/ClosingAuctionPage.tsx"), /\{!!r\.final_out !== final && <span className="k-sub-line">\{r\.final_out \? "final" : "indicative"\}<\/span>\}/);
+});
+
+test("LIVE19A-011: the calendars' search is drawn above the filters, which come with the figures (it moved 265px down when they came)", () => {
+  const f = read("src/components/CalendarFilters.tsx");
+  assert.ok(f.indexOf("{search}") < f.indexOf('<div className="res-filter-grid">'));
+  assert.equal((f.match(/\{search\}/g) ?? []).length, 1);
 });

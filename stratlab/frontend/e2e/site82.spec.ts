@@ -108,7 +108,7 @@ test("options builder on a phone: the underlyings list and the expiry row hold t
   await expect(other).toBeEnabled({ timeout: 30_000 });
   await expect(page.getByTestId("opt-expiry-note")).toBeVisible();
   const ex = await box(page, ".k-expiry > .k-seg button");
-  expect(new Set(ex.map((b) => b.y)).size, "the expiry choices share one row").toBe(1);
+  expect(new Set(ex.map((b) => b.w)).size, "the expiry choices are one width, one under another").toBe(1);
   await page.waitForTimeout(600);
   expect(await shifts(page), "nothing moved when the underlyings came").toBeLessThan(0.01);
 });
@@ -158,4 +158,20 @@ test("signed-in first load: each startup read goes out once, even when early.js 
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(4000);
   for (const p of ["/public/data-online", "/notebooks", "/markets", "/trade/vix?brief=true"]) expect(asked.filter((a) => a === p).length, `${p} asked`).toBeLessThanOrEqual(1);
+});
+
+// LIVE19A-011: the results calendar's search sat under the filters, which come with the page's figures: it moved 265px down when they came
+// (CLS 0.038 live). Every day's table also has the same columns at the same places.
+test("results: nothing moves when the figures come, and the day tables' columns line up", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "measured at 1440 as live");
+  await signedIn(page, "site82-3");
+  await countShifts(page);
+  await held(page, /\/research\/results\?/, 2000);
+  await page.goto("/research/results?region=US");
+  const days = page.getByTestId("results-day");
+  await expect(days.first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+  expect(await shifts(page), "nothing moved").toBeLessThan(0.01);
+  const xs = await days.evaluateAll((ds) => ds.map((d) => Array.from(d.querySelectorAll("thead th")).map((th) => Math.round(th.getBoundingClientRect().left)).join(",")));
+  expect(new Set(xs).size, `column starts per day: ${xs.join(" | ")}`).toBe(1);
 });
