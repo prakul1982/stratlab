@@ -521,7 +521,10 @@ export function NetWorthPage() {
             ...QUICK.map((k) => ({ label: FORM[k].title, icon: <Plus size={14} />, run: () => openAdd(k) })),
             { label: "Something else…", run: () => openAdd() },
           ]} />}
-        </span> : undefined} />
+        </span> : error ? undefined : (
+          // LIVE21B-008: the button's row is drawn with the page's first frame, the button held until the entries are read: the row came in at
+          // 4.9-5.5 s live with the totals and moved everything under the lede 33 px (CLS 0.116 for a Free account)
+          <span className="nw-add"><button type="button" className="btn" disabled><Plus size={16} />Add an entry</button></span>)} />
 
       {!view && (error
         ? <ErrorState title="Your net worth couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>{error}</ErrorState>
