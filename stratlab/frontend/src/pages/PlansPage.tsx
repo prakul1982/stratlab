@@ -154,13 +154,13 @@ export function PlansPage() {
       {/* LIVE15B-012 / LIVE16B: the "Prices in" switch holds its place while the public prices are on their way, so the plan cards under it
           never move down when they come (phone CLS 0.045-0.050) */}
       {((billing && yearlyOk) || usd || pricingStatus === "loading") && (
-        <FormGrid label="Price options">
+        <div className="k-plan-opts"><FormGrid label="Price options">
           {billing && yearlyOk && <FieldGroup label="Billed">
             <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
           </FieldGroup>}
           {(usd || pricingStatus === "loading") && <FieldGroup label="Prices in"><CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} /></FieldGroup>}
-        </FormGrid>
+        </FormGrid></div>
       )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
       <div className="k-plans">

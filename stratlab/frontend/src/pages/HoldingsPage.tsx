@@ -501,7 +501,9 @@ export function HoldingsPage() {
         </>
       )}
 
-      {view && rows.length > 0 && importPart}
+      {/* LIVE19B-007: under the holdings once their sectors and positions are in, never before: drawn under the second loading card, it was
+          pushed down when that card gave way to By sector and Positions (1440 CLS 0.052) */}
+      {view && rows.length > 0 && actionsReady && importPart}
 
       {view && actionsReady && (
         <Card id="h-add">

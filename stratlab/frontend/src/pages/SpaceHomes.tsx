@@ -260,7 +260,9 @@ export function InvestHome() {
   const { items: watching } = useWatchlist();
   // with nothing watched in this market, or one or two stocks (VR6-011): one or two stocks make a card a third as wide as the two dated cards stacked beside it, with an empty half under it and beside the tiles: with so
   // few they stack across the page as with none (LIVE1C-090)
-  const fewWatched = watching !== null && watching.filter((w) => w.region === region).length <= 2;
+  // LIVE19B-011: three stocks too: a card of three rows ended ~150px above "Coming up" and "Results today" stacked beside it (a row is about
+  // 50px, so from four rows on the card is about their height)
+  const fewWatched = watching !== null && watching.filter((w) => w.region === region).length <= 3;
   // the one Invest home: what you follow and the market around it. Looking up a company is its own page (Look up a company,
   // the menu's main button), so this page has no second search box (DD-002)
   return (
@@ -280,7 +282,7 @@ export function InvestHome() {
           watchlist ended 100px short of it (VR1-010, VR1-011; before: DF-023, UI-FIX-1 R1/R2) */}
       {/* VR6-011: with nothing watched in this market the watchlist is one line: beside the two dated cards it stood 225px short of them,
           so the three stack across the page instead */}
-      <div className={fewWatched ? "space-col" : "grid2 space-panels"}>
+      <div className={fewWatched ? "space-col" : "grid2 space-panels"} data-testid="invest-watch-row">
         <WatchPanel region={region} />
         {fewWatched ? <><NextEvents region={region} /><ResultsToday region={region} /></> : (
           <div className="space-col">

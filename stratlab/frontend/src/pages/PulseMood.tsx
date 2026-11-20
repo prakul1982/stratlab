@@ -121,7 +121,7 @@ export function SectorsTable({ s, closedDay, oldAt }: { s: NonNullable<PulseMood
   ];
   return (
     <Card testId="pulse-sectors">
-      <CardHead title="Sectors" info="Each sector index's move today, over the last 5 and 21 sessions (against today's level), and the two of its largest companies that moved most, from their market value and today's move." />
+      <CardHead title="Sectors" info="Each sector index's move today, over the last 5 and 21 sessions (against today's level), and the two of its largest companies that moved it most in the direction it moved, from their size (free-float market value in India, market value in the US) and today's move." />
       <p className="k-small" data-testid="pulse-sector-count">{sectorCount(s)}.</p>
       <DataTable csv="sector indices" stack compact label="Sector indices, best first" columns={cols} rows={s.rows} rowKey={(r) => r.name} />
     </Card>
@@ -137,7 +137,7 @@ export function MoversTable({ m, closedDay, oldAt }: { m: NonNullable<PulseMood[
   ];
   return (
     <Card testId="pulse-movers" label={`What moved the ${m.index}`}>
-      <CardHead title={`What moved the ${m.index}`} info="The companies adding the most points to the index and taking the most from it today. Points are estimated from each company's market value against the index's total, so they differ a little from the exchange's own free-float figures." />
+      <CardHead title={`What moved the ${m.index}`} info={`The companies adding the most points to the index and taking the most from it today. ${m.note || "Points are estimated from each company's market value against the index's total, so they differ a little from the exchange's own free-float figures."}`} />
       <DataTable stack compact label={`Companies that moved the ${m.index} most`} columns={cols} rows={rows} rowKey={(r) => r.symbol}
         foot={m.est_total != null && m.actual != null ? { n: "All its companies, estimated", c: "", p: <span>{signedPoints(m.est_total)}</span> } : undefined} />
       {m.actual != null && <p className="k-note" data-testid="pulse-movers-actual">The {m.index} itself moved {signedPoints(m.actual)} points.</p>}

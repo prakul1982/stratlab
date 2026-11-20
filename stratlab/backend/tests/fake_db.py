@@ -37,6 +37,8 @@ USERS = {
     **{f"su1-{i}": (f"u-su1-{i}", f"su1{i}@example.com", "free") for i in range(12)},
     # lane fix16's e2e (e2e/fix16.spec.ts): its own accounts, one per test and project (fix16-0 to 7 Free, 8 to 15 Pro)
     **{f"fix16-{i}": (f"u-fix16-{i}", f"fix16{i}@example.com", "free" if i < 8 else "pro") for i in range(16)},
+    # lane site82's e2e (e2e/site82.spec.ts): its own accounts, one per test and project (site82-0 to 11 Pro, 12 to 23 Free)
+    **{f"site82-{i}": (f"u-site82-{i}", f"site82{i}@example.com", "pro" if i < 12 else "free") for i in range(24)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),

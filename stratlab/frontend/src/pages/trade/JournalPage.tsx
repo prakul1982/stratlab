@@ -174,6 +174,7 @@ export function JournalPage() {
 
   // the date of the newest trade in the list, not today's date: "Data up to 15 Oct" over trades that end 4 Oct (R20-012)
   const header = <PageHeader eyebrow="Trade · My trades" title="Trade journal" asOf={j?.trades.map((t) => t.exit_t.slice(0, 10)).sort().pop()} asOfLabel="Trades up to"
+    asOfPending={!j} infoRow
     lede={JOURNAL_LEDE} info={JOURNAL_COVERS} infoLabel="Where the trades come from" />;
   if (error && !j) return <div className="k-page j-page">{header}<ErrorState title="Your journal couldn't be opened" action={{ label: "Try again", onClick: () => { setError(null); load(); } }}>{error}</ErrorState></div>;
   if (!j) return <div className="k-page j-page">{header}<Card><Skeleton label="Opening your journal" /></Card></div>;
@@ -190,7 +191,7 @@ export function JournalPage() {
       <div className="k-page j-page">
         {header}
 
-        <Card label="Bring in your trades">
+        <Card label="Bring in your trades" className="j-bring">
           <CardHead title="Bring in your trades"
             actions={<>
               {/* LIVE1B-056: the choice is the same two-button control as on Holdings, the tax report and Mutual funds (it was a select as wide as the card) */}
