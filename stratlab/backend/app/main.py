@@ -5844,7 +5844,10 @@ def breadth_load(region: str, symbol: str, days: int, max_wait: float | None = N
         inst = kite.equity(symbol)
         if not inst:
             raise LookupError("not listed")
-        return kite.history(inst["token"], "1d", days, store=False, **({"max_wait": max_wait} if max_wait is not None else {}))
+        bars = kite.history(inst["token"], "1d", days, store=False, **({"max_wait": max_wait} if max_wait is not None else {}))
+        # LIVE21B-013: as the exchange printed them (the broker scales every candle before an extraordinary dividend), so the run's
+        # 52-week highs and lows, the movers' marks and the stored trend scans read the year's real range, as the company pages do
+        return stock_pages.broker_as_traded(bars, inst.get("symbol") or symbol)
     # the day's closes as settled, never a copy the source's edge kept from mid-session (LIVE16A-001)
     return markets.provider(region).history({"token": symbol}, "1d", days, settled=True)
 
