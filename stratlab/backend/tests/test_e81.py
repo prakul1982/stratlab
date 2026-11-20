@@ -197,7 +197,9 @@ def test_e81_a_theme_post_says_its_pages_counts_of_companies_and_layers():
 
 
 # ---------- 4. LIVE17A-008: re-splits and returns are no moves ----------
-def test_e81_a_resplit_into_halves_and_a_move_that_returns_are_not_logged_as_moves():
+def test_e81_a_resplit_into_halves_is_not_logged_as_a_move():
+    # (updated on purpose, e84 / LIVE20A-004: a move a later re-check undoes is a change the page showed for a day (Franklin BSP out of
+    # "Mortgage REITs" on 19 Nov and back on 20 Nov), so each is logged on its day; a re-split into halves still is no move)
     log = [{"d": "2026-11-15", "cause": "rules", "counts": {"moved": 2}, "moved": [
                {"symbol": "OSIS", "name": "OSI", "from": "Fabless chip design", "to": "Other semiconductor companies"},
                {"symbol": "AAA", "name": "A", "from": "Oilfield services (larger)", "to": "Oilfield services (smaller)"}]},
@@ -210,8 +212,9 @@ def test_e81_a_resplit_into_halves_and_a_move_that_returns_are_not_logged_as_mov
                {"symbol": "OSIS", "name": "OSI", "from": "Fabless chip design", "to": "Makers of their own products"}]}]
     got = theme_changes.net_moves(log)
     moves = [(r["symbol"], r["to"]) for e in got for r in e.get("moved") or []]
-    assert moves == [("OSIS", "Makers of their own products")]
-    assert [e["counts"]["moved"] for e in got] == [1]
+    assert moves == [("OSIS", "Other semiconductor companies"), ("BIGBLOC", "Cement integrated producers (smaller)"),
+                     ("OSIS", "Fabless chip design"), ("BIGBLOC", "Other cement companies"), ("OSIS", "Makers of their own products")]
+    assert [e["counts"]["moved"] for e in got] == [1, 2, 1, 1]
     # and a new read never logs a re-split
     was = {"layers": ["Oilfield services (larger)"], "cos": {"AAA": ["A", 0, None, None, None, None]}}
     now = {"layers": ["Oilfield services (smaller)"], "cos": {"AAA": ["A", 0, None, None, None, None]}}

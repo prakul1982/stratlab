@@ -5420,7 +5420,8 @@ def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tu
             # layer of a theme, published or not
             undo.append((v, f"a layer of {len(v['companies'])} groups of several businesses (“{name}”)"))
         elif len(v["companies"]) <= CONTRACT_SINGLE and name not in pub and not v.get("aka"):
-            undo.append((v, f"a layer of one company a rule would make (“{name}”), new to the published version"))
+            n_ = len(v["companies"])          # e84 (LIVE20A-004: Lamar and OUTFRONT moved "as a layer of one company"): its count said
+            undo.append((v, f"a layer of {'one company' if n_ == 1 else f'{n_} companies'} a rule would make (“{name}”), new to the published version"))
     if not undo:
         return vc, rows
     by_name: dict = {}

@@ -672,7 +672,7 @@ def work_sentence(words) -> str:
     parts = [y for x in _sentences(flat) for y in re.split(r"(?:(?<=[a-z0-9)”\"])|(?<=[A-Z]{2}))\.\s+(?=[A-Z])", x) if y.strip()]
     for x in parts[:12]:
         if len(x.split()) < 4 or structure_only(x) or reit_tax_said(x) or _MANAGED.search(x) or _BOILER.search(x) \
-                or not own_words(x.rstrip(".;"), ""):
+                or _LEGAL.search(x) or _DATED_PAST.search(x) or _PLACE_SAYS.match(x) or not own_words(x.rstrip(".;"), ""):      # e84
             continue
         # e83 (LIVE19A-009, the R81 Regional banks deck: BankUnited's "with total consolidated assets of $35 billion at December 31, 2025",
         # Beacon's "a Delaware corporation", Provident's "became the holding company for Provident Bank on January 15, 2003"): a sentence of
@@ -742,7 +742,17 @@ _NEGATIVE_LAYER = re.compile(r"(?:don't say (?:it sells|they sell) (?:[^“]{0,8
 _QUOTED = re.compile(r"(?:\bsays?\s+|\bwords:\s+|\()“([^”]{12,})”")          # a quote of its words, never a layer's name
 
 
-def unquotable_reason(why: str) -> bool:
+# e84 (LIVE20A-004: Cim Group's "We operate our business in a manner that permits us to maintain our exemption from registration under the
+# Investment Company Act", Orchid Island's "Bimini commenced active investment management operations in 2003", TFS Financial's "We completed
+# our initial public stock offering in 2007", FB Bancorp's "New Orleans has one of the busiest ports in the world"): a sentence of how a
+# company is held exempt or qualified, a dated event of its past, or one of a place, is no line of its work
+_LEGAL = re.compile(r"\bexemption\s+from\s+registration\b|\bInvestment\s+Company\s+Act\b|\bqualif(?:y|ied|ication)\s+(?:as|to\s+be\s+taxed\s+as)\s+a\s+REIT\b", re.I)
+_DATED_PAST = re.compile(r"\b(?:completed|commenced|began|started|launched|was\s+(?:formed|founded|incorporated|organized|established))\b[^.;]{0,70}?"
+                         r"\b(?:in|on|since)\s+(?:[A-Z][a-z]+\s+)?(?:\d{1,2},\s+)?(?:19|20)\d{2}\b")
+_PLACE_SAYS = re.compile(r"^(?:[A-Z][a-z]+\s+){1,3}(?:has|is)\s+(?:one\s+of|the\s+(?:largest|busiest|biggest))\b")
+
+
+def unquotable_reason(why: str, name: str = "") -> bool:
     """e83 (LIVE19A-009: the stored 15-20 Nov moves still quoting FB Bancorp's "New Orleans has one of the busiest ports in the world…" and
     TFS Financial's "statements regarding our business plans…"): a kept reason that quotes as its words a line of no work of its own
     (boilerplate, a sentence of its legal form, size or history, an encyclopedia's opening, or one that names nothing it does) is said again
@@ -753,9 +763,37 @@ def unquotable_reason(why: str) -> bool:
         if len(q.split()) < 4:
             continue                        # a layer's name or a short phrase of its words ("non-listed"), no sentence
         if _BOILER.search(q) or encyclopedia_like(q) or (_FORM_ONLY.search(q) and not _WORK_SAID.search(_FORM_ONLY.sub(" ", q))) \
-                or not _WORK_SAID.search(q):
+                or not _WORK_SAID.search(q) or _LEGAL.search(q) or _DATED_PAST.search(q):
+            return True
+        lead = _PLACE_SAYS.match(q)          # a sentence of a place ("New Orleans has one of ..."), never of the company it names
+        if lead and not (set(re.findall(r"[a-z]+", lead.group(0).lower())) & set(re.findall(r"[a-z]{3,}", str(name or "").lower()))):
             return True
     return False
+
+
+# e84 (LIVE20A-004: BankUnited moved into "Real estate-focused lenders (bank)" on "BankUnited, a national banking association headquartered in
+# Miami Lakes, Florida", Beacon on "a wide range of commercial, business and retail banking services"): a kept reason quoting, for a move into
+# a named layer, a line that says none of the layer's own words (the theme's own words aside: "bank" of a Regional banks theme) is said again
+# from its words; a layer of lenders is said by words of lending ("originating ... loans", "credit", "mortgage")
+_LENDS_WORDS = re.compile(r"\b(?:lend\w*|loans?|mortgages?|credit|debt|financ\w*)\b", re.I)
+_LENDER_LAYER = re.compile(r"\b(?:lenders?|lending|mortgage|loans?|credit|financ\w*)\b", re.I)
+
+
+def quote_misses_layer(why: str, layer: str, name: str = "", theme_words: set | None = None) -> bool:
+    """e84: whether a kept reason's quote of its words (its first) says none of a named layer's own words (see above)."""
+    from .theme_base import _line_says, kind_stems, layer_words, name_aside
+    if not layer or str(layer).startswith("Other "):
+        return False
+    m = _QUOTED.search(str(why or ""))
+    if not m:
+        return False
+    q = name_aside(m.group(1).rstrip("…").strip(), name)
+    ws = {w for w in layer_words(_HALF_NAME.sub("", layer)) if not (theme_words and kind_stems(w) & theme_words)}
+    if not ws:
+        return False
+    if _LENDER_LAYER.search(layer) and _LENDS_WORDS.search(q):
+        return False
+    return not any(_line_says(q, w) for w in ws)
 
 
 def fit_reason(why: str, frm: str, to: str) -> str | None:
@@ -774,6 +812,10 @@ def fit_reason(why: str, frm: str, to: str) -> str | None:
     for m in _NEGATIVE_LAYER.finditer(out):
         if _HALF_NAME.sub("", m.group(1) or m.group(2)) != a:
             return None
+    # e84 (LIVE20A-004: BREIT "Mortgage REITs → Other: ... never a layer of towers and data centres", a reason kept from its move out of
+    # "Towers, data centres and niche property" a day before): a reason that bars towers and data centres is of a move out of such a layer only
+    if re.search(r"never a layer of towers and data cent", out) and not re.search(r"\btowers?\b|data cent", a, re.I):
+        return None
     return out
 
 
@@ -793,7 +835,7 @@ def unnamed_why(why: str, words=None, industry: str = "", theme_words: set | Non
     return base
 
 
-def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | None = None) -> list:
+def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | None = None, name_words: set | None = None) -> list:
     """r572: the log's entries with each removal whose only reason is the map's no longer naming it said with its own words (unnamed_why)."""
     # (r67e: with no reader of its words, each move still gets a reason, below; a removal's stands as kept)
     # e81 (LIVE17A-009: first opens of Semiconductors and REITs 14-15 s): each company's words and industry read once for the whole log (a
@@ -843,7 +885,8 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
             r = {**{k: x for k, x in r.items() if k != "why"}, "outside": True}
         if r.get("why"):
             fit = fit_reason(str(r["why"]), r.get("from") or "", r.get("to") or "")          # e80: the layer it moved to (or from)
-            if fit and not unquotable_reason(fit):
+            if fit and not unquotable_reason(fit, r.get("name") or "") \
+                    and not quote_misses_layer(fit, r.get("to") or "", r.get("name") or "", name_words):       # e84
                 return {**r, "why": fit}
             r = {k: x for k, x in r.items() if k != "why"}
         a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))
@@ -868,7 +911,24 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
             said = ("no words of its own are stored, so none says a named layer's work" if str(b).startswith("Other ") else
                     f"no words of its own are stored; the theme's map places it in “{b}”")
         return {**r, "why": said}
+    def counted_one(e):
+        # e84 (LIVE20A-004): a stored "a layer of one company a rule would make (“X”)" said of two or more companies moved from X in one entry
+        rows = [r for r in e.get("moved") or [] if isinstance(r, dict)]
+        out = []
+        for r in e.get("moved") or []:
+            w = r.get("why") if isinstance(r, dict) else None
+            if isinstance(w, str) and "a layer of one company a rule would make" in w:
+                n_ = sum(1 for x in rows if x.get("from") == r.get("from") and "a layer of one company a rule would make" in str(x.get("why") or ""))
+                if n_ > 1:
+                    r = {**r, "why": w.replace("a layer of one company", f"a layer of {n_} companies")}
+            out.append(r)
+        return out
+
     def clean(r):
+        # e84 (LIVE20A-004: the R82 deck printed Redwood's reason as "“Redwood Trust, Inc., together with its subsidiaries…”", the quote cut
+        # before its work): the clause that only says its subsidiaries are included is no part of the line quoted
+        if isinstance(r, dict) and isinstance(r.get("why"), str) and _WITH_SUBS.search(r["why"]):
+            r = {**r, "why": _WITH_SUBS.sub("", r["why"])}
         # e80 (the R78 US Media deck: "added 4: iHeartMedia, ... (filed under an official industry of the theme; True)", a 16 Nov entry kept
         # with a flag printed as its reason): a flag run on after a reason is no part of it
         if isinstance(r, dict) and isinstance(r.get("why"), str) and _FLAG_TAIL.search(r["why"]):
@@ -885,10 +945,11 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
     return [{**e, **counted(e), **({"layers": [x for x in e.get("layers") or [] if not case_only(x)]} if e.get("layers") else {}),
              **({"removed": [why(clean(r)) for r in e.get("removed") or []]} if e.get("removed") else {}),
              **({"added": [clean(r) for r in e.get("added") or []]} if e.get("added") else {}),
-             **({"moved": [move_why(clean(r)) for r in e.get("moved") or []]} if e.get("moved") else {})} for e in entries]
+             **({"moved": [move_why(clean(r)) for r in counted_one(e)]} if e.get("moved") else {})} for e in entries]
 
 
 _FLAG_TAIL = re.compile(r"(?:\s*;\s*(?:True|False|None))+\s*$")
+_WITH_SUBS = re.compile(r",\s+(?:together|along)\s+with\s+(?:its|their)\s+(?:consolidated\s+)?subsidiaries,?(?=\s)", re.I)
 
 
 # e77 (LIVE14A-007: Cement's log moved Kanoria 7 times in 4 days, three of them on 17 Nov; REITs moved Adamas Trust Other -> Mortgage REITs
@@ -952,34 +1013,17 @@ def net_moves(log: list) -> list:
     """e81 (LIVE17A-008: US Oil and gas "39 companies moved between layers" on 19 Nov, most "(larger) -> (smaller): the same layer, split into
     halves by market value"; Cement's BigBloc "Other cement companies -> Cement integrated producers (smaller)" on 17 Nov and back on 18 Nov on
     the same quoted sentence; OSI Systems Fabless -> Other -> Fabless -> Makers over 15-19 Nov): the log (oldest first) with a re-split of one
-    layer by market value said as no move (a company in the same layer is where it was), and a move that a later one undoes (back to the layer
-    it left, with no other change of the company between) said as neither: a placement changes only when where it is changes. The counts
-    follow the rows dropped; an entry left with nothing is not shown."""
+    layer by market value said as no move (a company in the same layer is where it was). e84: a move a later one undoes is logged (below).
+    The counts follow the rows dropped; an entry left with nothing is not shown."""
     out = [dict(e) for e in log]
     drop: dict[int, set] = {}
     for i, e in enumerate(out):
         for k, r in enumerate(e.get("moved") or []):
             if isinstance(r, dict) and r.get("from") is not None and _layer_of(r.get("from")) == _layer_of(r.get("to")):
                 drop.setdefault(i, set()).add(k)
-    seq: dict = {}
-    for i, e in enumerate(out):
-        for kind in ("added", "removed", "moved"):
-            for k, r in enumerate(e.get(kind) or []):
-                if not isinstance(r, dict) or not r.get("symbol") or (kind == "moved" and k in drop.get(i, set())):
-                    continue
-                seq.setdefault(r["symbol"], []).append((kind, i, k, r))
-    for sym, evs in seq.items():
-        stack: list = []
-        for kind, i, k, r in evs:
-            if kind != "moved":
-                stack = []                       # an addition or removal between: what came before stands
-                continue
-            if stack and _layer_of(stack[-1][2].get("to")) == _layer_of(r.get("from")) and _layer_of(stack[-1][2].get("from")) == _layer_of(r.get("to")):
-                pi, pk, _ = stack.pop()
-                drop.setdefault(pi, set()).add(pk)
-                drop.setdefault(i, set()).add(k)
-                continue
-            stack.append((i, k, r))
+    # e84 (LIVE20A-004: the REITs log said nothing of Franklin BSP's return to "Mortgage REITs" (out of it on 19 Nov, back on 20 Nov) nor of
+    # Pillarstone's move to "Other", both moves the page had shown for a day): a move a later re-check undoes is a change the page showed,
+    # each logged on its day (one day's moves still net to one, net_by_day); only a re-split into halves is no move
     for i, ks in drop.items():
         e = out[i]
         n_was = len(e.get("moved") or [])
@@ -1063,7 +1107,8 @@ def view(region: str, name: str, full: bool, words_of=None, industry_of=None) ->
         from .theme_base import kind_stems
         snap = got.get("snap") if isinstance(got.get("snap"), dict) else {}
         tw = kind_stems(" ".join([str(name)] + [str(x) for x in snap.get("layers") or [] if not str(x).startswith("Other ")]))
-    log = reasoned(log, words_of, industry_of, tw)          # r67e: every move with its reason, whatever reads its words
+    from .theme_base import kind_stems as _ks
+    log = reasoned(log, words_of, industry_of, tw, _ks(str(name)))          # r67e: every move with its reason, whatever reads its words
     if full:
         return {"full": True, "since": got.get("since"), "entries": log, "older": 0}
     return {"full": False, "since": got.get("since"), "entries": [_short(log[0], FREE_ROWS)] if log else [], "older": max(0, len(log) - 1)}
