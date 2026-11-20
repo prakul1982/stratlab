@@ -225,6 +225,9 @@ def test_an_unknown_us_symbol_is_still_not_found(monkeypatch):
     from app.intel.net import NotFound
     hub = main.research_hub
     monkeypatch.setattr(hub.finnhub, "profile", lambda s: {})
+    # the quote site answers an unknown symbol with no listing; stubbed so the test never reaches the real site (in CI a busy
+    # answer from it turned "not found" into "busy", which is right for a busy site but not what this test is about)
+    monkeypatch.setattr(hub.yahoo, "meta", lambda s: {})
     with pytest.raises(NotFound):
         hub._company_us("NOPE", lean=True)
 
