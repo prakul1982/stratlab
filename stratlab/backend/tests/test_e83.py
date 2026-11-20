@@ -368,8 +368,9 @@ def test_e83_a_curated_themes_evidence_is_unchanged_and_quantum_needs_both_words
 def test_e83_versions():
     from app import blog_research, deck
     from app.intel import sector_metrics, theme_base, theme_data, theme_routes
-    assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.EARLIER_MAX == 33
-    assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and blog_research.GEN == 11
+    # e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose)
+    assert theme_base.RULES == 79 and theme_routes.PLACE_CARRY[79] == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.EARLIER_MAX == 34
+    assert theme_data.DIVE_TEXT == 50 and deck.THEME_DECK_VERSION == 90 and blog_research.GEN == 12
     assert sector_metrics.VERSION == 3 and sector_metrics.REIT_V == 3                    # never sector_metrics.VERSION
 
 

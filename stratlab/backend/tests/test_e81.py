@@ -304,8 +304,8 @@ def test_e81_deck_check_reads_a_reason_after_a_name_ending_in_inc():
 
 def test_e81_versions():
     from app.intel import sector_metrics
-    assert theme_base.RULES == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 33          # (e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
-    assert theme_data.DIVE_TEXT == 49 and deck.THEME_DECK_VERSION == 89 and sector_metrics.VERSION == 3          # e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)
+    assert theme_base.RULES == 79 and theme_routes.PLACE_CARRY[79] == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.PLACE_CARRY[77] == 76 and theme_routes.PLACE_CARRY[76] == 75 and theme_routes.EARLIER_MAX == 34          # e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); (e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48)
+    assert theme_data.DIVE_TEXT == 50 and deck.THEME_DECK_VERSION == 90 and sector_metrics.VERSION == 3          # e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose)
 
 
 # ---------- owner P0-a (R79 REITs deck): the FFO Camden reports, $744.8 m, first; the derived proxy with its gains deducted ----------
