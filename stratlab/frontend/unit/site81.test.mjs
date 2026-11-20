@@ -135,7 +135,8 @@ test("LIVE18B-012: the menu shows the open page's item, scrolling only its own b
   // arrive, and never after the menu was moved
   assert.match(src, /const cur = box\.querySelector<HTMLElement>\('\[aria-current="page"\]'\);\n      if \(cur\) revealIn\(box, cur\);/);
   assert.match(src, /const onScroll = \(\) => \{ if \(Math\.abs\(box\.scrollTop - mine\) > 1\) moved = true; \};/);
-  assert.match(src, /void document\.fonts\?\.ready\.then\(reveal\);/);
+  // updated on purpose (Release 82 CI): the fonts' look is skipped once the window is another size (the reader's doing, R4-016)
+  assert.match(src, /void document\.fonts\?\.ready\.then\(\(\) => \{ if \(`\$\{window\.innerWidth\}x\$\{window\.innerHeight\}` === size\) reveal\(\); \}\);/);
   const body = src.match(/export function revealIn[\s\S]*?\n}/)[0]
     .replace("export function revealIn(box: HTMLElement, item: HTMLElement, room = 24): void", "function revealIn(box, item, room = 24)");
   const MORE_ROOM = Number(src.match(/export const MORE_ROOM = (\d+);/)[1]);
