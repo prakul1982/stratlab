@@ -463,3 +463,24 @@ def test_a_small_share_of_companies_with_figures_says_its_selection_and_bias():
     line = K.selection_said({"n": 85, "total": 807, "share": 71, "of_what": "the theme's market value"})
     assert line.startswith("The figures are of 85 of the theme's 807 companies") and "lean towards larger" in line
     assert K.selection_said({"n": 60, "total": 100}) == ""
+
+
+def test_deck_check_fails_a_stated_cohort_rule_its_population_breaks_and_layer_words_only_warns():
+    """Fails on R84: no check caught "Only description-verified and industry-supported" beside "with figures (every median and total is of
+    these) 16 (10 description-verified, 0 industry-supported, 6 list-supported)" (Payments; Medical devices, Hotels & Casinos, Aerospace,
+    Telecom, Building materials the same); and "layer words" failed Cybersecurity's correct "Endpoint and detection platforms"."""
+    import pathlib
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+    import deck_check
+    page = ("Universe Only description-verified and industry-supported companies count in a median or total. "
+            "in the theme, with figures (every median and total is of these) 16 (10 description-verified, 0 industry-supported, 6 list-supported)")
+    got = deck_check.check_text(page)
+    assert got["counts"]["cohort rule"] == 1 and deck_check.failed(got)
+    fixed = page.replace("Only description-verified and industry-supported companies count", "Description-verified, industry-supported and "
+                         "list-supported companies count")
+    assert not deck_check.check_text(fixed)["counts"]["cohort rule"]
+    assert "layer words" in deck_check.WARN and "layer words" not in deck_check.FAIL
+    # the Cybersecurity and Semiconductors inputs of R84 (their list-supported core members) are among the loop test's fixtures
+    here = pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "r84"
+    assert (here / "cyber.json").exists() and (here / "semis.json").exists()
