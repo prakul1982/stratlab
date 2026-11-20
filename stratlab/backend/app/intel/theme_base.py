@@ -3186,6 +3186,11 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
         if k_ not in judged:
             judged[k_] = sells_layer(v, named, sold_text(ev(c), c.get("name") or ""), c.get("industry"), theme_words,
                                      (model_of(c) if model_of else c.get("model")) or "")
+            # e83 (LIVE19A-004: Omega Healthcare Investors out of "Healthcare property owners" into "Mortgage REITs", "its own words don't say
+            # it sells what “Healthcare property owners” is"): a property owner whose name names the kind of property the layer's name
+            # names (a REIT named for what it owns) is of it, unless its own words name only other kinds
+            if judged[k_] is False and named_property(v, c, sold_text(ev(c), c.get("name") or "")):
+                judged[k_] = True
         return judged[k_]
 
     def came_from(c, v):
@@ -4443,6 +4448,11 @@ def compute_fit(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[
             # r68e (the live R65 REITs deck: Camden, multifamily apartments, and SBA, towers, sent to "Healthcare property owners" on the
             # words they share with it): never a layer whose name names only property types its words don't
             others_ = [w for w in others if property_fit(_HALF_RX.sub("", w.get("layer") or ""), plain) is not False]
+            # e83 (LIVE19A-004, the live R81 REITs: Pillarstone Capital REIT, "owning and operating commercial properties", put in "Hotel and
+            # leisure property owners" on the words it shares with it, its 4th layer in 4 days): a layer whose name names kinds of property
+            # takes on shared words only a company whose own words name one of them
+            others_ = [w for w in others_ if not layer_property_types(_HALF_RX.sub("", w.get("layer") or ""))
+                       or property_fit(_HALF_RX.sub("", w.get("layer") or ""), plain) is True]
             # e82 (LIVE18A-004, the live R80 REITs: Pillarstone Capital REIT, "engaged in investing in, owning and operating commercial
             # properties", put in "Mortgage REITs" on the words it shares with it): a layer of lenders only for one whose words say it lends
             if not LENDS_SAYS.search(plain):
@@ -4936,6 +4946,17 @@ def property_scope_layer(name: str, theme: str) -> bool:
     return bool(PROPERTY_LAYER.search(name)) and not LENDING_LAYER.search(name) and not PROPERTY_THEME.search(str(theme or ""))
 
 
+def lends_into(layer: str, c: dict, text: str) -> bool:
+    """e83 (LIVE19A-004, the live R81 REITs: Franklin BSP Realty Trust, a commercial mortgage lender, held in "Other" as "its own words,
+    official industry and name say no word of “Mortgage REITs”"): a layer of lenders' (LENDING_LAYER) concept is lending: a company whose own
+    words say it lends (LENDS_SAYS), or whose way of earning is read as lending with no word of it saying it owns property, says it, as
+    kind_bar reads a lender."""
+    if not LENDING_LAYER.search(_HALF_RX.sub("", str(layer or ""))):
+        return False
+    t = str(text or "")
+    return bool(LENDS_SAYS.search(t)) or (c.get("model") == "lending" and c.get("model_confidence") in ("high", "medium") and not OWNS_SAYS.search(t))
+
+
 def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
     """e81: (why the company is a kind the layer can never hold, the kind of layer it belongs in: "lending" or ""), ("", "") when none."""
     name = _HALF_RX.sub("", str(layer or ""))
@@ -4953,7 +4974,9 @@ def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
         m = NON_TRADED_SAYS.search(text)
         if m or NON_TRADED_NAME.search(nm):
             said = f"its own words say it is a non-traded REIT (“{m.group(0)}”)" if m else "it is a non-traded REIT (its name: an income trust)"
-            return f"{said}, a diversified owner, never a layer of towers and data centres", ""
+            # (e83, LIVE19A-004: the reason names the layer it leaves, so a log of a move from another layer never prints it: BREIT's
+            # "Mortgage REITs → Other: ... never a layer of towers and data centres")
+            return f"{said}, a diversified owner, never in a specialist layer such as “{name}”", ""
         if property_fit(name, text) is not True and not says_compute(text):
             d = DIVERSIFIED_NAME.search(nm) or DIVERSIFIED_SAYS.search(text)
             if d:
@@ -5758,24 +5781,32 @@ def kind_apart(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[d
                   and not re.search(r"\bpharma", f"{shown(x)} {x.get('was') or ''}", re.I)]:
             picks = []
             for c in v.get("companies") or []:
-                t = without_name(own_text((words_of(c.get("ticker")) if words_of else None) or ""), c.get("name") or "")
-                m_ = _SELF.search(t) if t.strip() else None
-                if not m_:
-                    continue
-                phrase = m_.group(1).lower()
-                k, o = re.search(kind_rx, phrase), re.search(own_rx, phrase)
-                if k and (o is None or k.start() < o.start()):
-                    picks.append((c, m_.group(0).strip()))
+                # e83 (LIVE19A-009, the R81 Biotech deck: Amneal moved as "its own words call it ... (“is an American publicly traded
+                # pharmaceutical company”)", an encyclopedia's opening): a sentence of its own quoted as its own words; one only an
+                # encyclopedia's opening in its description says is said as its description's, never quoted as its own words
+                raw_ = " ".join(own_text((words_of(c.get("ticker")) if words_of else None) or "").split())
+                mine_ = " ".join(x for x in _sentences(raw_) if not encyclopedia_like(x))
+                for own_, text_ in ((True, mine_), (False, raw_)):
+                    t = without_name(text_, c.get("name") or "")
+                    m_ = _SELF.search(t) if t.strip() else None
+                    if not m_:
+                        continue
+                    phrase = m_.group(1).lower()
+                    k, o = re.search(kind_rx, phrase), re.search(own_rx, phrase)
+                    if k and (o is None or k.start() < o.start()):
+                        picks.append((c, m_.group(0).strip() if own_ else "", k.group(0)))
+                        break
             if len(picks) < 2 or len(v["companies"]) - len(picks) < 2:
                 continue
             dest = next((x for x in vc if shown(x) == name), None)
             if dest is None:
                 dest = {"layer": name, "description": desc, "by_place": True, "kind_apart": True, "companies": []}
                 vc = vc + [dest]
-            for c, said_ in picks:
+            for c, said_, kind_ in picks:
                 v["companies"] = [x for x in v["companies"] if x is not c]
-                _move(c, shown(v), dest, f"its own words call it a company of another kind than the theme's (“{said_}”): an established "
-                                         f"drug maker, said apart from “{shown(v)}”", rows)
+                lead_ = (f"its own words call it a company of another kind than the theme's (“{said_}”)" if said_ else
+                         f"its description calls it a company of another kind than the theme's (a {kind_} company)")
+                _move(c, shown(v), dest, f"{lead_}: an established drug maker, said apart from “{shown(v)}”", rows)
     return vc, rows
 
 
@@ -6059,7 +6090,7 @@ def listed_out(vc: list[dict], words_of, theme: str, moved_before: dict | None =
             # (the name it is shown under, as the gate reads it; never a move on the rule's own evidence: its revenue against the layer's
             # median, its stage, its filing forms, a quote of its own words the audit checked for the layer)
             if not was or was in names or gate_says(shown, t) is not False or rf_.get("scale") or rf_.get("stage") or rf_.get("domicile") \
-                    or (rf_.get("quotes") or [""])[0]:
+                    or (rf_.get("quotes") or [""])[0] or lends_into(shown, c, t):
                 stay.append(c)
                 continue
             dest = rest_v if was.startswith("Other ") else by_name.get(was)
@@ -6253,6 +6284,12 @@ def note_us_voice(about: str) -> None:
     xs = [x for x in _sentences(" ".join(str(about or "").split())) if _PRONOUN.match(x)]
     if xs:
         note_encyclopedia(" ".join(x if x.endswith((".", ";", "!", "?")) else x + "." for x in xs))
+
+
+def encyclopedia_like(t: str) -> bool:
+    """e83: a sentence of an encyclopedia's extract or in its voice (encyclopedia_sentence), or one that opens as an encyclopedia's entry does
+    ("... is an American publicly traded pharmaceutical company": _ENCYCLOPEDIA, "Inc." read as no sentence's end)."""
+    return encyclopedia_sentence(t) or bool(_ENCYCLOPEDIA.search(_ABBR_DOT.sub(r"\1", " ".join(str(t or "").split()))))
 
 
 def encyclopedia_sentence(t: str) -> bool:
@@ -6905,6 +6942,18 @@ def company_property_types(text: str) -> set[str]:
     if not t or not _PROPERTY_SPEAKER.search(t):
         return set()
     return {ty for _, ty in _property_hits(t)}
+
+
+def named_property(v: dict, c: dict, text: str = "") -> bool:
+    """e83: whether a property owner's own name names a kind of property its layer's name names ("Omega Healthcare Investors" of "Healthcare
+    property owners"), its own words naming no other kind only (a net lease is no kind), and it no lender by its words (LENDS_SAYS)."""
+    nm = str(c.get("name") or "").lower()
+    lt = layer_property_types(_HALF_RX.sub("", v.get("layer") or ""))
+    if not nm or not lt or (c.get("model") or "") not in ("property", "") or LENDS_SAYS.search(str(text or "")):
+        return False
+    mine = {t for t, by_name, _ in PROPERTY_TYPES if re.search(by_name, nm)}
+    said = company_property_types(text) - {"net lease"}          # (a net lease is how it leases, no kind of property)
+    return bool(mine & lt) and (not said or bool(said & lt))
 
 
 def property_fit(name: str, text: str) -> bool | None:

@@ -193,3 +193,113 @@ def test_e83_a_public_cards_missing_ffo_is_labelled_and_the_column_notes_follow_
     assert '<td data-label="FFO">–</td>' in html_
     last_table = html_.rindex("</table>")
     assert html_.index("data-ffo-note") > last_table and html_.index("data-membership-note") > last_table
+
+
+# ---------- 4. LIVE19A-004: REIT placements that hold, and their reasons ----------
+def test_e83_a_reit_named_for_the_property_its_layer_names_stays_there():
+    """Omega Healthcare Investors moved from "Healthcare property owners" to "Mortgage REITs": "its own words don't say it sells what
+    “Healthcare property owners” is (“owners”)"."""
+    from app.intel import theme_base as B
+    words = {"OHI": "The Company invests in long-term care real estate and leases it to operators under triple-net leases.",
+             "WELL": "Welltower owns senior housing, post-acute communities and outpatient medical properties."}
+    out = [{"layer": "Healthcare property owners", "description": "They own healthcare properties.", "companies": [
+                {"ticker": "WELL", "name": "Welltower Inc", "industry": "Real Estate Investment Trusts", "model": "property"},
+                {"ticker": "OHI", "name": "Omega Healthcare Investors Inc", "industry": "Real Estate Investment Trusts", "model": "property",
+                 "moved": True}]},
+           {"layer": "Mortgage REITs", "description": "They lend.", "companies": [{"ticker": "KREF", "name": "KKR Real Estate Finance"}]},
+           {"layer": "Other real estate investment trust companies", "description": "", "official": True, "basis": "rest", "companies": []}]
+    got = B.sold_what(out, {}, lambda v: False, lambda cos: "", lambda c: "", lambda c: words.get(c.get("ticker"), ""),
+                      B.kind_stems("Real estate investment trusts"), "Real estate investment trusts", {}, None,
+                      {"OHI": ["Mortgage REITs", "Healthcare property owners"]})
+    at = {c["ticker"]: v["layer"] for v in got for c in v["companies"]}
+    assert at["OHI"] == "Healthcare property owners"
+    assert B.named_property({"layer": "Healthcare property owners"}, {"name": "Omega Healthcare Investors Inc", "model": "property"}, "")
+    # guards: a name naming no kind, or a lender's words, judge nothing
+    assert not B.named_property({"layer": "Healthcare property owners"}, {"name": "Pillarstone Capital REIT", "model": "property"}, "")
+    assert not B.named_property({"layer": "Healthcare property owners"}, {"name": "Healthcare Lending Trust", "model": "property"},
+                                "It originates senior secured mortgage loans to operators.")
+
+
+def test_e83_a_diversified_owner_never_goes_on_shared_words_to_a_layer_of_a_kind_of_property_it_doesnt_name():
+    """Pillarstone Capital REIT, "engaged in investing in, owning and operating commercial properties", moved into "Hotel and leisure
+    property owners" on the words it shares with that layer's description (its 4th layer in 4 days)."""
+    from app.intel import theme_base as B
+    pil = {"ticker": "PRLEQ", "name": "Pillarstone Capital REIT", "moved": True}
+    vc = [{"layer": "Towers, data centres and niche property", "description": "Towers and data centres.", "companies": [
+              pil, {"ticker": "AMT", "name": "American Tower"}]},
+          {"layer": "Hotel and leisure property owners", "description": "They own and operate hotel and leisure properties, investing in resorts.",
+           "companies": [{"ticker": "HST", "name": "Host"}, {"ticker": "PK", "name": "Park"}]},
+          {"layer": "Other real estate investment trust companies", "description": "", "official": True, "basis": "rest", "companies": []}]
+    words = {"PRLEQ": "The Trust is engaged in investing in, owning and operating commercial properties.",
+             "AMT": "We own and operate communications towers and data centres."}
+    out, rows = B.compute_fit(vc, words.get, "Real estate investment trusts")
+    at = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
+    assert at["PRLEQ"] == "Other real estate investment trust companies", rows
+
+
+def test_e83_a_commercial_mortgage_lender_is_not_held_out_of_the_lenders_layer_for_missing_its_name():
+    from app.intel import theme_base as B
+    t = "Franklin BSP Realty Trust originates, acquires and manages a portfolio of commercial real estate debt secured by properties."
+    assert B.lends_into("Mortgage REITs", {"model": "lending"}, t)
+    assert B.lends_into("Mortgage REITs", {"model": "lending", "model_confidence": "medium"}, "The Company is the managing member of the OP.")
+    assert not B.lends_into("Mortgage REITs", {"model": "property"}, "We own and lease apartment communities.")        # guard
+    assert not B.lends_into("Residential landlords", {"model": "lending"}, t)                                           # guard
+
+
+def test_e83_a_move_reason_never_names_a_layer_the_company_did_not_leave():
+    """BREIT "Mortgage REITs → Other: ... a diversified owner, never a layer of towers and data centres"."""
+    from app.intel import theme_base as B, theme_changes as C
+    why, _ = B.kind_bar("Towers, data centres and niche property", {"name": "Blackstone Real Estate Income Trust, Inc."},
+                        "We are a non-listed REIT that invests in stabilized income-generating commercial real estate.", "Real estate investment trusts")
+    assert "“Towers, data centres and niche property”" in why
+    assert C.fit_reason(why, "Mortgage REITs", "Other real estate investment trust companies") is None       # said from its own words instead
+    assert C.fit_reason(why, "Towers, data centres and niche property", "Other real estate investment trust companies") == why     # guard
+
+
+# ---------- 9. LIVE19A-009: a move's quote says something of its work and of the layer ----------
+def test_e83_a_move_never_quotes_a_line_of_legal_form_size_or_history():
+    """The R81 Regional banks deck: moves into "Real estate-focused lenders (bank)" quoting BankUnited's "with total consolidated assets of
+    $35 billion at December 31, 2025", Beacon's "a Delaware corporation", Provident's "became the holding company for Provident Bank on
+    January 15, 2003"."""
+    from app.intel import theme_changes as C
+    lay = "Real estate-focused lenders (bank)"
+    bku = ("BankUnited, Inc., with total consolidated assets of $35 billion at December 31, 2025, is the bank holding company of BankUnited, "
+           "N.A., a national banking association headquartered in Miami Lakes, Florida.")
+    pfs = "The Company is a Delaware corporation which became the holding company for Provident Bank on January 15, 2003."
+    assert C.layer_quote(bku, "BankUnited, Inc.", lay) == ("", False)
+    assert C.layer_quote(pfs, "Provident Financial Services Inc", lay) == ("", False)
+    beacon = "Beacon Financial Corporation, a Delaware corporation, is the holding company. The Bank offers commercial real estate loans."
+    assert C.layer_quote(beacon, "Beacon Financial Corp", lay) == ("The Bank offers commercial real estate loans", True)
+    log = [{"d": "2026-11-20", "moved": [{"symbol": "PFS", "name": "Provident Financial Services Inc", "from": "Other regional bank companies",
+                                          "to": lay}]}]
+    got = C.reasoned(log, words_of=lambda s: pfs)[0]["moved"][0]["why"]
+    assert "Delaware" not in got and "the theme's map places it in" in got
+    # guard: a line of what it does is still quoted
+    assert C.layer_quote("General Dynamics is a developer and producer of advanced military equipment.", "General Dynamics",
+                         "Defense prime contracting")[1] is True
+
+
+def test_e83_an_encyclopedias_opening_is_never_the_quote_that_moves_a_company():
+    """The R81 Biotech deck: Amneal moved to "Established pharmaceutical companies" as "its own words call it a company of another kind than
+    the theme's (“is an American publicly traded pharmaceutical company”)"."""
+    from app.intel import theme_base as B
+    assert B.encyclopedia_like("Amneal Pharmaceuticals, Inc. is an American publicly traded pharmaceutical company.")
+    assert not B.encyclopedia_like("Amneal is a global pharmaceutical company that makes generic medicines.")          # guard
+    theme_rx = r"\bbiotech"
+    words = {"AMRX": "Amneal Pharmaceuticals, Inc. is an American publicly traded pharmaceutical company. It develops generics.",
+             "MRK": "Merck is a global pharmaceutical company that discovers and sells medicines.",
+             "PFE": "Pfizer is a research-based pharmaceutical company that discovers and sells medicines.",
+             "B1": "B1 is a biotechnology company selling specialty medicines.", "B2": "B2 is a biotechnology company selling rare disease medicines."}
+    cos = [{"ticker": t_, "name": n_} for t_, n_ in (("AMRX", "Amneal Pharmaceuticals, Inc."), ("MRK", "Merck & Co., Inc"), ("PFE", "Pfizer Inc"),
+                                                    ("B1", "B1 Bio"), ("B2", "B2 Bio"))]
+    vc = [{"layer": "Commercial specialty biotechs", "description": "They sell approved specialty medicines.", "companies": cos},
+          {"layer": "Other biotech companies", "official": True, "basis": "rest", "companies": []}]
+    fn = next(f for n_, f in vars(B).items() if callable(f) and getattr(f, "__code__", None) and "an established " in str(f.__code__.co_consts)
+              and n_ != "encyclopedia_like")
+    got = fn(vc, words.get, "Biotechnology")
+    out = got[0] if isinstance(got, tuple) else got
+    at = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
+    assert at["AMRX"] == at["MRK"] == "Established pharmaceutical companies", at
+    why = {r["ticker"]: r["why"] for r in got[1]}
+    assert "American publicly traded" not in why["AMRX"] and why["AMRX"].startswith("its description calls it")
+    assert why["MRK"].startswith("its own words call it") and "“is a global pharmaceutical company”" in why["MRK"]
