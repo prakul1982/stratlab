@@ -1117,6 +1117,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     if scope_warn:
         print("theme base: theme-scope warning:", theme[:40], [x["layer"] for x in scope_warn])
         placements = {**(placements or {}), "scope_warning": scope_warn}
+        # e85 (the owner's R84 reassessment, P0: Fertilizers & Agrochemicals' "Property developers" layer, pp.10-11): such a layer is
+        # folded, never shown as a layer of the theme: its companies go to the theme's "Other" group, each with why
+        out_vc = fold_scope_layers(out_vc, f"{theme} {m.get('sector') or ''}", theme)
     if placements is not None and placements.get("dropped") and published is not None:
         out_vc, placements = layer_answer_removals(out_vc, placements, words_of, theme, facts_for)
     if placements is not None and placements.get("dropped"):
@@ -4356,7 +4359,7 @@ COMPUTE_SAYS = (r"\bcomput(?:e|ing)\b|\bcapacity\b|\bhosting\b|data cent(?:er|re
                 # e85 (CoreWeave's 10-K opening, read again for a line a page may quote: "The Essential Cloud for AI ... enables the full
                 # lifecycle of AI, including large-scale model training, inference ...", moved out of "Data centres, hosting and networks"):
                 # the training of AI models it runs for its customers is the computing it sells
-                r"\b(?:large-scale )?(?:ai )?model training\b")
+                r"\b(?:large-scale )?(?:ai )?model training\b|\b(?:ai|training) workloads\b|\bai hardware\b")
 CLOUD_ADJECTIVE = r"\bcloud(?:[- ]based|[- ]native)?\s+(?!comput\w*|infrastructure|hosting|servers?|capacity|data cent\w*)"
 
 
@@ -4935,7 +4938,17 @@ MAJOR_MIN = 1000.0              # a market value under this (in $ million or ₹
 PROPERTY_LAYER = re.compile(r"\bpropert(?:y|ies)\b|\breal\s+estate\b|\brealty\b", re.I)
 PROPERTY_THEME = re.compile(r"\bpropert|\breal\s*estate|\brealty|\breit|\bhous|\bhomes?\b|\bconstruct|\binfra|\blandlord|\bbuilding", re.I)
 PROPERTY_SAYS = re.compile(r"\breal\s+estate\b|\brealty\b|\bpropert(?:y|ies)\b|\bresidential\s+(?:projects?|development)|"
-                           r"\b(?:housing|township|commercial)\s+(?:projects?|development)", re.I)
+                           r"\b(?:housing|township|commercial)\s+(?:projects?|development)|"
+                           # e85 (the owner's review of the R84 Hotels & Casinos deck, P0: Host Hotels, "the largest publicly traded lodging
+                           # REIT, with a ... portfolio of luxury and upper-upscale hotels", Ryman and Sunstone out of "Hotel property owners
+                           # (lodging REITs)" as words that "don't say property is its business"): a REIT, or a portfolio of hotels, resorts
+                           # or casinos it owns, is property as its business
+                           r"\breits?\b|\breal\s+estate\s+investment\s+trusts?\b|"
+                           # e85 (the owner's R84 reassessment: Bharat Agri Fert & Realty "has no property evidence" beside its quoted
+                           # construction words): building homes, flats or commercial buildings is property as its business
+                           r"\b(?:construct\w*|develop\w*|build\w*)\b[^.;]{0,40}?\b(?:buildings?|flats?|apartments?|houses|homes|villas|"
+                           r"complex(?:es)?|towers?)\b|"
+                           r"\b(?:portfolio|own|owns|owned|owning|invests?\s+in|investing\s+in)\b(?!\s+(?:and\s+operated\s+)?by\b)[^.;]{0,80}?\b(?:hotels?|resorts?|casinos?)\b", re.I)
 # e82 (LIVE18A-004, the live R80 REITs: Omega Healthcare, a healthcare property owner whose words also name "real estate loans", and
 # Blackstone Real Estate Income Trust, one segment of nine "Investments in Real Estate Debt", moved to "Mortgage REITs" on one phrase):
 # words that say a company owns, leases or invests in property it holds (never "owned by" a borrower or a sponsor). A lender is one whose
@@ -5011,6 +5024,37 @@ def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
             return (f"its own words don't say property is its business"
                     + (f" (they say “{q}”)" if q else "") + f"; a {theme} theme holds “{name}” only for those whose do"), ""
     return "", ""
+
+
+_DEVELOPER_LAYER = re.compile(r"\bdevelop\w*|\bconstruct\w*|\bbuilders?\b|\brealty\b", re.I)
+
+
+def fold_scope_layers(vc: list[dict], scope: str, theme: str) -> list[dict]:
+    """e85: each named layer of property or real estate in a theme that names no such business (property_scope_layer) folded into the theme's
+    "Other" group, its companies there with why (a business beside the theme's own work); the layers as they were when there is none."""
+    rest_v = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
+    out = []
+    for v in vc:
+        name_ = _HALF_RX.sub("", v.get("layer") or "")
+        if v.get("official") or not v.get("layer") or not v.get("companies") or not property_scope_layer(v["layer"], scope) \
+                or not _DEVELOPER_LAYER.search(name_) or (kind_stems(name_) & kind_stems(scope)):
+            # (a layer of the theme's own kind of property, Hotels & Casinos' "Hotel property owners", stays: only a property developers'
+            # layer that shares no kind word with the theme is folded)
+            out.append(v)
+            continue
+        if rest_v is None:
+            rest_v = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+            vc = vc + [rest_v]
+        frm = _HALF_RX.sub("", v["layer"])
+        why = f"“{frm}” is a property business beside the theme's own work, no layer of a {theme} theme; listed here, out of every layer's figures"
+        rest_v["companies"] = list(rest_v.get("companies") or []) + [
+            {**{k: x for k, x in c.items() if k not in ("fit", "placed_by")}, "moved": True, "refit": {"from": frm, "to": "", "why": why, "scope": True}}
+            for c in v["companies"]]
+        # (the layer stays in its place, emptied and marked: the map's layers keep their order for every step that reads them by position)
+        out.append({**v, "companies": [], "folded": why})
+    if rest_v is not None and rest_v not in out:
+        out.append(rest_v)
+    return out
 
 
 def first_line(text: str) -> str:

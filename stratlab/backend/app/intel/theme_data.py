@@ -4301,6 +4301,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     """The dive for a checked map (see theme_check.check_placements): the tables by layer, the whole chain in one table, the sub-themes'
     companies, and the sections for the theme as a whole. Every figure is from the stored facts; nothing here calls a source."""
     checked = by_industry(checked)
+    # e85: a layer the placement folded (theme_base.fold_scope_layers: a property developers' layer in a theme of another business), emptied
+    # into "Other", is no layer of the dive
+    checked = {**checked, "value_chain": [v for v in checked.get("value_chain") or [] if not (v.get("folded") and not v.get("companies"))]}
     # r68e (R68, the owner's review of the live R66 Payments deck: its 6 card issuers, consumer lenders and digital banks folded into the
     # core figures, 16 -> 21 with figures, 64% -> 100% of the value, P/E n 13 -> 18): the re-check job worked the dive out under the theme
     # library's normalised name ("payment and financial technology", "fintech" spelt out), whose "financ" made lenders the theme's own

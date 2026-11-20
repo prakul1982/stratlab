@@ -140,6 +140,10 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
     left = {str(x["ticker"]): dropped_why(x) for x in ((dive.get("placements") or {}).get("dropped") or []) if isinstance(x, dict) and x.get("ticker")}
     mc = dive.get("membership_check") if isinstance(dive.get("membership_check"), dict) else {}
     ev = {s_: EV_CODE[x] for s_, x in (mc.get("outside") or {}).items() if x in EV_CODE}
+    # e85: the figures' window's states apart ("ev_win"), so a fall from description-verified of a company there is known to the next read
+    ev_win = {s_: EV_CODE[x] for s_, x in (dive.get("evidence") or {}).items() if x in EV_CODE and s_ not in ev}
+    ev_down = [[str(x.get("symbol")), clip_words(x.get("name") or "", 80), str(x.get("to") or ""), clip_words(x.get("why") or "", 200)]
+               for x in dive.get("evidence_down") or [] if isinstance(x, dict) and x.get("symbol")]
     # h56 (R56): only the points with the evidence tally's counts ([day, checked, total, description-verified]) are kept
     from .theme_data import tally_points
     hist = tally_points(mc.get("history"))
@@ -168,7 +172,8 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
             **({"ev_rule": mc["rule"]} if ev and isinstance(mc.get("rule"), int) else {}),     # e84: the evidence rule the kept states are of
-            **({"left": left} if left else {}), **({"kept_layers": kept_layers} if kept_layers else {})}
+            **({"left": left} if left else {}), **({"kept_layers": kept_layers} if kept_layers else {}),
+            **({"ev_down": ev_down[:ROWS_KEEP]} if ev_down else {}), **({"ev_win": ev_win} if ev_win else {})}
 
 
 BUSINESS, LISTING = "business membership: ", "listing: "
@@ -577,8 +582,13 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
     at = at or datetime.now(timezone.utc)
     if isinstance(was, dict) and isinstance(was.get("cos"), dict) and isinstance(was.get("layers"), list):
         d = diff(was, now)
-        if changed(d):
-            log = (log + [_entry(d, cause_of(was, now, refresh), at, now.get("rules"))])[-KEEP:]
+        if changed(d) or now.get("ev_down"):
+            # e85: a read whose only change is companies falling from description-verified is logged too, each with why ("down")
+            e_ = _entry(d, cause_of(was, now, refresh), at, now.get("rules"))
+            if now.get("ev_down"):
+                e_["down"] = [{"symbol": x[0], "name": x[1], "to": EV_STATE.get(x[2], x[2]) if len(x[2]) == 1 else x[2], "why": x[3]}
+                              for x in now["ev_down"] if isinstance(x, list) and len(x) == 4]
+            log = (log + [e_])[-KEEP:]
     if isinstance(was, dict):
         # d53: every company an earlier snapshot dropped as another business, kept from one snapshot to the next (off_memory), unless its
         # own words were read again and keep it in ("back")
@@ -598,7 +608,7 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
             now = {**now, "adj_was": [was["pop"], dict(was.get("adj") or {})]}
         elif was.get("adj_was"):
             now = {**now, "adj_was": was["adj_was"]}
-    now = {k: v for k, v in now.items() if k not in ("rest_why", "rest_mwhy")}           # r62, r67e: read for this entry's reasons, never stored
+    now = {k: v for k, v in now.items() if k not in ("rest_why", "rest_mwhy", "ev_down")}           # r62, r67e: read for this entry's reasons, never stored
     return {"snap": now, "log": log, "since": since or at.date().isoformat()}
 
 

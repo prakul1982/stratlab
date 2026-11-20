@@ -2429,6 +2429,26 @@ def roll_said(n_in: int, total: int, n_out: int, in_: str, out_: str, cut: bool)
 # by its words is never said to have no other way of earning from words that name none; what its words name beside the layer's business is
 # said as what it also earns from, and "no other way of earning" only where one reportable segment is stored (theme_data.also_said)
 ON_WORDS_NOTE = "(on its words): the map placed it here and its own words say the layer's name, so it is in the layer's figures."
+SELECTION_SHARE = 0.5         # e85: figures of fewer than this share of the theme's companies say their selection basis and its bias
+
+
+def selection_said(cov: dict | None) -> str:
+    """e85 (the owner's R84 reassessment, P1: Biotech's figures of 85 of its 807 core companies, the basis unsaid): when the companies with
+    figures are under SELECTION_SHARE of the theme's, one line of how they were chosen and which way that leans the medians; "" else."""
+    cov = cov if isinstance(cov, dict) else {}
+    n, total = int(cov.get("n") or 0), int(cov.get("total") or 0)
+    if not n or not total or n >= SELECTION_SHARE * total:
+        return ""
+    share = cov.get("share")
+    return (f"The figures are of {n:,} of the theme's {total:,} companies: the largest by market value whose filed figures are read"
+            + (f" ({share}% of {cov.get('of_what') or 'the market value'})" if share is not None else "")
+            + "; smaller and earlier-stage companies are under-represented, so the medians lean towards larger, more established companies.")
+
+
+EVIDENCE_RULE_SAID = ("Description-verified, industry-supported and list-supported companies count in a median or total; a company not "
+                      "checked yet, or whose own words describe other work, counts in none.")
+
+
 def on_words(c: dict) -> bool:
     """e85 (LIVE21A-009: Welltower's row "(on its words)" in the R84 REITs deck while the same deck's Membership note said it has "no
     description in its own words yet" and its page said "industry-supported"): a row is marked placed on its words only when its evidence
@@ -3591,8 +3611,14 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False, most:
     if (v.get("membership") or {}).get("placed"):
         # l55 (R55): each state by name, with what each means; only the members in the theme count, never one "confirmed" total
         rows.append(["Universe", membership_words(v, cov["total"]) + ".",
-                     "Only description-verified and industry-supported companies count in a median or total." if evidence_tally(v, cov["total"])
+                     # e85 (the owner's review of the R84 Payments deck, P0: "only description-verified and industry-supported enter
+                     # calculations", yet 6 list-supported companies were among its 16 core members with figures): the rule as the figures
+                     # apply it, list-supported members (the theme's own list) counted as they are
+                     EVIDENCE_RULE_SAID if evidence_tally(v, cov["total"])
                      else "Only companies in the theme count in a median or total."])
+    sel = selection_said(cov)
+    if sel:
+        rows.append(["Selection", sel, "Every median is read as one of the larger companies of the theme."])
     par = parents_row(v)
     if par:
         rows.append(par)
@@ -3622,6 +3648,14 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False, most:
                      "Kept in the figures by their official industry; nothing in their own words was checked."])
     else:
         rows.append(["Membership", "Every company with figures has words of its own, or a checked quote, that show the theme's work.", "Nothing held back."])
+    down = v.get("evidence_down") or []
+    if down:                       # e85 (owner, R84 decks, P0): every fall from description-verified with its reason
+        said_ = {"industry_code_supported": "industry-supported", "list_supported": "list-supported", "membership_unverified": "not checked",
+                 "not_confirmed": "own words describe other work"}
+        rows.append(["No longer description-verified", f"{_n(len(down), 'company', 'companies')} since the previous version: "
+                     + "; ".join(f"{clean_name(x['name'])} (now {said_.get(x.get('to'), x.get('to'))}: {x['why']})" for x in down[:6])
+                     + (f"; and {len(down) - 6} more" if len(down) > 6 else "") + ".",
+                     "Each said with why: its words read from another source, no line a page may quote, or words that don't say the theme's work."])
     part = partial_map(v, cov)
     if part:
         rows.append(["Partial map", part, "Every claim about the map is of its checked companies; the rest are listed, not placed."])
@@ -5287,10 +5321,17 @@ CHAIN_FAMILY_COLS = (("cet1", "CET1", 0.95), ("solvency", "Solvency", 1.0), ("lo
                      ("ffo_share", "FFO / revenue", 1.3), ("p_ffo", "P/FFO", 1.05), ("sbc_share", "SBC / revenue", 1.15), ("fcf_margin", "FCF margin", 1.05))
 
 
-def chain_family_cols(rows: list) -> list[tuple]:
+# e85 (the owner's review of the R84 US Insurance deck, P1: its value chain pp.8-10 carried a P/FFO column, from a property owner in one layer):
+# a sector's own measures only in its themes: FFO measures in the value chain of a theme of property owners (its name says REITs, real estate,
+# property or landlords), never of an insurance or any other theme
+REIT_THEME = re.compile(r"\breits?\b|\breal\s*estate|\bpropert|\brealty|\blandlord", re.I)
+
+
+def chain_family_cols(rows: list, sector: str | None = None) -> list[tuple]:
     """The value chain's columns of the families' filed figures that some layer has a median of (R25: a layer's columns follow its family;
-    drop_empty takes away the rest)."""
-    return [c for c in CHAIN_FAMILY_COLS if any(r.get(c[0]) is not None for r in rows)]
+    drop_empty takes away the rest). e85: FFO measures only for a theme of property owners (REIT_THEME), when its name is given."""
+    ffo_ok = sector is None or bool(REIT_THEME.search(str(sector or "")))
+    return [c for c in CHAIN_FAMILY_COLS if any(r.get(c[0]) is not None for r in rows) and (ffo_ok or c[0] not in FFO_KEYS)]
 
 
 def unranked_words(chain: dict) -> str:
@@ -6855,7 +6896,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         cols = [("n", "Companies", 1.25), ("revenue", "Revenue", 1.35), ("ebitda", "EBITDA margin", 1.2), ("net", "Net margin", 1.1), ("roce", "ROCE", 1.0)]
         if lend_chain:
             cols += [("roe", "ROE", 1.0), ("nii_assets", "NII / assets", 1.15), ("gnpa", "Gross NPA", 1.1), ("pb", "P/B", 0.9)]
-        cols += chain_family_cols(rows_c)            # R25: each family's own filed figures (CET1, solvency, combined ratio, SBC, FCF) where its layers have them
+        cols += chain_family_cols(rows_c, str(v.get("sector") or ""))            # R25: each family's own filed figures (CET1, solvency, combined ratio, SBC, FCF) where its layers have them
         fmt_ = {"ebitda": ebm, "pb": _times, "solvency": lambda x: _times(x, 2)}
 
         def cell(r, k):                    # each median with its base: none under 3 companies, a count when under the layer's (R20)

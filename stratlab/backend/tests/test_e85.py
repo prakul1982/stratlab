@@ -171,6 +171,7 @@ def test_words_read_again_move_no_company_on_a_fixed_rule():
     assert B.company_stage(regn)[0] != "development"
     assert B.says_compute("CoreWeave is The Essential Cloud for AI. Our CoreWeave Cloud platform enables the full lifecycle of AI, including "
                           "large-scale model training, inference, data movement, continuous iteration, and agentic workflows.")
+    assert B.says_compute('We offer Slurm on Kubernetes ("SUNK") to support large-scale AI research and training workloads.')
     assert not B.says_compute("Shopify's all-in-one platform makes it easier to start, run and grow a business")          # guard
 
 
@@ -366,3 +367,120 @@ def test_the_sample_deck_is_made_again_at_its_themes_newer_close(monkeypatch):
     row["meta"]["prices"] = "2026-11-20"
     dive.pop("updating")
     assert TR.refresh_sample({"id": ""}) is None and len(made) == 1  # already at the newest close
+
+
+# ---------- the owner's review of the R84 decks (P0/P1) ----------
+def test_a_hotel_reit_s_words_say_property_is_its_business():
+    """Fails on R84: Host Hotels, Ryman, Sunstone and Xenia out of "Hotel property owners (lodging REITs)" as words that "don't say property
+    is its business"."""
+    for w in ("We are the largest publicly traded lodging REIT, with a geographically diverse portfolio of luxury and upper-upscale hotels.",
+              "We specialize in group-oriented, destination hotel assets in urban and resort markets. As a REIT, we generally will not be "
+              "subject to federal corporate income taxes.",
+              "Xenia Hotels & Resorts, Inc. is a Maryland corporation that primarily invests in uniquely positioned luxury and upper upscale "
+              "hotels and resorts."):
+        assert B.PROPERTY_SAYS.search(B.principal_words(w)), w
+    assert not B.PROPERTY_SAYS.search("We operate casinos and hotels owned by third parties under management contracts")   # guard
+
+
+def test_the_decks_rule_says_list_supported_members_count_as_they_do():
+    """Fails on R84: "Only description-verified and industry-supported companies count" beside 6 list-supported core members with figures."""
+    from app import deck as K
+    assert "list-supported" in K.EVIDENCE_RULE_SAID
+
+
+def test_ffo_columns_only_in_a_reit_themes_value_chain():
+    """Fails on R84: the US Insurance deck's value chain carried P/FFO."""
+    from app import deck as K
+    rows = [{"layer": "A", "p_ffo": 14.0, "combined_ratio": 95.0}]
+    assert [c[0] for c in K.chain_family_cols(rows, "Insurance")] == ["combined_ratio"]
+    assert "p_ffo" in [c[0] for c in K.chain_family_cols(rows, "Real estate investment trusts")]
+
+
+def test_every_fall_from_description_verified_is_kept_with_its_reason():
+    """Fails on R84: Software's 467 -> 395 fell with no reason in the deck or the change log."""
+    from app.intel import theme_changes as C
+    before = {"ev": {"MSFT": "d"}, "ev_win": {"ADBE": "d", "ORCL": "i"}}
+    dive = {"evidence": {"MSFT": "industry_code_supported", "ADBE": "description_verified", "ORCL": "description_verified"}}
+    down = TR.evidence_down(before, dive, lambda s: MSFT_ARTICLE, "US", {"MSFT": MSFT})
+    assert [x["symbol"] for x in down] == ["MSFT"] and "may quote" in down[0]["why"]
+    snap = C.snapshot({"layers": [{"layer": "L", "companies": [{"symbol": "MSFT", "name": MSFT}]}], "evidence_down": down,
+                       "evidence": dive["evidence"]}, ["MSFT"], 1, B.RULES)
+    assert snap["ev_down"][0][0] == "MSFT" and snap["ev_win"]["ADBE"] == "d"
+    got = C.apply({"snap": {**snap, "ev_down": None}}, snap)
+    assert got["log"][-1]["down"][0]["symbol"] == "MSFT" and "ev_down" not in got["snap"]
+
+
+def test_no_company_outside_the_stated_evidence_states_is_in_a_calculation_cohort_on_any_theme_fixture():
+    """The owner's R84 reassessment (Payments, Medical devices, Hotels & Casinos, Aerospace, Telecom, Building materials: the rule printed
+    beside the figures and the companies in them disagreed). Guard over every live theme fixture: a company the membership check keeps in
+    the theme (in a layer's calculations when it has figures) is description-verified, industry-supported or list-supported, the three
+    states the deck's rule names (deck.EVIDENCE_RULE_SAID); not checked and other work are in none."""
+    import glob
+    import pathlib
+    from app import deck as K
+    for s_ in ("Description-verified", "industry-supported", "list-supported"):
+        assert s_ in K.EVIDENCE_RULE_SAID
+    ok = {"description_verified", "industry_code_supported", "list_supported"}
+    seen = 0
+    for p in sorted(glob.glob(str(pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "*" / "*.json"))):
+        try:
+            d = json.load(open(p))
+        except ValueError:
+            continue
+        d = d.get("data", d) if isinstance(d, dict) else d
+        if not isinstance(d, dict) or "evidence" not in d or "value_chain" not in d:
+            continue
+        theme, region = d.get("theme") or d.get("sector") or "", d.get("region") or "US"
+        words, named, wt = D.theme_words(d, theme), D.name_words(d, theme), D.work_test(d, theme)
+        for v in d["value_chain"]:
+            for c in v["companies"]:
+                raw = d["evidence"].get(c["ticker"])
+                st = D.membership(c, words, raw, None, named=named)
+                qc, q = D.quoted_words(c, raw, region, bool(v.get("official")))
+                ev = D.work_checked(D.evidence_state(qc, words, q, None, st), qc, q, wt)
+                assert st == "unverified" or ev in ok, (p, c["ticker"], st, ev)
+        seen += 1
+    assert seen >= 50
+
+
+def test_a_property_developers_layer_in_a_theme_of_another_business_is_folded_with_why():
+    """Fails on R84: Fertilizers & Agrochemicals showed a "Property developers" layer (pp.10-11); Bharat Agri Fert & Realty's reason said its
+    words don't say property while quoting its construction words."""
+    vc = [{"layer": "Urea and nitrogen fertiliser makers", "companies": [{"ticker": "U1"}]},
+          {"layer": "Property developers", "companies": [{"ticker": "BHARATAGRI"}]},
+          {"layer": "Other fertilizers and agrochemicals companies", "official": True, "basis": "rest", "companies": []}]
+    out = B.fold_scope_layers(vc, "Fertilizers and agrochemicals", "Fertilizers and agrochemicals")
+    assert [v["layer"] for v in out if v["companies"]] == ["Urea and nitrogen fertiliser makers", "Other fertilizers and agrochemicals companies"]
+    assert out[1]["folded"] and out[2]["companies"][0]["refit"]["why"].startswith("“Property developers” is a property business beside the theme's own work")
+    hotels = [{"layer": "Hotel property owners (lodging REITs)", "companies": [{"ticker": "HST"}]}]
+    assert B.fold_scope_layers(hotels, "Hotels and casinos", "Hotels and casinos") == hotels          # guard: the theme's own kind
+    assert B.PROPERTY_SAYS.search("The company is engaged in the construction of residential and commercial buildings")
+
+
+def test_a_small_share_of_companies_with_figures_says_its_selection_and_bias():
+    """Fails on R84: Biotech's figures of 85 of 807 core companies with no word of how they were chosen."""
+    from app import deck as K
+    line = K.selection_said({"n": 85, "total": 807, "share": 71, "of_what": "the theme's market value"})
+    assert line.startswith("The figures are of 85 of the theme's 807 companies") and "lean towards larger" in line
+    assert K.selection_said({"n": 60, "total": 100}) == ""
+
+
+def test_deck_check_fails_a_stated_cohort_rule_its_population_breaks_and_layer_words_only_warns():
+    """Fails on R84: no check caught "Only description-verified and industry-supported" beside "with figures (every median and total is of
+    these) 16 (10 description-verified, 0 industry-supported, 6 list-supported)" (Payments; Medical devices, Hotels & Casinos, Aerospace,
+    Telecom, Building materials the same); and "layer words" failed Cybersecurity's correct "Endpoint and detection platforms"."""
+    import pathlib
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+    import deck_check
+    page = ("Universe Only description-verified and industry-supported companies count in a median or total. "
+            "in the theme, with figures (every median and total is of these) 16 (10 description-verified, 0 industry-supported, 6 list-supported)")
+    got = deck_check.check_text(page)
+    assert got["counts"]["cohort rule"] == 1 and deck_check.failed(got)
+    fixed = page.replace("Only description-verified and industry-supported companies count", "Description-verified, industry-supported and "
+                         "list-supported companies count")
+    assert not deck_check.check_text(fixed)["counts"]["cohort rule"]
+    assert "layer words" in deck_check.WARN and "layer words" not in deck_check.FAIL
+    # the Cybersecurity and Semiconductors inputs of R84 (their list-supported core members) are among the loop test's fixtures
+    here = pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "r84"
+    assert (here / "cyber.json").exists() and (here / "semis.json").exists()
