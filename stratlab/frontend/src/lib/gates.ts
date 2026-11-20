@@ -7,6 +7,11 @@ import { FLAGS, planOf, type PlanId } from "./plans";
 
 export type Gate = { feature: string; whole: boolean };
 
+/** LIVE20B-009: the pages with part of them on a plan that never word a plan note of their own, so the page's note is drawn under the title from
+ *  the first frame instead of waiting for the page's figures (Free's /trade/positioning got it at 6.0 s above a table already drawn: CLS 0.057). */
+export const BARE_PAGES = new Set(["/trade/positioning", "/trade/positioning/stocks", "/trade/closing-auction", "/trade/fo-changes", "/trade/events",
+  "/invest/etf-gaps", "/invest/margin-funding", "/options"]);
+
 export const PAGE_GATES: Record<string, Gate> = {
   "/trade/signals": { feature: "signal_webhooks", whole: true },
   "/trade/replay": { feature: "chart_replay", whole: true },

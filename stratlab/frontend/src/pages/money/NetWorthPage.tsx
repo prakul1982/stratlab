@@ -248,7 +248,9 @@ function Facts({ r, tax }: { r: Row; tax?: DepositTax | null }) {
   if (f.maturity) bits.push(`${f.matured ? "Matured" : "Matures"} ${day(f.maturity)}${f.maturity_value != null ? `: ${inr(f.maturity_value)}` : ""}`);
   if (f.interest_so_far != null && r.kind !== "loan") bits.push(`interest so far ${inr(f.interest_so_far)}`);
   if (f.year_end != null) bits.push(`${f.year_end_label}: ${inr(f.year_end)} projected`);
-  if (f.paid_in != null) bits.push(`paid in ${inr(f.paid_in)}`);
+  // LIVE20B-008: a recurring deposit's instalments so far against all of them ("paid in ₹2,00,000" beside a maturity of ₹2,57,644 with ₹17,644 of
+  // interest read as not adding up: by maturity ₹2,40,000 is paid in)
+  if (f.paid_in != null) bits.push(f.total_in != null && f.total_in > f.paid_in ? `paid so far ${inr(f.paid_in)} of ${inr(f.total_in)}` : `paid in ${inr(f.paid_in)}`);
   if (f.yearly_interest != null) bits.push(`interest ${inr(f.yearly_interest)} a year`);
   if (f.next_interest) bits.push(`next interest ${day(f.next_interest)}`);
   const d = tax?.items?.[r.id];

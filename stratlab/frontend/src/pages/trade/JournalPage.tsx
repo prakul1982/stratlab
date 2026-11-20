@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ET, IST, dayIn, istToday, marketTz, money, fmtDate, tzLabel } from "../../lib/format";
 import { track } from "../../lib/analytics";
-import { CHECKS, checksLine, upDown } from "../../lib/tradeUi";
+import { CHECKS, checksLine, heroSummary, upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
@@ -394,7 +394,7 @@ function VerdictView({ v, n, totals, whose }: { v: NonNullable<Journal["verdict"
           <span className="k-eyebrow">Verdict on {whose}</span>
           {/* "too few to judge" isn't a verdict: it's said in smaller type (DB-044: about 100px) */}
           <h2 className={`verdict-head j-verdict-head ${v.verdict}`}>{v.headline}</h2>
-          <p className="j-verdict-sum">{v.summary}</p>
+          <p className="j-verdict-sum">{heroSummary(v.summary, `${v.headline}`).join(" ")}</p>
           {/* the tax report's yearly F&O totals aren't trades it can judge: say what the verdict covers (R61-004: "Only 11
               trades: too few to judge" over a page with 1,11,201 F&O trades in its totals) */}
           {totals && <p className="k-small k-muted">Judged on the {n.toLocaleString("en-IN")} round trip{n === 1 ? "" : "s"} listed here. The F&amp;O, commodity and currency totals from your tax report aren't trade by trade, so they aren't part of this verdict.</p>}
@@ -446,7 +446,8 @@ function CheckCard({ c }: { c: Check }) {
           ? <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · worst reshuffle <span className="nowrap">{m(-d.worst)}</span>, which is also the level 95% of reshuffles stay at or above</p>
           : <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles at or above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>)}
         {c.id === "costs" && d && <p className="k-small">Gross <span className="nowrap"><Signed value={d.gross}>{signed(d.gross)}</Signed></span> · charges <span className="nowrap">{m(d.charges)}</span> · doubled <span className="nowrap"><Signed value={d.doubled}>{signed(d.doubled)}</Signed></span></p>}
-        <p className="k-small k-muted">{c.detail}</p>
+        {/* LIVE20B-005: "too few" was said three times (headline, summary, this card): the card says what makes a fair sample instead */}
+        <p className="k-small k-muted">{c.id === "sample" && c.status === "fail" ? "Under 15 trades, luck can decide the result; 30 or more make a fair sample." : c.detail}</p>
         {c.id === "shuffle" && d?.unit === "rupees" && <span className="k-note">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}
       </Card>
     </div>

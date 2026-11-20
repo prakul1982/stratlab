@@ -62,6 +62,8 @@ def test_a_one_stock_sector_has_its_stocks_weight():
     v = holdings.view(items, q)
     w = {r["symbol"]: r["weight"] for r in v["rows"]}
     by = {a["sector"]: a["pct"] for a in v["allocation"]}
-    assert by["Information Technology"] == w["WIPRO"] == 7.1 and by["Gold ETFs"] == w["GOLDBEES"]
+    # (updated on purpose, site83 LIVE20B-010: a sector's share is its value over the total rounded once, 7.04% is 7.0, and its one stock
+    # still shows the same weight)
+    assert by["Information Technology"] == w["WIPRO"] == 7.0 and by["Gold ETFs"] == w["GOLDBEES"]
     assert round(by["Banks"], 1) == round(w["SBIN"] + w["ICICIBANK"], 1)
     assert abs(sum(by.values()) - 100) < 0.05

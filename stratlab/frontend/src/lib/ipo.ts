@@ -26,7 +26,7 @@ export interface IpoRow {
 }
 export interface AlertPrefs { on: boolean; events: EventKind[]; markets: Market[]; sme: boolean; allowed: boolean; plan: string; channels: string[]; event_names: Record<EventKind, string> }
 export interface IpoList {
-  market: Market; as_of: string | null; bids_read?: string | null; problems_at?: string | null; tabs: Record<Stage, IpoRow[]>; counts: Record<Stage, number>; note: string; problems: string[]; prefs: AlertPrefs; today: string;
+  market: Market; as_of: string | null; bids_read?: string | null; problems_at?: string | null; next_read?: string | null; tabs: Record<Stage, IpoRow[]>; counts: Record<Stage, number>; note: string; problems: string[]; prefs: AlertPrefs; today: string;
 }
 export interface SubRow { label: string; sr: string; offered: number | null; bid: number | null; times: number | null }
 export interface Subscription { rows: SubRow[]; times: number | null; as_of: string | null; live?: boolean; read?: string }

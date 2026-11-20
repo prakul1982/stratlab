@@ -50,7 +50,9 @@ def test_live18a_001_a_card_already_in_todays_words_or_without_movers_is_left_as
 
 
 def test_live18a_001_a_card_kept_in_the_database_is_mended_as_the_server_starts_and_on_every_read(monkeypatch):
-    store = {mood.KEEP_KEY + "US": json.dumps({"at": time.time() - 60, "value": _card(OLD_US, taking=ALPHABET)})}
+    # site83 (LIVE20A-002), updated on purpose: a card kept by an earlier release is now read again, never served (test_site83); one of
+    # this release's way of working the figures out ("method") is still taken up at the start and mended as before
+    store = {mood.KEEP_KEY + "US": json.dumps({"at": time.time() - 60, "value": {**_card(OLD_US, taking=ALPHABET), "method": mood.METHOD}})}
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     m = mood.Mood(hub=None)
     m._seed("US")

@@ -36,7 +36,9 @@ export const planIdOf = (p: string | null | undefined): PlanId => (p === "basic"
 /** The page lock's sentence after its heading, in the one wording (DP2-012: "…: on the Pro plan. You're on Free; the rest of the
  * page is yours."): what the plan adds, and that everything else on the page is on the person's own plan. */
 export function lockWords(what: string, plan: string, yours: string, whole: boolean): string {
-  return whole ? `${what}. You're on ${yours}.` : `${plan} adds ${lowerFirst(what)}. Everything else here is on your ${yours} plan.`;
+  // LIVE20B-005: a feature named as one thing takes "the" ("Basic adds trade journal: every trade, …" read as a slip)
+  const the = /^(?:Trade journal|SIP test)\b/.test(what) ? "the " : "";
+  return whole ? `${what}. You're on ${yours}.` : `${plan} adds ${the}${lowerFirst(what)}. Everything else here is on your ${yours} plan.`;
 }
 
 /** "Market breadth history" → "market breadth history"; a word in capitals stays as it is ("ITR-ready", "SIP test"). */
