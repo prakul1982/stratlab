@@ -484,3 +484,25 @@ def test_deck_check_fails_a_stated_cohort_rule_its_population_breaks_and_layer_w
     # the Cybersecurity and Semiconductors inputs of R84 (their list-supported core members) are among the loop test's fixtures
     here = pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "r84"
     assert (here / "cyber.json").exists() and (here / "semis.json").exists()
+
+
+def test_a_generic_word_of_a_platforms_qualities_places_no_company_in_a_security_layer():
+    """Fails before: Shopify's re-read 10-K opening put it in "Security software subscriptions" on "all-in-one", "platform", "while" and
+    "reliability and security", a quality of its platform; CrowdStrike, Palo Alto and Zscaler stay there on their own words (guard)."""
+    shop = ("Shopify provides essential internet infrastructure for commerce. Shopify's all-in-one platform makes it easier to start, run "
+            "and grow a business, powering sales online, in store, and everywhere in between. Shopify's mission is to make commerce better "
+            "for everyone with a platform and services that are engineered for speed, customization, reliability and security, while "
+            "delivering a better shopping experience for consumers everywhere.")
+    words = {"SHOP": shop,
+             "CRWD": "CrowdStrike is a global cybersecurity leader with a cloud-native platform that protects endpoints, cloud workloads and identities.",
+             "PANW": "Palo Alto Networks is a global cybersecurity provider that sells security platforms protecting networks, clouds and devices.",
+             "ZS": "Zscaler operates a cloud security platform that protects users, workloads and devices connecting to applications."}
+    sec = {"layer": "Security software subscriptions", "description": "These companies sell subscriptions that protect devices, networks, "
+           "identities and cloud workloads, bundling many modules into one platform, while competition weighs on margins.",
+           "companies": [{"ticker": "OKTA"}, {"ticker": "S"}]}
+    vc = [{"layer": "Cloud and AI compute providers", "companies": [{"ticker": t, "moved": True} for t in ("SHOP", "CRWD", "PANW", "ZS")]},
+          sec, {"layer": "Other software companies", "official": True, "basis": "rest", "companies": []}]
+    out, rows = B.compute_fit(vc, lambda s: words.get(s), "Software")
+    where = {c["ticker"]: v["layer"] for v in out for c in v.get("companies") or []}
+    assert where["SHOP"] != "Security software subscriptions"
+    assert all(where[t] == "Security software subscriptions" for t in ("CRWD", "PANW", "ZS")), where
