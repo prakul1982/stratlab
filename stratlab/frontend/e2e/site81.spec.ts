@@ -63,6 +63,8 @@ test("visitor /plans: the start-up frame is the Plans page, and nothing moves wh
   await page.waitForTimeout(400);                 // the faces in
   const before = await at();
   expect(await page.locator("h1").evaluate((e) => getComputedStyle(e).fontFamily)).toMatch(/Fraunces/);
+  // the shift counted from here: the app drawing over the frame, then the prices (a busy machine can bring the frame's faces in late)
+  await page.evaluate(() => { (window as unknown as { __moves: number }).__moves = 0; });
   go();
   await expect(page.locator("section.boot-plans")).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator('.lp-price[data-plan="basic"] .lp-amount')).toBeVisible({ timeout: 30_000 });
