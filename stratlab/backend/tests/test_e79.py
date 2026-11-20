@@ -220,7 +220,8 @@ def test_e79_another_companys_article_run_on_after_its_own_words_is_left_out():
 def test_e79_the_tally_is_dated_by_the_day_of_the_read_and_logs_one_entry_a_day():
     import inspect
     src = inspect.getsource(TR.dive_of)
-    assert 'hit["tally_at"] = datetime.now(timezone.utc).date().isoformat()' in src
+    # (updated on purpose, e82 LIVE18A-010: the day of the read in the market's own time, as the app's head says it, never a UTC date)
+    assert 'hit["tally_at"] = market_day(r).isoformat()' in src
     L = "Fabless chip design"
 
     def e(at, **kw):
