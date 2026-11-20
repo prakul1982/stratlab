@@ -1,5 +1,5 @@
 {
-  "_about": "Layout violations accepted on purpose. Each entry: page (a route like /holdings, or * for every page), rule (R1..R27), element (a piece of the element label shown in the report) and a reason. Only used by UI_LINT_STRICT=1 runs (npm run ui-lint) to pass; the report still lists them.",
+  "_about": "Layout violations accepted on purpose. Each entry: page (a route like /holdings, or * for every page), rule (R1..R29), element (a piece of the element label shown in the report) and a reason. Only used by UI_LINT_STRICT=1 runs (npm run ui-lint) to pass; the report still lists them.",
   "allow": [
     {
       "page": "/plans",
@@ -24,6 +24,18 @@
       "rule": "R27",
       "element": "StockCloseDay %StageSupertrendSince",
       "reason": "R27 (LIVE5): the brief's stock tables sit in the brief's reading column (about 480 px at 1280, beside the list of briefs); with k-fit their words wrap but the last column (Since) still scrolls with its edge shadow. Fitting it needs the brief's column wider or the table's columns chosen per width, a follow-up of its own."
+    },
+    {
+      "page": "*",
+      "rule": "R29",
+      "element": "StrategyMarketAfter costsBuy and holdvs",
+      "reason": "R29 (site83) a table wider than its box: the same Strategies table R27 accepts above (nine figure columns, Checks and Actions past the box at 1280, scrolling with its edge shadow). Fitting it needs columns chosen per width, a follow-up of its own."
+    },
+    {
+      "page": "*",
+      "rule": "R29",
+      "element": "StockCloseDay %StageSupertrendSince",
+      "reason": "R29 (site83) a table wider than its box: the brief's stock tables R27 accepts above, in the brief's ~460px reading column at 1280. Fitting them needs the brief's column wider or columns chosen per width, a follow-up of its own."
     }
   ]
 }

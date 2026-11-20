@@ -251,16 +251,17 @@ export function TaxReportPage() {
   const saleCols: Column<Sale & { i: number }>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => (
       <><b>{name(r.key)}</b>{rep?.kinds?.[r.key] && <> <span className="badge kind-etf">{rep.kinds[r.key]}</span></>}{r.bonus && <span className="k-note"> bonus</span>}
-        {r.gf === "applied" && <span className="k-note"> grandfathered</span>}{r.gf === "missing" && <span className="k-note k-down"> 31 Jan 2018 price missing</span>}</>) },
+        {r.gf === "applied" && <span className="k-note"> grandfathered</span>}{r.gf === "missing" && <span className="k-note k-down"> 31 Jan 2018 price missing</span>}
+        {/* site83 (owner, 20 Nov: no table wider than its box): with every column shown, the quantity under the name and the rate under the
+            term, so the sales are the card's width at 1280px (Qty and Rate scrolled out of view) */}
+        {salesMore.on && <span className="k-sub-line">{qtyText(r.qty)} {r.qty === 1 ? "share" : "shares"}</span>}</>) },
     { key: "gain", header: "Gain or loss", numeric: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
-    { key: "term", header: "Term", cell: (r) => (r.term === "LT" ? "Long" : "Short") },
+    { key: "term", header: "Term", cell: (r) => <>{r.term === "LT" ? "Long" : "Short"}{salesMore.on && <span className="k-sub-line">{rate(r.rate)}</span>}</> },
     { key: "sold", header: "Sold", numeric: true, cell: (r) => dateOnly(r.sold) },
     { key: "cost", header: "Cost", numeric: true, cell: (r) => inr(r.cost) },
     { key: "sale", header: "Sale", numeric: true, cell: (r) => inr(r.sale) },
     ...(salesMore.on ? [
       { key: "bought", header: "Bought", numeric: true, cell: (r: Sale) => dateOnly(r.bought) },
-      { key: "qty", header: "Qty", numeric: true, cell: (r: Sale) => qtyText(r.qty) },
-      { key: "rate", header: "Rate", numeric: true, cell: (r: Sale) => rate(r.rate) },
     ] : []),
   ];
   const lotCols: Column<Lot & { i: number }>[] = [

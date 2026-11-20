@@ -65,7 +65,7 @@ export const RULES: Record<string, string> = {
   R26: "Content past its card: a table, picture, control or tile whose right edge is > 3px past the right edge of the card that holds it",
   R27: "A table cut on a desktop: a list table with a column past its scrolling box's edge, or a row's name cut by an ellipsis to under 56px",
   R28: "Off-centre (owner, 18 Nov): a table header aligned otherwise than its column's cells, or a card head's controls > 2px off the middle of the title's line",
-  R29: "Off its row's centre (owner, 20 Nov): a table cell's contents > 2px off the cell's centre, fold-row cells side by side with centres > 2px apart or an off-centre chevron, an opened fold with unequal insets or tables not the row's width",
+  R29: "Off its row's centre (owner, 20 Nov): a table cell's contents > 2px off the cell's centre, fold-row cells side by side with centres > 2px apart or an off-centre chevron, an opened fold with unequal insets or tables not the row's width, a table wider than its box on a desktop",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -317,6 +317,9 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   const fold29 = (pad: string) => `<div style="width:600px"><details class="k-fold" open><summary class="k-fold-sum" style="display:grid;grid-template-columns:1fr 1fr;padding:12px;align-items:center"><span>Name</span><span>1</span></summary><div class="k-fold-body" style="padding:${pad}">Body text</div></details></div>`;
   expect(await fire(fold29("8px 12px 8px 12px")), "R29 a fold body with equal insets").not.toContain("R29");
   expect(await fire(fold29("8px 96px 8px 12px")), "R29 a fold body short of the right edge").toContain("R29");
+  const wide29 = (w: number) => `<div class="k-tbl-wrap" style="width:300px;overflow-x:auto"><table class="k-table" style="width:${w}px"><tbody><tr><td>A</td><td>B</td></tr></tbody></table></div>`;
+  expect(await fire(wide29(500)), "R29 a table wider than its box").toContain("R29");
+  expect(await fire(wide29(280)), "R29 a table that fits").not.toContain("R29");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });
