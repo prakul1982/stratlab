@@ -1465,6 +1465,7 @@ _FIN_THEME = re.compile(r"\b(?:banks?|banking|lenders?|lending|financ\w*|insur\w
 _BIG_PCT = re.compile(r"(?<![+−\-(\d.,])(\d{3,}(?:,\d{3})*(?:\.\d+)?)%(?!\s+(?:of|more|less|above|below)\b)")
 
 
+_RATIO_HEAD = re.compile(r"(?:Loss|Expense|Combined|Cost-income|Efficiency)(?: ratio)?|RO(?:C?E|A)|ratio", re.I)
 _HEADLINE_ROW = re.compile(r"·\s*\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}\s*·")
 
 
@@ -1483,8 +1484,10 @@ def financial_checks(pages: list[str], add) -> None:
         # two lines, "Combined" above "ratio"; Verisk's ROE 293.9% in the appendix): a ratio's head on a line of column heads alone (no
         # figure), its word over its column, and a return on equity or capital (ROE, ROCE, ROA: profit over equity or capital, never over
         # revenue) are no margin column either
-        cols += [(m.start() - 12, m.end() + 6) for ln in page.split("\n") if _COLUMNS.search(ln) and not re.search(r"\d%|\d\.\d", ln)
-                 for m in re.finditer(r"\b(?:Loss|Expense|Combined|Cost-income|Efficiency)\b(?:\s+ratio)?|\bRO(?:C?E|A)\b", ln)]
+        # (each figure is read as of the head nearest it on those lines: a ratio's or a return's head is no margin's)
+        heads = [((m.start() + m.end()) / 2, bool(_RATIO_HEAD.fullmatch(m.group(0).strip())))
+                 for ln in page.split("\n") if _COLUMNS.search(ln) and not re.search(r"\d%|\d\.\d", ln)
+                 for m in re.finditer(r"\S+(?: \S+)*", ln)]
         for ln in page.split("\n"):
             if not (fin_deck or _FIN_THEME.search(ln)):
                 continue
@@ -1494,6 +1497,9 @@ def financial_checks(pages: list[str], add) -> None:
                 continue
             for m in _BIG_PCT.finditer(ln):
                 if any(a <= (m.start() + m.end()) / 2 <= b for a, b in cols):
+                    continue
+                mid = (m.start() + m.end()) / 2
+                if heads and min(heads, key=lambda h: abs(h[0] - mid))[1]:
                     continue
                 if float(m.group(1).replace(",", "")) > 100.0:
                     add("financial margin", n, ln.strip()[:200])

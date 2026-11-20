@@ -735,7 +735,7 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
                                      **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}),
                                      **({"moved_out": mo} if mo else {}), published=published_layers(region, theme, m),
-                                     recent=recent_moves(region, theme, m))          # e85: moves of the last days not reversed
+                                     **({"recent": rc} if (rc := recent_moves(region, theme, m)) else {}))     # e85: moves of the last days not reversed
     # p57: the misfit and audit answers (and the retry mark) are kept too, so each is asked at most once a theme and rules version
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())
                                                     or any(got.get(k) != kept.get(k) for k in ("fit", "audit", "reasked_rules") if got.get(k))):

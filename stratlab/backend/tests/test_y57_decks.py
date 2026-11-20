@@ -204,6 +204,9 @@ def _stress(heavy: bool = False):
     lay = next(b for b in v["layers"] if b["layer"] == "Converters")
     for c in lay["companies"]:
         c["by_words"] = True
+        # (updated on purpose, e85 LIVE21A-009: a row is "on its words" only when description-verified (deck.on_words); these rows are
+        # placed on their words, as this page's case is)
+        c["evidence"] = "description_verified"
     if heavy:
         for c in lay["companies"][:9]:
             c["by_words"] = False
