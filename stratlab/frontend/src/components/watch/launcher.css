@@ -15,12 +15,16 @@
    "Calendar →" on Invest, the corner of the last Money card). Under 1600px it is a round 44px button that fits the margin (its name is its tooltip and its label for a
    screen reader); from 1600px the margin is 136px or more and the pill keeps its word.
    Items 37 and 43 (owner, 30 Oct: "not aligned properly", it sat 1px from the cards at 1280 and 6px at 1440; he picked this of the two ways shown):
-   the page column keeps an 80px right margin on a laptop and the button sits centred in it, 18px clear of the cards, its bottom where it was */
+   the page column keeps an 80px right margin on a laptop and the button sits centred in it, 18px clear of the cards, its bottom where it was
+   (site83: 76px each side now, the button still centred in it, 16px clear) */
 @media (min-width: 901px) and (max-width: 1599px) {
-  .mw-launch.app, .mw-launch.public { width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; }
+  .mw-launch.app, .mw-launch.public { width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 16px; }
   .mw-launch.app span, .mw-launch.public span { display: none; }
-  body:not(.mw-docked) .shell > .main { padding-right: 80px; }
-  body:not(.mw-docked) .shell > .consent { justify-self: stretch; width: auto; margin-left: clamp(24px, 4vw, 56px); margin-right: 80px; }   /* in line with the page */
+  /* centre alignment (owner, 20 Nov): the page column centred beside the menu, 76px each side (it was 40-56px on the left against 80px on the
+     right, so the column sat off to the left); the round button stays centred in the right margin, 16px clear of the cards and of the
+     window's edge (items 37, 43: at least 16px) */
+  body:not(.mw-docked) .shell > .main { padding-inline: 76px; }
+  body:not(.mw-docked) .shell > .consent { justify-self: stretch; width: auto; margin-left: 76px; margin-right: 76px; }   /* in line with the page */
 }
 /* a docked panel takes its width from the page (the cookie question, in the page column, with it) */
 body.mw-docked .shell { padding-right: var(--mw-dock, 0px); }

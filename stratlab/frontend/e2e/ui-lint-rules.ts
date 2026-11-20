@@ -56,6 +56,11 @@
 // Owner, 18 Nov ("center align everything properly"):
 //   R28 off-centre                          a table header aligned otherwise than most of its column's cells (left over right-aligned
 //                                            numbers); a card head's control whose middle is > 2px off its title's first line while beside it
+// Owner, 20 Nov ("this is still not centre aligned, I told you to get everything centre aligned", Mutual funds with a scheme open):
+//   R29 off its row's centre                a table cell's contents (the block their lines make) > 2px off the cell's centre; two cells of a
+//                                            fold row side by side whose centres differ by > 2px, or its chevron not centred; a fold's opened body
+//                                            whose left and right insets differ by > 2px, or (beside a chevron column) whose tables don't run to
+//                                            the row's own left and right edges
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
 export interface PageFrame { h1Top: number; h1Left: number; right: number }
@@ -810,6 +815,68 @@ export function lintPage(opts: LintOpts): LintResult {
     }
   }
 
+  // ---- R29 off its row's centre (owner, 20 Nov: "I told you to get everything centre aligned") ------------------------------------------------
+  {
+    const TOL = 2;
+    // the block a cell's contents make (their line boxes, as the cell centres them): wrapped in a block for a moment and measured
+    const inner = (el: Element): DOMRect | null => {
+      const wrap = document.createElement("div");
+      const kids = Array.from(el.childNodes);
+      kids.forEach((k) => wrap.appendChild(k));
+      el.appendChild(wrap);
+      const r = wrap.getBoundingClientRect();
+      kids.forEach((k) => el.insertBefore(k, wrap));
+      wrap.remove();
+      return r.height > 0 ? r : null;
+    };
+    for (const cell of Array.from(mainEl.querySelectorAll("table tr > td, table tr > th"))) {
+      if (!shown(cell) || closedDetails(cell) || cell.closest(".k-tbl-wrap.stack") || !textOf(cell)) continue;
+      const r = R(cell), s = S(cell);
+      if (r.height < 1 || s.display !== "table-cell") continue;
+      const c = inner(cell);
+      if (!c) continue;
+      const top = r.top + px(s.borderTopWidth) + px(s.paddingTop), bottom = r.bottom - px(s.borderBottomWidth) - px(s.paddingBottom);
+      const off = (c.top + c.bottom) / 2 - (top + bottom) / 2;
+      if (Math.abs(off) > TOL) add("R29", cell, `the cell's contents sit ${Math.round(Math.abs(off))}px ${off < 0 ? "above" : "below"} its row's centre`);
+    }
+    for (const row of Array.from(mainEl.querySelectorAll(".k-fold-sum, .k-fold-head"))) {
+      if (!shown(row) || R(row).height < 1) continue;
+      const cells = Array.from(row.children).filter((c) => shown(c) && R(c).height > 0);
+      let flagged = false;
+      for (let i = 0; i < cells.length && !flagged; i++) {
+        for (let j = i + 1; j < cells.length; j++) {
+          const a = R(cells[i]), b = R(cells[j]);
+          if (a.bottom <= b.top || b.bottom <= a.top) continue;               // one under the other (a phone's card): no pair
+          const d = Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2);
+          if (d > TOL) { add("R29", cells[j], `${Math.round(d)}px off the centre of "${textOf(cells[i]).slice(0, 18)}" beside it in its row`); flagged = true; break; }
+        }
+      }
+      if (row.classList.contains("k-fold-sum")) {
+        const a = getComputedStyle(row, "::after");
+        if (a.content && a.content !== "none") {
+          if (a.position === "absolute") {
+            const mid = px(a.top) + (px(a.height) + px(a.borderBottomWidth)) / 2;
+            if (Math.abs(mid - R(row).height / 2) > TOL) add("R29", row, `its chevron's centre is ${Math.round(Math.abs(mid - R(row).height / 2))}px off the row's`);
+          } else if (a.alignSelf !== "center") add("R29", row, `its chevron is not centred on the row (align-self ${a.alignSelf})`);
+        }
+      }
+    }
+    for (const body of Array.from(mainEl.querySelectorAll(".k-fold-body"))) {
+      const det = body.closest("details"), sum = det?.querySelector(":scope > summary");
+      if (!det || !sum || !shown(body) || R(body).height < 1) continue;
+      const b = R(body), d = R(det), sm = R(sum), bs = S(body), ss = S(sum);
+      const left = b.left + px(bs.paddingLeft) - d.left, right = d.right - (b.right - px(bs.paddingRight));
+      if (Math.abs(left - right) > TOL) add("R29", body, `an opened fold's insets are ${Math.round(left)}px left and ${Math.round(right)}px right`);
+      if (getComputedStyle(sum, "::after").position === "absolute") continue;        // a phone's card keeps room for its chevron
+      const rowL = sm.left + px(ss.paddingLeft), rowR = sm.right - px(ss.paddingRight);
+      for (const t of Array.from(body.querySelectorAll(".k-tbl-wrap"))) {
+        if (!shown(t) || t.parentElement?.closest(".k-tbl-wrap")) continue;
+        const tr = R(t);
+        if (Math.abs(tr.left - rowL) > TOL || Math.abs(tr.right - rowR) > TOL) add("R29", t, `an opened fold's table runs ${Math.round(tr.left)}-${Math.round(tr.right)}px, the row above ${Math.round(rowL)}-${Math.round(rowR)}px`);
+      }
+    }
+  }
+
   // ---- R14 overlay on content (G2) --------------------------------------------------------------------------------------------------------------------
   // a fixed/sticky box that is not app chrome: the notebook's "Lab notes" pill sat over a row's delete button, the end of "Edit in words"
   // and the "Testing on" box. Content is measured once on the page, the overlay's own box at the top, middle and bottom of the scroll.
@@ -877,7 +944,7 @@ export function lintPage(opts: LintOpts): LintResult {
     if (counts[f.rule] <= 25) violations.push({ rule: f.rule, element: f.el === document.body ? "body" : labelOf(f.el), key: f.el === document.body ? "body" : keyOf(f.el), detail: f.detail });
   }
   if (opts.mark) {
-    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500", R27: "#ff8c00", R28: "#00b894" };
+    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500", R27: "#ff8c00", R28: "#00b894", R29: "#e84393" };
     const st = document.createElement("style");
     st.textContent = Object.entries(colour).map(([r, c]) => `[data-uilint~="${r}"]{outline:3px solid ${c} !important;outline-offset:-2px !important}`).join("\n");
     document.head.appendChild(st);

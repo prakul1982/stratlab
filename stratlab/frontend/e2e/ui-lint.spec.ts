@@ -65,6 +65,7 @@ export const RULES: Record<string, string> = {
   R26: "Content past its card: a table, picture, control or tile whose right edge is > 3px past the right edge of the card that holds it",
   R27: "A table cut on a desktop: a list table with a column past its scrolling box's edge, or a row's name cut by an ellipsis to under 56px",
   R28: "Off-centre (owner, 18 Nov): a table header aligned otherwise than its column's cells, or a card head's controls > 2px off the middle of the title's line",
+  R29: "Off its row's centre (owner, 20 Nov): a table cell's contents > 2px off the cell's centre, fold-row cells side by side with centres > 2px apart or an off-centre chevron, an opened fold with unequal insets or tables not the row's width",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -309,6 +310,13 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   const head28 = (align: string) => `<div class="k-card-head" style="display:flex;align-items:${align};justify-content:space-between;width:600px"><h2 class="k-card-title" style="margin:0;font-size:20px;line-height:30px">Markets</h2><div class="k-card-actions" style="display:flex"><button style="height:46px">Open</button></div></div>`;
   expect(await fire(head28("flex-start")), "R28 control off the title's line").toContain("R28");
   expect(await fire(head28("center")), "R28 control centred on the title").not.toContain("R28");
+  // R29 (owner, 20 Nov: "I told you to get everything centre aligned") a top-aligned cell beside a two-line one; an opened fold with unequal insets
+  const cells29 = (va: string) => `<table style="width:400px"><tbody><tr><td style="vertical-align:${va};padding:10px">One</td><td style="padding:10px">Two<br>lines</td></tr></tbody></table>`;
+  expect(await fire(cells29("top")), "R29 a cell on its row's top line").toContain("R29");
+  expect(await fire(cells29("middle")), "R29 cells on the row's centre").not.toContain("R29");
+  const fold29 = (pad: string) => `<div style="width:600px"><details class="k-fold" open><summary class="k-fold-sum" style="display:grid;grid-template-columns:1fr 1fr;padding:12px;align-items:center"><span>Name</span><span>1</span></summary><div class="k-fold-body" style="padding:${pad}">Body text</div></details></div>`;
+  expect(await fire(fold29("8px 12px 8px 12px")), "R29 a fold body with equal insets").not.toContain("R29");
+  expect(await fire(fold29("8px 96px 8px 12px")), "R29 a fold body short of the right edge").toContain("R29");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });

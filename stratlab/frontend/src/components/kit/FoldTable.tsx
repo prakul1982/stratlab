@@ -17,7 +17,9 @@ export function FoldTable<R>({ label, columns, rows, rowKey, detail, openWhen, t
 }) {
   const [name, ...figures] = columns;
   // the name takes the room; a column of words (`wrap`) a little more than a column of figures
-  const cols = `minmax(0, 2.2fr) ${figures.map((c) => (c.wrap ? "minmax(0, 1.7fr)" : "minmax(0, 1fr)")).join(" ")}`;
+  // site83: a figure's column is never narrower than its longest word, so "₹27,500" and "+10.6%" never break inside (at 1000px they did); the
+  // name gives way (it is cut with …)
+  const cols = `minmax(0, 2.2fr) ${figures.map((c) => (c.wrap ? "minmax(min-content, 1.7fr)" : "minmax(min-content, 1fr)")).join(" ")}`;
   return (
     <>
     {csv && rows.length > 0 && <div className="k-tbl-tools"><CsvButton name={csv} label={label} columns={columns} rows={rows} /></div>}
