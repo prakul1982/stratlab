@@ -7,20 +7,23 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("LIVE21B-001: a saved sign-in on an app page starts in the app's frame, never the landing's header and heading", () => {
   const boot = read("public/boot.js"), html = read("index.html"), entry = read("src/lib/entry.ts");
-  // only a saved sign-in, and not on the pages anyone sees the same way: boot.js's list is lib/entry.ts's
-  const forAll = boot.match(/var FOR_ALL = (\[.*\]);/)[1];
-  assert.equal(forAll, entry.match(/export const PUBLIC_FOR_ALL = (\[.*\]);/)[1]);
-  assert.match(boot, /if \(document\.documentElement\.hasAttribute\("data-saved"\) && !FOR_ALL\.some\(/);
+  // only a saved sign-in downloads the frame's code (public/early.js), and the pages anyone sees the same way keep their words: its list is
+  // lib/entry.ts's (site85: moved out of boot.js, so a visitor's pages weigh what they did, review-r5's budgets)
+  const app = read("public/early.js");
+  assert.equal(app.match(/var FOR_ALL = (\[.*\]);/)[1], entry.match(/export const PUBLIC_FOR_ALL = (\[.*\]);/)[1]);
+  assert.doesNotMatch(boot, /FOR_ALL|appFrame|data-boot-shell/);
+  assert.match(boot, /setAttribute\("data-saved", "1"\); var e = document\.createElement\("script"\); e\.fetchPriority = "high"; e\.src = "\/early\.js";/);
+  assert.match(app, /document\.documentElement\.setAttribute\("data-for-all", "1"\); return;/);
   // the landing's frame is taken out as it is parsed, and hidden until then
-  assert.match(boot, /new MutationObserver\(appFrame\)/);
-  assert.match(html, /html\[data-app-boot\] #root > \.boot-head, html\[data-app-boot\] \[data-boot-head\], html\[data-app-boot\] \[data-boot\] \{ display: none; \}/);
-  // the start-up guard's slow and failed notices, and its "the app has drawn" (LIVE21A-003), still see the frame as "the app has not drawn yet"
-  assert.equal((boot.match(/\[data-boot-shell\]/g) || []).length, 5);
+  assert.match(app, /new MutationObserver\(appFrame\)/);
+  assert.match(html, /html\[data-saved\]:not\(\[data-for-all\]\) #root > \.boot-head, html\[data-saved\]:not\(\[data-for-all\]\) \[data-boot-head\], html\[data-saved\]:not\(\[data-for-all\]\) \[data-boot\]:not\(\.boot-shell\) \{ display: none; \}/);
+  // the frame carries data-boot, so the start-up guard's slow and failed notices see it as "the app has not drawn yet"
+  assert.match(app, /shell\.setAttribute\("data-boot", ""\);/);
   // the HTML frame and the app's own first frame (components/BootFrame.tsx) are the same: top bar with four held button places, the menu's
   // panel with the logo, the page column
   const frame = read("src/components/BootFrame.tsx");
   const classes = (s) => [...s.matchAll(/class(?:Name)?=\\?"([^"\\]+)\\?"/g)].map((m) => m[1]).filter((c) => !/^logo/.test(c));
-  const seg = boot.match(/shell\.className = "([^"]+)";[\s\S]*?var box = ('[^']*');[\s\S]*?shell\.innerHTML = ([\s\S]*?);\n/);
+  const seg = app.match(/shell\.className = "([^"]+)";[\s\S]*?var box = ('[^']*');[\s\S]*?shell\.innerHTML = ([\s\S]*?);\n/);
   const fromBoot = [seg[1], ...classes(new Function("box", `return ${seg[3]};`)(new Function(`return ${seg[2]};`)()))];
   const fromApp = classes(frame.slice(frame.indexOf("return (")));
   assert.deepEqual(fromBoot.slice(0, fromApp.length), fromApp);
