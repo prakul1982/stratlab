@@ -153,8 +153,10 @@ test("SCROLL: phone 390: every stock reachable inside the card, a taller list, t
   expect(await wholeRows(page, "mine-watch-list")).toBe(true);
   // every stock reachable by scrolling the list
   const wl = page.getByTestId("mine-watch-list");
+  await wl.scrollIntoViewIfNeeded();
   await wl.evaluate((el) => { el.scrollTop = el.scrollHeight; });
   await expect(wl.getByRole("link", { name: /^POWERGRID/ })).toBeInViewport();
+  expect(await wl.getByRole("link", { name: /^POWERGRID/ }).evaluate((a) => { const l = a.closest(".k-scroll")!.getBoundingClientRect(), r = a.getBoundingClientRect(); return r.top >= l.top - 1 && r.bottom <= l.bottom + 1; }), "the last stock shown inside the card's list").toBe(true);
   // a finger (or wheel) that starts outside the list scrolls the page
   await page.evaluate(() => scrollTo(0, 0));
   const y0 = await page.evaluate(() => scrollY);
