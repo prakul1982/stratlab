@@ -328,13 +328,14 @@ export function saveRegion(r: Region) {
 
 /** The page's market: ?region= when the address has one, else the last one picked. Picking one saves it and puts it in
  *  the address, so a shared link opens on the same market. */
-export function useRegion(fallback?: Region): [Region, (r: Region) => void] {
+export function useRegion(fallback?: Region): [Region, (r: Region, edit?: (p: URLSearchParams) => void) => void] {
   const [params, setParams] = useSearchParams();
   const fromUrl = params.get("region")?.toUpperCase();
   const [region, setRegionState] = useState<Region>(fromUrl === "US" || fromUrl === "IN" ? fromUrl : fallback ?? savedRegion());
-  const setRegion = (r: Region) => {
+  // `edit`: other parts of the address changed in the same step (site87: the theme page clears the open theme on a market switch)
+  const setRegion = (r: Region, edit?: (p: URLSearchParams) => void) => {
     setRegionState(r); saveRegion(r);
-    const p = new URLSearchParams(params); p.set("region", r); setParams(p, { replace: true });
+    const p = new URLSearchParams(params); p.set("region", r); edit?.(p); setParams(p, { replace: true });
   };
   return [region, setRegion];
 }

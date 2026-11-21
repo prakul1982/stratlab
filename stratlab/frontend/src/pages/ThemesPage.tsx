@@ -13,8 +13,9 @@ import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, 
 import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
-import { Card, CardHead, CardNote, DataTable, Disclosure, ErrorState, Notice, PageHeader, PageNav, ShowLess, Skeleton, Working } from "../components/kit";
+import { Card, CardHead, CardNote, DataTable, ErrorState, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
 import { watchSize } from "../lib/resize";
+import { foreignTheme, ideasBeside, sameByName, twinNames, type Market } from "../lib/themeMarket";
 import { emptyLayerLines, fundName, themeFunds } from "../lib/themeFormat";
 
 /* ================= Themes: a theme deep dive =================
@@ -75,10 +76,36 @@ export function ThemesPage() {
   };
   useEffect(() => {
     setText(q);
+    // site87: an old link to one market's country-named theme under the other market is never mapped there (the API refuses it too)
+    if (q && foreignTheme(q, region)) { seq.current++; setR(null); setBusy(false); setDive(null); setError(`“${q}” is a theme of ${region === "US" ? "India" : "the US"}, so it isn't mapped in ${region === "US" ? "the US" : "India"}. Pick a theme of this market.`); return; }
     if (q) run(q);
     else { seq.current++; setR(null); setError(null); setBusy(false); setDive(null); }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [q, region]);
+  // site87 (owner: India's "India defence" open, then "$ United States" mapped "India defence" in the US): a market switch closes the open
+  // theme back to the chooser, then opens the other market's own theme of the same name only if its library has one ("Defence" →
+  // "Aerospace and defense"); never one naming the other country
+  const at = useRef(region);
+  at.current = region;
+  const switchMarket = (to: Market) => {
+    if (to === region) return;
+    const open = q;
+    setText("");
+    setRegion(to, (p) => p.delete("q"));
+    if (!open) return;
+    void (async () => {
+      for (const name of twinNames(open, to)) {
+        try {
+          const hit = sameByName((await themeApi.suggest(to, name)).items, name);
+          if (!hit || at.current !== to || foreignTheme(hit.name, to)) continue;
+          const p = new URLSearchParams(window.location.search);
+          if (p.get("q")) return;                 // the reader has picked a theme meanwhile
+          p.set("region", to); p.set("q", hit.name); setParams(p, { replace: true });
+          return;
+        } catch { /* the library couldn't be read: stay on the chooser */ }
+      }
+    })();
+  };
 
   // the numbers load beside the map: each card fills when its own read is in
   const key = r ? `${q}|${region}|${r.generated_at}|${r.placements?.placed ?? 0}|${r.placements?.pending ?? 0}|${r.older ? "older" : ""}` : "";
@@ -175,7 +202,7 @@ export function ThemesPage() {
       <PageHeader eyebrow={eyebrowOf("/research/themes")} title="Map a theme, find the companies in it"
         lede="Type a sector or trend to see the listed companies along its chain." infoLabel="How a theme is mapped"
         info="Every listed company the exchange classifies in the theme's industries is in it; the AI maps them along the chain and adds companies from other industries, each checked against its own description. The margins, growth and prices beside them are worked out from reported figures." />
-      <ThemeBox region={region} setRegion={setRegion} text={text} setText={setText} current={q} busy={busy} onGo={go} />
+      <ThemeBox region={region} setRegion={switchMarket} text={text} setText={setText} current={q} busy={busy} onGo={go} />
       {/* R19: the themes the person saved, each with when it was last read, Open, Update (what changed since), Rename and Remove */}
       <SavedList kind="theme" id="saved-themes" title="Your saved themes" />
       {error && <ErrorState title="The theme couldn't be mapped" action={{ label: "Try again", onClick: () => run(q, { refresh: true }) }}>{error}</ErrorState>}
@@ -267,13 +294,14 @@ export function ThemesPage() {
   );
 }
 
-/** The theme box (owner, 18 Nov: "fix ui dude"): the market switch, the box and "Map it" on one row; under it the shared library as a grid
- *  of equal chips with short names, at most two rows before "All N themes"; the ideas folded under "More ideas" once the library shows. */
+/** The theme box (owner, 18 Nov: "fix ui dude"): the market switch, the box and "Map it" on one row; under it the market's ready themes as
+ *  compact chips, A to Z, each with the day its map was updated inside it (site87, owner: 31 equal heavy pills, a "Fewer themes" button and a
+ *  tooltip over the next row); then the ideas this market's chips don't already show (never the same theme twice, never the other market's). */
 function ThemeBox({ region, setRegion, text, setText, current, busy, onGo }: { region: "IN" | "US"; setRegion: (r: "IN" | "US") => void; text: string;
   setText: (t: string) => void; current: string; busy: boolean; onGo: (t: string) => void }) {
-  const items = useLibrary(region, text);
+  const items = useLibrary(region, text).filter((i) => !foreignTheme(i.name, region));
   const matching = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase());
-  const ideas = THEME_IDEAS[region].map((t) => <button key={t} type="button" className="btn quiet sm" onClick={() => onGo(t)}>{t}</button>);
+  const ideas = ideasBeside(THEME_IDEAS[region], items, region, shortTheme);
   return (
     <Card className="theme-box">
       <form className="theme-map" aria-label="Map a theme" onSubmit={(e) => { e.preventDefault(); onGo(text); }}>
@@ -286,9 +314,10 @@ function ThemeBox({ region, setRegion, text, setText, current, busy, onGo }: { r
         </div>
       </form>
       <ReadyGrid items={matching} onPick={onGo} />
-      {matching.length > 0
-        ? <Disclosure summary="More ideas" className="theme-more" testId="theme-ideas"><div className="k-row theme-ideas">{ideas}</div></Disclosure>
-        : <div className="k-row theme-ideas" data-testid="theme-ideas"><span className="k-small k-muted">Or try</span>{ideas}</div>}
+      {ideas.length > 0 && (
+        <div className="k-row theme-ideas" data-testid="theme-ideas"><span className="k-small k-muted">{matching.length ? "Other ideas" : "Or try"}</span>
+          {ideas.map((t) => <button key={t} type="button" className="theme-chip idea" onClick={() => onGo(t)}>{t}</button>)}</div>
+      )}
     </Card>
   );
 }
@@ -300,43 +329,59 @@ function useLibrary(region: "IN" | "US", typed: string): LibraryTheme[] {
   const [items, setItems] = useState<LibraryTheme[]>([]);
   useEffect(() => {
     let live = true;
+    setItems([]);                       // site87: never a moment of the other market's chips after a switch
     const t = setTimeout(() => {
-      themeApi.suggest(region, typed.trim()).then((x) => live && setItems(x.items)).catch(() => live && setItems([]));
+      themeApi.suggest(region, typed.trim()).then((x) => live && setItems(x.items.filter((i) => !i.region || i.region === region))).catch(() => live && setItems([]));
     }, 250);
     return () => { live = false; clearTimeout(t); };
   }, [region, typed]);
   return items;
 }
 
-/** Ready to open: equal chips, each the theme's short name (its full name and the day its map was updated in the title), at most two
- *  rows of the grid's own columns, the last cell "All N themes" (LIVE11A-013: every theme StratLab keeps for this market, one press away). */
+/** Lines of chips the ready area shows before it scrolls inside itself (it scrolls only when that hides three lines or more). */
+const READY_LINES = 3;
+
+/** Ready to open: every ready theme of the market as a compact chip, A to Z: its short name and, small inside it, the day its map was
+ *  updated (its full name in the chip's accessible name, no hover box over the next chips). Past READY_LINES lines the area scrolls inside
+ *  itself, so no "All N themes" / "Fewer themes" button (site87, owner: no show-more control on any list). */
 function ReadyGrid({ items, onPick }: { items: LibraryTheme[]; onPick: (t: string) => void }) {
   const grid = useRef<HTMLDivElement>(null);
-  const [cols, setCols] = useState(4);
-  const [all, setAll] = useState(false);
+  const [over, setOver] = useState(false);
+  const sorted = [...items].sort((a, b) => shortTheme(a.name).localeCompare(shortTheme(b.name)));
   useLayoutEffect(() => {
     const el = grid.current;
     if (!el) return;
-    const look = () => setCols(Math.max(1, getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length));
+    const look = () => {
+      el.style.maxHeight = "";
+      const kids = Array.from(el.children) as HTMLElement[];
+      const tops = Array.from(new Set(kids.map((k) => Math.round(k.offsetTop)))).sort((a, b) => a - b);
+      const cut = tops.length - READY_LINES >= 3 ? tops[READY_LINES] : null;
+      el.toggleAttribute("data-over", cut != null);
+      if (cut != null) el.style.maxHeight = `${cut - 4}px`;
+      el.toggleAttribute("data-more", cut != null && el.scrollHeight - el.clientHeight - el.scrollTop > 2);
+      setOver(cut != null);
+    };
     look();
-    return watchSize(el, look);
-  }, [items.length > 0]);   // eslint-disable-line react-hooks/exhaustive-deps
+    const more = () => el.toggleAttribute("data-more", el.hasAttribute("data-over") && el.scrollHeight - el.clientHeight - el.scrollTop > 2);
+    el.addEventListener("scroll", more, { passive: true });
+    const stop = watchSize(el.parentElement ?? el, look);
+    return () => { stop(); el.removeEventListener("scroll", more); };
+  }, [sorted.length]);
   if (!items.length) return null;
-  const room = cols * 2;
-  const more = !all && items.length > room;
-  const shown = more ? items.slice(0, room - 1) : items;
   return (
     <div className="theme-already" data-testid="theme-already">
-      <span className="k-small k-muted" title="Themes already mapped on StratLab, kept for everyone">{LIBRARY_HEAD}</span>
-      <div className="theme-ready" ref={grid}>
-        {shown.map((i) => (
-          <button key={i.q} type="button" className="btn quiet sm" title={libraryLabel(i, (d) => fmtDate(d, { year: false }), false)} onClick={() => onPick(i.name)}>
-            <span>{shortTheme(i.name)}</span>
-          </button>
-        ))}
-        {more && <button type="button" className="btn quiet sm theme-ready-all" data-testid="theme-already-all" onClick={() => setAll(true)}>All {items.length} themes</button>}
+      <span className="k-small k-muted" id="theme-ready-head">{LIBRARY_HEAD}</span>
+      <div className="theme-ready" ref={grid} role={over ? "region" : undefined} aria-labelledby={over ? "theme-ready-head" : undefined} tabIndex={over ? 0 : undefined}>
+        {sorted.map((i) => {
+          const day = i.day ?? (i.at ? i.at.slice(0, 10) : null);
+          return (
+            <button key={i.q} type="button" className="theme-chip" aria-label={libraryLabel(i, (d) => fmtDate(d, { year: false }), false)} onClick={() => onPick(i.name)}>
+              <span className="theme-chip-name">{shortTheme(i.name)}</span>
+              {day && <small className="theme-chip-day" aria-hidden="true">{fmtDate(day, { year: false })}</small>}
+            </button>
+          );
+        })}
       </div>
-      {all && items.length > room && <ShowLess onLess={() => setAll(false)} label="Fewer themes" />}
     </div>
   );
 }

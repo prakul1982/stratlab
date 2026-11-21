@@ -82,7 +82,11 @@ export type SectionFrame = {
   reset: () => void;
   /** where it can go now: [up, down], and whether the page has an order of its own */
   can: () => { up: boolean; down: boolean; kept: boolean };
+  /** the card's own entries in its "⋯" menu, before Move up (a table's "Download CSV": site87, never a button row in the card's body) */
+  extra: MenuEntry[];
+  setExtra: (key: string, entry: MenuEntry | null) => void;
 };
+export type MenuEntry = { label: string; run: () => void; testId?: string };
 
 /** A section's open state and place, kept for the person on this page. `title` is given by a FoldCard; a Card hears it from its CardHead. */
 export function useSectionFrame(el: RefObject<HTMLElement | null>, { id, title: given, defaultOpen = true, allowed = true }: {
@@ -93,6 +97,12 @@ export function useSectionFrame(el: RefObject<HTMLElement | null>, { id, title: 
   const [heard, setTitle] = useState("");
   const [headingId, setHeadingId] = useState<string | null>(null);
   const [inside, setInside] = useState(false);
+  const [extras, setExtras] = useState<Record<string, MenuEntry>>({});
+  const setExtra = useCallback((k: string, e: MenuEntry | null) => setExtras((prev) => {
+    if (!e) { if (!(k in prev)) return prev; const next = { ...prev }; delete next[k]; return next; }
+    return { ...prev, [k]: e };
+  }), []);
+  const extra = Object.values(extras);
   const title = given ?? heard;
   const key = title || id ? sectionSlug(id, title) : null;
   const on = allowed && !!at && !!key && !!title && !inside;
@@ -161,7 +171,7 @@ export function useSectionFrame(el: RefObject<HTMLElement | null>, { id, title: 
     if (!at) return;
     setOrder((prev) => { const next = { ...prev }; delete next[at.route]; return next; });
   };
-  return { key, open, setOpen, on, setTitle, headingId, setHeadingId, move, reset, can };
+  return { key, open, setOpen, on, setTitle, headingId, setHeadingId, move, reset, can, extra, setExtra };
 }
 
 export const SectionCtx = createContext<SectionFrame | null>(null);
@@ -178,7 +188,8 @@ export function SectionMenu({ frame }: { frame: SectionFrame }) {
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   usePopover(open, setOpen, btn, pop, { outside: box });
-  const items: { label: string; ok: boolean; run: () => void }[] = [
+  const items: { label: string; ok: boolean; run: () => void; testId?: string }[] = [
+    ...frame.extra.map((e) => ({ ...e, ok: true })),
     { label: "Move up", ok: can.up, run: () => frame.move(-1) },
     { label: "Move down", ok: can.down, run: () => frame.move(1) },
     { label: "Reset order", ok: can.kept, run: () => frame.reset() },
@@ -193,13 +204,13 @@ export function SectionMenu({ frame }: { frame: SectionFrame }) {
   };
   return (
     <div className="more-menu k-sec-menu" ref={box}>
-      <button ref={btn} type="button" className="k-sec-btn" aria-haspopup="menu" aria-expanded={open} aria-label="Move section"
-        aria-describedby={frame.headingId ?? undefined} title="Move this section"
+      <button ref={btn} type="button" className="k-sec-btn" aria-haspopup="menu" aria-expanded={open} aria-label={frame.extra.length ? "Section menu" : "Move section"}
+        aria-describedby={frame.headingId ?? undefined} title={frame.extra.length ? `${frame.extra.map((e) => e.label).join(", ")}, or move this section` : "Move this section"}
         onClick={() => { if (!open) setCan(frame.can()); setOpen(!open); }}><Dots /></button>
       {open && (
-        <div ref={pop} className="more-pop k-sec-pop" role="menu" aria-label="Move section" onKeyDown={key}>
+        <div ref={pop} className="more-pop k-sec-pop" role="menu" aria-label={frame.extra.length ? "Section menu" : "Move section"} onKeyDown={key}>
           {items.map((it) => (
-            <button key={it.label} type="button" role="menuitem" aria-disabled={!it.ok || undefined} className={it.ok ? undefined : "off"}
+            <button key={it.label} type="button" role="menuitem" data-testid={it.testId} aria-disabled={!it.ok || undefined} className={it.ok ? undefined : "off"}
               onClick={() => { if (!it.ok) return; setOpen(false); btn.current?.focus(); it.run(); }}>{it.label}</button>
           ))}
         </div>
