@@ -297,6 +297,10 @@ export const researchApi = {
   chart: (r: Region, s: string, range: string) =>
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),
+  /** Every stock's quote, 24 to a read (the server's limit): a list that shows every stock (SCROLL, owner 21 Nov). A part that fails is empty. */
+  quotesAll: (r: Region, syms: string[]) => Promise.all(Array.from({ length: Math.ceil(syms.length / 24) }, (_, i) => syms.slice(i * 24, i * 24 + 24))
+    .map((part) => researchApi.quotes(r, part).catch(() => ({} as Record<string, Quote | null>))))
+    .then((parts) => Object.assign({}, ...parts) as Record<string, Quote | null>),
   /** The same quotes, with the stocks the server's price source was busy for (asked again in a moment, LIVE5-001). */
   quotesPending: (r: Region, syms: string[]) => api<{ quotes: Record<string, Quote | null>; pending: string[] }>(`/research/quotes?region=${r}&pending=1&symbols=${syms.map(encodeURIComponent).join(",")}`),
   search: (r: Region, q: string) => api<{ symbol: string; name: string; exchange: string; region: Region }[]>(`/research/search?region=${r}&q=${encodeURIComponent(q)}`),

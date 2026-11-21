@@ -17,7 +17,7 @@ import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { AsOf, Loading, PanelSkel, VerdictBadge } from "../components/ui";
-import { Card, CardHead, DataTable, Disclosure, FigureTable, PageHeader, Seg, Signed } from "../components/kit";
+import { Card, CardHead, DataTable, Disclosure, FigureTable, PageHeader, Seg, Signed, ScrollList } from "../components/kit";
 import { addDaysIso } from "../lib/mine";
 import { Panel, WatchTable } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
@@ -317,7 +317,8 @@ function NextEvents({ limit = 5, testId = "invest-events", region }: { limit?: n
 }
 
 /** The watchlist's prices for the market picked at the top (R9R-008: the US tab left India's panels in place). */
-/** How many watchlist stocks the Invest home's card shows: six (three rows of two); the rest are one tap away. */
+/** How many watchlist stocks the Invest home's card shows before its list scrolls inside the card (SCROLL, owner 21 Nov: every stock is in
+ * it; it was the first six and "See all"). */
 export const WATCH_SHOWN = 6;
 
 function WatchPanel({ region }: { region: Region }) {
@@ -337,7 +338,7 @@ function WatchPanel({ region }: { region: Region }) {
         : regions.map((r) => (
           <div key={r} className="k-stack snug">
             {/* no "INDIA" over the stocks: the market is the toggle at the top of the page (VR5-owner-1: one line less, so the card ends level with its neighbours) */}
-            <WatchTable region={r} symbols={by(r).slice(0, WATCH_SHOWN).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
+            <WatchTable region={r} symbols={by(r).map((w) => w.symbol)} rows={WATCH_SHOWN} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
           </div>
         ))}
     </Panel>
@@ -447,12 +448,15 @@ function RedFlags({ region }: { region: Region }) {
           <div className="k-stack snug">
             {/* the window said once, not at the start of every line (VR2-021) */}
             <p className="small muted" data-testid="invest-redflags-window">Last {flagged[0].summary.days} days</p>
-            {flagged.slice(0, 5).map((r) => (
+            {/* every company with a red flag, scrolling inside the card past a few (SCROLL, owner 21 Nov; it was the first five, the rest unsaid) */}
+            <ScrollList label="Red flags filed lately"><div className="k-stack snug">
+            {flagged.map((r) => (
               <div key={r.symbol} className="space-line space-flag">
                 <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
                 <SummaryLine bare s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
               </div>
             ))}
+            </div></ScrollList>
             {unread.length > 0 && <p className="small muted" data-testid="invest-redflags-failed">{unreadLine(unread)} {retry}</p>}
           </div>
         )}

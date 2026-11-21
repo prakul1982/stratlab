@@ -10,7 +10,7 @@ import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
 import { JOURNAL_COVERS, JOURNAL_LEDE, journalSavedNote, journalVsTax } from "../../lib/journalTax";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, CsvButton, DataTable, ShowLess, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, CsvButton, DataTable, ShowLess, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem, ScrollList } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -211,7 +211,7 @@ export function JournalPage() {
               <p className="k-small"><b>{result.added.toLocaleString("en-IN")} trade line{result.added === 1 ? "" : "s"} added</b>{result.duplicates > 0 && `, ${result.duplicates.toLocaleString("en-IN")} already in the journal (skipped)`}{result.broker !== "CSV" ? ` from a ${result.broker} file` : ""}.</p>
               {result.problem_count > 0 && (
                 <Disclosure summary={`${result.problem_count} line${result.problem_count === 1 ? "" : "s"} couldn't be read`}>
-                  <ul className="k-list">{result.problems.slice(0, 30).map((p, i) => <li key={i}>Line {p.line} · {p.text}: {p.reason}</li>)}</ul>
+                  <ScrollList label="Lines that couldn't be read" rows={8}><ul className="k-list">{result.problems.map((p, i) => <li key={i}>Line {p.line} · {p.text}: {p.reason}</li>)}</ul></ScrollList>
                 </Disclosure>
               )}
               {result.skipped.length > 0 && (

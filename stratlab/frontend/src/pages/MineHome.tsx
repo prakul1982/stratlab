@@ -59,7 +59,7 @@ export function MineHome() {
   // the calendars (the money calendar, market events, results) are below the first screen: they are read once the page has
   // painted, so the net worth, holdings and prices at the top get the connections first (R9R-010)
   const later = useAfterPaint();
-  // SCROLL (owner, 21 Nov): every dated row, scrolling inside the card (kit ScrollList), not the first six and "+24 more in the calendar"
+  // SCROLL (owner, 21 Nov): every dated row, scrolling inside the card (kit ScrollList), not the first six and a count of the rest
   const coming = useComingUpAll(later);
   const first = firstName(session?.user?.user_metadata as Record<string, unknown> | undefined);
   let shown = layout.order.filter((id) => !layout.hidden.includes(id));
@@ -385,9 +385,7 @@ function WatchCard() {
     Promise.all((["IN", "US"] as Region[]).map(async (r) => {
       const mine = items.filter((w) => w.region === r);
       if (!mine.length) return [] as Mover[];
-      const parts = await Promise.all(Array.from({ length: Math.ceil(mine.length / 24) }, (_, i) => mine.slice(i * 24, i * 24 + 24))
-        .map((part) => researchApi.quotes(r, part.map((w) => w.symbol)).catch(() => ({} as Record<string, Quote | null>))));
-      const q: Record<string, Quote | null> = Object.assign({}, ...parts);
+      const q = await researchApi.quotesAll(r, mine.map((w) => w.symbol));
       if (!mine.some((w) => q[w.symbol]?.price != null)) return [] as Mover[];
       return mine.map((w): Mover => ({ region: r, symbol: w.symbol, name: w.name, q: q[w.symbol]?.price != null ? q[w.symbol]! : null }));
     // LIVE21B-003: in the watchlist's own order, as /invest and /research/watchlist list it (it was the biggest movers first: ABB, RELIANCE,
