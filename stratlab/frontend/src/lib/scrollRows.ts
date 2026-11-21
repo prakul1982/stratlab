@@ -6,7 +6,7 @@
 
 /** A block scrolls only when that hides at least this many rows; fewer and every row shows (owner: "why is there a scroll here for 2 things more"). */
 export const MIN_HIDDEN = 3;
-/** A long list beside a shorter card gives way to it, but never to fewer whole rows than this. */
+/** A long list beside a shorter card gives way to it, but never to fewer whole rows than this (the screen's room allowing). */
 export const FLOOR_ROWS = 3;
 /** A block's head (its title, a chart above the rows) counts against the screen's room up to this share of the screen, so a tall head
  * still leaves the rows a useful box. */
@@ -18,7 +18,7 @@ export const PHONE_Q = "(max-width: 640px)";
 export interface Cut {
   /** hides MIN_HIDDEN rows or more in `avail`: the block scrolls */
   over: boolean;
-  /** the block's height when it scrolls: the bottom edge of the last whole row that fits `avail` (at least FLOOR_ROWS rows) */
+  /** the block's height when it scrolls: the bottom edge of the last whole row that fits `avail`, never more than `avail` */
   fit: number;
   /** rows drawn in full at rest */
   shown: number;
@@ -31,10 +31,11 @@ export function scrollCut(bottoms: number[], avail: number): Cut {
   if (!bottoms.length || !(avail > 0)) return none;
   const at = (i: number) => Math.ceil(bottoms[i]);
   if (at(bottoms.length - 1) <= avail + 1) return none;
-  const floor = Math.min(FLOOR_ROWS, bottoms.length);
-  let shown = floor;
-  for (let i = floor; i < bottoms.length; i++) { if (at(i) <= avail + 1) shown = i + 1; else break; }
-  if (bottoms.length - shown < MIN_HIDDEN) return none;
+  let shown = 0;
+  for (let i = 0; i < bottoms.length; i++) { if (at(i) <= avail + 1) shown = i + 1; else break; }
+  if (bottoms.length - Math.max(1, shown) < MIN_HIDDEN) return none;
+  // a block is never taller than its room: one row taller than the screen (a phone's card) is cut at the room, the rest scroll under it
+  if (!shown) return { over: true, fit: Math.floor(avail), shown: 1 };
   return { over: true, fit: at(shown - 1), shown };
 }
 

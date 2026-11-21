@@ -98,9 +98,10 @@ export function ResultsPage() {
   // its own as the reader nears the end of that day's block (DE-026; never a 200-company day in one go: owner, 5 Nov, the page was slow)
   const [dayMore, setDayMore] = useState<Record<string, ResultRow[]>>({});
   const [dayBusy, setDayBusy] = useState("");
+  const [dayEnd, setDayEnd] = useState<Record<string, boolean>>({});        // a day whose last read brought nothing new: never asked again
   // another market or another set of companies is a different list: the find-a-company text and the old list don't carry over
   const [shownFor, setShownFor] = useState(`${region}|${scope}`);
-  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); setDayMore({}); }
+  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); setDayMore({}); setDayEnd({}); }
   // a sector or an index of one market is not the other's
   const [filtersFor, setFiltersFor] = useState(region);
   if (filtersFor !== region) { setFiltersFor(region); setFilters((f) => ({ ...f, sector: "", index: "", fo: false })); }
@@ -112,7 +113,7 @@ export function ResultsPage() {
     let live = true;
     setError(null);
     const t = setTimeout(() => {
-      setDayMore({});
+      setDayMore({}); setDayEnd({});
       api<ResultsView>(`/research/results?${ask()}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
@@ -129,7 +130,7 @@ export function ResultsPage() {
     if (dayBusy) return;
     setDayBusy(d);
     api<ResultsView>(`/research/results?${ask(d, have + MORE_ROWS)}`)
-      .then((x) => setDayMore((cur) => ({ ...cur, [d]: x.weeks.flatMap((w) => w.rows).filter((r) => r.date === d) })))
+      .then((x) => { const got = x.weeks.flatMap((w) => w.rows).filter((r) => r.date === d); if (got.length <= have) setDayEnd((e) => ({ ...e, [d]: true })); setDayMore((cur) => ({ ...cur, [d]: got })); })
       .catch(() => undefined).finally(() => setDayBusy(""));
   };
 
@@ -362,7 +363,7 @@ export function ResultsPage() {
         const day = (d: string) => {
           const on = dayMore[d] ?? w.rows.filter((r) => r.date === d);
           const info = about(d) ?? { date: d, count: on.length, shown: on.length };
-          const total = Math.max(info.count, on.length);
+          const total = dayEnd[d] ? on.length : Math.max(info.count, on.length);
           return (
             <div key={d} className="inv-day res-days" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>

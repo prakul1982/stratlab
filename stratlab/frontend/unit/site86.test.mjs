@@ -23,7 +23,7 @@ test("scrollCut with the room a card gives: the most whole rows that fit, at lea
   const rows = Array.from({ length: 20 }, (_, i) => 50 * (i + 1));
   assert.equal(S.scrollCut(rows, 380).fit, 350);
   assert.equal(S.scrollCut(rows, 351).fit, 350);       // a pixel's rounding is not a cut row
-  assert.equal(S.scrollCut(rows, 90).fit, 150);        // never fewer than FLOOR_ROWS
+  assert.equal(S.scrollCut(rows, 90).fit, 50);         // (changed on purpose, site87: never taller than its room; FLOOR_ROWS applies beside a shorter card)
   assert.equal(S.scrollCut(rows, 0).over, false);      // no room measured yet: drawn whole
 });
 
@@ -41,7 +41,7 @@ test("ScrollList: one shared component, sized with watchSize, named and focusabl
   assert.match(src, /role=\{over \? "region" : undefined\} aria-label=\{over \? label : undefined\} tabIndex=\{over \? 0 : undefined\}/);
   assert.match(src, /el\.addEventListener\("scroll", more, \{ passive: true \}\)/);
   // a long list gives way to a shorter neighbour whose content fits (changed on purpose, site87: within the screen's room)
-  assert.match(src, /if \(peer !== null\) avail = Math\.min\(avail, Math\.floor\(peer - head - below\)\);/);
+  assert.match(src, /if \(peer !== null && bottoms\.length\) avail = Math\.min\(avail, Math\.max\(Math\.floor\(peer - head - below\)/);
   assert.match(read("src/components/kit/index.ts"), /export \{ ScrollList, useScrollRows \} from "\.\/ScrollList";/);
   // the kit's tables use it (changed on purpose, site87: past the screen's room, not TABLE_ROWS; a phone's cards and the Library too)
   const dt = read("src/components/kit/DataTable.tsx");

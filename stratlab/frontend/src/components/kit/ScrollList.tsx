@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { watchSize } from "../../lib/resize";
-import { moreBelow, nearEnd, scrollCut, screenRoom } from "../../lib/scrollRows";
+import { FLOOR_ROWS, moreBelow, nearEnd, scrollCut, screenRoom } from "../../lib/scrollRows";
 
 /* SCROLL BY SCREEN (owner, Release 87: "it works on screen size, how much of the block a person can see on screen. Then you give a scroll,
  * so they don't have to scroll the whole page and can scroll the specific block"): every item of a list or table is in it; a block is never
@@ -100,7 +100,8 @@ export function useScrollRows(scroller: RefObject<HTMLElement | null>, { box, it
       }
       let avail = screenRoom(window.innerHeight, stickyTop(), head, below);
       const peer = card ? peerHeight(card) : null;
-      if (peer !== null) avail = Math.min(avail, Math.floor(peer - head - below));
+      // beside a shorter card, give way to it, but to no fewer than FLOOR_ROWS rows while the screen has room for them
+      if (peer !== null && bottoms.length) avail = Math.min(avail, Math.max(Math.floor(peer - head - below), Math.ceil(bottoms[Math.min(FLOOR_ROWS, bottoms.length) - 1])));
       const cut = scrollCut(bottoms, avail);
       if (!cut.over) clear();
       else { el.setAttribute("data-over", ""); el.style.maxHeight = `${cut.fit}px`; }

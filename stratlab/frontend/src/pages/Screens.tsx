@@ -325,7 +325,7 @@ export function ScreensPage() {
               <div className="screens-table">
                 {/* AUTO-LOAD (site87, owner: no "Show more"): the server's next page comes on its own as the reader nears the end of the block */}
                 <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }}
-                  more={out ? { total: out.total, load: () => run(rows.length), busy: loading, noun: "companies" } : undefined} />
+                  more={out ? { total: out.rows.length ? out.total : rows.length, load: () => run(rows.length), busy: loading, noun: "companies" } : undefined} />
               </div>
             )}
           </Card>

@@ -56,7 +56,7 @@ test("the one scroll: every table and list block uses it; no phone paging, no ro
   }
   // long server lists load on their own
   assert.match(read("src/pages/ResearchScans.tsx"), /more=\{\{ total: data\.pages > pageAt \? Math\.max\(data\.total, items\.length \+ 1\) : items\.length, load: loadMore/);
-  assert.match(read("src/pages/Screens.tsx"), /more=\{out \? \{ total: out\.total, load: \(\) => run\(rows\.length\), busy: loading, noun: "companies" \} : undefined\}/);
+  assert.match(read("src/pages/Screens.tsx"), /more=\{out \? \{ total: out\.rows\.length \? out\.total : rows\.length, load: \(\) => run\(rows\.length\), busy: loading, noun: "companies" \} : undefined\}/);
   assert.match(read("src/pages/HoldersPage.tsx"), /const pages = useAutoPages\(data,/);
   assert.match(read("src/pages/DocSearchPage.tsx"), /<ScrollList label=\{`Results for \$\{ans\.q\}`\} testId="ds-hits-box" onEnd=/);
 });

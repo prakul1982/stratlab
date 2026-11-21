@@ -104,8 +104,19 @@ async function newContext(browser: Browser, size: (typeof SIZES)[number], theme:
 }
 
 /** Opens a route, waits for it to be drawn, measures it, and (when it has violations) saves a shot with the offenders outlined. */
+/** SCROLL AUDIT (site87, owner: "list every scroll box that remains, with its route and reason"): each block that scrolls inside itself now. */
+type ScrollBox = { page: string; label: string; width: number; box: string; height: number; rows: number; hidden: number; screen: number };
+const scrollBoxes = (): Omit<ScrollBox, "page" | "label" | "width">[] => Array.from(document.querySelectorAll<HTMLElement>(".k-scroll[data-over], .k-tbl-wrap[data-over], .theme-ready[data-over]")).map((el) => {
+  const r = el.getBoundingClientRect();
+  const rows = Array.from(el.querySelectorAll(":scope > table > tbody > tr, :scope > ul > li, :scope > ol > li, :scope > div > li, :scope > div > *, :scope > button")).filter((x) => x.getBoundingClientRect().height > 0);
+  const card = el.closest(".k-card, section");
+  const name = el.getAttribute("aria-label") ?? el.querySelector("table")?.getAttribute("aria-label") ?? card?.querySelector("h2, h3")?.textContent ?? el.className;
+  return { box: String(name).trim().slice(0, 80), height: Math.round(r.height), rows: rows.length, hidden: rows.filter((x) => x.getBoundingClientRect().top >= r.bottom - 1).length, screen: innerHeight };
+});
+const SCROLLS: ScrollBox[] = [];
+
 async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme: string, shots: string): Promise<{ rows: Row[]; note?: string; frame?: PageFrame | null }> {
-  await page.goto(WEB + r.path);
+  await page.goto(WEB + r.path, { timeout: 45_000 });          // site87: a page that never loads is a note, not a run that never ends
   // (with Market Watch open the page is never network-idle: its prices refresh every few seconds, so it gets a short wait instead)
   if (process.env.UI_LINT_PANEL === "1" && size.width > 900) await page.waitForTimeout(1200);
   else await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
@@ -121,9 +132,13 @@ async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme
   const body = (await page.locator("body").innerText().catch(() => "")).slice(0, 4000);
   if (/page (isn.t|is not) here|page not found|404/i.test(body.slice(0, 400)) && !/404/.test(r.path)) note = note ?? "the page shows not-found";
   let res: LintResult;
-  try { res = await page.evaluate(lintPage, { phone: size.width <= 500, mark: process.env.UI_LINT_SHOTS !== "0" }); }
+  try {
+    res = await Promise.race([page.evaluate(lintPage, { phone: size.width <= 500, mark: process.env.UI_LINT_SHOTS !== "0" }),
+      new Promise<never>((_, no) => setTimeout(() => no(new Error("the page didn't answer within 60 s")), 60_000))]);
+  }
   catch (e) { return { rows: [], note: `lint failed: ${String(e).slice(0, 200)}` }; }
   const rows: Row[] = res.violations.map((v) => ({ ...v, page: r.path, label: r.label, width: size.width, theme }));
+  if (theme === "dark") for (const b of await page.evaluate(scrollBoxes).catch(() => [])) SCROLLS.push({ ...b, page: r.path, label: r.label, width: size.width });
   if (rows.length && process.env.UI_LINT_SHOTS !== "0") {
     const file = `${slug(r.label)}-${size.width}${theme === "light" ? "-light" : ""}.jpg`;
     const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
@@ -393,6 +408,8 @@ test("every route, three widths: UI layout problems, reported (UI_LINT_STRICT=1 
   const perRule = Object.fromEntries(Object.keys(RULES).map((k) => [k, live.filter((r) => r.rule === k).length]));
   writeFileSync(resolve(OUT, "report.json"), JSON.stringify({ seconds: Math.round(seconds), routes: routes.length, widths: PASSES.map((p) => `${p.size.width}${p.theme === "light" ? "-light" : ""}`), perRule, notes, violations: rows }, null, 1));
   writeFileSync(resolve(OUT, "report.md"), report(rows, routes, notes, seconds, allow, tasks.length));
+  SCROLLS.sort((a, b) => a.page.localeCompare(b.page) || b.width - a.width);
+  writeFileSync(resolve(OUT, "scrolls.json"), JSON.stringify(SCROLLS, null, 1));
   console.log(`ui-lint: ${live.length} violations on ${routes.length} routes in ${Math.round(seconds)} s -> ${resolve(OUT, "report.md")}`, perRule);
   if (STRICT) expect(live.map((r) => `${r.label} @${r.width} ${r.rule} ${r.element}: ${r.detail}`), "UI layout violations (add a reasoned entry to e2e/ui-lint.allow.json to accept one)").toEqual([]);
 });
