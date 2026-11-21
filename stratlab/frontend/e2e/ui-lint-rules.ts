@@ -216,7 +216,8 @@ export function lintPage(opts: LintOpts): LintResult {
       if (row.length < 2) continue;
       const xs = [...row].sort((a, b) => R(a).left - R(b).left);
       if (xs.some((a, i) => i && R(a).left < R(xs[i - 1]).right - 2)) continue;     // overlapping: not side by side
-      if (row.some((c) => c.matches("aside, nav, header, footer, main, [role=navigation]"))) continue;          // the page's own chrome (sidebar, admin menu) is not a card row
+      if (row.some((c) => c.matches("aside, nav, header, footer, main, [role=navigation]"))) continue;
+      if (row.some((c) => S(c).position === "sticky")) continue;          // site87: a sticky side panel (the screener's filters) rides along beside a longer column          // the page's own chrome (sidebar, admin menu) is not a card row
       const cardish = row.filter((c) => isCard(c) || c.querySelector("[class*=card]"));
       if (cardish.length < 2) continue;
       const top = Math.min(...row.map((c) => R(c).top));
@@ -338,7 +339,10 @@ export function lintPage(opts: LintOpts): LintResult {
     for (const c of all) {
       if (!c.matches("button, a, summary, [role=button]") || !shown(c) || c.closest("nav.sidebar, .sidebar, .more-pop, [role=menu], dialog, [role=dialog]")) continue;
       const t = textOf(c);
-      if (t.length > 60) continue;
+      if (t.length > 60 || /\bcolumns$/i.test(t)) continue;           // "Fewer columns" folds a table's columns, not its rows
+      // a link to another page ("All 3 notebooks", "See all 43 strategies") opens that page's own list: navigation, not a list's paging
+      const href = c.getAttribute("href");
+      if (c.matches("a") && href && (() => { try { return new URL(href, location.href).pathname !== location.pathname; } catch { return false; } })()) continue;
       if (PAGING.test(t) || c.closest(".k-pager")) add("R30", c, `(d) "${t.slice(0, 40)}": a paging or show-more control on a list (every item is in its block; long lists load more on their own)`);
     }
   }

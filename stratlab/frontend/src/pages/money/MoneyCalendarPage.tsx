@@ -6,7 +6,7 @@ import { inr, fmtDate, safeHref } from "../../lib/format";
 import { Copy, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Earlier } from "../../components/Earlier";
-import { Card, CardHead, CheckField, ChipSet, ConfirmDialog, DateField, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Seg, Select, Skeleton } from "../../components/kit";
+import { Card, CardHead, CheckField, ChipSet, ConfirmDialog, DateField, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, ScrollList, Seg, Select, Skeleton } from "../../components/kit";
 
 /* /money/calendar: tax due dates, results and dividends for your holdings and watchlist, plus your own dates, as a list
  * or a month, with a private link for any calendar app and reminders. Built from the kit (components/kit). */
@@ -65,14 +65,15 @@ function DayList({ events, today, label = "Money dates" }: { events: Ev[]; today
   }, [events]);
   if (!days.length) return <p className="k-small k-muted">Nothing in these dates.</p>;
   return (
-    <ol className="mc-days" aria-label={label}>
+    // site87 (owner: "scroll the specific block"): the days are a block sized to the screen, scrolling inside past it
+    <ScrollList label={label}><ol className="mc-days" aria-label={label}>
       {days.map(([d, evs]) => (
         <li key={d} className="mc-day">
           <div className={`mc-date${d === today ? " today" : ""}`}><b>{longDay(d)}</b>{d === today && <span className="k-note"> · today</span>}</div>
           <ul className="mc-evs">{evs.map((e) => <EventRow key={e.id} e={e} past={d < today} tag={tag} />)}</ul>
         </li>
       ))}
-    </ol>
+    </ol></ScrollList>
   );
 }
 

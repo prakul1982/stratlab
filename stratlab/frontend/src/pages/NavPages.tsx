@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { Card, CardHead, EmptyState, PageHeader } from "../components/kit";
+import { Card, CardHead, EmptyState, PageHeader, ScrollList } from "../components/kit";
 import { PageTags } from "../components/PageTags";
 import { TileGrid } from "../components/TileGrid";
 import { ALL_GROUPS, NAV, SPACE_LIST, groupPath, locateGroup, type NavPage } from "../lib/nav";
@@ -89,9 +89,9 @@ export function FeaturesPage() {
       {mine.length > 0 && (
         <Card testId="features-mine">
           <CardHead title={<Link to="/mine">{MINE_NAME}</Link>} />
-          <ul className="feat-list">
+          <ScrollList label={`${MINE_NAME} pages`}><ul className="feat-list">
             {mine.map((p) => <li key={p.to}><Link to={p.to}><b>{p.label}</b></Link><span className="feat-line">{p.line}</span></li>)}
-          </ul>
+          </ul></ScrollList>
         </Card>
       )}
       {spaces.map((s) => (
@@ -101,11 +101,11 @@ export function FeaturesPage() {
           {s.groups.map(({ g, pages }) => (
             <section key={g.id} className="feat-group" aria-label={`${s.label}: ${g.label}`}>
               <h3 className="feat-group-title"><Link to={groupPath(s.id, g)}>{g.label}</Link></h3>
-              <ul className="feat-list">
+              <ScrollList label={`${s.label}: ${g.label}`}><ul className="feat-list">
                 {pages.map((p) => (
                   <li key={p.to}><Link to={p.to}><b>{p.label}</b></Link>{p.was && <span className="k-note k-muted"> was {p.was}</span>}<PageTags page={p} /><span className="feat-line">{p.line}</span></li>
                 ))}
-              </ul>
+              </ul></ScrollList>
             </section>
           ))}
         </Card>

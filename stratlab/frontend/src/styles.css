@@ -3522,3 +3522,20 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .k-multi-opt { min-height: 36px; padding: 4px 8px; border-radius: 6px; }
 .k-multi-opt:hover { background: var(--paper-2); }
 .k-multi-clear { align-self: flex-end; margin-top: 4px; }
+
+/* site87: on the screener, the column of results stretches to the filters' bottom when it is the longer one (the filters then stretch) */
+@media (min-width: 1361px) {
+  .k-split2.screens-split { align-items: stretch; }
+  .screens-split > .inv-sticky { display: flex; flex-direction: column; }
+  .screens-split > .inv-sticky > .screens-filters { flex: 1 0 auto; }
+}
+/* site87: Admin's rules table: a long path or address in "In the code" or "Source" breaks inside its cell, so the five columns fit the box */
+[data-testid="rules-panel"] .k-table td, [data-testid="rules-panel"] .k-table th { overflow-wrap: anywhere; }
+@media (min-width: 641px) {
+  [data-testid="rules-panel"] table[aria-label="All rules"] { table-layout: fixed; width: 100%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(1) { width: 22%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(2) { width: 22%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(3) { width: 12%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(4) { width: 18%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(5) { width: 26%; }
+}

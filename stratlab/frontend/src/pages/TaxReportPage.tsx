@@ -10,7 +10,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, ScrollList, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
@@ -239,7 +239,7 @@ export function TaxReportPage() {
     ...(y.brought_forward ?? []).map((p) => ({ key: `bf_${p.fy}_${p.kind}`, label: `${p.kind === "st" ? "Short" : "Long"}-term loss brought forward from ${p.label}`, rate: null as unknown as number, gains: -p.amt, after_setoff: -p.left, exempt: 0, taxable: 0, tax: 0, slab: true })),
   ] : [];
   const bucketCols: Column<Bucket>[] = [
-    { key: "kind", header: "Kind", rowHeader: true, cell: (b) => b.label },
+    { key: "kind", header: "Kind", rowHeader: true, wrap: true, cell: (b) => b.label },     // site87: the kind wraps, so seven columns fit a 1280 screen
     { key: "rate", header: "Rate", numeric: true, cell: (b) => (b.key.startsWith("loss_") || b.key.startsWith("bf_") ? "–" : rate(b.rate, b.slab)) },
     { key: "gains", header: "Gains", numeric: true, cell: (b) => inr(b.gains) },
     { key: "after", header: "After set-off", numeric: true, cell: (b) => inr(b.after_setoff) },
@@ -481,11 +481,11 @@ export function TaxReportPage() {
           {/* the method is there for whoever wants it, folded, so the figures come first (R1-015) */}
           <Card id="tax-how" compact label="How this report works">
             <Disclosure summary="The set-off rules, and how this report works">
-              <ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <ScrollList label="The set-off rules"><ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList>
               <h3 className="k-sub">How this report works</h3>
-              <ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <ScrollList label="How this report works"><ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList>
               {!!rep.unit_notes?.length && <><h3 className="k-sub">ETFs, REITs, InvITs and gold bonds</h3>
-                <ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></>}
+                <ScrollList label="ETF, REIT, InvIT and gold bond rules"><ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList></>}
             </Disclosure>
           </Card>
         </>

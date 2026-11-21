@@ -202,7 +202,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   useLayoutEffect(() => { setFit(false); }, [boxW, columns.length, allRows.length]);
   useLayoutEffect(() => {
     const b = box.current;
-    if (!fit && !phone && !grid && !scrollEnd && b && b.scrollWidth > b.clientWidth + 2) setFit(true);
+    if (!fit && !phone && !grid && !scrollEnd && b && b.scrollWidth > b.clientWidth + 1) setFit(true);      // site87: 2px over is over (ui-lint R29 counts it)
   });
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });

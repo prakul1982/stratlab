@@ -8,9 +8,11 @@
 export const MIN_HIDDEN = 3;
 /** A long list beside a shorter card gives way to it, but never to fewer whole rows than this (the screen's room allowing). */
 export const FLOOR_ROWS = 3;
-/** A block's head (its title, a chart above the rows) counts against the screen's room up to this share of the screen, so a tall head
+/** A block's head (its title, a chart above the rows) counts against the screen's room up to this share of the screen (a quarter), so a tall head
  * still leaves the rows a useful box. */
-export const HEAD_SHARE = 0.3;
+export const HEAD_SHARE = 0.25;
+/** What sits under the rows inside their card (a note, or the next tables of a card that holds several) counts up to this share. */
+export const FOOT_SHARE = 0.1;
 /** Room kept under a block so its bottom edge (and the card's padding) is on screen too. */
 export const SCREEN_GAP = 12;
 export const PHONE_Q = "(max-width: 640px)";
@@ -42,7 +44,7 @@ export function scrollCut(bottoms: number[], avail: number): Cut {
 /** The room a block's rows have on this screen: the viewport less the sticky header above, the block's head (capped at HEAD_SHARE of the
  * screen) and what sits under the rows inside the block. */
 export function screenRoom(viewport: number, stickyTop: number, head: number, below: number): number {
-  return Math.max(0, Math.floor(viewport - stickyTop - Math.min(Math.max(0, head), HEAD_SHARE * viewport) - Math.max(0, below) - SCREEN_GAP));
+  return Math.max(0, Math.floor(viewport - stickyTop - Math.min(Math.max(0, head), HEAD_SHARE * viewport) - Math.min(Math.max(0, below), FOOT_SHARE * viewport) - SCREEN_GAP));
 }
 
 /** The fade under a list is there while more is below, and gone at the end. */

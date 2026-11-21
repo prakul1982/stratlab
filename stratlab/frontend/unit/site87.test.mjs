@@ -22,11 +22,12 @@ test("SCROLL BY SCREEN: content that fits its room is drawn whole; past it, whol
   assert.equal(S.MIN_HIDDEN, 3);
 });
 
-test("the room on a screen: the viewport less the sticky header, the block's head (at most 30% of the screen) and its foot", () => {
+test("the room on a screen: the viewport less the sticky header, the block's head (at most a quarter of the screen) and its foot (a tenth)", () => {
   assert.equal(S.screenRoom(900, 0, 80, 20), 900 - 80 - 20 - S.SCREEN_GAP);
   assert.equal(S.screenRoom(844, 56, 70, 0), 844 - 56 - 70 - S.SCREEN_GAP);
-  assert.equal(S.screenRoom(600, 0, 500, 0), Math.floor(600 - 0.3 * 600 - S.SCREEN_GAP), "a tall head leaves the rows a useful box");
-  assert.equal(S.screenRoom(100, 0, 0, 200), 0);
+  assert.equal(S.screenRoom(600, 0, 500, 0), Math.floor(600 - 0.25 * 600 - S.SCREEN_GAP), "a tall head leaves the rows a useful box");
+  assert.equal(S.screenRoom(100, 0, 0, 200), 100 - 10 - S.SCREEN_GAP, "what sits under the rows counts up to a tenth of the screen");
+  assert.equal(S.screenRoom(900, 0, 0, 5000), 900 - 90 - S.SCREEN_GAP);
 });
 
 test("AUTO-LOAD: the next rows are asked for near the end of the rows drawn", () => {

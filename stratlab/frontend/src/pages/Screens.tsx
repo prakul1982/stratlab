@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CsvButton, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
+  Card, CardHead, ChipSet, CsvButton, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, MultiPick, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
 import { limitLine, planIdOf } from "../lib/lockText";
@@ -246,7 +246,9 @@ export function ScreensPage() {
               : !meta ? (showFilters ? <div className="screens-filters-wait"><Skeleton label="Loading the filters" lines={4} /></div> : null) : showFilters && <>
               <Group title={sectorName} help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>
-                  : <ChipSet label={sectorName} options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}
+                  // site87 (owner: a column of four rows of chips beside one box made the form ragged): the sectors are one drop-down of tick boxes
+                  : <MultiPick label={sectorName} all="Every sector" noun="sectors" options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector}
+                    onToggle={(v) => toggle("sector", v)} onClear={() => setFilters((f) => ({ ...f, sector: [] }))} />}
               </Group>
               <Group title="Company size (market value)" help={help.cap}>
                 <ChipSet label="Company size" options={meta.cap.map((c) => ({ value: c.id, label: c.label }))} on={filters.cap} onToggle={(v) => toggle("cap", v as Filters["cap"][number])} />
