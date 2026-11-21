@@ -213,9 +213,10 @@ test("ads on: the public library shows one ad after Allow in the banner, below t
   await expect(slot.locator("[data-fake-ad]")).toBeVisible();
   await expect(slot.locator("ins.adsbygoogle")).toHaveAttribute("data-ad-slot", "1111111111");
   await expect(page.locator(".ad")).toHaveCount(1);
-  // (VR7-004: on a phone the cards past the first twelve are in the page but hidden until "Show more": the last one drawn)
-  const last = await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").last().boundingBox(), s = await slot.boundingBox();
-  expect(s!.y).toBeGreaterThan(last!.y + last!.height);
+  // (changed on purpose, site87, owner: "scroll the specific block": the library's rows scroll inside a block sized to the screen, so the slot is
+  // below that block, not below its last row)
+  const box = await page.locator(".lib-table .k-tbl-wrap").first().boundingBox(), s = await slot.boundingBox();
+  expect(s!.y).toBeGreaterThan(box!.y + box!.height - 1);
   await noSideways(page);
   expect(errors).toEqual([]);
 });

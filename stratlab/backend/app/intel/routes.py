@@ -1093,7 +1093,9 @@ def theme_map(profile, region: str, q: str):
     library's stored read when there is one (theme_library.py: already checked and described, marked "_library" so it isn't checked
     again), else the map as sector_map gives it."""
     from . import theme_library
+    from .theme_market import refuse_foreign
     r = region_of(region)
+    refuse_foreign(q, r)              # site87: one market's country-named theme is never mapped in the other
     hit = theme_library.stored(r, q)
     if hit is not None:
         return r, " ".join(q.split())[:80], {**hit["payload"], "_library": hit["name"]}, index_rows(r)
@@ -1142,7 +1144,9 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     "refresh_state" ("fresh", "capped", "started", "done")."""
     from .. import computed
     from . import theme_library
+    from .theme_market import refuse_foreign
     r = region_of(region)
+    refuse_foreign(q, r)              # site87 (owner: "India defence" mapped in the US): never across markets
     hit = theme_library.stored(r, q)
     state = None
     if hit is None and not refresh:

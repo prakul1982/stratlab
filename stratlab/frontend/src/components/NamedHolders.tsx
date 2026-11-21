@@ -81,7 +81,7 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
         {v.url && <> · <a className="link" href={safeHref(v.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a></>}</span>
       <GroupLink symbol={symbol} />
       {v.holders.length === 0 ? <p className="k-small k-muted">The filing names no holder above 1%.</p> : (
-        <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} stack scrollRows={12} rowAttrs={(h) => ({ "data-holder": h.name })}
+        <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} stack rowAttrs={(h) => ({ "data-holder": h.name })}
           columns={[
             { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <>{h.name}<span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span>
               {h.was_named && <span className="k-sub-line">filed last quarter as {h.was_named}</span>}</> },

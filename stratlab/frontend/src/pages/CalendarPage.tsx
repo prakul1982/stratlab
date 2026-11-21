@@ -33,7 +33,11 @@ export function CalendarPage() {
   const [types, setTypes] = useState<CalType[]>(typeParam.length ? typeParam : TYPES);
   const [size, setSize] = useState<string[]>([]);
   const [sector, setSector] = useState("");
-  const [openDay, setOpenDay] = useState("");
+  // AUTO-LOAD (site87, owner: no "Show all N on <day>"): a day of "every company" with more results than the first answer holds is read in
+  // full on its own as the reader nears the end of the table, one day at a time (DE-026); each day's whole list replaces its first rows
+  const [fullDays, setFullDays] = useState<Record<string, ResultRow[]>>({});
+  const [dayBusy, setDayBusy] = useState(false);
+  const resetDays = () => setFullDays({});
   const [res, setRes] = useState<ResultsView | null | "error">(null);
   const [corp, setCorp] = useState<CorpView | null | "error">(null);
   const [ipos, setIpos] = useState<IpoList | null | "error">(null);
@@ -42,7 +46,7 @@ export function CalendarPage() {
   const [tries, setTries] = useState(0);
   // a sector of one market is not the other's
   const [sectorFor, setSectorFor] = useState(region);
-  if (sectorFor !== region) { setSectorFor(region); setSector(""); setOpenDay(""); }
+  if (sectorFor !== region) { setSectorFor(region); setSector(""); resetDays(); }
   const qs = (extra: Record<string, string> = {}) => {
     const q = new URLSearchParams({ region, scope, size: scope === "all" ? size.join(",") : "", sector: scope === "all" ? sector : "", ...extra });
     for (const [k, v] of [...q]) if (!v) q.delete(k);
@@ -50,11 +54,11 @@ export function CalendarPage() {
   };
   useEffect(() => {
     let live = true;
-    setRes(null); setCorp(null);
-    api<ResultsView>(`/research/results?${qs({ day: scope === "all" ? openDay : "" })}`).then((x) => live && setRes(x)).catch(() => live && setRes("error"));
+    setRes(null); setCorp(null); setFullDays({});
+    api<ResultsView>(`/research/results?${qs()}`).then((x) => live && setRes(x)).catch(() => live && setRes("error"));
     api<CorpView>(`/research/corp-actions?${qs()}`).then((x) => live && setCorp(x)).catch(() => live && setCorp("error"));
     return () => { live = false; };
-  }, [region, scope, size, sector, openDay, tries]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [region, scope, size, sector, tries]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let live = true;
     setIpos(null);
@@ -79,7 +83,7 @@ export function CalendarPage() {
   const rows = useMemo(() => {
     const ok = <T,>(v: T | null | "error"): v is T => !!v && v !== "error";
     const parts: CalRow[][] = [];
-    if (ok(res)) parts.push(res.weeks.flatMap((w) => w.rows).filter((r) => r.date >= today).map((r) => ({
+    if (ok(res)) parts.push([...res.weeks.flatMap((w) => w.rows).filter((r) => !fullDays[r.date.slice(0, 10)]), ...Object.values(fullDays).flat()].filter((r) => r.date >= today).map((r) => ({
       id: `res:${r.region}:${r.symbol}:${r.date}`, date: r.date.slice(0, 10), type: "results" as const, name: r.name ?? r.symbol, mine: r.mine,
       to: `/research/${r.region}/${encodeURIComponent(r.symbol)}`, detail: [r.purpose, r.when].filter(Boolean).join(" · ") })));
     if (ok(corp)) parts.push(corp.ahead.filter((a) => a.ex_date <= until).map((a) => ({
@@ -92,12 +96,22 @@ export function CalendarPage() {
     if (ok(money)) parts.push(money.events.filter((e) => e.date >= today && e.date <= until).map((e) => ({
       id: `money:${e.id}`, date: e.date, type: "money" as const, name: e.title, to: "/money/calendar", detail: e.detail })));
     return mergeRows(parts).filter((r) => types.includes(r.type));
-  }, [res, corp, ipos, ev, money, types, today, until, region]);
+  }, [res, corp, ipos, ev, money, types, today, until, region, fullDays]);
 
   const failed = ([[res, "results"], [corp, "corporate actions"], [ipos, "IPOs"], [ev, "market events"], [money, "your money dates"]] as const).filter(([v]) => v === "error").map(([, w]) => w);
   const loading = res === null || corp === null || ipos === null || ev === null || money === null;
-  // a day of "every company" that has more results than came in this answer opens in full (DE-026), one day at a time
-  const cut = res && res !== "error" && scope === "all" ? res.weeks.flatMap((w) => w.days ?? []).filter((d) => d.count > d.shown && d.date !== openDay) : [];
+  // a day of "every company" that has more results than came in this answer is read in full as the reader nears the end (DE-026)
+  const cut = res && res !== "error" && scope === "all" ? res.weeks.flatMap((w) => w.days ?? []).filter((d) => d.count > d.shown && !fullDays[d.date]) : [];
+  const loadDay = () => {
+    const d = cut[0];
+    if (!d || dayBusy) return;
+    setDayBusy(true);
+    api<ResultsView>(`/research/results?${qs({ day: d.date })}`)
+      .then((x) => setFullDays((cur) => ({ ...cur, [d.date]: x.weeks.flatMap((w) => w.rows).filter((r) => r.date.slice(0, 10) === d.date) })))
+      .catch(() => setFullDays((cur) => ({ ...cur, [d.date]: (res && res !== "error" ? res.weeks.flatMap((w) => w.rows) : []).filter((r) => r.date.slice(0, 10) === d.date) })))
+      .finally(() => setDayBusy(false));
+  };
+  const hiddenResults = cut.reduce((a, d) => a + d.count - d.shown, 0);
   const facets = res && res !== "error" ? res.facets : null;
   const toggle = (t: CalType) => setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : TYPES.filter((x) => x === t || cur.includes(x))));
   const cols: Column<CalRow>[] = [
@@ -113,7 +127,7 @@ export function CalendarPage() {
       <Card label="What to show" className="cal-filters">
         <div className="k-toolbar">
           <RegionSwitch region={region} setRegion={(r: Region) => setRegion(r)} />
-          <Seg label="Companies" value={scope} onChange={(v) => { setOpenDay(""); setScope(v); }} options={SCOPE_OPTIONS} />
+          <Seg label="Companies" value={scope} onChange={(v) => { resetDays(); setScope(v); }} options={SCOPE_OPTIONS} />
         </div>
         <div className="k-field wide">
           <span className="k-lbl">Type</span>
@@ -137,10 +151,10 @@ export function CalendarPage() {
             <div className="k-field">
               <span className="k-lbl">Company size</span>
               <ChipSet label="Company size" options={facets.sizes.map((s) => ({ value: s.id, label: SIZE_NAME[s.id] ?? s.label }))} on={size}
-                onToggle={(v) => { setOpenDay(""); setSize((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v])); }} />
+                onToggle={(v) => { resetDays(); setSize((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v])); }} />
             </div>
             <Field label={region === "IN" ? "Sector" : "Industry division"}>
-              {(id) => <Select id={id} value={sector} onChange={(v) => { setOpenDay(""); setSector(v); }}
+              {(id) => <Select id={id} value={sector} onChange={(v) => { resetDays(); setSector(v); }}
                 options={[{ value: "", label: "All" }, ...facets.sectors.map((s) => ({ value: s.name, label: s.name })), ...(sector && !facets.sectors.some((s) => s.name === sector) ? [{ value: sector, label: sector }] : [])]} />}
             </Field>
           </div>
@@ -155,13 +169,8 @@ export function CalendarPage() {
       {loading ? <Card><Skeleton label="Reading the calendars" /></Card> : (
         <Card label="Dates" testId="cal-all">
           <DataTable csv="money calendar" stack label="Every date, this week and next" columns={cols} rows={rows} rowKey={(r) => r.id}
+            more={hiddenResults > 0 && types.includes("results") ? { total: rows.length + hiddenResults, load: loadDay, busy: dayBusy, noun: "dates" } : undefined}
             empty={types.length ? "Nothing dated in these two weeks for this choice." : "Pick at least one type above."} />
-          {cut.length > 0 && (
-            <div className="k-row cal-more">
-              <span className="k-small k-muted">Days with more results than the table holds at first:</span>
-              {cut.map((d) => <button key={d.date} type="button" className="btn quiet sm" onClick={() => setOpenDay(d.date)}>Show all {d.count.toLocaleString("en-IN")} on {fmtDate(d.date, { weekday: true, year: false })}</button>)}
-            </div>
-          )}
         </Card>
       )}
     </div>

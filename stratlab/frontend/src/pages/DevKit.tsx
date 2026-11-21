@@ -5,7 +5,7 @@ import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signed, signedInrCompac
 import { LineChart } from "../components/Charts";
 import { Loading } from "../components/ui";
 import {
-  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, HealthGrid, HealthTile, LinkCard, Pager, StatusList, StatusRow, PageHeader, ResultBlock, Seg, Signed, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
+  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, HealthGrid, HealthTile, LinkCard, StatusList, StatusRow, PageHeader, ResultBlock, Seg, Signed, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
   Range, TilePicker, TimeInput, type TileGroup,
   Coachmark,
 } from "../components/kit";
@@ -48,7 +48,6 @@ function Body() {
   const [tile, setTile] = useState<string | null>("fd");
   const [clock, setClock] = useState("09:30");
   const [trail, setTrail] = useState(4);
-  const [pg, setPg] = useState(2);
   const [sym, setSym] = useState("");
   const [coach, setCoach] = useState(false);
   const series = useMemo(() => BOOK, []);
@@ -112,9 +111,6 @@ function Body() {
         </Card>
       </Spec>
 
-      <Spec name="Pager" rule="Previous and next under a long list that comes a page at a time; it says which page and how many rows. Not shown when one page holds everything.">
-        <Card><Pager page={pg} pages={5} total={112} noun="filings" onPage={setPg} /><Pager page={1} pages={1} total={9} noun="filings" onPage={() => undefined} /></Card>
-      </Spec>
 
       <Spec name="FormGrid, Field and FormActions" rule="One-line labels, the detail behind (i), units inside the box, optional says so, the main button on its own row.">
         <Card>

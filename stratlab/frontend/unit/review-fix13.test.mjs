@@ -43,7 +43,9 @@ test("LIVE11A-013: every stored theme is listed, without the market the tab name
   assert.equal(libraryLabel({ name: "Cement", region: "IN", at: null, day: "2026-11-13" }, (d) => d), "Cement · India, updated 2026-11-13");
   const page = read("src/pages/ThemesPage.tsx");
   assert.doesNotMatch(page, /\.slice\(0, 4\);\n  if \(!shown\.length\) return null;/);
-  assert.match(page, /All \{items\.length\} themes/);     // (updated on purpose, owner 18 Nov: the grid's own list is `items`)
+  // (changed on purpose, site87, owner: no "All N themes" / "Fewer themes": every ready theme is a chip, the area scrolling past three lines)
+  assert.doesNotMatch(page, /All \{items\.length\} themes|label="Fewer themes"/);
+  assert.match(page, /\{sorted\.map\(\(i\) => \{/);
 });
 
 test("LIVE11A-014: one plan line for the download row, no toast with it, the decks count after the buttons", () => {

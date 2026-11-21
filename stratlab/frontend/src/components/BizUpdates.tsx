@@ -4,7 +4,7 @@ import { safeHref, fmtDate } from "../lib/format";
 import { bizChange, bizValue, foldFilings, periodName, monthIndex, monthOf } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
-import { CardNote, DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
+import { CardNote, DataTable, EmptyState, Notice, ScrollList, Skeleton } from "./kit";
 import { PlanActions } from "./PlanInterest";
 
 /* Monthly and quarterly business updates read into numbers (biz_updates.py): the company's filed figures with the line
@@ -77,8 +77,6 @@ export function BizChart({ m, label }: { m: BizMetric; label?: string }) {
   );
 }
 
-/** Filing rows shown before "Show all N" (owner, 18 Nov: "show 5"). */
-const FILINGS_FIRST = 5;
 
 /** The company page's and the deep dive's panel. Nothing at all for a company that files no business updates. */
 export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body: React.ReactNode, right?: React.ReactNode) => React.ReactNode }) {
@@ -86,7 +84,6 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState<string | null>(null);
-  const [more, setMore] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -105,9 +102,9 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
   };
   const chosen = v.metrics.find((m) => m.key === pick) ?? v.metrics[0];
   const right = v.allowed ? <AlertButton region="IN" symbol={symbol} label="Alert on new updates" condition="bizupdate" /> : null;
-  // one row a subject (owner, 18 Nov): a subject filed again is one row with its other days; five rows, then "Show all N"
-  const groups = foldFilings(v.filings);
-  const files = more ? groups : groups.slice(0, FILINGS_FIRST);
+  // one row a subject (owner, 18 Nov): a subject filed again is one row with its other days; every row, the list a block sized to the
+  // screen that scrolls inside itself past that (site87, owner: no "Show all N")
+  const files = foldFilings(v.filings);
 
   return wrap(
     <div className="k-stack biz-updates">
@@ -140,7 +137,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
       )}
       {files.length > 0 ? (
         // date | subject (two lines at most, the whole of it in its title) | link, the link column the same on every row (owner, 18 Nov)
-        <ul className="biz-filings k-small" aria-label="Business update filings">
+        <ScrollList label="Business update filings"><ul className="biz-filings k-small" aria-label="Business update filings">
           {files.map(({ title, items: [f, ...again] }) => (
             <li key={f.id}>
               <span className="k-note biz-day">{day(f.at)}</span>
@@ -151,10 +148,8 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
               </span>
               <a className="link biz-link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
             </li>))}
-        </ul>
+        </ul></ScrollList>
       ) : <EmptyState title="No business update filed">They are listed here as the company files them.</EmptyState>}
-      {groups.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {groups.length}</button>}
-      {more && groups.length > FILINGS_FIRST && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
       {v.problems.length > 0 && <p className="k-note">{v.problems.slice(0, 3).join(" · ")}</p>}
       {v.note && <CardNote><p>{v.note}</p></CardNote>}
     </div>, right);

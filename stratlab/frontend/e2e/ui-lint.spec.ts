@@ -66,7 +66,7 @@ export const RULES: Record<string, string> = {
   R27: "A table cut on a desktop: a list table with a column past its scrolling box's edge, or a row's name cut by an ellipsis to under 56px",
   R28: "Off-centre (owner, 18 Nov): a table header aligned otherwise than its column's cells, or a card head's controls > 2px off the middle of the title's line",
   R29: "Off its row's centre (owner, 20 Nov): a table cell's contents > 2px off the cell's centre, fold-row cells side by side with centres > 2px apart or an off-centre chevron, an opened fold with unequal insets or tables not the row's width, a table wider than its box on a desktop",
-  R30: "Uneven pair or hidden items (owner, 21 Nov): two cards side by side whose heights differ by > 2px, a \"+N more\" with nothing to press, or a list's rows cut off by a box that doesn't scroll",
+  R30: "Uneven pair, hidden items or a block not sized to the screen (owner, 21 Nov; site87): two cards side by side, or a card beside a column of cards, whose heights differ by > 2px; a \"+N more\" with nothing to press; a list's rows cut off by a box that doesn't scroll; (a) a list or table taller than the screen that doesn't scroll inside its block; (b) a scroll box hiding fewer than 3 rows; (c) a scroll box taller than the screen; (d) a paging or show-more control on a list",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -104,8 +104,19 @@ async function newContext(browser: Browser, size: (typeof SIZES)[number], theme:
 }
 
 /** Opens a route, waits for it to be drawn, measures it, and (when it has violations) saves a shot with the offenders outlined. */
+/** SCROLL AUDIT (site87, owner: "list every scroll box that remains, with its route and reason"): each block that scrolls inside itself now. */
+type ScrollBox = { page: string; label: string; width: number; box: string; height: number; rows: number; hidden: number; screen: number };
+const scrollBoxes = (): Omit<ScrollBox, "page" | "label" | "width">[] => Array.from(document.querySelectorAll<HTMLElement>(".k-scroll[data-over], .k-tbl-wrap[data-over], .theme-ready[data-over]")).map((el) => {
+  const r = el.getBoundingClientRect();
+  const rows = Array.from(el.querySelectorAll(":scope > table > tbody > tr, :scope > ul > li, :scope > ol > li, :scope > div > li, :scope > div > *, :scope > button")).filter((x) => x.getBoundingClientRect().height > 0);
+  const card = el.closest(".k-card, section");
+  const name = el.getAttribute("aria-label") ?? el.querySelector("table")?.getAttribute("aria-label") ?? card?.querySelector("h2, h3")?.textContent ?? el.className;
+  return { box: String(name).trim().slice(0, 80), height: Math.round(r.height), rows: rows.length, hidden: rows.filter((x) => x.getBoundingClientRect().top >= r.bottom - 1).length, screen: innerHeight };
+});
+const SCROLLS: ScrollBox[] = [];
+
 async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme: string, shots: string): Promise<{ rows: Row[]; note?: string; frame?: PageFrame | null }> {
-  await page.goto(WEB + r.path);
+  await page.goto(WEB + r.path, { timeout: 45_000 });          // site87: a page that never loads is a note, not a run that never ends
   // (with Market Watch open the page is never network-idle: its prices refresh every few seconds, so it gets a short wait instead)
   if (process.env.UI_LINT_PANEL === "1" && size.width > 900) await page.waitForTimeout(1200);
   else await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
@@ -121,9 +132,13 @@ async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme
   const body = (await page.locator("body").innerText().catch(() => "")).slice(0, 4000);
   if (/page (isn.t|is not) here|page not found|404/i.test(body.slice(0, 400)) && !/404/.test(r.path)) note = note ?? "the page shows not-found";
   let res: LintResult;
-  try { res = await page.evaluate(lintPage, { phone: size.width <= 500, mark: process.env.UI_LINT_SHOTS !== "0" }); }
+  try {
+    res = await Promise.race([page.evaluate(lintPage, { phone: size.width <= 500, mark: process.env.UI_LINT_SHOTS !== "0" }),
+      new Promise<never>((_, no) => setTimeout(() => no(new Error("the page didn't answer within 60 s")), 60_000))]);
+  }
   catch (e) { return { rows: [], note: `lint failed: ${String(e).slice(0, 200)}` }; }
   const rows: Row[] = res.violations.map((v) => ({ ...v, page: r.path, label: r.label, width: size.width, theme }));
+  if (theme === "dark") for (const b of await page.evaluate(scrollBoxes).catch(() => [])) SCROLLS.push({ ...b, page: r.path, label: r.label, width: size.width });
   if (rows.length && process.env.UI_LINT_SHOTS !== "0") {
     const file = `${slug(r.label)}-${size.width}${theme === "light" ? "-light" : ""}.jpg`;
     const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
@@ -328,7 +343,20 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   expect(await fire(`<div><ul><li>One</li><li>Two</li></ul><span>+24 more in the calendar</span></div>`), "R30 a count with nothing to press").toContain("R30");
   expect(await fire(`<div><ul><li>One</li><li>Two</li></ul><a href="/money/calendar">+24 more in the calendar</a></div>`), "R30 a count that is a link").not.toContain("R30");
   expect(await fire(`<div style="height:60px;overflow:hidden"><ul style="margin:0"><li style="height:40px">One</li><li style="height:40px">Two</li><li style="height:40px">Three</li></ul></div>`), "R30 rows cut by a box that doesn't scroll").toContain("R30");
-  expect(await fire(`<div style="height:60px;overflow:auto"><ul style="margin:0"><li style="height:40px">One</li><li style="height:40px">Two</li><li style="height:40px">Three</li></ul></div>`), "R30 rows in a box that scrolls").not.toContain("R30");
+  // (changed on purpose, site87: a scroll box that hides fewer than three rows fails; this one hides five)
+  expect(await fire(`<div style="height:120px;overflow:auto"><ul style="margin:0"><li style="height:40px">Row 0</li><li style="height:40px">Row 1</li><li style="height:40px">Row 2</li><li style="height:40px">Row 3</li><li style="height:40px">Row 4</li><li style="height:40px">Row 5</li><li style="height:40px">Row 6</li><li style="height:40px">Row 7</li></ul></div>`), "R30 rows in a box that scrolls").not.toContain("R30");
+  // site87 (owner: "it works on screen size ... then you give a scroll"): (b) a scroll for one or two rows; (c) a scroll box taller than the screen;
+  // (a) a list taller than the screen that doesn't scroll; (d) a paging or show-more control; a card beside a column of stacked cards
+  expect(await fire(`<div style="height:240px;overflow:auto"><ul style="margin:0"><li style="height:40px">Row 0</li><li style="height:40px">Row 1</li><li style="height:40px">Row 2</li><li style="height:40px">Row 3</li><li style="height:40px">Row 4</li><li style="height:40px">Row 5</li><li style="height:40px">Row 6</li></ul></div>`), "R30 (b) a scroll box hiding one row").toContain("R30");
+  expect(await fire(`<div style="height:1200px;overflow:auto"><ul style="margin:0"><li style="height:40px">Row 0</li><li style="height:40px">Row 1</li><li style="height:40px">Row 2</li><li style="height:40px">Row 3</li><li style="height:40px">Row 4</li><li style="height:40px">Row 5</li><li style="height:40px">Row 6</li><li style="height:40px">Row 7</li><li style="height:40px">Row 8</li><li style="height:40px">Row 9</li><li style="height:40px">Row 10</li><li style="height:40px">Row 11</li><li style="height:40px">Row 12</li><li style="height:40px">Row 13</li><li style="height:40px">Row 14</li><li style="height:40px">Row 15</li><li style="height:40px">Row 16</li><li style="height:40px">Row 17</li><li style="height:40px">Row 18</li><li style="height:40px">Row 19</li><li style="height:40px">Row 20</li><li style="height:40px">Row 21</li><li style="height:40px">Row 22</li><li style="height:40px">Row 23</li><li style="height:40px">Row 24</li><li style="height:40px">Row 25</li><li style="height:40px">Row 26</li><li style="height:40px">Row 27</li><li style="height:40px">Row 28</li><li style="height:40px">Row 29</li><li style="height:40px">Row 30</li><li style="height:40px">Row 31</li><li style="height:40px">Row 32</li><li style="height:40px">Row 33</li><li style="height:40px">Row 34</li><li style="height:40px">Row 35</li><li style="height:40px">Row 36</li><li style="height:40px">Row 37</li><li style="height:40px">Row 38</li><li style="height:40px">Row 39</li><li style="height:40px">Row 40</li><li style="height:40px">Row 41</li><li style="height:40px">Row 42</li><li style="height:40px">Row 43</li><li style="height:40px">Row 44</li><li style="height:40px">Row 45</li><li style="height:40px">Row 46</li><li style="height:40px">Row 47</li><li style="height:40px">Row 48</li><li style="height:40px">Row 49</li><li style="height:40px">Row 50</li><li style="height:40px">Row 51</li><li style="height:40px">Row 52</li><li style="height:40px">Row 53</li><li style="height:40px">Row 54</li><li style="height:40px">Row 55</li><li style="height:40px">Row 56</li><li style="height:40px">Row 57</li><li style="height:40px">Row 58</li><li style="height:40px">Row 59</li></ul></div>`), "R30 (c) a scroll box taller than the screen").toContain("R30");
+  expect(await fire(`<div><ul style="margin:0"><li style="height:40px">Row 0</li><li style="height:40px">Row 1</li><li style="height:40px">Row 2</li><li style="height:40px">Row 3</li><li style="height:40px">Row 4</li><li style="height:40px">Row 5</li><li style="height:40px">Row 6</li><li style="height:40px">Row 7</li><li style="height:40px">Row 8</li><li style="height:40px">Row 9</li><li style="height:40px">Row 10</li><li style="height:40px">Row 11</li><li style="height:40px">Row 12</li><li style="height:40px">Row 13</li><li style="height:40px">Row 14</li><li style="height:40px">Row 15</li><li style="height:40px">Row 16</li><li style="height:40px">Row 17</li><li style="height:40px">Row 18</li><li style="height:40px">Row 19</li><li style="height:40px">Row 20</li><li style="height:40px">Row 21</li><li style="height:40px">Row 22</li><li style="height:40px">Row 23</li><li style="height:40px">Row 24</li><li style="height:40px">Row 25</li><li style="height:40px">Row 26</li><li style="height:40px">Row 27</li><li style="height:40px">Row 28</li><li style="height:40px">Row 29</li><li style="height:40px">Row 30</li><li style="height:40px">Row 31</li><li style="height:40px">Row 32</li><li style="height:40px">Row 33</li><li style="height:40px">Row 34</li><li style="height:40px">Row 35</li><li style="height:40px">Row 36</li><li style="height:40px">Row 37</li><li style="height:40px">Row 38</li><li style="height:40px">Row 39</li></ul></div>`), "R30 (a) a list taller than the screen that doesn't scroll").toContain("R30");
+  expect(await fire(`<div><ul style="margin:0"><li style="height:40px">Row 0</li><li style="height:40px">Row 1</li><li style="height:40px">Row 2</li><li style="height:40px">Row 3</li><li style="height:40px">Row 4</li><li style="height:40px">Row 5</li><li style="height:40px">Row 6</li><li style="height:40px">Row 7</li><li style="height:40px">Row 8</li><li style="height:40px">Row 9</li><li style="height:40px">Row 10</li><li style="height:40px">Row 11</li><li style="height:40px">Row 12</li><li style="height:40px">Row 13</li><li style="height:40px">Row 14</li><li style="height:40px">Row 15</li><li style="height:40px">Row 16</li><li style="height:40px">Row 17</li><li style="height:40px">Row 18</li><li style="height:40px">Row 19</li></ul></div>`), "R30 (a) a list that grows by two rows past the screen is fine").not.toContain("R30");
+  for (const t of ["Show more", "Show all 31", "Show 12 more", "Fewer themes", "Load more", "Next page", "All 31 themes"])
+    expect(await fire(`<div><ul><li>One</li><li>Two</li></ul><button>${t}</button></div>`), `R30 (d) "${t}"`).toContain("R30");
+  expect(await fire(`<div><ul><li>One</li><li>Two</li></ul><button>Show all drawings</button><button>Map it</button></div>`), "R30 (d) not a list's control").not.toContain("R30");
+  const colPair = (h: number) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;width:800px;align-items:start"><section class="k-card" style="border:1px solid #888;height:400px">A</section><div style="display:flex;flex-direction:column;gap:16px"><section class="k-card" style="border:1px solid #888;height:200px">B</section><section class="k-card" style="border:1px solid #888;height:${h}px">C</section></div></div>`;
+  expect(await fire(colPair(100)), "R30 a card beside a shorter column of cards").toContain("R30");
+  expect(await fire(colPair(184)), "R30 a card level with the column beside it").not.toContain("R30");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });
@@ -380,6 +408,8 @@ test("every route, three widths: UI layout problems, reported (UI_LINT_STRICT=1 
   const perRule = Object.fromEntries(Object.keys(RULES).map((k) => [k, live.filter((r) => r.rule === k).length]));
   writeFileSync(resolve(OUT, "report.json"), JSON.stringify({ seconds: Math.round(seconds), routes: routes.length, widths: PASSES.map((p) => `${p.size.width}${p.theme === "light" ? "-light" : ""}`), perRule, notes, violations: rows }, null, 1));
   writeFileSync(resolve(OUT, "report.md"), report(rows, routes, notes, seconds, allow, tasks.length));
+  SCROLLS.sort((a, b) => a.page.localeCompare(b.page) || b.width - a.width);
+  writeFileSync(resolve(OUT, "scrolls.json"), JSON.stringify(SCROLLS, null, 1));
   console.log(`ui-lint: ${live.length} violations on ${routes.length} routes in ${Math.round(seconds)} s -> ${resolve(OUT, "report.md")}`, perRule);
   if (STRICT) expect(live.map((r) => `${r.label} @${r.width} ${r.rule} ${r.element}: ${r.detail}`), "UI layout violations (add a reasoned entry to e2e/ui-lint.allow.json to accept one)").toEqual([]);
 });

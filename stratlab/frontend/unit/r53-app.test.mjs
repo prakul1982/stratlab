@@ -91,7 +91,7 @@ test("LIVE8B-014: an account with a Google sign-in is named Google; an email-lin
 });
 
 test("LIVE8B-012: on a phone the peers come five at a time, quarters four a line; a bank's quarters say revenue", () => {
-  assert.match(read("src/components/CompanyPeers.tsx"), /columns=\{cols\} foot=\{foot\} phonePage=\{6\}/);
+  assert.match(read("src/components/CompanyPeers.tsx"), /columns=\{cols\} foot=\{foot\}\n/);      // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   assert.match(read("src/styles-invest.css"), /\.inv-q \.k-tbl-wrap\.stack \.k-table tr \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
   assert.match(read("src/components/Research.tsx"), /name: bank \? "Revenue" : "Sales"/);
 });

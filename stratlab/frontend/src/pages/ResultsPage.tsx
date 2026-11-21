@@ -13,7 +13,7 @@ import { RegionSwitch } from "../components/Research";
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
 import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
-import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
+import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
 import { capAt, laterDays, movesEmpty, purposeShown, quarterLabel, reportedQuarter, whenShort } from "../lib/resultsRows";
 import { resultDay } from "../lib/resultDay";
@@ -59,7 +59,7 @@ interface MovesAnswer { moves: Moves | null; since: Since | null }
 interface Implied { pct: number; strike: number; expiry: string; straddle: number }
 
 const KEEP = "stratlab.results.filters.v1";
-const MORE_ROWS = 50;                // rows "Show more" adds to a day
+const MORE_ROWS = 50;                // rows a day reads on its own each time the reader nears its end
 export const NO_FILTERS: Filters = { ...NO_CAL, sort: "cap", purpose: "" };
 const SORT_NAME: Record<string, string> = {
   cap: "Market value, largest first", name: "Company name", move: "Usual move on a results day", sales: "Revenue growth, a year on", profit: "Profit growth, a year on",
@@ -94,32 +94,45 @@ export function ResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
   const [filters, setFilters] = useState<Filters>(() => keptFilters(KEEP, NO_FILTERS));
-  // the one day of "All companies" opened in full (DE-026: each day shows its first rows and says how many more it has)
-  const [openDay, setOpenDay] = useState("");
-  // how many of that day's rows to show: 50 more at each press, never a 200-company day in one go (owner, 5 Nov: the page was slow to open)
-  const [dayRows, setDayRows] = useState(0);
+  // AUTO-LOAD (site87, owner: no "Show 50 more"): a day of "All companies" with more rows than the first answer holds reads its next 50 on
+  // its own as the reader nears the end of that day's block (DE-026; never a 200-company day in one go: owner, 5 Nov, the page was slow)
+  const [dayMore, setDayMore] = useState<Record<string, ResultRow[]>>({});
+  const [dayBusy, setDayBusy] = useState("");
+  const [dayEnd, setDayEnd] = useState<Record<string, boolean>>({});        // a day whose last read brought nothing new: never asked again
   // another market or another set of companies is a different list: the find-a-company text and the old list don't carry over
   const [shownFor, setShownFor] = useState(`${region}|${scope}`);
-  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); setOpenDay(""); setDayRows(0); }
+  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); setDayMore({}); setDayEnd({}); }
   // a sector or an index of one market is not the other's
   const [filtersFor, setFiltersFor] = useState(region);
   if (filtersFor !== region) { setFiltersFor(region); setFilters((f) => ({ ...f, sector: "", index: "", fo: false })); }
   useEffect(() => { keepFilters(KEEP, filters); }, [filters]);
-  const set = (p: Partial<Filters>) => { setOpenDay(""); setFilters((f) => ({ ...f, ...p })); };
+  const set = (p: Partial<Filters>) => { setDayMore({}); setFilters((f) => ({ ...f, ...p })); };
   const sortName = filters.sort || "cap";
 
   useEffect(() => {
     let live = true;
     setError(null);
     const t = setTimeout(() => {
-      const qs = new URLSearchParams({ region, scope, q: scope === "all" ? q : "", day: scope === "all" ? openDay : "", size: filters.size.join(","),
-        sector: filters.sector, index: filters.index, fo: filters.fo ? "true" : "", purpose: filters.purpose, on: filters.on, sort: sortName,
-        day_rows: scope === "all" && openDay && dayRows ? String(dayRows) : "" });
-      for (const [k, v] of [...qs]) if (v === "") qs.delete(k);
-      api<ResultsView>(`/research/results?${qs}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
+      setDayMore({}); setDayEnd({});
+      api<ResultsView>(`/research/results?${ask()}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [region, scope, q, openDay, dayRows, tries, filters]);
+  }, [region, scope, q, tries, filters]);   // eslint-disable-line react-hooks/exhaustive-deps
+  /** The calendar's address: the filters, and one day's next rows when `day` is given. */
+  function ask(day = "", dayRows = 0) {
+    const qs = new URLSearchParams({ region, scope, q: scope === "all" ? q : "", day: scope === "all" ? day : "", size: filters.size.join(","),
+      sector: filters.sector, index: filters.index, fo: filters.fo ? "true" : "", purpose: filters.purpose, on: filters.on, sort: sortName,
+      day_rows: scope === "all" && day && dayRows ? String(dayRows) : "" });
+    for (const [k, v] of [...qs]) if (v === "") qs.delete(k);
+    return qs.toString();
+  }
+  const loadDay = (d: string, have: number) => {
+    if (dayBusy) return;
+    setDayBusy(d);
+    api<ResultsView>(`/research/results?${ask(d, have + MORE_ROWS)}`)
+      .then((x) => { const got = x.weeks.flatMap((w) => w.rows).filter((r) => r.date === d); if (got.length <= have) setDayEnd((e) => ({ ...e, [d]: true })); setDayMore((cur) => ({ ...cur, [d]: got })); })
+      .catch(() => undefined).finally(() => setDayBusy(""));
+  };
 
   // ---- what is read for the rows on the page, in the order a person sees them (LIVE4-001: the first 48 in the list's order were read, which
   // were often the folded days gone by, so today's rows and every row "Show 50 more" added sat on "Reading" for good) ----
@@ -348,8 +361,9 @@ export function ResultsPage() {
         const ahead = days.filter((d) => d >= data.today), past = days.filter((d) => d < data.today);
         const about = (d: string) => w.days?.find((x) => x.date === d);
         const day = (d: string) => {
-          const on = w.rows.filter((r) => r.date === d);
+          const on = dayMore[d] ?? w.rows.filter((r) => r.date === d);
           const info = about(d) ?? { date: d, count: on.length, shown: on.length };
+          const total = dayEnd[d] ? on.length : Math.max(info.count, on.length);
           return (
             <div key={d} className="inv-day res-days" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
@@ -358,16 +372,9 @@ export function ResultsPage() {
                   day's own set and widths put Market value at x 780, 870 and 755 on three days. "Usual move" is the page's (movesEmpty over every
                   row shown, LIVE14A-009's rule for a column of one value); "Implied" only on a day with an F&O stock (R15 #11), the last column */}
               <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`}
-                columns={pageColumns.filter((c) => c.key !== "im" || on.some((r) => r.fo))} stack compact phonePage={10} />
+                columns={pageColumns.filter((c) => c.key !== "im" || on.some((r) => r.fo))} stack compact
+                more={total > on.length || dayMore[d] ? { total, load: () => loadDay(d, on.length), busy: dayBusy === d, noun: `on ${resultDay(d)}` } : undefined} />
               </ReportScope>
-              {(info.count > info.shown || (openDay === d && dayRows > 0)) && (
-                <div className="k-row">
-                  <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>
-                  {info.count > info.shown && <button type="button" className="btn quiet sm" onClick={() => { setOpenDay(d); setDayRows(info.shown + MORE_ROWS); }}>
-                    Show {Math.min(MORE_ROWS, info.count - info.shown).toLocaleString("en-IN")} more</button>}
-                  {openDay === d && dayRows > 0 && <ShowLess onLess={() => { setOpenDay(""); setDayRows(0); }} />}
-                </div>
-              )}
             </div>
           );
         };
@@ -389,7 +396,7 @@ export function ResultsPage() {
           {anyFo && !optionsOn ? " Option prices can't be read right now, so the move they imply is not shown." : ""} Facts, not a forecast.
         </p>
       )}
-      {data && data.more > 0 && <p className="k-note">Each day shows its first {data.day_rows ?? 25} companies, yours first; {data.more.toLocaleString("en-IN")} more are a click away under their day, or find a company by name.</p>}
+      {data && data.more > 0 && <p className="k-note">Each day shows its first {data.day_rows ?? 25} companies, yours first; {data.more.toLocaleString("en-IN")} more load on their own as you scroll each day's list, or find a company by name.</p>}
       {data && <p className="k-note inv-text">{data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );

@@ -415,7 +415,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
 /** The Invest home's watchlist as a table (LIVE3-015: tiles two across left an empty cell beside an odd one, and "Tables
  * everywhere"): the stock with its name and any exchange or F&O note under it, its price and the day's change; each opens the
  * company (its F&O lot changes are on the watchlist page). The prices are asked again each minute while they are live, each row kept until its new price comes (LIVE-1). */
-export function WatchTable({ region, symbols, names, label = "Your watchlist", rows }: { region: Region; symbols: string[]; names?: Record<string, string | null>; label?: string; rows?: number }) {
+export function WatchTable({ region, symbols, names, label = "Your watchlist" }: { region: Region; symbols: string[]; names?: Record<string, string | null>; label?: string }) {
   const [q, setQ] = useState<Record<string, Quote | null> | null>(null);
   const key = symbols.join(",");
   useEffect(() => {
@@ -431,10 +431,10 @@ export function WatchTable({ region, symbols, names, label = "Your watchlist", r
   });
   const ccy = region === "IN" ? "INR" : "USD";
   return (
-    <div className="watch-table">
+    <>
       {/* on a phone a card a row (the app's phone pattern): beside a stock's name and its surveillance note the Change column ran off
-          a 390px screen */}
-      <DataTable csv={`watchlist ${label}`} label={label} rows={symbols} rowKey={(s) => s} stack scrollRows={rows}
+          a 390px screen. site87 (owner): the CSV is in the card's "⋯" menu, and the card is the table's frame (no box inside it) */}
+      <DataTable csv={`watchlist ${label}`} csvInMenu label={label} rows={symbols} rowKey={(s) => s} stack
         columns={[
           { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (s) => (
             <>
@@ -447,7 +447,7 @@ export function WatchTable({ region, symbols, names, label = "Your watchlist", r
           { key: "p", header: "Price", numeric: true, cell: (s) => (q == null ? <span className="skel" /> : q[s]?.price != null ? price(q[s]!.price!, ccy) : "–") },
           { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : q == null ? "" : "–") },
         ]} />
-    </div>
+    </>
   );
 }
 

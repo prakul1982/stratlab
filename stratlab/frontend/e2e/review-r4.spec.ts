@@ -227,7 +227,8 @@ test("R4-021: a lending title does not repeat its field, the ETF placeholder fit
   expect(on, "an on chip carries a tick").toContain("✓");
   await chips.first().click();
   await expect(chips.first()).toHaveAttribute("aria-pressed", "false");
-  expect(await chips.first().evaluate((el) => getComputedStyle(el).borderStyle)).toBe("dashed");
+  // (changed on purpose, site87, owner: dashed chips "look like empty placeholders, not choices": an off chip is solid and quiet)
+  expect(await chips.first().evaluate((el) => getComputedStyle(el).borderStyle)).toBe("solid");
   expect(await chips.first().evaluate((el) => getComputedStyle(el, "::before").content)).not.toContain("✓");
   if (info.project.name === "phone") {
     await page.goto("/options");

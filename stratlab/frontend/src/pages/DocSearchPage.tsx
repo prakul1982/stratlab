@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -8,7 +8,7 @@ import { download as saveFile } from "../lib/share";
 import { RegionSwitch } from "../components/Research";
 import { apiPath, lockedFilters, planLine, readQuery, snippetParts, totalLine, whereLine, writeQuery,
   type DocAnswer, type DocHit, type DocQuery, type DocRegion, type DocStatus } from "../lib/docSearch";
-import { Badge, Card, CardHead, ChipSet, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager,
+import { Badge, Card, CardHead, DateField, EmptyState, ErrorState, Field, MultiPick, PageHeader, ScrollList,
   PlanNote, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
 import "./docsearch.css";
 
@@ -66,6 +66,23 @@ export function DocSearchPage() {
   const dropped = filters ? [] : lockedFilters(query);
 
   useEffect(() => { setDraft(query); }, [query]);
+  // AUTO-LOAD (site87, owner: no Next page): the results are one block sized to the screen; the next page of hits comes on its own as the
+  // reader nears the block's end
+  const [extra, setExtra] = useState<{ page: number; hits: DocHit[] }>({ page: 0, hits: [] });
+  const [moreBusy, setMoreBusy] = useState(false);
+  useEffect(() => { setExtra({ page: 0, hits: [] }); }, [ans]);
+  const hits = ans ? [...ans.hits, ...extra.hits.filter((h) => !ans.hits.some((x) => x.id === h.id))] : [];
+  const atPage = ans ? Math.max(ans.page, extra.page) : 0;
+  const loadMore = () => {
+    if (!ans || moreBusy || atPage >= ans.pages) return;
+    const for_ = ans;
+    setMoreBusy(true);
+    api<DocAnswer>(apiPath({ ...query, page: atPage + 1 }, filters))
+      .then((a) => setExtra((cur) => (for_ !== ansRef.current ? cur : { page: a.page, hits: [...cur.hits, ...a.hits] })))
+      .catch(() => undefined).finally(() => setMoreBusy(false));
+  };
+  const ansRef = useRef(ans);
+  ansRef.current = ans;
   useEffect(() => {
     let live = true;
     api<DocStatus>("/research/docs/status").then((s) => live && setStatus(s)).catch(() => undefined);
@@ -108,49 +125,59 @@ export function DocSearchPage() {
       <PageHeader eyebrow={eyebrowOf("/research/search")} title="Search filings"
         lede="Find words and phrases inside companies' call transcripts, investor presentations, annual reports and earnings releases. Each result is a short extract in the company's own words, linked to the filed copy."
         info={info} infoLabel="What is searched" />
-      <div className="k-toolbar"><RegionSwitch region={query.region} setRegion={setRegion} /></div>
-
+      {/* site87 (owner, "what is this UI": dashed chips that looked empty, three ragged columns, a small Search alone at the bottom left and
+          the market toggle floating above the card): one compact form. Its top row is the market, the words and Search; then even rows of
+          one box each (two lists as drop-downs, so no column wraps to four lines of chips); the dates' format in their (i), not "e.g." in the box */}
       <Card label="Search the documents">
-        <FormGrid label="Search the documents" onSubmit={submit}>
-          <Field label="Words or a phrase" wide value={draft.q} placeholder={'Like "order book" or capacity utilisation'} maxLength={200}
-            onChange={(e) => set("q", e.target.value)} hint={'Quotes find the exact phrase; -word leaves a word out; "or" finds either word.'} />
-          <FieldGroup label="Companies">
-            <div className="k-stack tight">
-              <StockPicker market={query.region} clearOnPick listedOnly placeholder={query.region === "US" ? "Like AAPL or Apple" : "Like RELIANCE or Infosys"}
-                onPick={(s) => setDraft((d) => (d.symbols.includes(s) || d.symbols.length >= 20 ? d : { ...d, symbols: [...d.symbols, s] }))} />
+        <form className="ds-form" aria-label="Search the documents" onSubmit={submit}>
+          <div className="ds-row ds-top">
+            <div className="ds-market"><span className="ds-lab" aria-hidden="true">Market</span><RegionSwitch region={query.region} setRegion={setRegion} /></div>
+            <Field label="Words or a phrase" value={draft.q} placeholder={'Like "order book" or capacity utilisation'} maxLength={200}
+              onChange={(e) => set("q", e.target.value)} info={'Quotes find the exact phrase; -word leaves a word out; "or" finds either word.'} infoLabel="How to write a search" />
+            <button className="btn ds-go" type="submit" disabled={!draft.q.trim()}>Search</button>
+          </div>
+          <div className="ds-row ds-three">
+            <Field label="Companies" optional>
+              {(id) => <StockPicker id={id} market={query.region} clearOnPick listedOnly placeholder={query.region === "US" ? "Like AAPL or Apple" : "Like RELIANCE or Infosys"}
+                onPick={(s) => setDraft((d) => (d.symbols.includes(s) || d.symbols.length >= 20 ? d : { ...d, symbols: [...d.symbols, s] }))} />}
+            </Field>
+            {filters && kinds.length > 0 && (
+              <Field label="Kind of document" optional>
+                {(id) => <MultiPick id={id} label="Kinds of document to search" all="Every kind" noun="kinds" options={kinds.map((k) => ({ value: k.id, label: k.label }))}
+                  on={draft.kinds} onToggle={(v) => toggle("kinds", v)} onClear={() => set("kinds", [])} />}
+              </Field>
+            )}
+            {filters && sectors.length > 0 && (
+              <Field label="Sector" optional>
+                {(id) => <MultiPick id={id} label="Sectors to search" all="Every sector" noun="sectors" options={sectors.map((x) => ({ value: x, label: x }))}
+                  on={draft.sectors} onToggle={(v) => toggle("sectors", v)} onClear={() => set("sectors", [])} />}
+              </Field>
+            )}
+          </div>
+          {filters && (
+            <div className="ds-row ds-three">
+              <Field label="Theme" optional info="The companies of a theme already mapped in Themes.">
+                {(id) => <Suggest id={id} value={draft.theme} minChars={2} placeholder="Like defence or semiconductors" load={themeNames(query.region)}
+                  onText={(t) => set("theme", t)} onPick={(t) => set("theme", t.key)} empty="No mapped theme by that name." />}
+              </Field>
+              <DateField label="Filed from" optional value={draft.from} onChange={(v) => set("from", v)} max={draft.to || undefined} placeholder=""
+                info="Type a day, like 14 Aug 2025, or pick it from the calendar." />
+              <DateField label="Filed to" optional value={draft.to} onChange={(v) => set("to", v)} min={draft.from || undefined} placeholder=""
+                info="Type a day, like 14 Aug 2025, or pick it from the calendar." />
+            </div>
+          )}
+          {(draft.symbols.length > 0 || (filters && (draft.kinds.length > 0 || draft.sectors.length > 0 || draft.theme || draft.from || draft.to))) && (
+            <div className="ds-row ds-picked">
               {draft.symbols.length > 0 && (
                 <div className="k-row tight" aria-label="Companies searched">
-                  {draft.symbols.map((s) => <button key={s} type="button" className="chip" onClick={() => set("symbols", draft.symbols.filter((x) => x !== s))}
-                    aria-label={`Remove ${s}`}>{s} <span aria-hidden="true">×</span></button>)}
+                  {draft.symbols.map((x) => <button key={x} type="button" className="chip" onClick={() => set("symbols", draft.symbols.filter((y) => y !== x))}
+                    aria-label={`Remove ${x}`}>{x} <span aria-hidden="true">×</span></button>)}
                 </div>
               )}
+              <button className="btn quiet sm" type="button" onClick={() => setDraft((d) => ({ ...d, symbols: [], kinds: [], sectors: [], theme: "", from: "", to: "" }))}>Clear filters</button>
             </div>
-          </FieldGroup>
-          {filters && kinds.length > 0 && (
-            <FieldGroup label="Kind of document">
-              <ChipSet label="Kinds of document to search" options={kinds.map((k) => ({ value: k.id, label: k.label }))} on={draft.kinds} onToggle={(v) => toggle("kinds", v)} />
-            </FieldGroup>
           )}
-          {filters && sectors.length > 0 && (
-            <FieldGroup label="Sector">
-              <ChipSet label="Sectors to search" options={sectors.map((s) => ({ value: s, label: s }))} on={draft.sectors} onToggle={(v) => toggle("sectors", v)} />
-            </FieldGroup>
-          )}
-          {filters && (
-            <Field label="Theme" optional info="The companies of a theme already mapped in Themes.">
-              {(id) => <Suggest id={id} value={draft.theme} minChars={2} placeholder="Like defence or semiconductors" load={themeNames(query.region)}
-                onText={(t) => set("theme", t)} onPick={(t) => set("theme", t.key)} empty="No mapped theme by that name." />}
-            </Field>
-          )}
-          {filters && <DateField label="Filed from" optional value={draft.from} onChange={(v) => set("from", v)} max={draft.to || undefined} />}
-          {filters && <DateField label="Filed to" optional value={draft.to} onChange={(v) => set("to", v)} min={draft.from || undefined} />}
-          <FormActions>
-            <button className="btn" type="submit" disabled={!draft.q.trim()}>Search</button>
-            {(draft.symbols.length > 0 || (filters && (draft.kinds.length > 0 || draft.sectors.length > 0 || draft.theme || draft.from || draft.to))) && (
-              <button className="btn quiet" type="button" onClick={() => setDraft((d) => ({ ...d, symbols: [], kinds: [], sectors: [], theme: "", from: "", to: "" }))}>Clear filters</button>
-            )}
-          </FormActions>
-        </FormGrid>
+        </form>
         {!filters && me && !(ans?.locked) && <PlanNote>Filters by sector, theme, kind of document and date, and every result, are on the Basic plan. Free searches by company and shows the first 3 results.</PlanNote>}
         {dropped.length > 0 && <p className="k-small k-muted" role="status">Searched without the {dropped.join(", ")} filter{dropped.length > 1 ? "s" : ""}: filters beyond the company are on the Basic plan.</p>}
       </Card>
@@ -181,9 +208,11 @@ export function DocSearchPage() {
               {ans.floor ? ` Filed since ${fmtDate(ans.floor)}.` : ""}
               {Object.keys(ans.facets.kinds).length > 1 ? ` ${Object.entries(ans.facets.kinds).map(([k, n]) => `${n} ${kinds.find((x) => x.id === k)?.label.toLowerCase() ?? k}${n === 1 ? "" : "s"}`).join(", ")}.` : ""}
             </p>
-            <ol className="ds-hits" aria-label={`Results for ${ans.q}`}>{ans.hits.map((h) => <Hit key={h.id} h={h} />)}</ol>
+            <ScrollList label={`Results for ${ans.q}`} testId="ds-hits-box" onEnd={atPage < ans.pages ? loadMore : undefined}>
+              <ol className="ds-hits" aria-label={`Results for ${ans.q}`}>{hits.map((h) => <Hit key={h.id} h={h} />)}</ol>
+            </ScrollList>
+            {ans.pages > 1 && <p className="k-note" aria-live="polite" data-testid="k-loaded">Loaded {hits.length.toLocaleString("en-IN")} of {ans.total.toLocaleString("en-IN")} documents{moreBusy ? "; loading more…" : atPage < ans.pages ? "; more load as you scroll" : ""}.</p>}
             {ans.locked > 0 && <PlanNote>Free shows the first {ans.hits.length} of the {totalLine(ans.total, ans.more).toLowerCase()} found. Every result, with filters by sector, theme, kind of document and date, is on the Basic plan.</PlanNote>}
-            <Pager page={ans.page} pages={ans.pages} total={ans.total} noun="documents" onPage={(n) => { go({ ...query, page: n }); document.getElementById("results")?.scrollIntoView({ block: "start" }); }} />
           </>
         )}
         {ans?.ready && <p className="k-note">{ans.note} {planLine(ans.limits)}</p>}

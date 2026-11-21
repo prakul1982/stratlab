@@ -72,8 +72,9 @@ test("Basic: every filter, the empty start and a search with no results", async 
   await shots(page, "doc-search-empty", info.project.name);
   await page.getByRole("button", { name: "capacity utilisation" }).click();
   await expect(page.getByText(/mention “capacity utilisation”/)).toBeVisible();
-  await expect(page.getByRole("group", { name: "Kind of document" })).toBeVisible();
-  await page.getByRole("group", { name: "Kind of document" }).getByRole("button", { name: "Investor presentation" }).click();
+  // (changed on purpose, site87, owner: "what is this UI": the kinds and sectors are drop-downs of tick boxes, one box high, not rows of dashed chips)
+  await page.getByLabel(/^Kinds of document to search: Every kind$/).click();
+  await page.getByRole("group", { name: "Kinds of document to search" }).getByRole("checkbox", { name: "Investor presentation" }).check();
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page).toHaveURL(/kind=presentation/);
   const hits = page.getByRole("list", { name: "Results for capacity utilisation" }).getByRole("listitem");

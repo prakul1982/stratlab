@@ -36,6 +36,12 @@
       "rule": "R29",
       "element": "StockCloseDay %StageSupertrendSince",
       "reason": "R29 (site83) a table wider than its box: the brief's stock tables R27 accepts above, in the brief's ~460px reading column at 1280. Fitting them needs the brief's column wider or columns chosen per width, a follow-up of its own."
+    },
+    {
+      "page": "/research/screens",
+      "rule": "R30",
+      "element": "screens-filters",
+      "reason": "site87: the screener's filters are a form of about fifteen conditions (the sectors already one drop-down), and the results beside them are a block sized to the screen (the owner's rule: a list scrolls inside its block once it is taller than the screen). At 1440 the form is about a quarter of a screen longer than the results and Save; stretching the results or Save card leaves a blank band (R13), and growing the results block would make it taller than the screen (R30 c). When the results column is the longer one, the filters card stretches to it."
     }
   ]
 }

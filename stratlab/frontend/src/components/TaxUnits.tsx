@@ -43,7 +43,7 @@ export function UnitsCard({ units, notes, name, label }: { units: Units | null |
         {units.lt_10 && <> Gold bonds where 10% without indexation is the lower tax: <b>{inr(units.lt_10.gains)}</b> of gains{units.lt_10.losses > 0 && <>, {inr(units.lt_10.losses)} of losses</>}.</>}
         {units.old != null && <> Sold before 23 Jul 2024 under the old long-term rules, but the cost can't be indexed (bought before the index starts), so not worked out: {inr(units.old)}.</>}
       </p>
-      <DataTable label="ETF and gold bond sales" columns={cols} rows={rows} rowKey={(r) => String(r.i)} scrollRows={15} />
+      <DataTable label="ETF and gold bond sales" columns={cols} rows={rows} rowKey={(r) => String(r.i)} />
       {notes.length > 0 && <ul className="k-list muted">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
     </Card>
   );

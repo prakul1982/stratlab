@@ -55,8 +55,9 @@ test("DC-004, DB-011: the chain is in contracts once the lot is known", async ()
 test("DC-009: stock futures page through 50 rows at a time, open interest in lots, the days to expiry said once", () => {
   const src = read("src/pages/trade/StockFuturesPage.tsx");
   assert.match(src, /export const SF_PAGE = 50;/);
-  assert.match(src, /const shown = rows\.slice\(0, limit\);/);
-  assert.match(src, /data-testid="sf-more"/);
+  // (changed on purpose, site87, owner: no "Show more": every stock, the table a block sized to the screen that scrolls inside itself)
+  assert.match(src, /const shown = rows;/);
+  assert.doesNotMatch(src, /data-testid="sf-more"/);
   assert.match(src, /export const oiLots = \(r: Pick<FutRow, "oi" \| "lot">\) => \(r\.oi != null && r\.lot \? Math\.round\(r\.oi \/ r\.lot\) : null\);/);
   assert.match(src, /f !== "roll" \|\| \(count\(f\) > 0 && count\(f\) < \(t\?\.rows\.length \?\? 0\)\)/);   // a chip that filters nothing is left out
   assert.match(src, /r\.td != null && !same \? `\$\{r\.td\}d to expiry`/);

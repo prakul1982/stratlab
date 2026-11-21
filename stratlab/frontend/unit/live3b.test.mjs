@@ -107,7 +107,7 @@ test("a note column only some rows fill goes under the items, on every screen (L
   assert.match(read("src/components/kit/FigureTable.tsx"), /const under = withNote && \(phone \|\| sparseNotes\(rows\.filter\(noted\)\.length, rows\.length\)\);/);
   assert.match(read("src/components/kit/FactTable.tsx"), /const under = notes && \(\(noteUnder && phone\) \|\| sparseNotes\(/);
   // the watchlist is a table, not tiles
-  assert.match(read("src/pages/SpaceHomes.tsx"), /<WatchTable region=\{r\}/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /<WatchTable region=\{region\}/);      // (changed on purpose, site87: one market's table, no wrapper)
   assert.doesNotMatch(read("src/components/Research.tsx"), /inv-tile/);
 });
 

@@ -10,7 +10,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, ShowLess, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, ScrollList, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
@@ -143,7 +143,6 @@ export function TaxReportPage() {
   const [replacing, setReplacing] = useState<File[] | null>(null);       // files that would replace the stored trades, asked first (LIVE10B-032)
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
-  const [allSales, setAllSales] = useState(false);
   const [asking, setAsking] = useState(false);
   // each wide table leads with what the tax works out from; the rest is a click away, so it fits a laptop
   const salesMore = useMoreColumns("tax-sales", 3, true);       // all columns from a laptop up unless the person folded them (LIVE1B-012)
@@ -240,7 +239,7 @@ export function TaxReportPage() {
     ...(y.brought_forward ?? []).map((p) => ({ key: `bf_${p.fy}_${p.kind}`, label: `${p.kind === "st" ? "Short" : "Long"}-term loss brought forward from ${p.label}`, rate: null as unknown as number, gains: -p.amt, after_setoff: -p.left, exempt: 0, taxable: 0, tax: 0, slab: true })),
   ] : [];
   const bucketCols: Column<Bucket>[] = [
-    { key: "kind", header: "Kind", rowHeader: true, cell: (b) => b.label },
+    { key: "kind", header: "Kind", rowHeader: true, wrap: true, cell: (b) => b.label },     // site87: the kind wraps, so seven columns fit a 1280 screen
     { key: "rate", header: "Rate", numeric: true, cell: (b) => (b.key.startsWith("loss_") || b.key.startsWith("bf_") ? "–" : rate(b.rate, b.slab)) },
     { key: "gains", header: "Gains", numeric: true, cell: (b) => inr(b.gains) },
     { key: "after", header: "After set-off", numeric: true, cell: (b) => inr(b.after_setoff) },
@@ -294,7 +293,7 @@ export function TaxReportPage() {
       {rep && has && y && !hasTrades(y) && (() => {
         const other = rep.years.filter((x) => x.fy !== y.fy && hasTrades(x)).sort((a, b) => b.fy - a.fy)[0];
         return other ? (
-          <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); setMovedFrom(null); setAllSales(false); } }}>
+          <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); setMovedFrom(null); } }}>
             No trades in {y.label}. {other.label} has trades in your files.
           </Notice>
         ) : null;
@@ -371,7 +370,7 @@ export function TaxReportPage() {
         <>
           <Card compact className="tax-controls">
             <CardHead title="Financial year" actions={<>
-              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
+              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); }}
                 options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}${hasTrades(x) ? "" : " · no trades"}` }))} />
               {/* LIVE1B-069: the two downloads are one pair of equal buttons (two widths on a phone) */}
               {!canExport ? <Link className="btn quiet sm" to="/plans" data-testid="tax-export-locked" title="The tax report's CSV and PDF downloads are on Basic. The report on screen stays free.">🔒 Downloads: on Basic</Link> : <span className="k-btn-pair">
@@ -437,9 +436,8 @@ export function TaxReportPage() {
           {y.count > 0 && (
             <Card id="tax-sales">
               <CardHead title="Each sale, matched to its purchase" actions={<><span className="k-note">{y.count} line{y.count === 1 ? "" : "s"}</span>{salesMore.toggle}</>} />
-              <DataTable label="Realised sales" columns={saleCols} rows={(allSales ? y.rows : y.rows.slice(0, FIRST_SALES)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} stack />
-              {y.rows.length > FIRST_SALES && !allSales && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAllSales(true)}>Show all {y.rows.length}</button>}
-              {y.rows.length > FIRST_SALES && allSales && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAllSales(false)} />}
+              {/* site87 (owner: no "Show all N"): every sale, the table a block sized to the screen that scrolls inside itself past that */}
+              <DataTable label="Realised sales" columns={saleCols} rows={y.rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} stack />
               {y.count > y.rows.length && <p className="k-note">The CSV download has all {y.count} lines.</p>}
               <p className="k-note">Cost includes brokerage and charges from your files; sale is after them. STT isn't deductible, so it isn't included. Each figure is rounded to the rupee and the gain is worked out from the exact amounts, so a line or a total can differ by ₹1 from subtracting the rounded figures.</p>
             </Card>
@@ -483,11 +481,11 @@ export function TaxReportPage() {
           {/* the method is there for whoever wants it, folded, so the figures come first (R1-015) */}
           <Card id="tax-how" compact label="How this report works">
             <Disclosure summary="The set-off rules, and how this report works">
-              <ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <ScrollList label="The set-off rules"><ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList>
               <h3 className="k-sub">How this report works</h3>
-              <ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <ScrollList label="Notes on how this report works"><ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList>
               {!!rep.unit_notes?.length && <><h3 className="k-sub">ETFs, REITs, InvITs and gold bonds</h3>
-                <ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></>}
+                <ScrollList label="ETF, REIT, InvIT and gold bond rules"><ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList></>}
             </Disclosure>
           </Card>
         </>
@@ -513,8 +511,6 @@ const AGES: [Age, string][] = [["below60", "Below 60"], ["60to79", "60–79"], [
 const AGE_TEXT: Record<Age, string> = { below60: "below 60", "60to79": "60 to 79", "80plus": "80 or more" };
 const ITR3_URL = "https://www.incometax.gov.in/iec/foportal/help/individual-business-profession";
 // DH-006: fewer lines open at first, so a phone's page isn't 12,800px of cards; the rest are one button away
-const FIRST_SALES = 10;
-const FIRST_UNDERLYINGS = 5;
 
 /** DH-006: the year's total, and what is payable with the interest, at the top of the page, not under the upload. */
 function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
@@ -701,7 +697,6 @@ function MutualFundsCard({ y, mf }: { y: Year; mf?: Report["mf"] }) {
 
 /** F&O, commodity and currency for the year: the result, charges, turnover and the biggest underlyings. */
 function BusinessCard({ y }: { y: Year }) {
-  const [all, setAll] = useState(false);
   const b = y.business;
   if (!b.segments.length) return (
     <Card>
@@ -734,9 +729,7 @@ function BusinessCard({ y }: { y: Year }) {
       <p className="k-note">Turnover is the total of profits and losses, trade by trade ({inr(b.turnover)}). Netted per contract first, as broker summaries often show it, it is {inr(b.turnover_contract)}. Your files' lines aren't kept, only these totals.</p>
       {top.length > 0 && (
         <>
-          <DataTable stack label="F&O by underlying" columns={underCols} rows={all ? top : top.slice(0, FIRST_UNDERLYINGS)} rowKey={(u) => String(u.i)} />
-          {top.length > FIRST_UNDERLYINGS && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {top.length}</button>}
-          {top.length > FIRST_UNDERLYINGS && all && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} />}
+          <DataTable stack label="F&O by underlying" columns={underCols} rows={top} rowKey={(u) => String(u.i)} />
         </>
       )}
     </Card>

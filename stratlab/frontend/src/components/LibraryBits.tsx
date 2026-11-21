@@ -10,7 +10,6 @@ import { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
 import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
 import { DataTable, type Column } from "./kit/DataTable";
-import { ShowLess } from "./kit/ShowLess";
 
 /* The pieces of a library strategy that its page behind sign-in and its read-only public page both draw: what an entry
  * looks like, which of its figures exist, and its rules in words. Kept apart from pages/LibraryPage.tsx so the public
@@ -102,8 +101,8 @@ export function Rules({ s }: { s: Strategy }) {
   );
 }
 
-/** How many rows a phone shows before "Show 12 more" (VR6-024, VR7-004): every row stays in the page (a search engine's phone
- * browser reads them all, and the search box finds them); the rest are hidden by CSS on a phone only. */
+/** No longer used (site87, owner: no "Show 12 more"): every row is drawn, on a phone too (a search engine's phone browser reads them
+ * all), in a block sized to the screen that scrolls inside itself. Kept for importers. */
 export const PHONE_ROWS = 12;
 
 type SortKey = "ret" | "bh" | "gap" | "mdd" | "unseen" | "checks";
@@ -125,16 +124,12 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
   rules?: boolean;
 }) {
   const [by, setBy] = useState<{ key: SortKey; desc: boolean } | null>(null);
-  // back to the first twelve when the page's filters change: the page gives the table a new key then (not when the same list
-  // arrives again, which would undo a "Show 12 more" pressed while it loaded)
-  const [pages, setPages] = useState(1);
   const sorted = useMemo(() => {
     if (!by) return rows;
     const v = sortValue[by.key];
     // a strategy with no figure (never traded) goes last whichever way the column is sorted
     return [...rows].sort((a, b) => { const x = v(a), y = v(b); return x == null ? (y == null ? 0 : 1) : y == null ? -1 : by.desc ? y - x : x - y; });
   }, [rows, by]);
-  const extraRow = new Set(sorted.slice(PHONE_ROWS * pages).map((e) => e.id));
   const fig = (n: number | null, tone = true) => (n == null ? "–" : tone ? <Signed value={n} fmt={(v) => pct(v)} /> : pct(n));
   const cols: Column<LibEntry>[] = [
     { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => (
@@ -174,18 +169,11 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
   return (
     <>
       <div className="lib-table">
-        <DataTable label={label} rows={sorted} rowKey={(e) => e.id} columns={cols} stack noScroll
-          rowAttrs={(e): Record<string, string> => (extraRow.has(e.id) ? { className: "lib-extra" } : {})}
+        {/* site87 (owner: "scroll the specific block"): every strategy, the table a block sized to the screen, scrolling inside past that */}
+        <DataTable label={label} rows={sorted} rowKey={(e) => e.id} columns={cols} stack
           sort={{ key: by?.key ?? "", desc: by?.desc ?? true, onSort: (k) => setBy((b) => (b?.key === k ? { key: k as SortKey, desc: !b.desc } : { key: k as SortKey, desc: true })) }}
           detail={{ label: "Rules and details", render: details }} />
       </div>
-      {(sorted.length > PHONE_ROWS * pages || (pages > 1 && sorted.length > PHONE_ROWS)) && (
-        <div className="k-row lib-more" data-testid="lib-show-more">
-          <span className="k-note">Showing {Math.min(PHONE_ROWS * pages, sorted.length)} of {sorted.length}.</span>
-          {sorted.length > PHONE_ROWS * pages && <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(PHONE_ROWS, sorted.length - PHONE_ROWS * pages)} more</button>}
-          {pages > 1 && <ShowLess onLess={() => setPages(1)} />}
-        </div>
-      )}
     </>
   );
 }

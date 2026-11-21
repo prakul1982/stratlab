@@ -108,11 +108,11 @@ test("VR6-024: a phone shows twelve strategy cards, ten positions and eight divi
   assert.match(lib, /export \{ PHONE_ROWS as PHONE_CARDS \} from "\.\.\/components\/LibraryBits";/);
   const bits = read("src/components/LibraryBits.tsx");
   assert.match(bits, /export const PHONE_ROWS = 12;/);
-  assert.match(bits, /const extraRow = new Set\(sorted\.slice\(PHONE_ROWS \* pages\)\.map\(\(e\) => e\.id\)\);/);
-  assert.match(bits, /data-testid="lib-show-more"/);
-  assert.match(read("src/pages/HoldingsPage.tsx"), /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Positions".*stack phonePage=\{10\} \/>/);
+  // (changed on purpose, site87, owner: no "Show 12 more": every strategy is drawn, the table a block sized to the screen)
+  assert.doesNotMatch(bits, /const extraRow|data-testid="lib-show-more"/);
+  assert.match(read("src/pages/HoldingsPage.tsx"), /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Positions".*stack \/>/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   const act = read("src/components/HoldingsActions.tsx");
-  assert.match(act, /rows=\{data\.ahead\} rowKey=\{key\} stack phonePage=\{8\}/);
+  assert.match(act, /rows=\{data\.ahead\} rowKey=\{key\} stack \/>/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   // (changed on purpose, site86 SCROLL: every dividend received, six rows before the table scrolls inside its card, about eight on a phone)
-  assert.match(act, /rows=\{received\} rowKey=\{key\} stack scrollRows=\{6\}/);
+  assert.match(act, /rows=\{received\} rowKey=\{key\} stack \/>/);      // (changed on purpose, site87: the screen, not a row count, sets when it scrolls)
 });

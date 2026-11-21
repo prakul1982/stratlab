@@ -29,7 +29,7 @@ test("DE-004/DE-035: on a phone the scan's and the red flags' rows are cards tha
   assert.match(s, /\{ key: "sg", header: "Signal", lead: true,/);
   assert.match(s, /\{ key: "f", header: "Flag", wrap: true, lead: true,/);
   assert.match(s, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?stack label="Red-flag filings, newest first"/);
-  assert.match(s, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?stack phonePage=\{25\} label=\{`\$\{st2\.name\}: stage and Supertrend`\}/);
+  assert.match(s, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?stack label=\{`\$\{st2\.name\}: stage and Supertrend`\}/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   const css = read("src/styles.css");
   assert.match(css, /\.k-tbl-wrap\.stack\.has-lead \.k-table td\.k-lead \{ order: -1; grid-column: 1 \/ -1; \}/);
   assert.match(read("src/components/kit/DataTable.tsx"), /c\.lead && "k-lead"/);
@@ -107,7 +107,9 @@ test("DE-026/DE-027: results are listed day by day with each day's count, and a 
   const s = read("src/pages/ResultsPage.tsx");
   assert.match(s, /export function dayHeading/);
   // owner, 5 Nov: never a 200-company day in one go; each press shows MORE_ROWS more of that day
-  assert.match(s, /setOpenDay\(d\); setDayRows\(info\.shown \+ MORE_ROWS\)/);
+  // (changed on purpose, site87, owner: no "Show 50 more": a day's next MORE_ROWS load on their own as the reader nears its block's end)
+  assert.match(s, /api<ResultsView>\(`\/research\/results\?\$\{ask\(d, have \+ MORE_ROWS\)\}`\)/);
+  assert.match(s, /more=\{total > on\.length \|\| dayMore\[d\] \? \{ total, load: \(\) => loadDay\(d, on\.length\)/);
   assert.doesNotMatch(s, /And \{data\.more\} more\./);
 });
 

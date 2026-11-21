@@ -94,7 +94,9 @@ test("LIVE1A-004: the instrument search groups its results and keeps most option
 
 test("LIVE1A-004 (source): groups and the show-more row", () => {
   const src = read("src/components/InstrumentSearch.tsx");
-  assert.match(src, /className="search-more" role="option"/);
+  // (changed on purpose, site87: no "Show N more options": every match is listed, the options box scrolling)
+  assert.doesNotMatch(src, /className="search-more" role="option"/);
+  assert.match(src, /arrange\(results, true\)/);
   assert.match(read("src/lib/instrumentGroups.ts"), /heads\.set\(first\.id, GROUPS\[g\]\)/);
 });
 

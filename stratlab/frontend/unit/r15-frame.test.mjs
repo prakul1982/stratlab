@@ -83,17 +83,19 @@ test("every Card with a title, and every FoldCard, is a section with the close a
 });
 
 test("every Show more has a Show less (owner, 7 Nov)", () => {
-  assert.match(read("src/components/kit/DataTable.tsx"), /\{pages > 1 && <ShowLess onLess=\{\(\) => setPages\(1\)\} \/>\}/);
+  // (changed on purpose, site87, owner: no "Show more", "Show all" or "+N more" on any list, so there is no Show less either: every list shows
+  // every item in a block sized to the screen, and long server lists load more on their own)
+  assert.doesNotMatch(read("src/components/kit/DataTable.tsx"), /<ShowLess |Show \{Math\.min/);
   // (changed on purpose, site86 SCROLL, owner 21 Nov: "add a scroll, don't extend it": the company page's filings, deals, named holders and
   // corporate actions, the tax report's ETF sales and the dividends received show every row, scrolling inside the card, with no Show all)
   for (const f of ["src/components/Filings.tsx", "src/components/Deals.tsx", "src/components/NamedHolders.tsx", "src/components/TaxUnits.tsx",
     "src/components/HoldingsActions.tsx", "src/components/CorpActions.tsx"]) {
     assert.doesNotMatch(read(f), /Show all \{|<ShowLess /, f);
-    assert.match(read(f), /scrollRows=\{\d+\}|<ScrollList /, f);
+    assert.match(read(f), /<DataTable |<ScrollList /, f);         // (changed on purpose, site87: no row counts; the screen sizes the block)
   }
   for (const f of ["src/components/BizUpdates.tsx", "src/pages/TaxReportPage.tsx", "src/pages/EtfGapsPage.tsx", "src/components/ThemeDive.tsx", "src/pages/ResultsPage.tsx", "src/pages/trade/ClosingAuctionPage.tsx", "src/pages/trade/StockFuturesPage.tsx",
     "src/pages/trade/JournalPage.tsx", "src/pages/admin/AuditPanel.tsx", "src/pages/Screens.tsx", "src/components/LibraryBits.tsx"]) {
-    assert.match(read(f), /<ShowLess /, f);
+    assert.doesNotMatch(read(f), /<ShowLess |>Show all \{|Show \{Math\.min|Show more \(/, f);         // (changed on purpose, site87)
   }
   assert.doesNotMatch(read("src/components/CorpActions.tsx"), /Show fewer/);
   const less = read("src/components/kit/ShowLess.tsx");

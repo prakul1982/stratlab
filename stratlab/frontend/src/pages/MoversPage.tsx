@@ -120,7 +120,7 @@ export function MoversPage() {
             </p>
             {busy && <Working small label="Reading the new settings" />}
             <DataTable label={tableLabel} columns={cols} rows={rows}
-              rowKey={(r) => r.s} stack compact phonePage={20}
+              rowKey={(r) => r.s} stack compact
               empty={(list === "highs" || list === "lows") && !view.marks ? "The 52-week highs and lows appear after the next daily close run." : "None at this close."} />
             <p className="k-note">{what}{locked && lst && lst.total > rows.length ? ` ${(lst.total - rows.length).toLocaleString("en-IN")} more on the ${view.plan ?? "Basic"} plan.` : ""}</p>
           </Card>

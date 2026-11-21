@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CsvButton, CheckField, ConfirmDialog, DataTable, ShowLess, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
+  Card, CardHead, ChipSet, CsvButton, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, MultiPick, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
 import { limitLine, planIdOf } from "../lib/lockText";
@@ -246,7 +246,9 @@ export function ScreensPage() {
               : !meta ? (showFilters ? <div className="screens-filters-wait"><Skeleton label="Loading the filters" lines={4} /></div> : null) : showFilters && <>
               <Group title={sectorName} help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>
-                  : <ChipSet label={sectorName} options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}
+                  // site87 (owner: a column of four rows of chips beside one box made the form ragged): the sectors are one drop-down of tick boxes
+                  : <MultiPick label={sectorName} all="Every sector" noun="sectors" options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector}
+                    onToggle={(v) => toggle("sector", v)} onClear={() => setFilters((f) => ({ ...f, sector: [] }))} />}
               </Group>
               <Group title="Company size (market value)" help={help.cap}>
                 <ChipSet label="Company size" options={meta.cap.map((c) => ({ value: c.id, label: c.label }))} on={filters.cap} onToggle={(v) => toggle("cap", v as Filters["cap"][number])} />
@@ -323,11 +325,11 @@ export function ScreensPage() {
             )}
             {rows.length > 0 && (
               <div className="screens-table">
-                <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }} />
+                {/* AUTO-LOAD (site87, owner: no "Show more"): the server's next page comes on its own as the reader nears the end of the block */}
+                <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }}
+                  more={out ? { total: out.rows.length ? out.total : rows.length, load: () => run(rows.length), busy: loading, noun: "companies" } : undefined} />
               </div>
             )}
-            {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}
-            {out && first.current > 0 && rows.length > first.current && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setRows((old) => old.slice(0, first.current))} />}
           </Card>
 
           <Card className={`screens-save${showFilters ? "" : " folded"}`}>

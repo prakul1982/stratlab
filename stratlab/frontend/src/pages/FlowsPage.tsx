@@ -93,7 +93,7 @@ export function FlowsPage() {
                           labels={shown.map((p) => dayName(p.day))} times={shown.map((p) => p.day.slice(0, 10))} x={shown.map((p) => Date.parse(`${p.day.slice(0, 10)}T00:00:00Z`))} ranges={false} legend format={(v) => crore(v, true)} signedTip
                           axisFormat={(v) => crore(v)} baseline={0} height={220} ariaLabel="FII and DII net cash market flows by day" />
                       )}
-                      <DataTable csv="FII DII flows by day" label="FII and DII net buying by day" columns={cols} rows={rows} rowKey={(r) => r.day} phonePage={30}
+                      <DataTable csv="FII DII flows by day" label="FII and DII net buying by day" columns={cols} rows={rows} rowKey={(r) => r.day}
                         foot={{ d: `${rows.length} day${rows.length === 1 ? "" : "s"}, total`, f: <Net v={total("fii")} />, i: <Net v={total("dii")} />, b: <Net v={total("both")} /> }} />
                     </>
                   )}

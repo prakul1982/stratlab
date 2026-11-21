@@ -71,14 +71,14 @@ test("VR7-003: A to Z on a phone fills its rows (no last row of one or two lette
   }
 });
 
-test("VR7-004: the signed-out library keeps every card in the page and shows twelve on a phone", async ({ page }) => {
+// (changed on purpose, site87, owner: no "Show 12 more": a phone draws every row too, in a block sized to its screen)
+test("VR7-004: the signed-out library keeps every card in the page, on a phone too", async ({ page }) => {
   await open(page, "/library", null, 390);
   await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   const total = await page.locator(".lib-table tbody tr:not(.k-detail-row)").count();
   expect(total).toBeGreaterThan(12);
-  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(12);
-  await page.getByTestId("lib-show-more").getByRole("button").click();
-  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(Math.min(24, total));
+  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(total);
+  await expect(page.getByTestId("lib-show-more")).toHaveCount(0);
   await open(page, "/library", null, 1440);
   await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(total);

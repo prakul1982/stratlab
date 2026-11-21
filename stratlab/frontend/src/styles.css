@@ -1212,8 +1212,12 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
    live status, its placeholder, or where it goes), so every card is the same height before and after loading. */
 .space-home { container-type: inline-size; }
 
-/* side-by-side panels keep their own height: a short card is not stretched to the taller one beside it, leaving an empty block */
-.space-panels { align-items: start; }
+/* site87 (owner: "every side-by-side layout ends level"): panels side by side are one height, a card beside a column of stacked cards
+   too: the column's last card stretches to the pair's bottom, and a long list in the taller card gives way and scrolls inside it
+   (kit/ScrollList: peerHeight measures the column's stacked content) */
+.space-panels { align-items: stretch; }
+.grid2 > .space-col > :last-child, .k-cols > .space-col > :last-child { flex: 1 0 auto; }
+.grid2 > .k-card, .grid2 > .space-col > .k-card { min-height: 0; }
 /* VR2-002: the watchlist's tiles of one row are the same height (VR1-012's align-items:start left TCS's bottom edge 24px above RELIANCE's beside it) */
 /* VR1-013: a card head whose only control is a "Market events ->" style link keeps it at the top right and lets the title wrap beside it, on a phone too,
    instead of dropping the link to a line of its own under a long title */
@@ -1719,6 +1723,10 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (min-width: 641px) {
   .k-card:has(> .k-tbl-wrap:only-child:not(.pinhead)), .k-card:has(> .k-facts:only-child > .k-tbl-wrap:only-child:not(.pinhead)) { padding: 0; }
   .k-card > .k-tbl-wrap:only-child:not(.pinhead), .k-card > .k-facts:only-child > .k-tbl-wrap:only-child:not(.pinhead) { border: 0; border-radius: calc(var(--r-card) - 1px); }
+  /* site87 (owner: the Invest watchlist's "inner bordered table box"): a card's head and then its table: the card is the frame, the table has
+     no second box; its rows run to the card's padding */
+  .k-card > .k-card-head + .k-tbl-wrap:not(.pinhead):not(.stack), .k-card > .k-card-head + .k-scroll-box > .k-tbl-wrap:not(.pinhead):not(.stack),
+  .k-card > .k-card-head + .k-tbl-wrap.stack, .k-card > .k-card-head + .k-scroll-box > .k-tbl-wrap.stack { border: 0; border-radius: 0; }
 }
 
 /* stats */
@@ -1808,7 +1816,8 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .k-chipset .k-chip { color: var(--muted); }
 .k-chipset .k-chip[aria-pressed="true"] { color: var(--on-ink); }
 .k-chipset .k-chip[aria-pressed="true"]::before { content: "✓"; margin-right: 6px; font-size: .9em; }
-.k-chipset .k-chip[aria-pressed="false"] { background: transparent; border-style: dashed; }
+/* site87 (owner: dashed chips "look like empty placeholders, not choices"): an off chip is a solid, quiet choice; on is filled with a tick */
+.k-chipset .k-chip[aria-pressed="false"] { background: transparent; border-style: solid; border-color: var(--line-2); color: var(--ink-2); }
 .k-chipset .k-chip[aria-pressed="false"]:hover { color: var(--ink); }
 .k-chipwrap { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
 .k-custom { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
@@ -1998,10 +2007,13 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .k-scroll:focus-visible { outline-offset: -2px; border-radius: 8px; -webkit-mask-image: none; mask-image: none; }
 .k-tbl-wrap[data-over]:focus-visible { -webkit-mask-image: none; mask-image: none; }
 /* a phone's table drawn as cards that scrolls (a card's short list: DataTable scrollRows) keeps its box: the cards' rule lets them spill */
-.k-tbl-wrap.stack[data-over] { overflow-x: hidden; overflow-y: auto; }
+@media (max-width: 640px) { .k-tbl-wrap.stack[data-over] { overflow-x: hidden; overflow-y: auto; } }   /* site87: a phone's cards only; a wider screen's table keeps its sideways scroll */
 .k-tbl-wrap.stack[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
 /* a long table's header row stays at the top of its box while its rows scroll */
 .k-tbl-wrap[data-over]:not(.stack) .k-table thead th, .k-tbl-wrap.pinhead[data-over] .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
+/* site87 (owner, Breadth's last 20 days: "no Date/Advances/... header visible over the rows"): a table drawn as cards only on a phone is an
+   ordinary table on a wider screen, and its header row stays at the top of its block while it scrolls too */
+@media (min-width: 641px) { .k-tbl-wrap.stack[data-over] .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); } }
 /* on a phone, a link or a small button in a table or a calendar's list is a 32px target, not a line of text's height
    (R5O-017: hundreds of targets under 32px on ETF vs NAV, Market events and the screener) */
 @media (max-width: 640px) {
@@ -2130,16 +2142,23 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .theme-field { flex: 1 1 320px; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .theme-field > .k-input { flex: 1; min-width: 0; }
 .theme-field > .btn { flex: none; }
-.theme-already { display: flex; flex-direction: column; gap: var(--s1); }
-.theme-ready { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s2); }
-.theme-ready > .btn { width: 100%; min-width: 0; justify-content: center; padding-inline: 8px; }
-.theme-ready > .btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.theme-ready > .theme-ready-all { font-weight: 600; }
-.theme-already > [data-show-less] { align-self: flex-start; }
-.theme-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }   /* LIVE10A-021 */
+.theme-already { display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
+/* site87 (owner: "plain and heavy": 31 equal bordered pills in 5 columns): the ready themes as compact chips, centred, A to Z, each with its
+   updated day small inside it; past three lines the area scrolls inside itself with the fade (no "All N" / "Fewer themes") */
+.theme-ready { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; position: relative; }
+.theme-ready[data-over] { overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; padding-right: 4px; }
+.theme-ready[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); }
+.theme-ready:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; -webkit-mask-image: none; mask-image: none; }
+.theme-chip { display: inline-flex; align-items: baseline; gap: 6px; min-height: 32px; padding: 5px 12px; border: 1px solid transparent; border-radius: 999px;
+  background: var(--paper-2); color: var(--ink); font: inherit; font-size: 13px; line-height: 1.3; cursor: pointer; white-space: nowrap; max-width: 100%; }
+.theme-chip:hover { border-color: var(--line-2); background: var(--paper); }
+.theme-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.theme-chip-name { overflow: hidden; text-overflow: ellipsis; }
+.theme-chip-day { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.theme-chip.idea { background: none; border-color: var(--line); }
+.theme-ideas { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px var(--s2); }   /* LIVE10A-021 */
 .theme-more .k-disclosure-body { padding-left: 0; }
 @media (max-width: 560px) {
-  .theme-ready { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* R72 (ui-lint R18): on a phone the ideas wrap as chips, none cut by the edge of a sideways row */
   .theme-ideas { row-gap: var(--s2); }
 }
@@ -3488,4 +3507,35 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
   .opt-setup > .k-card-head > .k-card-actions > :last-child { grid-column: 1 / -1; }
   .opt-setup > .k-card-head > .k-card-actions > .btn { justify-content: center; }
   .opt-setup > .k-card-head:has(> .k-sec) > .k-card-actions { margin-right: -76px; max-width: none; }
+}
+
+/* MULTIPICK (site87): several choices from a long list as one box: what is picked, and a list of tick boxes under it */
+.k-multi { position: relative; min-width: 0; }
+.k-multi > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.k-multi > summary::-webkit-details-marker { display: none; }
+.k-multi-said { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.k-multi-btn.on .k-multi-said { color: var(--ink); font-weight: 600; }
+.k-multi-caret { flex: none; width: 8px; height: 8px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-2px) rotate(45deg); }
+.k-multi[open] .k-multi-caret { transform: translateY(2px) rotate(-135deg); }
+.k-multi-pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0; min-width: 220px; max-height: min(320px, 60vh); overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.k-multi-opt { min-height: 36px; padding: 4px 8px; border-radius: 6px; }
+.k-multi-opt:hover { background: var(--paper-2); }
+.k-multi-clear { align-self: flex-end; margin-top: 4px; }
+
+/* site87: on the screener, the column of results stretches to the filters' bottom when it is the longer one (the filters then stretch) */
+@media (min-width: 1361px) {
+  .k-split2.screens-split { align-items: stretch; }
+  .screens-split > .inv-sticky { display: flex; flex-direction: column; }
+  .screens-split > .inv-sticky > .screens-filters { flex: 1 0 auto; }
+}
+/* site87: Admin's rules table: a long path or address in "In the code" or "Source" breaks inside its cell, so the five columns fit the box */
+[data-testid="rules-panel"] .k-table td, [data-testid="rules-panel"] .k-table th { overflow-wrap: anywhere; }
+@media (min-width: 641px) {
+  [data-testid="rules-panel"] table[aria-label="All rules"] { table-layout: fixed; width: 100%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(1) { width: 22%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(2) { width: 22%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(3) { width: 12%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(4) { width: 18%; }
+  [data-testid="rules-panel"] table[aria-label="All rules"] :is(th, td):nth-child(5) { width: 26%; }
 }

@@ -46,8 +46,10 @@ test("LIVE13A-002: 'Membership checked N of M' is followed by states that add up
 
 test("LIVE13A-013: on a phone a layer's tables are a press away (the Cement page was 52,041 px)", () => {
   const src = read("src/components/ThemeDive.tsx");
-  assert.match(src, /function PhoneFold\(\{ label, children \}/);
-  assert.match(src, /if \(!usePhone\(\)\) return <>\{children\}<\/>;/);
+  // (changed on purpose, site87, owner: no fold that hides a list's items: each table is a block sized to the phone's screen, scrolling inside,
+  // so the page stays short without a press)
+  assert.match(src, /function PhoneFold\(\{ children \}/);
+  assert.doesNotMatch(src, /k-phone-fold/);
   assert.equal((src.match(/<PhoneFold label=/g) || []).length, 3);       // the companies' table, margins by year, business updates
 });
 

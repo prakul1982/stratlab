@@ -78,7 +78,7 @@ test("LIVE1C-014, LIVE1C-015: a job's next run is a time with the schedule behin
   const src = read("src/pages/admin/DataSection.tsx");
   assert.match(src, /Next run: \{j\.next\}/);
   assert.match(src, /<Info label=\{`Schedule of \$\{j\.name\}`\}>\{j\.schedule\}<\/Info>/);
-  assert.match(src, /stack phonePage=\{8\}/);
+  assert.match(src, /columns=\{cols\} stack \/>/);       // (changed on purpose, site87: no phone paging; every job, the table a block sized to the screen)
   assert.match(read("src/styles.css"), /td\.k-act\[data-label\]::before \{ display: none; \}/);
 });
 

@@ -134,7 +134,9 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   const table = page.locator(".screens-table");
   await expect(table.locator("tbody tr").first()).toContainText("Reliance Industries Ltd");   // the largest market value first (R5O-012), the listed name
   if (phone) await page.getByRole("button", { name: /Show filters/ }).click();
-  await page.getByRole("button", { name: "Energy", exact: true }).click();
+  // (changed on purpose, site87, owner: the sectors are one drop-down of tick boxes, not four rows of chips)
+  await page.locator("summary.k-multi-btn").first().click();
+  await page.getByRole("checkbox", { name: "Energy", exact: true }).check();
   await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();                 // RELIANCE, ONGC, COALINDIA
   await page.getByRole("button", { name: "What is Debt to equity?" }).click();
   await expect(page.getByRole("note")).toContainText("Borrowings divided by shareholders' equity");

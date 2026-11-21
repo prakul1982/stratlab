@@ -4,7 +4,7 @@ import { deckFileName } from "../lib/deckName";
 import { deckWhenReady } from "../lib/deckReady";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, DataTable, ShowLess, Select, Spark, Signed, Meter, PlanNote, usePhone, Working, type Column } from "./kit";
+import { Badge, Card, CardHead, DataTable, Select, Spark, Signed, Meter, PlanNote, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
 import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
@@ -71,30 +71,21 @@ function Spk({ row }: { row: BizRow }) {
   return <Spark values={row.points.map((p) => p.value)} label={`${row.name}, ${row.metric}, by month`} tone="neutral" height={24} />;
 }
 
-/** LIVE6-017: a long table shows its first rows and the rest a press away ("Show all N"), so the page isn't 16,000 px tall. */
-function Fold<T>({ rows, n: wide = 10, what = "rows", children }: { rows: T[]; n?: number; what?: string; children: (shown: T[]) => ReactNode }) {
-  const [all, setAll] = useState(false);
-  // LIVE11A-010: on a phone each row is a card, so a fold shows fewer (Cement was 72,468 px for 41 companies)
-  const n = usePhone() ? Math.min(wide, PHONE_FOLD) : wide;
-  return (
-    <>
-      {children(all || rows.length <= n + 2 ? rows : rows.slice(0, n))}
-      {rows.length > n + 2 && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" data-testid="show-all" onClick={() => setAll(true)}>{`Show all ${rows.length} ${what}`}</button>)}
-    </>
-  );
+/** Every row of a long table (site87, owner: no "Show all N" on any list): the table is a block sized to the screen and scrolls inside
+ *  itself past that (kit DataTable), so the page isn't 16,000 px tall (LIVE6-017) and nothing is a press away. */
+function Fold<T>({ rows, children }: { rows: T[]; n?: number; what?: string; children: (shown: T[]) => ReactNode }) {
+  return <>{children(rows)}</>;
 }
 /** r69e (LIVE13A-013: the phone Cement page 52,041 px, every layer's table, margins by year and business updates open one after another): on a
  *  phone a layer's tables are a press away under its description and count; a desktop shows them as before. */
-function PhoneFold({ label, children }: { label: string; children: ReactNode }) {
-  if (!usePhone()) return <>{children}</>;
-  return <details className="k-phone-fold" data-testid="phone-fold"><summary className="btn quiet sm">{label}</summary>{children}</details>;
+function PhoneFold({ children }: { label: string; children: ReactNode }) {
+  // site87 (owner: no fold that hides a list's items): each table is a block sized to the phone's screen, scrolling inside, so the page stays short
+  return <>{children}</>;
 }
 /** a row whose every figure is a dash says nothing: it is left out (LIVE6-017) */
 const isDash = (v: ReactNode) => v == null || v === "–" || v === "" || (typeof v === "object" && v !== null && (v as { props?: { children?: unknown } }).props?.children === "–");
 const said = (rows: KV[]) => rows.filter((x) => ![x.a, x.b].every(isDash));
 
-const MEMBERS_SHOWN = 12;     // a group's first rows; the rest a press away (a theme of 500 drug makers is listed in full)
-const PHONE_FOLD = 4;         // ...and on a phone, where each row is a card (LIVE11A-010)
 
 /** Every company in the theme, by layer (THEMES): the base is every listed company the exchange classifies in the theme's industries,
  * which the AI can sort into its layers but never removes; the AI's additions from other industries are marked, confirmed in their own
@@ -175,16 +166,14 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
 }
 
 function MemberGroup({ name, official, rows, cols, evidence, byOnce }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[]; evidence: string; byOnce?: string | null }) {
-  const [all, setAll] = useState(false);
-  const first = usePhone() ? PHONE_FOLD : MEMBERS_SHOWN;
-  const shown = all ? rows : rows.slice(0, first);
+  // site87 (owner: no "Show all N companies"): every company, the table a block sized to the screen that scrolls inside itself
+  const shown = rows;
   return (
     <section className="k-stack">
       <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
       {evidence && <p className="k-small k-muted" data-testid="layer-evidence">{evidence}</p>}
       {byOnce && <p className="k-small k-muted" data-testid="layer-by-once">Every company in this layer is in the theme by: {byOnce}.</p>}
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
-      {rows.length > first && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
     </section>
   );
 }

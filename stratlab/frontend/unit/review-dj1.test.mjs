@@ -127,8 +127,11 @@ test("DJ-028, DJ-030: an old audit says how old, and the findings come 30 compan
   // R11 (owner, 5 Nov: "why is it still showing mismatches, errors etc"): an old sampled audit is one closed line of history that says how old
   assert.match(panel, /const old = s\.running \? null : oldAudit\(s\.finished_at\);/);
   assert.match(panel, /\{old\.days\} days old\. The whole-market check above re-checks every company each day; these results are kept as a record only\./);
-  assert.match(panel, /const PAGE_ROWS = 30;/);
-  assert.match(panel, /rows\.slice\(0, Math\.min\(SHOWN, upTo\)\)/);
+  // (changed on purpose, site87, owner: no "Show more": the findings are a block sized to the screen; the next 60 companies are drawn on their
+  // own as the reader nears its end, with "Loaded N of M")
+  assert.match(panel, /const PAGE_ROWS = 60;/);
+  assert.match(panel, /rows\.slice\(0, upTo\)/);
+  assert.match(panel, /onEnd=\{rows\.length > upTo \? \(\) => setUpTo\(\(n\) => n \+ PAGE_ROWS\) : undefined\}/);
 });
 
 test("DJ-031: a provider's badge reads its last result, as the summary counts it", async () => {
@@ -209,7 +212,7 @@ test("DJ-020, DJ-025: storage shows a meter per real database, and the reclaim s
 test("DJ-013, DJ-023: the job buttons are quiet and the tables are cards on a phone; session cells break inside the card", () => {
   const data = read("src/pages/admin/DataSection.tsx");
   assert.match(data, /className="btn quiet sm" disabled=\{j\.running/);
-  assert.match(data, /columns=\{cols\} stack phonePage=\{8\} \/>/);
+  assert.match(data, /columns=\{cols\} stack \/>/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   const users = read("src/pages/admin/UsersSection.tsx");
   assert.match(users, /<DataTable label="Paper trading sessions"[^\n]*stack \/>/);
   assert.match(users, /<span className="adm-break">\{s\.email\}<\/span>/);

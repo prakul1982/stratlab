@@ -24,25 +24,22 @@ test("item 6: the Themes box is one row, the library two rows of equal short chi
   expect(Math.abs((box!.y + box!.height / 2) - (btn!.y + btn!.height / 2))).toBeLessThanOrEqual(1);
   expect(btn!.x).toBeGreaterThan(box!.x + box!.width - 1);
   if (!phone) expect(Math.abs((seg!.y + seg!.height / 2) - (box!.y + box!.height / 2))).toBeLessThanOrEqual(1);
-  // Ready to open: equal chips with short names, two rows, the last cell "All 30 themes"
+  // (changed on purpose, site87, owner: 31 equal heavy pills, "Fewer themes" and a tooltip over the next row: every ready theme is a compact chip,
+  // A to Z, its updated day small inside it (its full name and day in its accessible name), the area scrolling past three lines; the ideas a
+  // row of their own with none the chips already show, never folded)
   const grid = page.getByTestId("theme-already");
   await expect(grid).toContainText("Ready to open:");
   const chips = grid.locator(".theme-ready > button");
-  await expect(chips.first()).toHaveText("Utilities");
-  await expect(chips.first()).toHaveAttribute("title", /^Utilities \(Indian power, gas and water-linked infrastructure\) · updated 10 Nov$/);
-  await expect(chips.last()).toHaveText("All 30 themes");
-  const boxes = await chips.evaluateAll((els) => els.map((e) => { const b = e.getBoundingClientRect(); return { y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; }));
-  expect(new Set(boxes.map((b) => b.y)).size, "two rows").toBe(2);
-  expect(new Set(boxes.map((b) => b.w)).size, "equal widths").toBe(1);
+  await expect(chips).toHaveCount(30);
+  const util = grid.getByRole("button", { name: /^Utilities \(Indian power, gas and water-linked infrastructure\) · updated 10 Nov$/ });
+  await expect(util.locator(".theme-chip-name")).toHaveText("Utilities");
+  await expect(util.locator(".theme-chip-day")).toHaveText("10 Nov");
+  expect(await grid.locator(".theme-ready > button[title]").count()).toBe(0);
+  const boxes = await chips.evaluateAll((els) => els.map((e) => { const b = e.getBoundingClientRect(); return { h: Math.round(b.height) }; }));
   expect(new Set(boxes.map((b) => b.h)).size, "equal heights").toBe(1);
-  // the ideas are folded under the library
   const ideas = page.getByTestId("theme-ideas");
-  await expect(ideas.locator("summary")).toHaveText("More ideas");
-  await expect(ideas.getByRole("button", { name: "India defence" })).toBeHidden();
-  await chips.last().click();
-  await expect(grid.locator(".theme-ready > button")).toHaveCount(30);
-  await grid.getByRole("button", { name: "Fewer themes" }).click();
-  await expect(grid.locator(".theme-ready > button").last()).toHaveText("All 30 themes");
+  await expect(ideas.locator("summary")).toHaveCount(0);
+  await expect(grid.getByRole("button", { name: /^(All \d+ themes|Fewer themes)$/ })).toHaveCount(0);
   await sane(page, errors);
 });
 
@@ -63,7 +60,7 @@ test("item 3: a company's update filings are one clean list, repeats folded (own
   const list = page.getByRole("list", { name: "Business update filings" });
   await expect(list).toBeVisible({ timeout: 30_000 });
   const rows = list.locator("li");
-  await expect(rows).toHaveCount(5);
+  await expect(rows).toHaveCount(6);                       // (changed on purpose, site87: every subject, no "Show all N")
   await expect(rows.filter({ hasText: lodr })).toHaveCount(1);
   await expect(rows.first().getByTestId("biz-also")).toHaveText("Also filed 12 Jul 2026, 15 Apr 2026, 14 Jan 2026");
   await expect(rows.first().getByTestId("biz-also").getByRole("link", { name: "15 Apr 2026" })).toHaveAttribute("href", "https://example.com/a5");
@@ -75,9 +72,9 @@ test("item 3: a company's update filings are one clean list, repeats folded (own
   expect(new Set(geo.map((g) => g.right)).size, `link ends ${geo.map((g) => g.right)}`).toBe(1);
   for (const g of geo) { expect(g.inRow).toBe(true); expect(g.lines).toBeLessThanOrEqual(2); }
   await expect(rows.nth(1).locator(".biz-title")).toHaveAttribute("title", long);
-  const card = page.locator(".k-card", { has: list });
-  await card.getByRole("button", { name: "Show all 6" }).click();
+  // (changed on purpose, site87, owner: no "Show all N": every row, the list a block sized to the screen)
   await expect(rows).toHaveCount(6);
+  await expect(page.getByRole("button", { name: /^Show all \d+$/ })).toHaveCount(0);
   await sane(page, errors);
 });
 

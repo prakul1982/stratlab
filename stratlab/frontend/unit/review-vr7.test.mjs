@@ -21,13 +21,11 @@ test("VR7-004: the signed-out library keeps every card in the page and a phone s
   assert.doesNotMatch(src, /shown\.slice\(/);
   const bits = read("src/components/LibraryBits.tsx");
   assert.match(bits, /export const PHONE_ROWS = 12;/);
-  assert.match(bits, /rowAttrs=\{\(e\): Record<string, string> => \(extraRow\.has\(e\.id\) \? \{ className: "lib-extra" \} : \{\}\)\}/);
-  assert.match(bits, /data-testid="lib-show-more"/);
+  // (changed on purpose, site87, owner: no "Show 12 more": every row is drawn on a phone too, the table a block sized to the screen)
+  assert.doesNotMatch(bits, /lib-extra|data-testid="lib-show-more"/);
   assert.doesNotMatch(bits, /<DataTable label=\{label\}[^>]*phonePage/, "no slicing: the rows stay in the page");
   const css = read("src/pages/trade/trade.css");
-  assert.match(css, /\.lib-table \.k-table tr\.lib-extra \{ display: none; \}/);
-  assert.match(css, /  \.k-row\.lib-more \{ display: flex; \}/);
-  assert.match(css, /\.k-row\.lib-more \{ display: none; \}/);                        // a desktop has no such button
+  assert.doesNotMatch(css, /lib-extra|lib-more/);       // (changed on purpose, site87: no rows hidden on a phone, no button)
 });
 
 test("VR7-006 (UI-CO item 2): Key numbers are tables of one width in two balanced columns (one on a phone); a long note is a numbered note under them", () => {

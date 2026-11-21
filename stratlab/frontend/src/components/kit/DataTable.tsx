@@ -1,7 +1,6 @@
 import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useScrollRows } from "./ScrollList";
-import { TABLE_ROWS } from "../../lib/scrollRows";
-import { ShowLess } from "./ShowLess";
+import { useSection } from "./Section";
 import { Info } from "../ui";
 import { textOf } from "./Card";
 import { istToday, minusNode } from "../../lib/format";
@@ -124,17 +123,23 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
 /** A table box's rows, for its scroll height (useScrollRows). */
 const bodyRows = (el: HTMLElement): HTMLElement[] => Array.from(el.querySelectorAll<HTMLElement>(":scope > table > tbody > tr"));
 
-export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, scrollRows, noScroll, stack: stackProp, grid, pinHead, sort, phonePage, pageDesktop, scrollEnd, csv, detail, selectAll, compact }: {
+export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, scrollEnd, csv, csvInMenu, more, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
    * holds more than the table shows now (a group showing its first 12). */
   csv?: string | { name: string; rows?: R[] };
-  /** No longer used: past TABLE_ROWS rows every table scrolls inside its box with its header row in view (SCROLL, owner 21 Nov). Kept so callers need not change. */
+  /** EXPORT in the card's "⋯" menu (site87, owner: the watchlist's big "Download CSV" on a row of its own above the table cluttered the
+   *  card): the file is one of the card's menu entries, not a button over the table. Needs a Card with a title. */
+  csvInMenu?: boolean;
+  /** AUTO-LOAD (site87, owner: "no next page, show more or load more"): a list whose server sends it a page at a time. Its next rows are
+   *  asked for on their own as the reader nears the end of the rows drawn (in the block's own scroll), and a line says "Loaded N of M". */
+  more?: { total: number; load: () => void; busy?: boolean; noun?: string };
+  /** No longer used: every table's block is sized to the screen (SCROLL BY SCREEN, site87). Kept so callers need not change. */
   sticky?: boolean;
-  /** SCROLL: how many rows show before the table scrolls inside its box (TABLE_ROWS unless a card's short list says fewer). Given, a phone's
-   *  cards scroll too (about eight), instead of every card making the page longer. */
+  /** No longer used (site87): the screen, not a row count, sets when a table scrolls. */
   scrollRows?: number;
-  noScroll?: boolean;                        // site86: a table that is its page's own list (the Library) grows with the page, never a box of its own
+  /** No longer used (site87): the Library's list is a block sized to the screen too. */
+  noScroll?: boolean;
   /** On a phone, each row becomes a card (the first column as its title, every other cell under its own column name),
    * so nothing is cut off at the edge and the figures that matter are all in view. Desktop is unchanged. */
   stack?: boolean;
@@ -151,9 +156,9 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   /** A totals row under the rows: a cell for each column key (the first column's names the row). */
   foot?: Record<string, ReactNode>;
   rowAttrs?: (row: R) => Record<string, string>; rowNote?: (row: R) => ReactNode | undefined;
-  /** With `stack`: on a phone, this many cards at a time, then "Show more" (R6O-018: 352 ETF cards made one 13,000 px page). */
+  /** No longer used (site87, owner: no "Show more" on any list): a phone's cards are a block sized to its screen, scrolling inside. */
   phonePage?: number;
-  /** With `phonePage`: a desktop pages the rows the same way ("Each sale in rupees": the first 10, then Show more; owner, 7 Nov). */
+  /** No longer used (site87). */
   pageDesktop?: boolean;
   /** With `stack`: on a phone each row is two short lines, not a card of labelled figures (LIVE4-010: a results day of ten companies was
    *  2,900 px of cards): the name with the `brief` figures at its right, then the other figures in one line, each after a short label; a
@@ -173,8 +178,6 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   // a first look at the drawn table
   const [spill, setSpill] = useState(false);
   const stack = stackProp ?? (!grid && !scrollEnd && (columns.length >= 5 || spill));
-  const [pages, setPages] = useState(1);
-  useEffect(() => { setPages(1); }, [allRows.length]);
   const box = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!phone) { setSpill(false); return; }
@@ -199,14 +202,12 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   useLayoutEffect(() => { setFit(false); }, [boxW, columns.length, allRows.length]);
   useLayoutEffect(() => {
     const b = box.current;
-    if (!fit && !phone && !grid && !scrollEnd && b && b.scrollWidth > b.clientWidth + 2) setFit(true);
+    if (!fit && !phone && !grid && !scrollEnd && b && b.scrollWidth > b.clientWidth + 1) setFit(true);      // site87: 2px over is over (ui-lint R29 counts it)
   });
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const uid = useId();
-  const cap = stack && phonePage && (phone || pageDesktop) ? phonePage * pages : Infinity;
-  const rows = allRows.length > cap ? allRows.slice(0, cap) : allRows;
-  const left = allRows.length - rows.length;
+  const rows = allRows;
   const file = typeof csv === "string" ? { name: csv, rows: allRows } : csv ? { name: csv.name, rows: csv.rows ?? allRows } : null;
   const allBox = (withText: boolean) => selectAll && allRows.length > 0 && (
     <label className={withText ? "k-check k-select-all" : "k-tap k-th-check"}>
@@ -216,9 +217,23 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
       {withText && <span>{selectAll.label ?? "Select all"}</span>}
     </label>);
   const cardsNow = stack && phone;
-  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): past TABLE_ROWS rows the table scrolls inside its box, its header row kept at the
-  // top; a phone's cards keep their own "Show more"
-  useScrollRows(box, { rows: scrollRows ?? TABLE_ROWS, items: bodyRows, off: !!noScroll || (cardsNow && scrollRows == null) });
+  // SCROLL BY SCREEN (owner, site87): a table taller than the screen gives it scrolls inside its block, its header row kept at the top, whole
+  // rows at rest and the fade while more is below (the owner's reference: Movers); one that fits is drawn whole. A phone's cards the same.
+  // AUTO-LOAD: nearing the end of the rows drawn asks the server for the next ones (no button)
+  const loadMore = more && !more.busy && allRows.length < more.total ? more.load : undefined;
+  useScrollRows(box, { items: bodyRows, onEnd: loadMore });
+  // EXPORT in the card's "⋯" menu (csvInMenu): one entry there, kept up to date with the rows
+  const frame = useSection();
+  const setExtra = frame?.setExtra;
+  const menuCsv = !!csvInMenu && !!frame?.on && !!file && file.rows.length > 0;
+  const saveRef = useRef<() => void>(() => undefined);
+  saveRef.current = () => { if (file) { const t = tableCsv(allColumns, file.rows); downloadCsv(csvName(file.name, istToday()), t.head, t.rows); } };
+  const csvKey = `csv:${label}`;
+  useEffect(() => {
+    if (!setExtra) return;
+    setExtra(csvKey, menuCsv ? { label: "Download CSV", run: () => saveRef.current(), testId: "card-menu-csv" } : null);
+    return () => setExtra(csvKey, null);
+  }, [setExtra, menuCsv, csvKey]);
   // "Report an error in this figure" (owner, 12 Nov): inside a ReportScope each row's name carries the flag, with the row's figures to pick from
   const scope = useReportScope();
   const figureCols = columns.filter((c) => !c.rowHeader && !c.action && c.numeric);
@@ -228,8 +243,8 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
       .filter(([, v]) => v !== "" && !dashOnly(v))} />);
   return (
     <>
-    {((file && file.rows.length > 0) || (cardsNow && selectAll && allRows.length > 0)) && (
-      <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && <CsvButton name={file.name} label={label} columns={allColumns} rows={file.rows} />}</div>)}
+    {((file && file.rows.length > 0 && !menuCsv) || (cardsNow && selectAll && allRows.length > 0)) && (
+      <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && !menuCsv && <CsvButton name={file.name} label={label} columns={allColumns} rows={file.rows} />}</div>)}
     <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && compact ? " compact" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${columns.some((c) => c.narrow === false || c.tight === false) ? " has-narrow" : ""}${fit ? " k-fit" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}
       onScroll={scrollEnd ? (e) => markScrolled(e.currentTarget) : undefined}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
@@ -290,12 +305,10 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
         )}
       </table>
     </div>
-    {(left > 0 || (pages > 1 && cap !== Infinity)) && (
-      <div className="k-row">
-        <span className="k-note">Showing {rows.length} of {allRows.length}.</span>
-        {left > 0 && <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(left, phonePage ?? left)} more</button>}
-        {pages > 1 && <ShowLess onLess={() => setPages(1)} />}
-      </div>
+    {more && allRows.length > 0 && (
+      <p className="k-note k-loaded" aria-live="polite" data-testid="k-loaded">
+        Loaded {allRows.length.toLocaleString("en-IN")} of {Math.max(more.total, allRows.length).toLocaleString("en-IN")}{more.noun ? ` ${more.noun}` : ""}{more.busy ? "; loading more…" : allRows.length < more.total ? "; more load as you scroll" : ""}
+      </p>
     )}
     </>
   );

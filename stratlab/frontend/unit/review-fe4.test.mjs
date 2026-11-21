@@ -116,7 +116,7 @@ test("Results and Corporate actions drop the search text and the list when the m
   for (const f of ["src/pages/ResultsPage.tsx", "src/pages/CorpActionsPage.tsx"]) {
     const src = read(f);
     // (the results page also closes the day it had opened further, DE-026, and how far: 5 Nov, 50 more at a time)
-    assert.match(src, /if \(shownFor !== `\$\{region\}\|\$\{scope\}`\) \{ setShownFor\(`\$\{region\}\|\$\{scope\}`\); setQ\(""\); setData\(null\);( setOpenDay\(""\); setDayRows\(0\);)? \}/, f);
+    assert.match(src, /if \(shownFor !== `\$\{region\}\|\$\{scope\}`\) \{ setShownFor\(`\$\{region\}\|\$\{scope\}`\); setQ\(""\); setData\(null\);( setDayMore\(\{\}\); setDayEnd\(\{\}\);)? \}/, f);      // (changed on purpose, site87: the days read further are dropped too)
     assert.match(src, /<Field key=\{region\} label="Find a company">/, f);
   }
 });

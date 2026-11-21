@@ -243,7 +243,7 @@ export function UsTaxPage() {
         )}
         {v && v.trades.length > 0 && (
           <Disclosure summary={<>{v.trades.length} trade{v.trades.length === 1 ? "" : "s"}{v.files.length ? ` · last file ${ago(v.files[v.files.length - 1].at)}` : ""}</>}>
-            <DataTable csv="US trades" stack phonePage={10} label="US trades" columns={tradeCols} rows={v.trades} rowKey={(t) => t.id || `${t.d}${t.sym}${t.qty}${t.price}`} />
+            <DataTable csv="US trades" stack label="US trades" columns={tradeCols} rows={v.trades} rowKey={(t) => t.id || `${t.d}${t.sym}${t.qty}${t.price}`} />
             {/* VR1-148: "Delete all" was a head button of the same weight as Upload; it sits under the list it empties */}
             <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete all US trades</button>
           </Disclosure>
@@ -290,7 +290,7 @@ export function UsTaxPage() {
               <Card>
                 <CardHead title="Each sale in rupees" />
                 {!y.rows?.length ? <EmptyState title={`No US sales in ${y.label}`}>Sales you add or upload show here with the rate used for each.</EmptyState>
-                  : <DataTable stack phonePage={10} pageDesktop label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r, i) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}-${i}`} />}
+                  : <DataTable stack label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r, i) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}-${i}`} />}
                 <p className="k-note">Rule 115: the sale at SBI's TT buying rate on the last day of the month before the sale, the cost at the rate on the last day of the month before the purchase; the last rate SBI published when it has none that day. "RBI" marks the RBI reference rate, used where SBI's rate isn't known.</p>
               </Card>
 

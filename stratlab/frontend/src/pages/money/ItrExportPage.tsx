@@ -6,7 +6,7 @@ import { Download, Lock } from "../../components/Icons";
 import { lockWords } from "../../lib/lockText";
 import { track } from "../../lib/analytics";
 import { download as saveFile } from "../../lib/share";
-import { Card, CardHead, type Column, DataTable, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormGrid, Notes, Notice, PageHeader, PlanNote, Select, Skeleton } from "../../components/kit";
+import { Card, CardHead, type Column, DataTable, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormGrid, Notes, Notice, PageHeader, PlanNote, ScrollList, Select, Skeleton } from "../../components/kit";
 import { movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { minus } from "../../lib/format";
@@ -200,9 +200,9 @@ export function ItrExportPage() {
           {/* LIVE1B-028: the sources and the assumptions are one fold, not twenty small lines under the figures */}
           <Card label="Where the figures come from" compact>
             <Disclosure summary="Where the figures come from, and the assumptions">
-              <Notes label="Sources" items={v.sources} />
+              <ScrollList label="Sources"><Notes label="Sources" items={v.sources} /></ScrollList>
               <h3 className="k-sub">Assumptions</h3>
-              <Notes label="Assumptions" items={v.assumptions} />
+              <ScrollList label="Assumptions"><Notes label="Assumptions" items={v.assumptions} /></ScrollList>
               <p className="k-note">StratLab doesn't file returns: filing on someone's behalf needs registration as an e-return intermediary with the Income Tax Department. Upload or type these figures into the return yourself, or hand the pack to your CA.</p>
             </Disclosure>
           </Card>

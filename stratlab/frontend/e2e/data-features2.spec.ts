@@ -142,10 +142,9 @@ test("business updates: my stocks first, more sectors, month by month with the c
   await sane(page, errors);
 });
 
-// on a phone the library pages its rows (VR6-024: "Show 12 more"); open every page so a check reads the whole library
+// (changed on purpose, site87, owner: no "Show 12 more": every row is drawn on a phone too, in a block sized to the screen; nothing to open)
 async function showAllCards(page: import("@playwright/test").Page) {
-  const more = page.getByTestId("lib-show-more").getByRole("button", { name: /^Show \d+ more$/ });
-  for (let i = 0; i < 20 && await more.isVisible(); i++) await more.click();
+  await expect(page.getByTestId("lib-show-more")).toHaveCount(0);
 }
 // TABLES EVERYWHERE (owner, 4 Nov: "make tables?"): the library is one table, a row a strategy (a compact card on a phone)
 const libRows = (page: import("@playwright/test").Page) => page.getByRole("table", { name: "Strategies" }).locator("tbody tr:not(.k-detail-row)");

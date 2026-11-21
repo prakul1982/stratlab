@@ -62,9 +62,13 @@
 //                                            whose left and right insets differ by > 2px, or (beside a chevron column) whose tables don't run to
 //                                            the row's own left and right edges; (desktop) a table wider than its box
 // Owner, 21 Nov ("add a scroll, don't extend it, and do it everywhere so this kind of mismatch doesn't happen"):
-//   R30 uneven pair / hidden items          two cards side by side whose heights differ by > 2px (a long list scrolls inside its card: kit
-//                                            ScrollList); a "+N more" / "and N more" with nothing to press; a list's rows cut off below a box that
-//                                            doesn't scroll
+//   R30 uneven pair / hidden items          two cards side by side whose heights differ by > 2px, a card beside a column of stacked cards
+//                                            included (site87); a "+N more" / "and N more" with nothing to press; a list's rows cut off below a box
+//                                            that doesn't scroll. Site87 (owner: "it works on screen size ... then you give a scroll"):
+//                                            (a) a list or table block taller than the screen that doesn't scroll inside itself (3+ rows past it);
+//                                            (b) a scroll box that hides fewer than 3 rows; (c) a scroll box taller than the screen;
+//                                            (d) any paging or show-more control on a list ("Show more", "Show all N", "Show 12 more", "Fewer
+//                                            themes", "Load more", Previous/Next page)
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
 export interface PageFrame { h1Top: number; h1Left: number; right: number }
@@ -212,7 +216,8 @@ export function lintPage(opts: LintOpts): LintResult {
       if (row.length < 2) continue;
       const xs = [...row].sort((a, b) => R(a).left - R(b).left);
       if (xs.some((a, i) => i && R(a).left < R(xs[i - 1]).right - 2)) continue;     // overlapping: not side by side
-      if (row.some((c) => c.matches("aside, nav, header, footer, main, [role=navigation]"))) continue;          // the page's own chrome (sidebar, admin menu) is not a card row
+      if (row.some((c) => c.matches("aside, nav, header, footer, main, [role=navigation]"))) continue;
+      if (row.some((c) => S(c).position === "sticky")) continue;          // site87: a sticky side panel (the screener's filters) rides along beside a longer column          // the page's own chrome (sidebar, admin menu) is not a card row
       const cardish = row.filter((c) => isCard(c) || c.querySelector("[class*=card]"));
       if (cardish.length < 2) continue;
       const top = Math.min(...row.map((c) => R(c).top));
@@ -241,18 +246,28 @@ export function lintPage(opts: LintOpts): LintResult {
       const [l, r] = [...row].sort((a, b) => R(a).left - R(b).left);
       if (R(r).left < R(l).right - 2) continue;
       if (row.some((c) => c.matches("aside, nav, header, footer, main, [role=navigation]"))) continue;
-      // the card itself, or the one card that fills its slot (My space's .mine-slot holds its card); a column of two or more cards is a stack,
-      // not one card, and is left to R1
-      const cardOf = (c: Element): Element | null => {
+      // the card itself, or the one card that fills its slot (My space's .mine-slot holds its card); site87: a column of two or more cards
+      // stacked (Invest home's Coming up over Results today) is measured as one block, from its first card's top to its last card's bottom
+      const cardOf = (c: Element): Element | DOMRect | null => {
         if (isCard(c)) return c;
         const inner = Array.from(c.querySelectorAll("[class*=card]")).filter((d) => isCard(d) && shown(d));
         const top = inner.filter((d) => !inner.some((o) => o !== d && o.contains(d)));
-        return top.length === 1 && Math.abs(R(top[0]).top - R(c).top) < 2 && Math.abs(R(top[0]).width - R(c).width) < 2 ? top[0] : null;
+        if (top.length === 1 && Math.abs(R(top[0]).top - R(c).top) < 2 && Math.abs(R(top[0]).width - R(c).width) < 2) return top[0];
+        const cs = S(c);
+        const stack = top.filter((d) => d.parentElement === c);
+        if (stack.length >= 2 && stack.length === kids(c).length && cs.display.includes("flex") && cs.flexDirection.startsWith("column")) {
+          const t = Math.min(...stack.map((d) => R(d).top)), b = Math.max(...stack.map((d) => R(d).bottom));
+          return new DOMRect(R(c).left, t, R(c).width, b - t);
+        }
+        return null;
       };
       const a = cardOf(l), b = cardOf(r);
       if (!a || !b) continue;
-      const d = R(a).height - R(b).height;
-      if (Math.abs(d) > 2) add("R30", d > 0 ? a : b, `${Math.round(Math.max(R(a).height, R(b).height))}px tall beside a ${Math.round(Math.min(R(a).height, R(b).height))}px card in the same row (two cards side by side are the same height)`);
+      const ra = a instanceof DOMRect ? a : R(a), rb = b instanceof DOMRect ? b : R(b);
+      if (Math.abs(ra.top - rb.top) > 2) continue;
+      const d = ra.height - rb.height;
+      const el = (d > 0 ? (a instanceof DOMRect ? l : a) : (b instanceof DOMRect ? r : b)) as Element;
+      if (Math.abs(d) > 2) add("R30", el, `${Math.round(Math.max(ra.height, rb.height))}px tall beside a ${Math.round(Math.min(ra.height, rb.height))}px ${a instanceof DOMRect || b instanceof DOMRect ? "column of cards" : "card"} in the same row (side by side ends level)`);
     }
   }
   for (const e of all) {
@@ -271,6 +286,65 @@ export function lintPage(opts: LintOpts): LintResult {
       const pb = R(p), cut = rowsL.filter((c) => R(c).top >= pb.bottom - 1).length;
       if (cut > 0 && pb.height >= 40) add("R30", l, `${cut} of ${rowsL.length} rows cut off below a box that doesn't scroll`);
       break;
+    }
+  }
+
+  // ---- R30 (site87) SCROLL BY SCREEN: a block is never taller than the screen; it scrolls only past it, never for fewer than 3 rows ------
+  {
+    const vh = window.innerHeight;
+    const bar = document.querySelector(".topbar");
+    const top = bar && S(bar).display !== "none" && (S(bar).position === "sticky" || S(bar).position === "fixed") ? R(bar).height : 0;
+    const room = vh - top;
+    const OUT = "nav, aside, header, footer, dialog, [role=dialog], [role=menu], [role=listbox], .more-pop, .sidebar, .mw, .k-cal, pre, textarea, .lp-page, .lp-nav";
+    const rowsIn = (box: Element): Element[] => {
+      const body = box.querySelector(":scope > table > tbody, :scope > tbody");
+      if (body) return Array.from(body.children).filter((c) => R(c).height > 0);
+      const list = box.matches("ul, ol") ? box : box.querySelector(":scope > ul, :scope > ol, :scope > div > ul, :scope > div > ol, :scope > div");
+      return list ? Array.from(list.children).filter((c) => R(c).height > 0) : [];
+    };
+    for (const box of all) {
+      if (!(box instanceof HTMLElement) || !shown(box) || box.closest(OUT)) continue;
+      const oy = S(box).overflowY;
+      if (oy !== "auto" && oy !== "scroll") continue;
+      if (box === document.body || box === document.documentElement || box.matches("main, .shell, .content, .k-chart-body")) continue;
+      if (box.scrollHeight <= box.clientHeight + 2) continue;
+      const rows = rowsIn(box);
+      if (rows.length < 2) continue;
+      const b = R(box);
+      const inner = b.top + box.clientTop + box.clientHeight;          // the rows' area ends inside the box's bottom edge (its border)
+      const hidden = rows.filter((r) => R(r).top >= inner - 1).length;
+      if (hidden < 3) add("R30", box, `(b) a scroll box that hides ${hidden} row${hidden === 1 ? "" : "s"}: fewer than three hidden rows show in full`);
+      if (b.height > room + 2) add("R30", box, `(c) a scroll box ${Math.round(b.height)}px tall on a ${Math.round(room)}px screen: a block is never taller than the screen`);
+    }
+    // (a) a list or table block taller than the screen that doesn't scroll inside itself (3+ rows past the screen)
+    const scrolls = (e: Element): boolean => {
+      for (let p: Element | null = e; p && p !== document.body; p = p.parentElement) {
+        const oy = S(p).overflowY;
+        if ((oy === "auto" || oy === "scroll") && !p.matches("main, .shell, .content")) return true;
+      }
+      return false;
+    };
+    for (const l of all) {
+      if (!l.matches("tbody, ul, ol") || !shown(l) || l.closest(OUT) || scrolls(l)) continue;
+      if (l.parentElement?.closest("tbody, ul, ol")) continue;             // a list inside a row is the row's
+      const rowsL = Array.from(l.children).filter((c) => R(c).height >= 16);
+      if (rowsL.length < 4) continue;
+      const lr = R(l);
+      if (lr.height <= room) continue;
+      const start = R(rowsL[0]).top;
+      const past = rowsL.filter((c) => R(c).bottom > start + room).length;
+      if (past >= 3) add("R30", l.closest(".k-tbl-wrap, .k-card, table") ?? l, `(a) a ${l.matches("tbody") ? "table" : "list"} ${Math.round(lr.height)}px tall on a ${Math.round(room)}px screen that doesn't scroll inside its block (${past} of ${rowsL.length} rows past the screen)`);
+    }
+    // (d) a paging or show-more control on a list
+    const PAGING = /^(show\s+(all\b(?!.*\b(on the chart|drawings)\b)|more\b|less\b|\d[\d,]*\s+more\b)|load\s+more\b|more\s+ideas$|fewer\s+\w+$|all\s+\d[\d,]*\s+\w+$|see\s+all\s+\d|next\s+page\b|previous\s+page\b|← previous$|next →$)/i;
+    for (const c of all) {
+      if (!c.matches("button, a, summary, [role=button]") || !shown(c) || c.closest("nav.sidebar, .sidebar, .more-pop, [role=menu], dialog, [role=dialog]")) continue;
+      const t = textOf(c);
+      if (t.length > 60 || /\bcolumns$/i.test(t)) continue;           // "Fewer columns" folds a table's columns, not its rows
+      // a link to another page ("All 3 notebooks", "See all 43 strategies") opens that page's own list: navigation, not a list's paging
+      const href = c.getAttribute("href");
+      if (c.matches("a") && href && (() => { try { return new URL(href, location.href).pathname !== location.pathname; } catch { return false; } })()) continue;
+      if (PAGING.test(t) || c.closest(".k-pager")) add("R30", c, `(d) "${t.slice(0, 40)}": a paging or show-more control on a list (every item is in its block; long lists load more on their own)`);
     }
   }
 

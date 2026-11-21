@@ -253,7 +253,7 @@ export function IposPage() {
               </EmptyState>
             ) : (
               <DataTable csv={`IPOs ${now} ${market}`} stack label={`${tabs.find((t) => t.value === now)?.label} IPOs, ${market === "IN" ? "India" : "US"}`} rows={rows} rowKey={(r) => r.id}
-                rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })} columns={columns(market, now, rows.reduce<string | null>((a, r) => (r.perf?.latest_date && (!a || r.perf.latest_date > a) ? r.perf.latest_date : a), null))} phonePage={25} />
+                rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })} columns={columns(market, now, rows.reduce<string | null>((a, r) => (r.perf?.latest_date && (!a || r.perf.latest_date > a) ? r.perf.latest_date : a), null))} />
             )}
             {unpricedShown.length > 0 && (
               <Disclosure summary={`Listed, no prices read yet (${unpricedShown.length})`} testId="ipo-unpriced">

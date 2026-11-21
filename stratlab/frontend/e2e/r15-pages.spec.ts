@@ -15,7 +15,8 @@ test("R15 #1: More in Money starts open, and still folds", async ({ page }) => {
   await sane(page, errors);
 });
 
-test("R15 #7: US stocks tax's Each sale in rupees shows the first 10 sales, then Show more", async ({ page }) => {
+// (changed on purpose, site87, owner: no "Show more" on any list: every sale is in the table, a block sized to the screen)
+test("R15 #7: US stocks tax's Each sale in rupees shows every sale, with no Show more", async ({ page }) => {
   // 13 sales in the year (the fake world has none): the page's own reply with rows put in
   await page.route((u) => u.href.startsWith(API) && u.pathname === "/money/us-tax", async (r) => {
     const res = await r.fetch();
@@ -33,10 +34,9 @@ test("R15 #7: US stocks tax's Each sale in rupees shows the first 10 sales, then
   });
   const errors = await open(page, "/money/us-tax", "Each sale in rupees");
   const sales = page.getByRole("table", { name: "US sales in rupees" });
-  await expect(sales.getByRole("row").filter({ hasText: /SYM\d+/ })).toHaveCount(10);
-  await expect(page.getByText("Showing 10 of 13.")).toBeVisible();
-  await page.getByRole("button", { name: "Show 3 more" }).click();
   await expect(sales.getByRole("row").filter({ hasText: /SYM\d+/ })).toHaveCount(13);
+  await expect(page.getByText("Showing 10 of 13.")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Show \d+ more$/ })).toHaveCount(0);
   await sane(page, errors);
 });
 

@@ -200,8 +200,11 @@ test("admin users: a calm table filtered by plan, a … button per row, and dele
   // no red button on every row: one … button opens the user's actions
   await expect(table.getByRole("button", { name: /Delete|Change plan/ })).toHaveCount(0);
   await expect(table.getByRole("button", { name: /^Actions for / }).first()).toBeVisible();
-  expect(await table.locator("tbody tr").count(), "a page at a time").toBeLessThanOrEqual(25);
-  await expect(page.getByRole("navigation", { name: "Pages" })).toContainText(/Page 1 of \d+/);
+  // (changed on purpose, site87, owner 21 Nov: no paging on a list; every user is in the table, which scrolls inside a block no taller
+  // than the screen, its header row in view)
+  await expect(page.getByRole("navigation", { name: "Pages" })).toHaveCount(0);
+  const usersBox = await table.evaluate((t) => { let el: HTMLElement | null = t as HTMLElement; while (el && getComputedStyle(el).overflowY !== "auto" && getComputedStyle(el).overflowY !== "scroll") el = el.parentElement; return el ? el.getBoundingClientRect().height : t.getBoundingClientRect().height; });
+  expect(usersBox, "the users' block fits the screen").toBeLessThanOrEqual(page.viewportSize()!.height);
   // filter by plan, sent to the server
   await page.getByRole("radiogroup", { name: "Plan" }).getByRole("radio", { name: "Pro" }).click();
   await expect.poll(() => queries.at(-1)).toContain("plan=pro");

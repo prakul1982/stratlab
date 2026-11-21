@@ -90,16 +90,15 @@ test("VR6-013, R11: the plan cards are level, five short lines and one button ea
   expect(await page.locator("ul.k-fineprint li").count()).toBeLessThanOrEqual(5);
 });
 
-test("VR6-024: a phone shows twelve strategy rows and Show 12 more; a desktop shows them all", async ({ page }) => {
+// (changed on purpose, site87, owner: no "Show 12 more": every row is drawn on a phone and a desktop alike, the table a block sized to the screen)
+test("VR6-024: a phone and a desktop draw every strategy row, with no Show 12 more", async ({ page }) => {
   await open(page, "/library", ADMIN, 390);
   await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   const total = await page.getByText(/^\d+ strategies$/).innerText().then((t) => Number(t.split(" ")[0]));
   expect(total).toBeGreaterThan(12);
   // TABLES EVERYWHERE (owner, 4 Nov): one table; every row is in the page and a phone shows twelve of them at a time
-  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(12);
-  await expect(page.getByTestId("lib-show-more")).toContainText(`Showing 12 of ${total}.`);
-  await page.getByTestId("lib-show-more").getByRole("button").click();
-  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(Math.min(24, total));
+  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(total);
+  await expect(page.getByTestId("lib-show-more")).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByTestId("lib-show-more")).toBeHidden();
   expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(total);
