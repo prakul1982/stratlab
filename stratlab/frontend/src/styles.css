@@ -1997,6 +1997,9 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .k-tbl-wrap[data-more], .k-tbl-wrap.pinhead[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
 .k-scroll:focus-visible { outline-offset: -2px; border-radius: 8px; -webkit-mask-image: none; mask-image: none; }
 .k-tbl-wrap[data-over]:focus-visible { -webkit-mask-image: none; mask-image: none; }
+/* a phone's table drawn as cards that scrolls (a card's short list: DataTable scrollRows) keeps its box: the cards' rule lets them spill */
+.k-tbl-wrap.stack[data-over] { overflow-x: hidden; overflow-y: auto; }
+.k-tbl-wrap.stack[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
 /* a long table's header row stays at the top of its box while its rows scroll */
 .k-tbl-wrap[data-over]:not(.stack) .k-table thead th, .k-tbl-wrap.pinhead[data-over] .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
 /* on a phone, a link or a small button in a table or a calendar's list is a 32px target, not a line of text's height
