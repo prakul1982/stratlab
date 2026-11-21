@@ -89,3 +89,226 @@ for (const width of [1280, 1440, 1700]) {
     });
   }
 }
+
+/** A block's scroll state: whether it scrolls inside itself, its height, the screen's, its rows hidden below, its header row in view. */
+const blockOf = (page: Page, sel: string) => page.evaluate((sel) => {
+  const el = document.querySelector<HTMLElement>(sel)!;
+  const r = el.getBoundingClientRect(), top = r.top;
+  const rows = Array.from(el.querySelectorAll<HTMLElement>(":scope > table > tbody > tr, :scope li, :scope > div > ul > li")).filter((x) => x.getBoundingClientRect().height > 0);
+  const hidden = rows.filter((x) => x.getBoundingClientRect().top >= r.bottom - 1).length;
+  const th = el.querySelector("thead th");
+  return { over: el.hasAttribute("data-over"), h: r.height, top, vh: innerHeight, rows: rows.length, hidden, sh: el.scrollHeight, ch: el.clientHeight,
+    overscroll: getComputedStyle(el).overscrollBehaviorY, tab: el.tabIndex, headTop: th ? th.getBoundingClientRect().top - top : null,
+    whole: rows.some((x) => Math.abs(x.getBoundingClientRect().bottom - (top + el.clientHeight)) <= 1.5) };
+}, sel);
+
+test("SCREEN: Mood's 16 sectors are drawn whole at 1440x900 and scroll inside their block, header sticky, at 1280x600", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "desktop sizes");
+  await signIn(page);
+  await page.route((u) => u.pathname === "/research/pulse/mood", async (r) => {
+    const res = await r.fetch(), body = await res.json();
+    const base = body.sectors?.rows?.[0] ?? { name: "Nifty Bank", change_pct: 0.5 };
+    const rows = Array.from({ length: 16 }, (_, i) => ({ ...base, name: `Nifty Sector ${String(i + 1).padStart(2, "0")}`, change_pct: 2 - i * 0.25 }));
+    await r.fulfill({ response: res, json: { ...body, sectors: { ...(body.sectors ?? {}), rows, up: 8, down: 8, unchanged: 0, of: 16, leader: rows[0].name, laggard: rows[15].name } } });
+  });
+  const sel = '[aria-label="Sector indices, best first, scrolls sideways"]';
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/research/pulse");
+  await expect(page.locator(sel).locator("tbody tr")).toHaveCount(16, { timeout: 30_000 });
+  await page.waitForTimeout(500);
+  const big = await blockOf(page, sel);
+  await shot(page, "mood-1440x900", sel);
+  expect(big.over, `16 rows fit a 900px screen: no scroll (block ${big.h}px)`).toBe(false);
+  expect(big.hidden).toBe(0);
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await page.waitForTimeout(600);
+  const small = await blockOf(page, sel);
+  await page.locator(sel).scrollIntoViewIfNeeded();
+  await shot(page, "mood-1280x600");
+  expect(small.over, "on a 600px screen the 16 rows scroll inside their block").toBe(true);
+  expect(small.h, "the block is no taller than the screen").toBeLessThanOrEqual(600);
+  expect(small.hidden, "a scroll hides three rows or more").toBeGreaterThanOrEqual(3);
+  expect(small.whole, "it ends on a whole row").toBe(true);
+  expect(small.overscroll).toBe("contain");
+  expect(small.tab).toBe(0);
+  await page.locator(sel).evaluate((el) => { el.scrollTop = 120; });
+  await page.waitForTimeout(100);
+  const scrolled = await blockOf(page, sel);
+  expect(Math.abs(scrolled.headTop ?? 99), "the header row stays at the top of the block while it scrolls").toBeLessThanOrEqual(1);
+});
+
+test("SCREEN: Movers' table (the owner's reference): the block fits the screen, header sticky, rows scroll inside with the fade", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "desktop sizes");
+  await signIn(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/invest/movers");
+  const sel = '[data-testid="movers"] .k-tbl-wrap';
+  await expect(page.locator(sel).locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(500);
+  const b = await blockOf(page, sel);
+  await page.getByTestId("movers").scrollIntoViewIfNeeded();
+  await shot(page, "movers-1440");
+  expect(b.h).toBeLessThanOrEqual(900);
+  if (b.over) { expect(b.hidden).toBeGreaterThanOrEqual(3); expect(b.whole).toBe(true); }
+});
+
+test("AUTO-LOAD: Filings is one block the screen's height, its rows scroll inside it, more load near its end with no button, header sticky", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "desktop sizes");
+  await signIn(page);
+  const TOTAL = 1406, SIZE = 25, asked: number[] = [];
+  await page.route((u) => u.pathname === "/research/redflags", async (r) => {
+    const res = await r.fetch(), body = await res.json();
+    const pg = Number(new URL(r.request().url()).searchParams.get("page") ?? "1");
+    asked.push(pg);
+    const items = Array.from({ length: SIZE }, (_, i) => {
+      const n = (pg - 1) * SIZE + i;
+      return { id: `f-${n}`, at: `2026-10-${String(28 - (n % 27)).padStart(2, "0")}T10:00:00Z`, symbol: SYMS[n % SYMS.length], company: `${SYMS[n % SYMS.length]} Ltd`, severity: n % 3 ? "amber" : "red", label: "Pledge", subject: `Filing number ${n + 1}`, url: null, copies: 1 };
+    });
+    await r.fulfill({ response: res, json: { ...body, items, total: TOTAL, page: pg, pages: Math.ceil(TOTAL / SIZE), companies: 20 } });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/research/filings?region=IN&view=all");
+  const sel = '[aria-label="Red-flag filings, newest first, scrolls sideways"]';
+  await expect(page.locator(sel).locator("tbody tr")).toHaveCount(SIZE, { timeout: 30_000 });
+  await page.waitForTimeout(500);
+  const b = await blockOf(page, sel);
+  await page.locator(sel).scrollIntoViewIfNeeded();
+  await shot(page, "filings-1440");
+  expect(b.over, "the rows scroll inside the block").toBe(true);
+  expect(b.h, "the block is no taller than the screen").toBeLessThanOrEqual(900);
+  expect(b.h, "and takes most of it").toBeGreaterThan(900 * 0.5);
+  // no paging button anywhere on the page
+  await expect(page.getByRole("button", { name: /^(Next|Previous|Show more|Load more|Next page)/ })).toHaveCount(0);
+  await expect(page.locator(".k-pager")).toHaveCount(0);
+  await expect(page.getByTestId("k-loaded")).toContainText(`Loaded 25 of ${TOTAL.toLocaleString("en-IN")}`);
+  // scroll the block to its end: the next 25 load on their own
+  await page.locator(sel).evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await expect(page.locator(sel).locator("tbody tr")).toHaveCount(SIZE * 2, { timeout: 15_000 });
+  await page.locator(sel).evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await expect(page.locator(sel).locator("tbody tr")).toHaveCount(SIZE * 3, { timeout: 15_000 });
+  expect(asked.slice(0, 3)).toEqual([1, 2, 3]);
+  await expect(page.getByTestId("k-loaded")).toContainText(`Loaded 75 of ${TOTAL.toLocaleString("en-IN")}`);
+  const after = await blockOf(page, sel);
+  expect(Math.abs(after.headTop ?? 99), "the header row stays at the top of the block").toBeLessThanOrEqual(1);
+  // one scroll for the content: the page around the block barely scrolls
+  const pageScroll = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+  expect(pageScroll, "the page itself scrolls less than a screen").toBeLessThan(900);
+});
+
+const PAGING = /^(show\s+(all|more|less|\d[\d,]*\s+more)\b|load\s+more\b|more ideas$|fewer\s+\w+$|all\s+\d[\d,]*\s+themes$|see\s+all\s+\d|next\s+page\b|previous\s+page\b|← previous$|next →$)/i;
+for (const path of ["/library", "/research/themes?region=IN", "/research/results", "/research/filings?region=IN&view=all", "/calendar", "/invest", "/mine", "/research/screens", "/invest/etf-gaps", "/admin"]) {
+  test(`NO SHOW-MORE: ${path} has no paging or show-more control`, async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop", "one size is enough for the words");
+    await signIn(page);
+    await page.goto(path);
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+    await page.waitForTimeout(800);
+    const bad = await page.evaluate((src) => {
+      const re = new RegExp(src, "i");
+      return Array.from(document.querySelectorAll("button, a, summary, [role=button]")).map((e) => (e.textContent ?? "").replace(/\s+/g, " ").trim())
+        .filter((t) => t && t.length <= 60 && re.test(t));
+    }, PAGING.source);
+    expect(bad, `paging or show-more controls on ${path}`).toEqual([]);
+    await expect(page.locator(".k-pager")).toHaveCount(0);
+  });
+}
+
+// ---------- Themes ----------
+const LIB = ["Specialty chemicals", "Metals and mining", "Cement", "Steel", "Defence", "Railways", "Banks", "Automobiles", "Auto components", "Pharmaceuticals",
+  "Hospitals", "Insurance", "Capital markets", "Power", "Renewable energy", "Oil and gas", "Telecom", "IT services", "FMCG", "Retail", "Real estate", "Hotels",
+  "Aviation", "Logistics", "Ports", "Shipbuilding", "Fertilisers", "Agrochemicals", "Textiles", "Paints", "Electronics manufacturing"];
+async function themeWorld(page: Page) {
+  await signIn(page);
+  await page.route((u) => u.pathname === "/research/theme-library/suggest", (r) => {
+    const u = new URL(r.request().url()), region = u.searchParams.get("region") ?? "IN", typed = (u.searchParams.get("q") ?? "").toLowerCase();
+    const names = region === "US" ? ["Aerospace and defense", "AI data centers", "Semiconductors", "Banks"] : LIB;
+    const items = names.filter((n) => !typed || n.toLowerCase().includes(typed)).map((n, i) => ({ name: n, q: n.toLowerCase(), region, at: "2026-11-08T10:00:00Z", day: `2026-11-${String(1 + (i % 20)).padStart(2, "0")}`, members: 20, searched: 50 - i }));
+    return r.fulfill({ json: { items } });
+  });
+}
+
+test("THEMES: compact chips, never the same theme twice, the updated day inside the chip, no box over the next chips", async ({ page }, info) => {
+  await themeWorld(page);
+  await page.goto("/research/themes?region=IN");
+  const ready = page.getByTestId("theme-already");
+  await expect(ready.locator(".theme-chip")).toHaveCount(LIB.length, { timeout: 30_000 });
+  await page.waitForTimeout(400);
+  await shot(page, `themes-${info.project.name}`);
+  // every theme once, ideas included ("Specialty chemicals" was in "Ready to open" and again in "More ideas")
+  const names = await page.locator(".theme-box .theme-chip").evaluateAll((els) => els.map((e) => (e.querySelector(".theme-chip-name") ?? e).textContent!.trim().toLowerCase()));
+  expect(new Set(names).size, `duplicates in ${names.join(", ")}`).toBe(names.length);
+  await expect(page.getByText("More ideas")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Fewer themes|All \d+ themes)$/ })).toHaveCount(0);
+  // the day inside each chip, no title tooltip that would open over the next row
+  await expect(ready.locator(".theme-chip").first().locator(".theme-chip-day")).toHaveText(/^\d{1,2} [A-Z][a-z]{2}$/);
+  expect(await ready.locator(".theme-chip[title]").count()).toBe(0);
+  await expect(ready.locator(".theme-chip").first()).toHaveAttribute("aria-label", /· updated \d{1,2} [A-Z][a-z]{2}/);
+  // hovering a chip covers no other chip
+  const chip = ready.locator(".theme-chip").nth(3);
+  await chip.hover();
+  const covered = await page.evaluate(() => {
+    const chips = Array.from(document.querySelectorAll<HTMLElement>(".theme-ready .theme-chip"));
+    return chips.filter((c) => { const r = c.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return false; const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!top && !c.contains(top); }).length;
+  });
+  expect(covered, "no hover box over another chip").toBe(0);
+  // chips never overlap one another
+  const overlap = await ready.locator(".theme-chip").evaluateAll((els) => {
+    const rs = els.map((e) => e.getBoundingClientRect());
+    return rs.some((a, i) => rs.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1));
+  });
+  expect(overlap).toBe(false);
+});
+
+test("THEMES BUG: India's \"India defence\" open, then \"$ United States\": never mapped in the US; the chooser comes back, or the US's own Aerospace and defense", async ({ page }) => {
+  await themeWorld(page);
+  const usAsks: string[] = [];
+  page.on("request", (rq) => {
+    const u = new URL(rq.url());
+    if (/\/research\/(sector|theme-dive)/.test(u.pathname) && u.searchParams.get("region") === "US") usAsks.push(u.searchParams.get("q") ?? "");
+  });
+  await page.goto("/research/themes?region=IN&q=India%20defence");
+  await expect(page.getByRole("textbox", { name: "Theme" })).toHaveValue("India defence");
+  await page.getByRole("radio", { name: /United States/ }).or(page.getByRole("button", { name: /United States/ })).first().click();
+  await page.waitForTimeout(1500);
+  expect(usAsks.filter((q) => /india/i.test(q)), "no India theme asked for in the US").toEqual([]);
+  const url = new URL(page.url());
+  expect(url.searchParams.get("region")).toBe("US");
+  expect(url.searchParams.get("q") ?? "", "the US's own theme or the chooser").toMatch(/^(|Aerospace and defense)$/);
+  await expect(page.getByText("India defence", { exact: true })).toHaveCount(0);
+  // the US's ideas, never India's
+  await expect(page.locator(".theme-box")).not.toContainText(/India defence|Railways capex/);
+  // the API refuses one too, for an old link
+  const r = await page.request.get(`${API}/research/sector?q=India%20defence&region=US`, { headers: { Authorization: "Bearer pro-token" } });
+  expect(r.status()).toBe(400);
+});
+
+// ---------- Search filings form ----------
+test("FORM: Search filings is one compact form: the market inside its top row with Search, even columns, solid choices, no e.g. in the date boxes", async ({ page }, info) => {
+  await signIn(page);
+  await page.goto("/research/search");
+  const form = page.locator("form.ds-form");
+  await expect(form).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(500);
+  await shot(page, `filings-form-${info.project.name}`, "form.ds-form");
+  // the market toggle and Search are inside the form, on the phrase's row
+  const top = form.locator(".ds-top");
+  await expect(top.getByRole("radiogroup").or(top.locator(".k-seg")).first()).toBeVisible();
+  await expect(top.getByRole("button", { name: "Search" })).toBeVisible();
+  const level = await top.evaluate((row) => {
+    const box = (sel: string) => row.querySelector(sel)!.getBoundingClientRect();
+    return { input: box("input").bottom, go: box(".ds-go").bottom, seg: box(".k-seg").bottom, phone: innerWidth <= 640 };
+  });
+  if (!level.phone) {
+    expect(Math.abs(level.input - level.go), "Search is level with the phrase box").toBeLessThanOrEqual(2);
+    expect(Math.abs(level.input - level.seg), "the market is level with the phrase box").toBeLessThanOrEqual(4);
+  }
+  // no form row whose columns differ in height by more than one control row
+  const ragged = await form.evaluate((f) => Array.from(f.querySelectorAll(".ds-row")).map((row) => {
+    const hs = Array.from(row.children).map((c) => c.getBoundingClientRect().height);
+    return Math.max(...hs) - Math.min(...hs);
+  }));
+  for (const d of ragged) expect(d, "columns of a row differ by at most one control row").toBeLessThanOrEqual(44);
+  // no dashed chip, no "e.g." in a box
+  expect(await form.evaluate((f) => Array.from(f.querySelectorAll("*")).some((e) => getComputedStyle(e).borderTopStyle === "dashed"))).toBe(false);
+  expect(await form.locator("input[placeholder^='e.g.']").count()).toBe(0);
+});

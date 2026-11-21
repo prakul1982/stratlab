@@ -76,7 +76,6 @@
 .lib-line { margin: 0; }
 .lib-about { margin: 0; }
 .lib-mini { display: none; }
-.k-row.lib-more { display: none; }
 /* a wide screen sizes the columns from what they hold: the fixed percentages (16/12/10.6/12/7) left the Checks column narrower than its
  * one-line badge, which ran under the Copy button on a 1000px window (owner, 5 Nov). The list replaces its placeholder in one go, so
  * the page itself still holds still (LIVE3-012 measured the page, not the columns). The buttons' column is as narrow as its button. */
@@ -87,8 +86,6 @@
   .lib-table .k-table td.k-act { width: 1%; white-space: nowrap; }
 }
 @media (max-width: 640px) {
-  .lib-table .k-table tr.lib-extra { display: none; }
-  .k-row.lib-more { display: flex; }
   .lib-table .k-table td:is([data-label="Buy and hold"], [data-label="Worst fall"], [data-label="Unseen period"]) { display: none; }
   .lib-mini { display: table; width: 100%; }
   .lib-mini th { font-weight: 400; color: var(--muted); text-align: left; }

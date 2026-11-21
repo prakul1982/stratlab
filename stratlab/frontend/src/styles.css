@@ -1816,7 +1816,8 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .k-chipset .k-chip { color: var(--muted); }
 .k-chipset .k-chip[aria-pressed="true"] { color: var(--on-ink); }
 .k-chipset .k-chip[aria-pressed="true"]::before { content: "✓"; margin-right: 6px; font-size: .9em; }
-.k-chipset .k-chip[aria-pressed="false"] { background: transparent; border-style: dashed; }
+/* site87 (owner: dashed chips "look like empty placeholders, not choices"): an off chip is a solid, quiet choice; on is filled with a tick */
+.k-chipset .k-chip[aria-pressed="false"] { background: transparent; border-style: solid; border-color: var(--line-2); color: var(--ink-2); }
 .k-chipset .k-chip[aria-pressed="false"]:hover { color: var(--ink); }
 .k-chipwrap { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
 .k-custom { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
@@ -2006,10 +2007,13 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .k-scroll:focus-visible { outline-offset: -2px; border-radius: 8px; -webkit-mask-image: none; mask-image: none; }
 .k-tbl-wrap[data-over]:focus-visible { -webkit-mask-image: none; mask-image: none; }
 /* a phone's table drawn as cards that scrolls (a card's short list: DataTable scrollRows) keeps its box: the cards' rule lets them spill */
-.k-tbl-wrap.stack[data-over] { overflow-x: hidden; overflow-y: auto; }
+@media (max-width: 640px) { .k-tbl-wrap.stack[data-over] { overflow-x: hidden; overflow-y: auto; } }   /* site87: a phone's cards only; a wider screen's table keeps its sideways scroll */
 .k-tbl-wrap.stack[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
 /* a long table's header row stays at the top of its box while its rows scroll */
 .k-tbl-wrap[data-over]:not(.stack) .k-table thead th, .k-tbl-wrap.pinhead[data-over] .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
+/* site87 (owner, Breadth's last 20 days: "no Date/Advances/... header visible over the rows"): a table drawn as cards only on a phone is an
+   ordinary table on a wider screen, and its header row stays at the top of its block while it scrolls too */
+@media (min-width: 641px) { .k-tbl-wrap.stack[data-over] .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); } }
 /* on a phone, a link or a small button in a table or a calendar's list is a 32px target, not a line of text's height
    (R5O-017: hundreds of targets under 32px on ETF vs NAV, Market events and the screener) */
 @media (max-width: 640px) {
@@ -3504,3 +3508,17 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
   .opt-setup > .k-card-head > .k-card-actions > .btn { justify-content: center; }
   .opt-setup > .k-card-head:has(> .k-sec) > .k-card-actions { margin-right: -76px; max-width: none; }
 }
+
+/* MULTIPICK (site87): several choices from a long list as one box: what is picked, and a list of tick boxes under it */
+.k-multi { position: relative; min-width: 0; }
+.k-multi > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.k-multi > summary::-webkit-details-marker { display: none; }
+.k-multi-said { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.k-multi-btn.on .k-multi-said { color: var(--ink); font-weight: 600; }
+.k-multi-caret { flex: none; width: 8px; height: 8px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-2px) rotate(45deg); }
+.k-multi[open] .k-multi-caret { transform: translateY(2px) rotate(-135deg); }
+.k-multi-pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0; min-width: 220px; max-height: min(320px, 60vh); overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.k-multi-opt { min-height: 36px; padding: 4px 8px; border-radius: 6px; }
+.k-multi-opt:hover { background: var(--paper-2); }
+.k-multi-clear { align-self: flex-end; margin-top: 4px; }

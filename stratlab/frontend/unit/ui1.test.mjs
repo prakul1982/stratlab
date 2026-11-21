@@ -29,17 +29,19 @@ test("the Themes page: one-line lede with the method behind the (i); box, Map it
   assert.match(page, /<form className="theme-map" aria-label="Map a theme"[^\n]*\n\s*<RegionSwitch region=\{region\} setRegion=\{setRegion\} \/>\s*<div className="theme-field">/);
   const css = read("src/styles.css");
   assert.match(css, /\.theme-field \{ flex: 1 1 320px; display: flex; align-items: center;/);
-  assert.match(css, /\.theme-ready \{ display: grid; grid-template-columns: repeat\(auto-fill, minmax\(180px, 1fr\)\);/);
+  // (changed on purpose, site87, owner: "31 equal bordered pills in 5 columns" looked plain and heavy: compact chips, centred, wrapping)
+  assert.match(css, /\.theme-ready \{ display: flex; flex-wrap: wrap; justify-content: center;/);
 });
 
 test("Ready to open: short names (full name and date in the title), two rows of the grid's columns, then All N themes", () => {
   const page = read("src/pages/ThemesPage.tsx");
-  assert.match(page, /title=\{libraryLabel\(i, \(d\) => fmtDate\(d, \{ year: false \}\), false\)\}/);
-  assert.match(page, /<span>\{shortTheme\(i\.name\)\}<\/span>/);
-  assert.match(page, /const room = cols \* 2;/);
-  assert.match(page, /const shown = more \? items\.slice\(0, room - 1\) : items;/);
-  assert.match(page, /All \{items\.length\} themes/);
-  assert.match(page, /<Disclosure summary="More ideas"/);
+  // (changed on purpose, site87, owner: the updated day small inside the chip, not a hover box over the next row; every ready theme, the area
+  // scrolling past three lines, no "All N themes" / "Fewer themes"; the ideas a row of their own with none the chips already show, no fold)
+  assert.match(page, /aria-label=\{libraryLabel\(i, \(d\) => fmtDate\(d, \{ year: false \}\), false\)\}/);
+  assert.match(page, /<span className="theme-chip-name">\{shortTheme\(i\.name\)\}<\/span>/);
+  assert.match(page, /<small className="theme-chip-day" aria-hidden="true">/);
+  assert.doesNotMatch(page, /title=\{libraryLabel|All \{items\.length\} themes|<Disclosure summary="More ideas"/);
+  assert.match(page, /const ideas = ideasBeside\(THEME_IDEAS\[region\], items, region, shortTheme\);/);
 });
 
 // item 3 (owner, 18 Nov: HDFC Bank's update filings, "NSE filing ↗" dropped to its own line under a long subject)
@@ -54,9 +56,10 @@ test("update filings: the same subject filed again is one row with its other day
 
 test("update filings: date | subject (two lines at most) | link on one grid; five rows, then Show all N", () => {
   const panel = read("src/components/BizUpdates.tsx"), css = read("src/styles.css");
-  assert.match(panel, /const FILINGS_FIRST = 5;/);
-  assert.match(panel, /const groups = foldFilings\(v\.filings\);/);
-  assert.match(panel, /Show all \{groups\.length\}/);
+  // (changed on purpose, site87, owner: no "Show all N": every filing, the list a block sized to the screen that scrolls inside itself)
+  assert.doesNotMatch(panel, /const FILINGS_FIRST = 5;|Show all \{groups\.length\}/);
+  assert.match(panel, /const files = foldFilings\(v\.filings\);/);
+  assert.match(panel, /<ScrollList label="Business update filings">/);
   assert.match(panel, /<span className="biz-title" title=\{title\}>\{title\}<\/span>/);
   assert.match(css, /\.biz-title \{ display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; \}/);
   assert.match(css, /\.biz-link \{ white-space: nowrap; justify-self: end; \}/);

@@ -9,7 +9,7 @@ const page = read("src/pages/ResultsPage.tsx");
 test("RES-1: one table a day with the figures a person looks at on a results day", () => {
   // (updated on purpose, site76 LIVE14A-009: the day's table also drops "Usual move" when its own rows have too few; the Implied column rule is unchanged)
   // (updated on purpose, LIVE19A-011: one column set for every day of the page (Implied when any row shown has options, Usual move by the page's rows), so the stacked day tables line up)
-  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\}\s+columns=\{pageColumns\.filter\(\(c\) => c\.key !== "im" \|\| on\.some\(\(r\) => r\.fo\)\)\} stack compact phonePage=\{10\} \/>/);      // R15 #11 (updated on purpose: Release 82)
+  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\}\s+columns=\{pageColumns\.filter\(\(c\) => c\.key !== "im" \|\| on\.some\(\(r\) => r\.fo\)\)\} stack compact\s+more=/);      // R15 #11 (updated on purpose: Release 82)   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   // LIVE4-010: shorter headers that fit one line (the (i) says the rest); the CSV keeps the full names
   // LIVE5-002: revenue and profit share the "Quarter" column (a CSV-only pair keeps them apart); "Implied" fits a 1280 screen
   for (const h of ["Company", "Market value", "Price", '"Day"', "Quarter", "Revenue", "Profit", "Usual move", "Implied"])
@@ -59,7 +59,7 @@ test("RES-1: live prices, earlier moves and implied moves are read for every row
 });
 
 test("RES-1: the corporate actions calendar is a table a day with the same filters and live prices", () => {
-  assert.match(corp, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Corporate actions going ex on \$\{exDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => r\.id\} columns=\{columns\} stack phonePage=\{10\} \/>/);
+  assert.match(corp, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Corporate actions going ex on \$\{exDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => r\.id\} columns=\{columns\} stack \/>/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   for (const h of ["Company", "Action", "Amount or ratio", "Record date", "Price now", "Yield of this payment", "Market value"]) assert.ok(corp.includes(`header: "${h}"`), h);
   assert.match(corp, /<CalendarFilters region=\{region\}/);
   assert.match(corp, /useRowQuotes\(region, symbols\)/);

@@ -428,7 +428,8 @@ export function axisInrFor(span: number): (v: number) => string {
 /** A hyphen used as a minus (before a digit or currency sign, at the start or after a space or bracket) becomes the real
  * minus sign (U+2212): the one minus the app draws (FY ranges and dates, where a digit comes first, are left alone). */
 export function minus(s: string): string {
-  return s.replace(/(^|[\s(])-(?=\.?\d|[₹$€£])/g, "$1−");
+  // site87 (owner: Breadth's McClellan read "−0" on 30 Oct): a figure that rounds to zero is "0", never "−0" (nor "−0.0", "−₹0" or "−0%")
+  return s.replace(/(^|[\s(+])[-−]((?:[₹$€£]\s?)?0(?:[.,]0+)?)(?![\d.,]*[1-9])(?=$|[^\d.,])/g, "$1$2").replace(/(^|[\s(])-(?=\.?\d|[₹$€£])/g, "$1−");
 }
 
 /** The same for what a table cell or a figure holds: text is fixed, a number is written with its real minus. */

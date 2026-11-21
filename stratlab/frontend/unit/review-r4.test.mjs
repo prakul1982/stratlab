@@ -127,7 +127,8 @@ test("a rule under a box shows after interaction; titles don't repeat their fiel
   assert.match(read("pages/EtfGapsPage.tsx"), /placeholder="e\.g\. NIFTYBEES"/);
   const css = read("styles.css");
   assert.match(css, /\.k-chipset \.k-chip\[aria-pressed="true"\]::before \{ content: "✓"/);
-  assert.match(css, /\.k-chipset \.k-chip\[aria-pressed="false"\] \{[^}]*border-style: dashed/);
+  // (changed on purpose, site87, owner: dashed chips "look like empty placeholders, not choices": an off chip is solid and quiet)
+  assert.match(css, /\.k-chipset \.k-chip\[aria-pressed="false"\] \{[^}]*border-style: solid/);
   assert.match(read("pages/OptionsPage.tsx"), /<ChipBar wrap label="Underlying"/);
   assert.match(css, /\.k-chipbar:not\(\.wrap\) \{ flex-wrap: nowrap/);
   assert.match(read("pages/admin/admin.css"), /\.adm-menu \{ position: static; flex-direction: row; flex-wrap: wrap/);

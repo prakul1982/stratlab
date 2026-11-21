@@ -263,9 +263,9 @@ test("My space greets in India's time for the Indian market, or the person's own
 
 test("ETF vs NAV on a phone: cards, a page of the widest gaps, then Show all; bigger targets (R5O-017)", () => {
   const p = read("src/pages/EtfGapsPage.tsx");
-  assert.match(p, /const TOP = 50;/);
-  assert.match(p, /rows=\{all \|\| q\.trim\(\) \? rows : rows\.slice\(0, TOP\)\} rowKey=\{\(r\) => r\.symbol\} stack/);
-  assert.match(p, />Show all \{rows\.length\}<\/button>/);
+  // (changed on purpose, site87, owner: no "Show all": every ETF, the table a block sized to the screen that scrolls inside itself)
+  assert.doesNotMatch(p, /const TOP = 50;|>Show all \{rows\.length\}<\/button>/);
+  assert.match(p, /rows=\{rows\} rowKey=\{\(r\) => r\.symbol\} stack/);
   assert.match(read("src/styles.css"), /\.k-table td a, \.k-table th a, \.k-table td \.btn\.sm, \.k-table td button, \.k-cal-ev a, \.k-cal-evs button \{ min-height: 32px;/);
 });
 

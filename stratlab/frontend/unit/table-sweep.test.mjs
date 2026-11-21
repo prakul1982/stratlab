@@ -82,7 +82,7 @@ test("TABLE-SWEEP: the swept records: a loan's rate changes, a fund's falls, its
   assert.match(c, /<Disclosure summary="Parts of the TER"><FigureTable label="Parts of the TER"/);
   const mf = read("src/pages/money/MutualFundsPage.tsx");
   assert.match(mf, /<FigureTable label=\{`What you hold in \$\{s\.name\}`\}/);
-  assert.match(mf, /<DataTable label="Lines left out" phonePage=\{10\} columns=\{problemCols\} rows=\{result\.problems\.map/);
+  assert.match(mf, /<DataTable label="Lines left out" columns=\{problemCols\} rows=\{result\.problems\.map/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
   assert.match(mf, /rows=\{sales\.map\(\(r, i\) => \(\{ \.\.\.r, i \}\)\)\}/);
   // the holdings and the year's tax: figures as tables; a payable's total line in bold, TDS taken off with its sign
   assert.match(read("src/pages/HoldingsPage.tsx"), /<FigureTable label="Where your stocks stand" header="Total" valueHeader="Amount" noteHeader="Change"/);

@@ -7,36 +7,31 @@ import * as S from "../src/lib/scrollRows.ts";
 // the shared scroll list's arithmetic and its contract. The pages are proved in the browser (e2e/site86.spec.ts).
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
-test("scrollCut: a list of rows or fewer doesn't scroll; past that the box is the bottom of the last row shown, never mid-row", () => {
+// (changed on purpose, site87, owner: "it works on screen size, how much of the block a person can see on screen. Then you give a scroll": the
+// row counts (6 rows, 8 on a phone, 15 for a table) are replaced by the screen's room; unit/site87.test.mjs pins the new arithmetic)
+test("scrollCut: a list that fits its room doesn't scroll; past it the box is the bottom of the last whole row, never mid-row", () => {
   const rows = Array.from({ length: 20 }, (_, i) => 50.4 * (i + 1));     // each row's bottom edge
-  assert.deepEqual(S.scrollCut(rows.slice(0, 6), 6), { over: false, cap: 0, floor: 0, fit: 0 });
-  const c = S.scrollCut(rows, 6);
+  assert.equal(S.scrollCut(rows.slice(0, 6), 400).over, false);
+  const c = S.scrollCut(rows, 400);
   assert.equal(c.over, true);
-  assert.equal(c.cap, Math.ceil(50.4 * 6));
-  assert.equal(c.floor, Math.ceil(50.4 * S.FLOOR_ROWS));
-  assert.equal(c.fit, c.cap);
-  // rows of different heights: still a row's bottom
-  const mixed = [60, 100, 170, 210, 290, 330, 400];
-  assert.equal(S.scrollCut(mixed, 6).cap, 330);
+  assert.equal(c.fit, Math.ceil(50.4 * 7));
+  const mixed = [60, 100, 170, 210, 290, 330, 400, 470, 520, 600];
+  assert.equal(S.scrollCut(mixed, 340).fit, 330);
 });
 
 test("scrollCut with the room a card gives: the most whole rows that fit, at least the floor", () => {
   const rows = Array.from({ length: 20 }, (_, i) => 50 * (i + 1));
-  assert.equal(S.scrollCut(rows, 6, 380).fit, 350);       // 7 rows fit 380: a stretched card shows one more, still whole
-  assert.equal(S.scrollCut(rows, 6, 351).fit, 350);       // a pixel's rounding is not a cut row
-  assert.equal(S.scrollCut(rows, 6, 90).fit, 150);        // never fewer than FLOOR_ROWS
-  assert.equal(S.scrollCut(rows, 6, 0).fit, 300);         // no room measured yet: the cap
+  assert.equal(S.scrollCut(rows, 380).fit, 350);
+  assert.equal(S.scrollCut(rows, 351).fit, 350);       // a pixel's rounding is not a cut row
+  assert.equal(S.scrollCut(rows, 90).fit, 150);        // never fewer than FLOOR_ROWS
+  assert.equal(S.scrollCut(rows, 0).over, false);      // no room measured yet: drawn whole
 });
 
-test("the fade is there while more is below and gone at the end; a phone's list is taller", () => {
+test("the fade is there while more is below and gone at the end", () => {
   assert.equal(S.moreBelow(0, 300, 900), true);
   assert.equal(S.moreBelow(599, 300, 900), false);
   assert.equal(S.moreBelow(597, 300, 900), true);
-  assert.equal(S.rowsFor(6, false), 6);
-  assert.equal(S.rowsFor(6, true), S.PHONE_ROWS);
-  assert.equal(S.rowsFor(15, true), 15);
   assert.equal(S.PHONE_Q, "(max-width: 640px)");
-  assert.ok(S.PHONE_ROWS >= 8 && S.ROWS === 6 && S.TABLE_ROWS === 15);
 });
 
 test("ScrollList: one shared component, sized with watchSize, named and focusable only while it scrolls", () => {
@@ -45,12 +40,12 @@ test("ScrollList: one shared component, sized with watchSize, named and focusabl
   assert.match(src, /watchSize\(el, run\)/);
   assert.match(src, /role=\{over \? "region" : undefined\} aria-label=\{over \? label : undefined\} tabIndex=\{over \? 0 : undefined\}/);
   assert.match(src, /el\.addEventListener\("scroll", more, \{ passive: true \}\)/);
-  // a long list gives way to a shorter neighbour whose content fits, down to FLOOR_ROWS rows
-  assert.match(src, /const give = peer !== null && mine > peer \+ 2;/);
+  // a long list gives way to a shorter neighbour whose content fits (changed on purpose, site87: within the screen's room)
+  assert.match(src, /if \(peer !== null\) avail = Math\.min\(avail, Math\.floor\(peer - head - below\)\);/);
   assert.match(read("src/components/kit/index.ts"), /export \{ ScrollList, useScrollRows \} from "\.\/ScrollList";/);
-  // the kit's tables use it: past TABLE_ROWS rows, header row kept at the top
+  // the kit's tables use it (changed on purpose, site87: past the screen's room, not TABLE_ROWS; a phone's cards and the Library too)
   const dt = read("src/components/kit/DataTable.tsx");
-  assert.match(dt, /useScrollRows\(box, \{ rows: scrollRows \?\? TABLE_ROWS, items: bodyRows, off: !!noScroll \|\| \(cardsNow && scrollRows == null\) \}\);/);   // (changed on purpose: the Library's own list opts out, noScroll)
+  assert.match(dt, /useScrollRows\(box, \{ items: bodyRows, onEnd: loadMore \}\);/);
 });
 
 test("the scroll's look: whole rows, a thin themed scrollbar, the fade, the focus ring, overscroll contained, sticky table header", () => {
@@ -78,7 +73,7 @@ test("/mine: every watchlist stock and every date, each list scrolling in its ca
 });
 
 test("the sweep: lists that cut items off now scroll inside their cards", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /<WatchTable region=\{r\} symbols=\{by\(r\)\.map\(\(w\) => w\.symbol\)\} rows=\{WATCH_SHOWN\}/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /<WatchTable region=\{region\} symbols=\{mine\.map\(\(w\) => w\.symbol\)\}/);      // (changed on purpose, site87: no row count)
   assert.match(read("src/pages/SpaceHomes.tsx"), /<ScrollList label="Red flags filed lately">/);
   assert.match(read("src/pages/trade/EventsPage.tsx"), /<ScrollList label="Index notices not read into stocks"><ul className="k-list plain">\n\s+\{unread\.map/);
   assert.match(read("src/components/Research.tsx"), /<ScrollList label="Headlines" rows=\{limit\}><div className="inv-news">\n\s+\{sorted\.map/);
@@ -91,5 +86,5 @@ test("ui-lint R30: two cards side by side the same height; no count of hidden it
   assert.match(rules, /if \(Math\.abs\(d\) > 2\) add\("R30"/);
   assert.match(rules, /counts items the list leaves out, with no scroll or link to them/);
   assert.match(rules, /rows cut off below a box that doesn't scroll/);
-  assert.match(spec, /R30: "Uneven pair or hidden items/);
+  assert.match(spec, /R30: "Uneven pair, hidden items or a block not sized to the screen/);      // (changed on purpose, site87)
 });

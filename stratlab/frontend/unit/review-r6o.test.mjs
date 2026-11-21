@@ -111,10 +111,11 @@ test("ETF vs NAV: the close the gap uses and the price's day are shown, and a ph
   const p = read("src/pages/EtfGapsPage.tsx");
   assert.match(p, /\$\{price\(r\.nav_price, "INR"\)\}, /);
   assert.match(p, /fmtDate\(dayIn\(r\.price_at\) \?\? r\.price_at, \{ year: false \}\)/);
-  assert.match(p, /stack phonePage=\{25\}/);
+  // (changed on purpose, site87, owner: no "Show more" on any list: every ETF, the cards a block sized to the phone's screen, scrolling inside)
+  assert.match(p, /rows=\{rows\} rowKey=\{\(r\) => r\.symbol\} stack /);
   const dt = read("src/components/kit/DataTable.tsx");
-  assert.match(dt, /const cap = stack && phonePage && \(phone \|\| pageDesktop\) \? phonePage \* pages : Infinity;/);      // R15 #7: a table may page a desktop too
-  assert.match(dt, /Show \{Math\.min\(left, phonePage \?\? left\)\} more/);
+  assert.match(dt, /const rows = allRows;/);
+  assert.doesNotMatch(dt, /Show \{Math\.min\(left/);
 });
 
 test("Rotation's chart is a group with tappable points, not an image holding buttons; phone targets reach 32px (R6O-024)", () => {

@@ -84,11 +84,11 @@ test("VR5-015: a fold's 'what is inside' line takes its own line under its title
 
 test("VR5-owner-1: the Invest home's watchlist shows six, with See all in its header for a longer list, and no market label over the stocks", () => {
   const src = read("src/pages/SpaceHomes.tsx");
-  assert.match(src, /export const WATCH_SHOWN = 7;/);                 // (changed on purpose, site86: seven rows before the card scrolls)
-  // (changed on purpose, site86 SCROLL, owner 21 Nov: every stock is in the card, six rows before it scrolls inside it; See all stays in the header)
-  assert.match(src, /symbols=\{by\(r\)\.map\(\(w\) => w\.symbol\)\} rows=\{WATCH_SHOWN\}/);
-  assert.match(src, /\(by\(region\)\.length > WATCH_SHOWN\) && <Link to="\/research\/watchlist" className="link" data-testid="watch-see-all">See all \{by\(region\)\.length\} →<\/Link>/);
+  // (changed on purpose, site87, owner: every stock is in the card, which ends level with the column beside it; the list scrolls inside it
+  // only past the room it has. No row count and no "See all": every stock is already there)
+  assert.doesNotMatch(src, /WATCH_SHOWN|watch-see-all/);
+  assert.match(src, /<WatchTable region=\{region\} symbols=\{mine\.map\(\(w\) => w\.symbol\)\}/);
   assert.doesNotMatch(src, /<span className="eyebrow">\{REGION_NAME\[r\]\}<\/span>\n\s+<WatchTable/);
   // LIVE3-015 changed this on purpose: the six are rows of a table (they were tiles)
-  assert.match(src, /<WatchTable region=\{r\} symbols=\{by\(r\)\.map/);
+  assert.match(src, /<WatchTable region=\{region\} symbols=\{mine\.map/);       // (changed on purpose, site87)
 });

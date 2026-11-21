@@ -12,3 +12,26 @@
 .ds-extract mark { background: var(--orange-soft); color: var(--ink); font-weight: 600; padding: 0 2px; border-radius: 3px; }
 .ds-hit-foot { align-items: center; flex-wrap: wrap; }
 .ds-sub { margin: 0 0 var(--s3); }
+
+/* site87 (owner, "what is this UI"): the search form. Top row: the market, the words and Search, their boxes on one line; then even rows of
+   three equal columns, one box each (the two lists are drop-downs, so no column wraps to rows of chips); picked companies and Clear last */
+.ds-form { display: flex; flex-direction: column; gap: var(--s4); }
+.ds-row { display: grid; gap: var(--s3) var(--s4); align-items: end; min-width: 0; }
+.ds-top { grid-template-columns: auto minmax(0, 1fr) auto; }
+.ds-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ds-row > .k-field { min-width: 0; }
+.ds-market { display: flex; flex-direction: column; gap: 6px; }
+.ds-lab { font-size: var(--t-small, 13px); font-weight: 600; color: var(--ink-2); line-height: 20px; }
+.ds-market .k-seg { height: 44px; }
+.ds-go { height: 44px; min-width: 120px; }
+.ds-picked { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); }
+@media (max-width: 900px) {
+  .ds-top { grid-template-columns: minmax(0, 1fr) auto; }
+  .ds-top > .ds-market { grid-column: 1 / -1; }
+  .ds-three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .ds-top, .ds-three { grid-template-columns: minmax(0, 1fr); }
+  .ds-go { width: 100%; }
+  .ds-market .k-seg { width: 100%; }
+}

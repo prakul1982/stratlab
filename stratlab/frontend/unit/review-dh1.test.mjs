@@ -14,7 +14,7 @@ test("DH-003, DH-006: the tax report leads with the year's total and what is pay
   assert.match(src, /data-testid="tax-payable-locked"/);
   assert.match(src, /as the return rounds it \(sections 288A and 288B\$\{t\.sections \? " of the 1961 Act" : ""\}\)/);   // (updated on purpose, LIVE9B-018)
   assert.match(src, /y\.exemption\.used > 0 && <Meter/);                            // no blue sliver at ₹0
-  assert.match(src, /const FIRST_SALES = 10;/);
+  assert.doesNotMatch(src, /const FIRST_SALES = 10;/);      // (changed on purpose, site87: every sale, no "Show all"; the table is a block sized to the screen)
 });
 
 test("DH-005, DH-007: the gains table shows the losses and adds up; F&O lines are exit lines", () => {
