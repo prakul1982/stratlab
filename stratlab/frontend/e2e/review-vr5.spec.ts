@@ -147,8 +147,8 @@ test("VR5-owner-1: the Invest home's watchlist card shows every stock of a longe
     const rows = card.getByRole("table", { name: "Your watchlist" }).locator("tbody tr");
     await expect(rows.first()).toBeVisible({ timeout: 30_000 });
     await expect(rows).toHaveCount(8);                                 // (changed on purpose, site86 SCROLL, owner 21 Nov: every stock is in the card, which scrolls past six; it was the first six)
-    await expect(card.getByTestId("watch-see-all")).toHaveText("See all 8 →");
-    await expect(card.getByTestId("watch-see-all")).toHaveAttribute("href", "/research/watchlist");
+    // (changed on purpose, site87, owner: every stock is already in the card, so no "See all"; the card ends level with the column beside it)
+    await expect(card.getByTestId("watch-see-all")).toHaveCount(0);
     await expect(card.getByText(/^India$/i)).toHaveCount(0);           // the market is the toggle above, not a label again over the stocks
     if (info.project.name !== "phone") {
       await expect(page.getByRole("heading", { name: "Results today" })).toBeVisible();
@@ -156,10 +156,10 @@ test("VR5-owner-1: the Invest home's watchlist card shows every stock of a longe
         const by = (t: string) => els.find((e) => e.querySelector("h2, h3")?.textContent?.trim() === t)!.getBoundingClientRect().bottom;
         return [by("Your watchlist"), by("Results today")];
       });
-      expect(Math.abs(ends[0] - ends[1]), `bottoms ${ends}`).toBeLessThan(80);
+      expect(Math.abs(ends[0] - ends[1]), `bottoms ${ends}`).toBeLessThanOrEqual(2);      // (changed on purpose, site87: level, ±2 px; it was within 80)
     }
-    await card.getByTestId("watch-see-all").click();
-    await expect(page).toHaveURL(/\/research\/watchlist/);
+    await card.getByRole("link", { name: "At a glance →" }).click();
+    await expect(page).toHaveURL(/\/research\/investor/);
   } finally {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: before.items ?? [] } });
   }

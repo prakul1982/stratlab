@@ -88,23 +88,15 @@ test("Move up puts a section above its neighbour, kept after a reload; On this p
 });
 
 // ---------- 3: Show less after Show all ----------
-test("Show all has a Show less that goes back to the first rows with the section's top in view", async ({ page }) => {
+// (changed on purpose, site87, owner: no "Show more", "Show all" or "+N more" on any list, so no "Show less" either: every list shows every
+// item in a block sized to the screen, scrolling inside itself past that)
+test("the company page has no Show all and no Show less: every list is whole, each block no taller than the screen", async ({ page }) => {
   const errors = await open(page, "/research/IN/RELIANCE");
-  await expect(page.getByRole("button", { name: /^Show all \d+$/ }).first()).toBeVisible({ timeout: 30_000 });
-  const key = (await page.locator("main [data-section]").filter({ has: page.getByRole("button", { name: /^Show all \d+$/ }) }).first().getAttribute("data-section"))!;
-  const card = section(page, key);
-  const all = card.getByRole("button", { name: /^Show all \d+$/ });
-  const label = (await all.textContent())!;
-  const short = (await card.boundingBox())!.height;
-  await all.click();
-  const less = card.getByRole("button", { name: "Show less" });
-  await expect(less).toBeVisible();
-  expect((await card.boundingBox())!.height).toBeGreaterThan(short);
-  await less.click();
-  await expect(card.getByRole("button", { name: label })).toBeVisible();
-  await expect(less).toHaveCount(0);
-  // the section's top comes back on screen (a smooth scroll)
-  await expect.poll(async () => { const y = (await card.boundingBox())!.y; return y >= -1 && y < page.viewportSize()!.height; }).toBe(true);
+  await expect(page.locator("main [data-section]").first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(800);
+  await expect(page.getByRole("button", { name: /^(Show all \d+|Show less|Show more)$/ })).toHaveCount(0);
+  const tall = await page.locator(".k-tbl-wrap[data-over], .k-scroll[data-over]").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height).filter((h) => h > innerHeight + 2));
+  expect(tall, "no scrolling block taller than the screen").toEqual([]);
   expect(errors).toEqual([]);
 });
 

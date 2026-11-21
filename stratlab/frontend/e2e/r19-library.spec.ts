@@ -58,7 +58,8 @@ test("a theme read is offered as already read, says when it was updated, and Ref
   await expect(already).not.toContainText(/Already read|, read \d/);
   // (updated on purpose, fix13 LIVE11A-013: under the India tab a chip no longer repeats "· India")
   // (updated on purpose, owner 18 Nov: a chip says the theme's short name; its full name and the day it was updated are its title)
-  await expect(already.getByRole("button", { name: /steel/i }).first()).toHaveAttribute("title", /steel.*· updated \d{1,2} [A-Z][a-z]{2}/i);
+  // (changed on purpose, site87, owner: the updated day small inside the chip, not a hover box over the next row; the full name and day are its name)
+  await expect(already.getByRole("button", { name: /steel/i }).first()).toHaveAttribute("aria-label", /steel.*· updated \d{1,2} [A-Z][a-z]{2}/i);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/r19-theme-${info.project.name}.png`, fullPage: false });
   await sane(page, errors);
 });

@@ -124,12 +124,10 @@ test("red flags across every company: newest first, paged, filtered by type and 
   const dates = await table.locator("tbody tr td:first-child").allInnerTexts();
   const ms = dates.map((d) => new Date(d).getTime());
   expect(ms, "newest first").toEqual([...ms].sort((a, b) => b - a));
-  await expect(page.getByText(/Page 1 of \d+ · \d+ filings/)).toBeVisible();
-  await page.getByRole("button", { name: "Next →" }).click();
-  await expect(page.getByText(/Page 2 of/)).toBeVisible();
-  await expect(page).toHaveURL(/page=2/);
-  await page.getByRole("button", { name: "← Previous" }).click();
-  await expect(page.getByText(/Page 1 of/)).toBeVisible();
+  // (changed on purpose, site87, owner: "double scrolls, then next page, worst UI": no Next page; the next 25 load on their own as the reader
+  // nears the end of the block, which says "Loaded N of M")
+  await expect(page.getByTestId("k-loaded")).toContainText(/Loaded 25 of \d/);
+  await expect(page.getByRole("button", { name: /Next →|← Previous/ })).toHaveCount(0);
   await shot(page, "redflags-india", info);
 
   // a type: every row is that flag, and the count in the chip matches the heading

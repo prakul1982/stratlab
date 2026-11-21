@@ -162,7 +162,9 @@ test("admin: rates and rules show each area's review, the source watch and every
   for (const area of ["Trading costs", "Income tax", "Interest rates", "Market rules", "Surveillance lists"])
     await expect(panel.getByRole("rowheader", { name: area, exact: true })).toBeVisible();
   for (const src of ["SEC fee rate", "PPF rate", "NSE circulars on charges and contract rules"]) await expect(panel.getByText(src, { exact: true })).toBeVisible();
-  await panel.getByRole("button", { name: /Show all \d+ rules/ }).click();
+  // (changed on purpose, site87, owner: no "Show all N": every rule is in its table, a block sized to the screen)
+  await expect(panel.getByRole("button", { name: /Show all \d+ rules/ })).toHaveCount(0);
+  await panel.getByRole("table", { name: "All rules" }).getByRole("rowheader", { name: /US SEC fee \(Section 31\)/ }).scrollIntoViewIfNeeded();
   await expect(panel.getByRole("rowheader", { name: /US SEC fee \(Section 31\)/ })).toBeVisible();
   await expect(panel.getByText("$20.60 a million on sells")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);

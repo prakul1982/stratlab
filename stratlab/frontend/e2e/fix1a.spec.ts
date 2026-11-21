@@ -163,8 +163,8 @@ test("the instrument search lists a stock, its futures, then a few options, the 
   await expect(rows.first()).not.toContainText("26NOV");                                    // the stock leads, the contracts follow
   await expect(list.getByText("Options", { exact: true })).toBeVisible();
   await expect(list.getByText("Futures", { exact: true })).toBeVisible();
-  expect(await rows.count()).toBeLessThan(14);
-  await list.getByRole("option", { name: /Show 8 more options/ }).click();
+  // (changed on purpose, site87, owner: no "Show N more" on any list: every match is listed at once, the options box scrolling)
+  await expect(list.getByRole("option", { name: /Show \d+ more options/ })).toHaveCount(0);
   expect(await list.getByRole("option").count()).toBe(16);
   expect(errors).toEqual([]);
 });

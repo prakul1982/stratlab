@@ -87,10 +87,9 @@ test("My space has one name, and Look up a company differs from the Invest home 
   expect(errors).toEqual([]);
 });
 
-// on a phone the library pages its cards (VR6-024: "Show 12 more"); open every page so a check reads the whole library
+// (changed on purpose, site87, owner: no "Show 12 more": every row is drawn on a phone too, in a block sized to the screen; nothing to open)
 async function showAllCards(page: import("@playwright/test").Page) {
-  const more = page.getByTestId("lib-show-more").getByRole("button", { name: /^Show \d+ more$/ });
-  for (let i = 0; i < 20 && await more.isVisible(); i++) await more.click();
+  await expect(page.getByTestId("lib-show-more")).toHaveCount(0);
 }
 
 test("Library: groups say what they hold and ST S2 is spelled out (R3-014)", async ({ page }) => {
