@@ -152,8 +152,10 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end",
         "layer counts", "layer header", "pe partition", "loss-maker profit", "checked counts", "figures count", "none screened", "empty table",
         "few rows", "same name", "carried log", "reason layer", "thin layer", "largest left out", "duplicate member", "profile unsaid",
-        "removal unbacked", "layer words", "words contradict", "financial margin", "sparse page")
-WARN = ("cut text", "other>40%", "mixed range")
+        "removal unbacked", "words contradict", "financial margin", "sparse page", "cohort rule")
+# e85 (the owner's 38-deck review: Cybersecurity's "Endpoint and detection platforms" with CrowdStrike and SentinelOne failed on a keyword
+# its companies' printed lines don't repeat): "layer words" is reported, a failure only with --strict
+WARN = ("cut text", "other>40%", "mixed range", "layer words")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
 _RANGE = re.compile(r"(?<![\w.,])[−-]?\d[\d,]*(\.\d+)?(%|x\b) to [−-]?\d[\d,]*(\.\d+)?(%|x\b)")
@@ -434,6 +436,7 @@ def check_pages(pages: list[str]) -> dict:
     m57_checks(pages, add)
     p57_checks(pages, add)
     financial_checks(pages, add)
+    cohort_checks(pages, add)          # e85
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -1462,6 +1465,7 @@ _FIN_THEME = re.compile(r"\b(?:banks?|banking|lenders?|lending|financ\w*|insur\w
 _BIG_PCT = re.compile(r"(?<![+−\-(\d.,])(\d{3,}(?:,\d{3})*(?:\.\d+)?)%(?!\s+(?:of|more|less|above|below)\b)")
 
 
+_RATIO_HEAD = re.compile(r"(?:Loss|Expense|Combined|Cost-income|Efficiency)(?: ratio)?|RO(?:C?E|A)|ratio", re.I)
 _HEADLINE_ROW = re.compile(r"·\s*\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}\s*·")
 
 
@@ -1476,6 +1480,14 @@ def financial_checks(pages: list[str], add) -> None:
         # combined: claims and costs over premiums, past 100% for an underwriting loss) is no margin
         cols = [(m.start() - 12, m.end() + 4) for ln in page.split("\n") if re.search(r"\bmargin\b|\bRevenue\b", ln)
                 for m in re.finditer(r"(?:Loss|Expense|Combined|Cost-income|Efficiency) ratio", ln, re.I)]
+        # e85 (the R84 US Insurance deck: Employers Holdings' combined ratio 114.3% and its range "69.0% to 114.3%" under a head wrapped over
+        # two lines, "Combined" above "ratio"; Verisk's ROE 293.9% in the appendix): a ratio's head on a line of column heads alone (no
+        # figure), its word over its column, and a return on equity or capital (ROE, ROCE, ROA: profit over equity or capital, never over
+        # revenue) are no margin column either
+        # (each figure is read as of the head nearest it on those lines: a ratio's or a return's head is no margin's)
+        heads = [((m.start() + m.end()) / 2, bool(_RATIO_HEAD.fullmatch(m.group(0).strip())))
+                 for ln in page.split("\n") if _COLUMNS.search(ln) and not re.search(r"\d%|\d\.\d", ln)
+                 for m in re.finditer(r"\S+(?: \S+)*", ln)]
         for ln in page.split("\n"):
             if not (fin_deck or _FIN_THEME.search(ln)):
                 continue
@@ -1486,9 +1498,32 @@ def financial_checks(pages: list[str], add) -> None:
             for m in _BIG_PCT.finditer(ln):
                 if any(a <= (m.start() + m.end()) / 2 <= b for a, b in cols):
                     continue
+                mid = (m.start() + m.end()) / 2
+                if heads and min(heads, key=lambda h: abs(h[0] - mid))[1]:
+                    continue
                 if float(m.group(1).replace(",", "")) > 100.0:
                     add("financial margin", n, ln.strip()[:200])
                     break
+
+
+# e85 (the owner's R84 reviews: Payments, Cybersecurity, Semiconductors "only description-verified and industry-supported enter calculations"
+# beside list-supported core members with figures): the deck's stated cohort rule against the evidence states of its population
+_RULE_TWO = re.compile(r"Only description-verified and industry-supported\b")
+_COHORT_LIST = re.compile(r"with figures(?: \(every median and total is of these\))? \d[\d,]* \([^()]*?\b(\d[\d,]*) list-supported|"
+                          r"companies with figures, of every company the deck lists: [^;]*?\b(\d[\d,]*) list-supported")
+
+
+def cohort_checks(pages: list[str], add) -> None:
+    """e85: "cohort rule", a deck whose stated rule names only description-verified and industry-supported companies while its companies
+    with figures (the median and total population) count list-supported ones."""
+    text = "\n".join(pages)
+    if not _RULE_TWO.search(" ".join(text.split())):
+        return
+    for n, page in enumerate(pages, 1):
+        for m in _COHORT_LIST.finditer(" ".join(page.split())):
+            if int((m.group(1) or m.group(2)).replace(",", "")) > 0:
+                add("cohort rule", n, m.group(0)[-160:])
+                return
 
 
 def check_text(text: str) -> dict:

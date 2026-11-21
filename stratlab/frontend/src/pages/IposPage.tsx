@@ -76,8 +76,9 @@ const readAt = (iso: string) => fmtDateTime(iso, { tz: IST, zone: true, year: fa
  * bidding opens the lot comes with the price band announcement; once open, it is on the issue's page, read again each day.
  * (updated on purpose, site76 LIVE14A-013: the words say why, from where the lot is read: Crystal Crop and Mahanadi Coalfields said
  * "Not on the exchange's page yet" on a bidding day without saying whether that page had been read at all) */
-export const lotMissing = (tab: Stage, r?: Pick<IpoRow, "page" | "page_at">): string => {
+export const lotMissing = (tab: Stage, r?: Pick<IpoRow, "page" | "page_at" | "exchanges">): string => {
   if (tab === "upcoming") return "Not announced yet";
+  if (bseOnly(r)) return BSE_ONLY;
   // LIVE16B-006: short in its numbers column (the long words wrapped there and the table ran 1,055 px in a 1,004 px box at 1440); the why
   // is the cell's hover text (NO_PAGE_WHY)
   if (r?.page === false) return "No NSE page yet";
@@ -86,18 +87,26 @@ export const lotMissing = (tab: Stage, r?: Pick<IpoRow, "page" | "page_at">): st
   return "Not on the exchange's page yet";
 };
 
+/** An issue listed on BSE alone (owner, 20 Nov: Mahanadi Coalfields, in BSE's list only, said "No NSE page yet" for its lot and bids): it is
+ *  BSE's issue, so its lot comes from BSE's list when that gives one (backend/app/ipo.py), and otherwise the cells say BSE hasn't published them. */
+export const bseOnly = (r?: Pick<IpoRow, "exchanges">): boolean => !!r?.exchanges?.length && !r.exchanges.includes("NSE");
+export const BSE_ONLY = "Listed on BSE: not published yet";
+export const BSE_ONLY_WHY = "Listed on BSE only, so NSE has no issue page for it; BSE's list gives no lot or bids for it yet.";
+/** The hover text of a missing lot or bids cell. */
+const missingWhy = (r: Pick<IpoRow, "page" | "exchanges">) => (bseOnly(r) ? BSE_ONLY_WHY : r.page === false ? NO_PAGE_WHY : undefined);
+
 /** Why a lot and bids are missing when NSE has no page for the issue: the hover text of those cells. */
 export const NO_PAGE_WHY = "NSE has no issue page for it yet; the lot and bids are read there.";
 
 /** LIVE14A-013: an open issue's bids that aren't in yet say why, as its lot does ("Bids so far –" on all three open issues). */
-export const bidsMissing = (r: Pick<IpoRow, "page" | "page_at">): string =>
-  r.page === false ? "No NSE page yet" : !r.page_at ? "NSE's issue page not read yet" : `None on NSE's issue page, read ${readAt(r.page_at)}`;
+export const bidsMissing = (r: Pick<IpoRow, "page" | "page_at" | "exchanges">): string =>
+  bseOnly(r) ? BSE_ONLY : r.page === false ? "No NSE page yet" : !r.page_at ? "NSE's issue page not read yet" : `None on NSE's issue page, read ${readAt(r.page_at)}`;
 
 function columns(m: Market, tab: Stage, newest: string | null = null): Column<IpoRow>[] {
   const name: Column<IpoRow> = { key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> };
   const band: Column<IpoRow> = { key: "band", header: "Price band", numeric: true, cell: (r) => bandText(r) };
   const lot: Column<IpoRow> = { key: "lot", header: "Lot and minimum", numeric: true, info: "The lot is the fewest shares one bid can be for. The minimum is the lot at the top of the price band.",
-    cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : <span className="k-muted" data-testid="ipo-lot-none" title={r.page === false ? NO_PAGE_WHY : undefined}>{lotMissing(tab, r)}</span>) };
+    cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : <span className="k-muted" data-testid="ipo-lot-none" title={missingWhy(r)}>{lotMissing(tab, r)}</span>) };
   // the size says whether it is all new shares or new shares plus a sale by existing holders, when the exchange gives the two parts (LIVE1A-030)
   const size: Column<IpoRow> = { key: "size", header: "Issue size", numeric: true,
     info: "The whole issue: the new shares the company issues plus any shares existing holders put up for sale (an offer for sale). The two parts are under the total when the exchange gives both.",
@@ -107,7 +116,7 @@ function columns(m: Market, tab: Stage, newest: string | null = null): Column<Ip
       {r.size_was && <span className="k-sub-line k-muted" data-testid="ipo-size-was">{sizeWasText(r)}</span>}</> };
   const times: Column<IpoRow> = { key: "times", header: tab === "open" ? "Bids so far" : "Bids received", numeric: true, info: "How many times the shares on offer the bids came to, counting the bids placed on both exchanges (NSE and BSE), as the exchange's issue page totals them. NSE's own count alone is lower. The time of the reading is under each figure.",
     cell: (r) => (r.sub_times != null ? <>{timesText(r.sub_times)}{tab === "open" && r.sub_as_of && <span className="k-sub-line" data-testid="ipo-sub-at">as of {bidsAt(r.sub_as_of)}</span>}</>
-      : tab === "open" && m === "IN" ? <span className="k-muted" data-testid="ipo-bids-none" title={r.page === false ? NO_PAGE_WHY : undefined}>{bidsMissing(r)}</span> : <span className="k-muted">–</span>) };
+      : tab === "open" && m === "IN" ? <span className="k-muted" data-testid="ipo-bids-none" title={missingWhy(r)}>{bidsMissing(r)}</span> : <span className="k-muted">–</span>) };
   if (m === "US") {
     if (tab === "upcoming") {
       return [name, { key: "d", header: "Expected to price", cell: (r) => (r.expected ? fmtDate(r.expected) : r.filed ? `Filed ${fmtDate(r.filed)}` : "–") }, band,

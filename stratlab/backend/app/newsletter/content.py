@@ -74,13 +74,15 @@ def _pct(now: float | None, then: float | None) -> float | None:
 
 
 # ---------- the Market Brief ----------
+YEAR_BACK = 380               # e85: days of daily candles read before a brief's day, for its 52-week high (a year and a margin)
 def index_close(sym: str, day: date, since: str | None = None, prev: str | None = None) -> dict | None:
     """An index's close on `day` and its change from the session before (or from the last close on or before `since`,
     for the week), read from the daily candles: the same numbers whenever the issue is built or rebuilt. `prev`: the
     exchange's own session before `day`; when the candles lack it the day's change is left out (None), never measured
     from an older close (R90-001: the 22 Oct India brief said NIFTY −0.88%, from 19 Oct's close, the feed not yet
     carrying 21 Oct's; it was −0.54%)."""
-    back = max(21, (date.today() - day).days + 14)        # far enough back to hold that day and the session before it
+    # far enough back to hold that day and the session before it; e85 (LIVE21A-015): and the year before it, for its 52-week high
+    back = max(21, (date.today() - day).days + 14, (date.today() - day).days + YEAR_BACK)
     # LIVE15A-001: never a level an edge copy kept from mid-session as the day's close (closing_chart: None when no real close came)
     candles = (_safe(lambda: _main().research_hub.yahoo.closing_chart(sym, back), {}) or {}).get("candles") or []
     candles = with_special_sessions(sym, candles, day)
@@ -90,7 +92,18 @@ def index_close(sym: str, day: date, since: str | None = None, prev: str | None 
     before = [c for c in upto if c["t"][:10] <= since] if since else upto[:-1]
     if not since and prev and before and before[-1]["t"][:10] != prev:
         before = []                                    # the session before is missing from the candles
-    return {"price": round(upto[-1]["c"], 2), "change_pct": _pct(upto[-1]["c"], before[-1]["c"]) if before else None}
+    out = {"price": round(upto[-1]["c"], 2), "change_pct": _pct(upto[-1]["c"], before[-1]["c"]) if before else None}
+    # e85 (LIVE21A-015: the 18 Nov US post "S&P 500 7,323.63 ... 6.9% below" its 52-week high of 7,844.52, 6.6%: the gap was the live
+    # quote's, read at 10:52 ET on 19 Nov at 7,303.98, and stayed when the level was set to the close): the gap from the day's own close
+    # to the highest high of the year of candles up to that day, when the candles hold that year
+    year = (day - timedelta(days=365)).isoformat()
+    span = [c for c in upto if c["t"][:10] > year]
+    if span and upto[0]["t"][:10] <= (day - timedelta(days=358)).isoformat():
+        hi = max(float(c.get("h") or c["c"]) for c in span)
+        if hi > 0:
+            out["high52"] = round(hi, 2)
+            out["from_high_pct"] = round(min(0.0, (upto[-1]["c"] / hi - 1) * 100), 1)
+    return out
 
 
 def with_special_sessions(sym: str, candles: list[dict], day: date) -> list[dict]:
@@ -131,8 +144,12 @@ def index_moves(region: str, day: date, weekly: bool) -> list[dict]:
             got = {**got, "change_pct": round(now["change_pct"], 2)}
         if got is None:
             continue
-        if now and now.get("from_high_pct") is not None:
+        # e85 (LIVE21A-015): the gap from the issue's own close, never the live quote's level (read later, at another price)
+        if got.get("from_high_pct") is None and now and isinstance(now.get("high52"), (int, float)) and now["high52"] > 0:
+            got["from_high_pct"] = round(min(0.0, (got["price"] / now["high52"] - 1) * 100), 1)
+        elif got.get("from_high_pct") is None and today and now.get("from_high_pct") is not None:
             got["from_high_pct"] = round(now["from_high_pct"], 1)
+        got.pop("high52", None)
         out.append({"name": name, **got})
     return out
 

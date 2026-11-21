@@ -136,7 +136,7 @@ test("a tile shows its symbol and figure only at a size they fit at, so no word 
   assert.deepEqual(tileWords("TCS", "+1.2%", 80, 30, width), { px: 12, fig: false });       // room for one line only
   assert.deepEqual(tileWords("TCS", "+1.2%", 40, 40, width), { px: 10, fig: true });
   // (updated on purpose, fix18 LIVE13A-012: ten letters don't fit one line at 60px, and a 40px-tall tile now names them over two lines)
-  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 10, fig: false, split: 5 });
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 10, fig: false, clip: true }); // (changed on purpose, site85: owner, 20 Nov, never split inside a ticker: one line cut with "…")
   assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 75, 40, width), { px: 10, fig: true });
   assert.deepEqual(tileWords("MAHINDRAHOLIDAYS", "+1.2%", 140, 80, width), { px: 12, fig: true }); // too long for the largest size here
   assert.deepEqual(tileWords("TCS", "+1.2%", 40, 12, width), { px: 0, fig: false });         // too short for a line
@@ -144,8 +144,9 @@ test("a tile shows its symbol and figure only at a size they fit at, so no word 
   for (const sym of ["A", "ITC", "RELIANCE", "BAJAJ-AUTO", "MAHINDRAHOLIDAYS"]) for (let w = 10; w <= 260; w += 7) {
     // (updated on purpose, fix11 LIVE10A-012: a tall, narrow tile names its symbol down its length, so it fits the tile's height instead)
     // (updated on purpose, fix15 LIVE12A-010: a mid-size tile may name a long symbol over two lines, so each line fits its width)
-    const { px, fig, vert, split } = tileWords(sym, "−12.5 pts", w, 90, width);
-    const line = split ? [sym.slice(0, split), sym.slice(split)].sort((a, b) => b.length - a.length)[0] : sym;
+    // (updated on purpose, site85: a long symbol may be cut with "…" on one line; what is drawn then is its first letters and the "…")
+    const { px, fig, vert, split, clip } = tileWords(sym, "−12.5 pts", w, 90, width);
+    const line = split ? [sym.slice(0, split), sym.slice(split)].sort((a, b) => b.length - a.length)[0] : clip ? `${sym.slice(0, 3)}…` : sym;
     if (px) assert.ok((width(line, 600) * px) / 10 <= (vert ? 90 : w) - 6, `${sym} at ${px}px in ${w}px`);
     if (fig) assert.ok((width("−12.5 pts", 400) * px * 0.92) / 10 <= w - 6, `figure at ${px}px in ${w}px`);
   }

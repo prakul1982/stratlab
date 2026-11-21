@@ -42,3 +42,65 @@
   // /config.js has usually run by now; if not, boot.js's config hook calls this when it does
   if (w.STRATLAB_CONFIG) go(w.STRATLAB_CONFIG); else w.__stratlabEarlyGo = go;
 })();
+
+/* LIVE21B-001: a saved sign-in on an app page sees the app's own frame, never the landing's. The page's HTML is the home page's (vercel.json):
+ * its first frame was the landing's header with "Sign in" and the landing's heading, for ~2.9 s live. index.html hides them for a saved
+ * sign-in (boot.js marks it); here they are taken out as the parser adds them and the app's frame is drawn instead, from the app's
+ * stylesheet: the menu's panel and the phone's top bar with the logo, "Opening StratLab…" where the app's "Opening the page" comes next. The
+ * same frame as components/BootFrame.tsx (unit/site85 keeps them equal). In this file, which only a saved sign-in downloads, so a visitor's
+ * pages weigh what they did (review-r5's budgets). The pages anyone sees the same way (lib/entry.ts PUBLIC_FOR_ALL) keep their own words. */
+(function () {
+  var FOR_ALL = [/^\/(about|terms|privacy|refunds|contact)\/?$/, /^\/verdict\/[^/]+\/?$/, /^\/library\/[^/]+\/?$/];
+  try {
+    if (FOR_ALL.some(function (re) { return re.test(location.pathname); })) { document.documentElement.setAttribute("data-for-all", "1"); return; }
+  } catch (e) { return; }
+  function appFrame() {
+    var root = document.getElementById("root");
+    if (!root || Object.keys(root).some(function (k) { return k.indexOf("__reactContainer") === 0; })) return;      // the app draws now
+    var logo = null, shell = null;
+    for (var n = root.firstElementChild; n;) {
+      var next = n.nextElementSibling;
+      if (n.hasAttribute("data-boot-shell")) shell = n;
+      else if (!n.querySelector(".boot-now")) { if (!logo) logo = n.querySelector(".logo"); root.removeChild(n); }
+      n = next;
+    }
+    if (!shell) {
+      shell = document.createElement("div");
+      shell.className = "shell boot-shell";
+      shell.setAttribute("data-boot-shell", "");
+      shell.setAttribute("data-boot", "");          // the start-up guard (boot.js) reads it as the start-up frame
+      var box = '<span class="icon-btn" aria-hidden="true"></span>';
+      // the app's Shell: the menu's panel, the phone's top bar (its buttons' places held), the page column with one heading
+      shell.innerHTML = '<header class="topbar" aria-hidden="true">' + box + '<span class="brand" data-boot-logo></span><span class="row tight">' + box + box + box + '</span></header>'
+        + '<aside class="sidebar" aria-hidden="true"><div class="side-top"><div class="side-brand"><span class="brand" data-boot-logo></span></div></div></aside>'
+        + '<main class="main" id="main"><div class="page"><h1 class="sr-only">Opening StratLab</h1><div class="k-loading" role="status"><span class="spinner"></span>Opening StratLab…</div></div></main>';
+      root.insertBefore(shell, root.firstChild);
+    }
+    var slots = shell.querySelectorAll("[data-boot-logo]:empty");
+    for (var i = 0; i < slots.length; i++) {
+      if (logo) {
+        var c = logo.cloneNode(true); c.className = "logo logo-40";
+        var m = c.querySelector("svg"); if (m) { m.setAttribute("width", "16"); m.setAttribute("height", "40"); }
+        // each copy's gradients named its own: the first copy's (the phone's top bar) is not drawn on a laptop, and a fill naming it was empty
+        var ids = c.querySelectorAll("[id]");
+        for (var j = 0; j < ids.length; j++) {
+          var was = ids[j].id, now = was + "-" + i;
+          ids[j].id = now;
+          var refs = c.querySelectorAll('[fill="url(#' + was + ')"]');
+          for (var q = 0; q < refs.length; q++) refs[q].setAttribute("fill", "url(#" + now + ")");
+        }
+        slots[i].appendChild(c);
+      }
+      else if (document.readyState !== "loading") slots[i].innerHTML = '<span class="logo logo-40"><img src="/favicon.svg" alt="" width="28" height="28"><span class="logo-word"><b>Strat</b>Lab</span></span>';
+    }
+  }
+  try {
+    appFrame();
+    if (document.readyState === "loading") {
+      var parsed = new MutationObserver(appFrame);
+      parsed.observe(document.documentElement, { childList: true, subtree: true });
+      // the whole page parsed (before the app's code runs): once more, and the observer goes
+      document.addEventListener("readystatechange", function () { if (document.readyState === "loading") return; parsed.disconnect(); appFrame(); });
+    }
+  } catch (e) { /* no observer: index.html keeps the landing's frame hidden */ }
+})();

@@ -3,8 +3,10 @@
  * button, instead of staying blank. A plain file, not part of the app bundle, so it works when the bundle does not. */
 (function () {
   var KEY = "stratlab.reloaded";
-  var WAIT = 60 * 1000;          // a second failure within this time shows the message instead of reloading again
-  var SLOW = 10 * 1000;          // the app has not drawn anything after this long: say so, with a Reload button (round 39: Safari sat on "Opening…" for 20 s)
+  // a second failure within this time shows the message instead of reloading again
+  var WAIT = 60 * 1000;
+  // the app has not drawn anything after this long: say so, with a Reload button (round 39: Safari sat on "Opening…" for 20 s)
+  var SLOW = 10 * 1000;
 
   function once() {
     try {
@@ -18,22 +20,28 @@
     return true;
   }
 
-  var said = null;                // the notice this script put up, if any: { main, slow }
+  // the notice this script put up, if any: { main, slow }
+  var said = null;
 
   function show(force, slow) {
     var root = document.getElementById("root");
-    if (!root || (!force && !root.querySelector("[data-boot], .boot"))) return;       // once the app has drawn, its own error screen does this
-    if (said && (slow || !said.slow)) return;                                        // said once is enough
-    if (said && said.main.parentNode) said.main.parentNode.removeChild(said.main);    // "taking longer" gives way to "couldn't load"
+    // once the app has drawn, its own error screen does this
+    if (!root || (!force && !root.querySelector("[data-boot], .boot"))) return;
+    // said once is enough
+    if (said && (slow || !said.slow)) return;
+    // "taking longer" gives way to "couldn't load"
+    if (said && said.main.parentNode) said.main.parentNode.removeChild(said.main);
     // the app has started drawing into the page: its elements are its own to change, so the notice goes above the page
     // instead (R68-004: emptying them under the app crashed it, "NotFoundError", and two error messages stacked)
     var owned = Object.keys(root).some(function (k) { return k.indexOf("__reactContainer") === 0; });
-    if (owned && root.querySelector('[role="alert"]')) return;                        // the app already says what went wrong
+    // the app already says what went wrong
+    if (owned && root.querySelector('[role="alert"]')) return;
     // a page whose words are already in the HTML (the policies, the 404): keep them readable and put the notice above them
     var keep = root.querySelector("[data-readable]");
     keep = keep && keep.hasAttribute && keep.hasAttribute("data-readable") ? keep : null;
     if (!keep && !owned) root.textContent = "";
-    var main = document.createElement("main");         // the page's main landmark while it is the only thing on it
+    // the page's main landmark while it is the only thing on it
+    var main = document.createElement("main");
     var box = document.createElement("div");
     box.className = "boot boot-now";
     box.setAttribute("role", "alert");
@@ -44,7 +52,8 @@
     brand.className = "boot-brand";
     var logo = document.createElement("img");
     logo.src = "/favicon.svg"; logo.alt = ""; logo.width = 24; logo.height = 24;
-    logo.onerror = function () { logo.style.display = "none"; };      // no connection and no kept copy: the name alone, not a broken picture
+    // no connection and no kept copy: the name alone, not a broken picture
+    logo.onerror = function () { logo.style.display = "none"; };
     brand.appendChild(logo);
     var name = document.createElement("span");
     name.textContent = "StratLab";
@@ -62,19 +71,43 @@
     box.appendChild(brand); box.appendChild(h); box.appendChild(p); box.appendChild(b);
     said = { main: main, slow: !!slow };
     if (owned) {
-      box.className += " boot-above";       // above the page, so it sits close to the top (the card's own margin, in index.html)
+      // above the page, so it sits close to the top (the card's own margin, in index.html)
+      box.className += " boot-above";
       main.setAttribute("role", "presentation");
       root.parentNode.insertBefore(main, root);
     } else if (keep) {
       box.className += " boot-above";
-      main.setAttribute("role", "presentation");      // the page's own main stays the main landmark
+      // the page's own main stays the main landmark
+      main.setAttribute("role", "presentation");
       root.insertBefore(main, root.firstChild);
-      if (keep.classList) keep.classList.remove("boot-wait");     // shown now, not after the fade-in delay
+      // shown now, not after the fade-in delay
+      if (keep.classList) keep.classList.remove("boot-wait");
     } else root.appendChild(main);
   }
 
   /** A file failed to load: reload once, else say so. */
+  // LIVE21A-003: a file Safari stops as the page is left (beforeunload, pagehide, a link just pressed) is no failure: no reload over the click
+  var leaving = 0, leftAt = 0;
+  window.addEventListener("beforeunload", function () { leaving = 1; });
+  window.addEventListener("pagehide", function () { leaving = 1; });
+  window.addEventListener("pageshow", function () { leaving = leftAt = 0; });
+  // the app's own links prevent the click; a place on this page (#faq) leaves nothing
+  try {
+    document.addEventListener("click", function (e) {
+      var a = !e.defaultPrevented && e.target.closest && e.target.closest("a[href]");
+      if (a && !a.hasAttribute("download") && (!a.target || a.target == "_self") && a.href.split("#")[0] != location.href.split("#")[0]) leftAt = Date.now();
+    });
+  } catch (e) {}
+  function goingAway() { return leaving || Date.now() - leftAt < 5000; }
+
+  function drawn() {
+    var root = document.getElementById("root");
+    return !!root && Object.keys(root).some(function (k) { return k.indexOf("__reactContainer") === 0; }) && !root.querySelector("[data-boot]");
+  }
+
+  /** A file failed to load: reload once, else say so. */
   function recover() {
+    if (goingAway()) return;
     if (once()) location.reload(); else show();
   }
 
@@ -86,6 +119,7 @@
       if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); var e = document.createElement("script"); e.fetchPriority = "high"; e.src = "/early.js"; document.head.appendChild(e); break; }
     }
   } catch (e) { /* storage off */ }
+
 
   // the home address: only it shows the landing's start-up hero (LIVE13B-001)
   try {
@@ -110,9 +144,11 @@
     function look() {
       if (html.hasAttribute("data-faces")) return;
       Promise.all(FACES.map(function (f) { return fonts.load(f); })).then(function (got) {
-        for (var i = 0; i < got.length; i++) if (!got[i].length) { if (loaded) show(); return; }      // not here yet: the next stylesheet
+        // not here yet: the next stylesheet
+        for (var i = 0; i < got.length; i++) if (!got[i].length) { if (loaded) show(); return; }
         show();
-      }, show);       // a face that failed to download: the stand-in, now
+      // a face that failed to download: the stand-in, now
+      }, show);
     }
     document.addEventListener("load", function (e) { if (e.target && e.target.tagName === "LINK") look(); }, true);
     document.addEventListener("DOMContentLoaded", look);
@@ -157,7 +193,8 @@
   // the host keeps every /assets/ answer for a year, a 404 too (a deploy switching over): the file that failed is asked for past the
   // browser's cache before the reload, so the reload gets the file and not the kept 404 (R43.1 smoke: "Couldn't load StratLab" stayed)
   function refetch(url) {
-    if (typeof fetch !== "function") return null;                 // no way to ask past the cache: reload as before
+    // no way to ask past the cache: reload as before
+    if (typeof fetch !== "function") return null;
     try { return fetch(url, { cache: "reload", credentials: "same-origin" }).then(function () {}, function () {}); }
     catch (x) { return null; }
   }
@@ -189,6 +226,8 @@
     var url = String(t.src || t.href || "");
     // config.js too: without it the app can send no request (R68-004: its 502 showed "StratLab ran into a problem")
     if ((/\/assets\//.test(url) || /\/config\.js(\?|$)/.test(url)) && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
+      // LIVE21A-003: once the app has drawn, a later file is its own (lib/lazyRetry.ts)
+      if (goingAway() || drawn()) return;
       var asked = refetch(url);
       if (asked) asked.then(recover); else recover();
     }

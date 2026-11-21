@@ -69,7 +69,9 @@ test("the library and policy pages have their own h1 and words in the raw HTML, 
   assert.match(files["privacy/index.html"], /What StratLab collects and why/);
   // the noscript note is a paragraph, and the page's own words show with scripts off
   assert.match(template, /<noscript>\s*<div class="boot"[^>]*>\s*<p><b>StratLab needs JavaScript\.<\/b><\/p>/);
-  assert.doesNotMatch(template, /\[data-boot\] \{ display: none; \}/);
+  // (changed on purpose, site85 LIVE21B-001: the one rule hiding the block is for a saved sign-in's app frame, which only the start-up script
+  // marks, so a page with scripts off still shows its words)
+  for (const m of template.matchAll(/([^{}\n]*)\[data-boot\] \{ display: none; \}/g)) assert.match(m[1], /(^|, )html\[data-app-boot\] $/, m[0]);
   // changed on purpose (R39): the Terms' full text is in its HTML now and says "not ... a recommendation to buy or sell"
   for (const [file, html] of Object.entries(files)) assert.doesNotMatch(html, file === "terms/index.html" ? /buy now|should buy|Yahoo|Finnhub|Screener/i : /recommend|buy now|should buy|Yahoo|Finnhub|Screener/i);
 });

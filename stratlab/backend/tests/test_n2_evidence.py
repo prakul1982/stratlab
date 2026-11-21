@@ -98,7 +98,9 @@ def test_a_full_article_that_says_nothing_of_the_business_gets_the_annual_report
     assert reads == ["UMC"] and got["UMC"]["about"].startswith(UMC_20F) and got["UMC"]["about"].endswith(UMC_WIKI)
     # stored in the old format, it is read once more; in this format it keeps its time
     assert TR.ABOUT_V == 5 and TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": 3}, "US")
-    assert not TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": TR.ABOUT_V}, "US")
+    # (updated on purpose, e85 LIVE21A-002: an article with no line a page may quote is read once more by the reader of quotable words,
+    # QUOTE_V; a record that reader kept is not read again)
+    assert not TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": TR.ABOUT_V, "qv": TR.QUOTE_V}, "US")
     assert not TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": 3}, "IN")
 
 

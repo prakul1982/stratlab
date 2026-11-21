@@ -18,7 +18,7 @@ import { track } from "../lib/analytics";
 import { LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { KEY } from "../lib/planKeys";
 import { readViewAs } from "../lib/viewAs";
-import { canBuy, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
+import { canBuy, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, YEARLY_SHORT, yearlySaving } from "../lib/offer";
 
 const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
 
@@ -157,7 +157,7 @@ export function PlansPage() {
         <div className="k-plan-opts"><FormGrid label="Price options">
           {billing && yearlyOk && <FieldGroup label="Billed">
             <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
-              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
+              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL, short: YEARLY_SHORT }]} />
           </FieldGroup>}
           {(usd || pricingStatus === "loading") && <FieldGroup label="Prices in"><CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} /></FieldGroup>}
         </FormGrid></div>

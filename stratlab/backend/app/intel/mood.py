@@ -44,6 +44,7 @@ US_MOVERS_FROM = 24                       # the US index's biggest companies rea
 MIN_COVER = 0.8                           # the share of an index's companies that must be read for its points table
 US_MIN_COVER = 0.9                        # ...and the share of the US index's companies that must have a market value to weigh by
 _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="mood")
+_quote_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="mood-quote")   # the other prices' reads (_metas), never queued behind _pool's
 
 # the two markets' other prices: (label, Yahoo-style symbol, kind). `kind` decides how a move is worded.
 RISK = {
@@ -791,11 +792,19 @@ class Mood:
         return out
 
     def _metas(self, spec: list[tuple]) -> dict[str, dict | None]:
-        futs = {sym: _pool.submit(self.hub.yahoo.meta, sym) for _, sym, *_ in spec}
+        # LIVE21A-005: on a pool of their own. This runs as one of _pool's own tasks (build), and its thirteen reads queued in _pool behind the
+        # page's other reads, each given 10 s from when it was waited on: India VIX and Brent crude timed out and the card lost both rows.
+        # A read that fails is asked once more, so one busy answer doesn't drop a row for the whole card's life.
+        futs = {sym: _quote_pool.submit(self.hub.yahoo.meta, sym) for _, sym, *_ in spec}
         got = {}
         for sym, f in futs.items():
             try:
-                got[sym] = f.result(timeout=10)
+                got[sym] = f.result(timeout=20)
+            except Exception:
+                got[sym] = None
+        for sym in [k for k, v in got.items() if not v]:
+            try:
+                got[sym] = _quote_pool.submit(self.hub.yahoo.meta, sym).result(timeout=10)
             except Exception:
                 got[sym] = None
         return got

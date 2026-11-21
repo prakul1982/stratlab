@@ -20,7 +20,7 @@ Who sees what (plans.py "theme_changes"): Basic and Pro the whole log; Free the 
 import json
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from .. import db
 
@@ -140,6 +140,10 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
     left = {str(x["ticker"]): dropped_why(x) for x in ((dive.get("placements") or {}).get("dropped") or []) if isinstance(x, dict) and x.get("ticker")}
     mc = dive.get("membership_check") if isinstance(dive.get("membership_check"), dict) else {}
     ev = {s_: EV_CODE[x] for s_, x in (mc.get("outside") or {}).items() if x in EV_CODE}
+    # e85: the figures' window's states apart ("ev_win"), so a fall from description-verified of a company there is known to the next read
+    ev_win = {s_: EV_CODE[x] for s_, x in (dive.get("evidence") or {}).items() if x in EV_CODE and s_ not in ev}
+    ev_down = [[str(x.get("symbol")), clip_words(x.get("name") or "", 80), str(x.get("to") or ""), clip_words(x.get("why") or "", 200)]
+               for x in dive.get("evidence_down") or [] if isinstance(x, dict) and x.get("symbol")]
     # h56 (R56): only the points with the evidence tally's counts ([day, checked, total, description-verified]) are kept
     from .theme_data import tally_points
     hist = tally_points(mc.get("history"))
@@ -168,7 +172,8 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
             **({"ev_rule": mc["rule"]} if ev and isinstance(mc.get("rule"), int) else {}),     # e84: the evidence rule the kept states are of
-            **({"left": left} if left else {}), **({"kept_layers": kept_layers} if kept_layers else {})}
+            **({"left": left} if left else {}), **({"kept_layers": kept_layers} if kept_layers else {}),
+            **({"ev_down": ev_down[:ROWS_KEEP]} if ev_down else {}), **({"ev_win": ev_win} if ev_win else {})}
 
 
 BUSINESS, LISTING = "business membership: ", "listing: "
@@ -535,9 +540,36 @@ def cause_of(was: dict, now: dict, refresh: bool) -> str:
     return "refresh" if refresh else "figures"
 
 
-def _entry(d: dict, cause: str, at: datetime) -> dict:
+def _entry(d: dict, cause: str, at: datetime, rules=None) -> dict:
+    # e85: the rules version each entry was made under (recent_moves holds a reversal only under the same rules)
     return {"at": at.isoformat(timespec="seconds"), "d": at.date().isoformat(), "cause": cause, "counts": d["counts"],
-            **{k: d[k][:ROWS_KEEP] for k in KINDS}}
+            **({"rules": rules} if rules is not None else {}), **{k: d[k][:ROWS_KEEP] for k in KINDS}}
+
+
+HOLD_DAYS = 3                # e85: a move made within this many days, under the rules of today, is not reversed by a re-check (recent_moves)
+
+
+def recent_moves(got: dict | None, rules, today: date | None = None, days: int = HOLD_DAYS) -> dict:
+    """e85 (LIVE21A-009: the REITs log moved Omega Healthcare to "Mortgage REITs" on 19 Nov and back on 20 Nov, Alexandria Other ->
+    Healthcare -> Other, Medalist Other -> Towers -> Other, a page's layers flipping day to day): {symbol: [from, to]} of each company's
+    latest move the stored log made within `days` days under the same rules version as today's (an entry kept before e85 says no version and
+    holds nothing; a code change may reverse a move, a re-check under the same rules may not). The placement keeps such a company where the
+    move put it rather than moving it back (theme_base.hold_reversals)."""
+    got = got if isinstance(got, dict) else {}
+    today = today or datetime.now(timezone.utc).date()
+    since = (today - timedelta(days=days)).isoformat()
+    out: dict = {}
+    for e in got.get("log") or []:
+        if not isinstance(e, dict):
+            continue
+        fresh = rules is not None and e.get("rules") == rules and _day_of(e) >= since
+        for r in e.get("moved") or []:
+            if isinstance(r, dict) and r.get("symbol") and r.get("to"):
+                if fresh and r.get("from") and not FIGURE_MOVE.search(str(r.get("why") or "")):
+                    out[r["symbol"]] = [str(r["from"]), str(r["to"])]
+                else:
+                    out.pop(r["symbol"], None)          # a later move, or one under other rules, is the company's latest
+    return out
 
 
 def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | None = None) -> dict:
@@ -550,8 +582,13 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
     at = at or datetime.now(timezone.utc)
     if isinstance(was, dict) and isinstance(was.get("cos"), dict) and isinstance(was.get("layers"), list):
         d = diff(was, now)
-        if changed(d):
-            log = (log + [_entry(d, cause_of(was, now, refresh), at)])[-KEEP:]
+        if changed(d) or now.get("ev_down"):
+            # e85: a read whose only change is companies falling from description-verified is logged too, each with why ("down")
+            e_ = _entry(d, cause_of(was, now, refresh), at, now.get("rules"))
+            if now.get("ev_down"):
+                e_["down"] = [{"symbol": x[0], "name": x[1], "to": EV_STATE.get(x[2], x[2]) if len(x[2]) == 1 else x[2], "why": x[3]}
+                              for x in now["ev_down"] if isinstance(x, list) and len(x) == 4]
+            log = (log + [e_])[-KEEP:]
     if isinstance(was, dict):
         # d53: every company an earlier snapshot dropped as another business, kept from one snapshot to the next (off_memory), unless its
         # own words were read again and keep it in ("back")
@@ -571,7 +608,7 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
             now = {**now, "adj_was": [was["pop"], dict(was.get("adj") or {})]}
         elif was.get("adj_was"):
             now = {**now, "adj_was": was["adj_was"]}
-    now = {k: v for k, v in now.items() if k not in ("rest_why", "rest_mwhy")}           # r62, r67e: read for this entry's reasons, never stored
+    now = {k: v for k, v in now.items() if k not in ("rest_why", "rest_mwhy", "ev_down")}           # r62, r67e: read for this entry's reasons, never stored
     return {"snap": now, "log": log, "since": since or at.date().isoformat()}
 
 
@@ -766,11 +803,22 @@ def unquotable_reason(why: str, name: str = "") -> bool:
     TFS Financial's "statements regarding our business plans…"): a kept reason that quotes as its words a line of no work of its own
     (boilerplate, a sentence of its legal form, size or history, an encyclopedia's opening, or one that names nothing it does) is said again
     from its words as they are read now."""
+    from .sec import _STRUCTURE
     from .theme_base import encyclopedia_like
     for m in _QUOTED.finditer(str(why or "")):
         q = m.group(1).rstrip("…").strip()
+        # e85 (LIVE21A-009: Redwood's kept reason "“Redwood Trust, Inc., together with its subsidiaries, is …”", cut before its work): the
+        # clause that only includes its subsidiaries is no word of the line (a quote of its name and that clause says nothing)
+        q = _WITH_SUBS.sub("", q + " ").strip()
         if len(q.split()) < 4:
-            continue                        # a layer's name or a short phrase of its words ("non-listed"), no sentence
+            # a layer's name or a short phrase of its words ("non-listed"), no sentence; e85: a name and a verb left by a cut, no line either
+            if m.group(1).rstrip().endswith("…") and _WITH_SUBS.search(m.group(1) + " "):
+                return True
+            continue
+        # e85 (LIVE21A-009: Franklin BSP moved into "Mortgage REITs" on "The Company is the managing member of the OP and directly or
+        # indirectly held 91% of the common units ..."): a sentence of how the company is held (sec._STRUCTURE) is no line of its work
+        if _STRUCTURE.search(q):
+            return True
         if _BOILER.search(q) or encyclopedia_like(q) or (_FORM_ONLY.search(q) and not _WORK_SAID.search(_FORM_ONLY.sub(" ", q))) \
                 or not _WORK_SAID.search(q) or _LEGAL.search(q) or _DATED_PAST.search(q):
             return True
@@ -902,6 +950,8 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
         if a == b:
             return {**r, "why": "the same layer, split into halves by market value"}
         w = words_of(r["symbol"]) if words_of is not None else None
+        if w:                         # e85 (LIVE21A-009: Redwood): the clause that only includes its subsidiaries left out of what is quoted
+            w = _WITH_SUBS.sub("", str(w))
         q = work_sentence(w)          # e80: a line of its work, never one of how it is held or taxed
         ind = "" if q else (industry_of(r["symbol"]) if industry_of is not None else "")
         # e81 (the R79 Capital markets deck: Mefcom "→ Proprietary investing and small financial firms: its own words say “Mefcom Capital
@@ -958,7 +1008,7 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
 
 
 _FLAG_TAIL = re.compile(r"(?:\s*;\s*(?:True|False|None))+\s*$")
-_WITH_SUBS = re.compile(r",\s+(?:together|along)\s+with\s+(?:its|their)\s+(?:consolidated\s+)?subsidiaries,?(?=\s)", re.I)
+_WITH_SUBS = re.compile(r",\s+(?:together|along)\s+with\s+(?:its|their)\s+(?:consolidated\s+)?subsidiaries,?(?=\s|…)", re.I)
 
 
 # e77 (LIVE14A-007: Cement's log moved Kanoria 7 times in 4 days, three of them on 17 Nov; REITs moved Adamas Trust Other -> Mortgage REITs
@@ -1044,6 +1094,25 @@ def net_moves(log: list) -> list:
     return [e for e in out if any((e.get("counts") or {}).values()) or any(e.get(k) for k in KINDS)]
 
 
+def fold_layers(events: list) -> list:
+    """e85 (the R84 Capital markets deck: "layers changed 2: “Other capital market companies” added (2 companies); “Other capital market
+    companies” removed (2 companies: 1 to ..., 1 to ...)", one day's two re-checks, printed as a layer of 2 companies with no words of
+    theirs): a layer added and removed again within the day (or removed and added back) is no change of the day, in neither list; every
+    other event as it is, in order."""
+    out = list(events)
+    for i, x in enumerate(events):
+        if not isinstance(x, dict) or x.get("kind") not in ("added", "removed") or x not in out:
+            continue
+        name = (x.get("to") or [None])[0] if x["kind"] == "added" else (x.get("from") or [None])[0]
+        other = "removed" if x["kind"] == "added" else "added"
+        pair = next((y for y in events[i + 1:] if isinstance(y, dict) and y in out and y.get("kind") == other
+                     and ((y.get("from") or [None])[0] if other == "removed" else (y.get("to") or [None])[0]) == name), None)
+        if name and pair is not None:
+            out.remove(x)
+            out.remove(pair)
+    return out
+
+
 def one_a_day(log: list) -> list:
     """e79 (LIVE15A-013: Software's log with five "18 Nov 2026 · Re-checked under new placement rules" entries, IT services three on 18 Nov
     and four on 16 Nov, Cement three on 16 Nov): the entries of one day and one cause (oldest first) as one entry, the day's last, with the day's net
@@ -1092,7 +1161,7 @@ def one_a_day(log: list) -> list:
                     r = {**r, **{k: [first[k][0], r[k][1]] for k in ("revenue", "margin")
                                  if isinstance(first.get(k), list) and isinstance(r.get(k), list) and len(first[k]) == 2 and len(r[k]) == 2}}
                 rest[sym if sym else id(r)] = r
-        layers = [x for e in es for x in e.get("layers") or []]
+        layers = fold_layers([x for e in es for x in e.get("layers") or []])
         last = dict(es[-1])
         last.update({"added": added, "removed": removed, "moved": list(moved.values()), "layers": layers, "restated": list(rest.values()),
                      "entries": sum(int(e.get("entries") or 1) for e in es)})

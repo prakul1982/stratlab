@@ -62,7 +62,8 @@ test("R8O-007: \"Opening…\" gives way to Reload after 15 s; Admin's reads go o
   assert.match(main, /<Suspense fallback=\{<><h1 className="sr-only">Opening the page<\/h1><Opening \/><\/>\}>/);
   // (updated on purpose, LIVE7B-006: the analytics question is drawn before each start-up shell, not above the whole app)
   // (updated on purpose, LIVE8B-004: the question after the start-up shell, so its arrival never pushes the page down)
-  assert.match(main, /if \(!ready\) return <><main><h1 className="sr-only">Opening StratLab<\/h1><Opening label="Opening StratLab" \/><\/main><Tracking \/><\/>;/);
+  // (changed on purpose, site85 LIVE21B-001: inside the app's frame, as the page's HTML draws it)
+  assert.match(main, /if \(!ready\) return <><BootFrame><h1 className="sr-only">Opening StratLab<\/h1><Opening label="Opening StratLab" \/><\/BootFrame><Tracking \/><\/>;/);
   assert.match(read("src/visitor/VisitorApp.tsx"), /<Opening label="Opening StratLab" \/>/);
   assert.match(main, /void firstPage\(location\.pathname\)\?\.\(\)/);
   const admin = read("src/pages/admin/AdminContext.tsx");

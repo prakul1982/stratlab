@@ -156,9 +156,11 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
   // a laptop shows every column of the sales at once (LIVE1B-012: the purchase date was folded away at 1440px); a phone leads with what the tax works out from
   const wideScreen = (page.viewportSize()?.width ?? 0) >= 1280;
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 1 : 0);
+  // (changed on purpose, site85 LIVE21B-012: the purchase day is under the sale's, "bought 10 Apr 2023", so the sales fit their card at 1000 px)
+  const bought = sales.getByText(/^bought \d/);
+  if (wideScreen) await expect(bought.first()).toBeVisible(); else await expect(bought).toHaveCount(0);
   await page.getByTestId("cols-tax-sales").click();                                                // the button flips it either way
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 0 : 1);
+  if (wideScreen) await expect(bought).toHaveCount(0); else await expect(bought.first()).toBeVisible();
   await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
   await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
   await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();

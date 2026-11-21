@@ -2320,7 +2320,7 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
 # ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
 BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
 BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
-BUSINESS_KEY = ("business", 4)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read; e78: 4, before a sentence of a REIT's tax status was passed over (REIT_TAX)
+BUSINESS_KEY = ("business", 5)         # e85: 5, before a sentence of an operating company held as an LLC ("managing member of the OP") was passed over (_OP_LLC); lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read; e78: 4, before a sentence of a REIT's tax status was passed over (REIT_TAX)
 BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
     (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
     # lane n2 (the outside review of the live R33 decks: TSMC's and UMC's 20-F gave nothing, or a line on process technology): a 20-F's
@@ -2338,14 +2338,26 @@ _REPORT_TALK = re.compile(r"forward[- ]looking|unless the context|unless otherwi
                           r"\bannual report\b|\bform (?:10-k|20-f|40-f)\b|table of contents|trademarks?|incorporated (?:herein )?by reference|"
                           r"\bsee (?:note|item|part)\b|safe harbor|website|"
                           r"\b(?:was|were) (?:originally |first )?(?:incorporated|formed|founded|organi[sz]ed|established)\b|\bincorporated (?:in|as|under)\b|"
-                          r"initial public offering|fiscal year|5[23]-week", re.I)
+                          r"initial public offering|fiscal year|5[23]-week|"
+                          # e85 (the R84 Software inputs read again: Shopify's opening "In addition, we operate in a highly competitive and
+                          # rapidly changing environment. These statements are inherently uncertain and investors are cautioned ...", the end of
+                          # its cautionary note; Clarivate's "... incorporated on January 7, 2019 under the laws of Jersey ... Our principal
+                          # business offices are located at ...; our main telephone number is ..."): the cautionary note's own sentences and
+                          # where the company is registered or reached are about the report or the company's papers, not its work
+                          r"\bthese statements\b|\b(?:are|is) cautioned\b|\brapidly changing environment\b|\bincorporated on\b|"
+                          r"\bprincipal (?:business|executive) offices?\b|\btelephone number\b|\bregistered office\b|\bforeign private issuer\b|"
+                          r"\bemerging growth company\b|\bblank check\b", re.I)
 # a sentence that says what the company is or does: the opening starts at the first one (a report can open with cautions and definitions)
 _SAYS_WORK = re.compile(
-    r"\bwe are (?:a|an|the|one of|primarily|principally|engaged)\b|"
+    r"\b[Ww]e are (?:a|an|the|one of|primarily|principally|engaged)\b|"          # e85: "We" opening a sentence too (PayPal's "We operate ...")
     r"(?:\b(?:company|corporation|group)|\)) (?:is|are) (?:a|an|the|one of|primarily|principally|engaged)\b|"
     r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That)\b)[A-Z][\w&.,’' -]{1,60}? (?:is|are) (?:a|an|one of|the)\b|"
-    r"\bwe (?:\w+ly )?(?:design|develop|manufactur|produce|provide|offer|sell|operate|supply|make|deliver|own|serve)|"
-    r"(?:\b(?:company|corporation)|\)),? (?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers)\b")
+    r"\b[Ww]e (?:\w+ly )?(?:design|develop|manufactur|produce|provide|offer|sell|operate|supply|make|deliver|own|serve)|"
+    r"(?:\b(?:company|corporation)|\)),? (?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers)\b|"
+    # e85 (Shopify's 10-K opening, read again: "Shopify provides essential internet infrastructure for commerce.", passed over for the
+    # cautionary note before it): the company's own name doing its work
+    r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That|We|In|As|For|Since|If)\b)[A-Z][\w&.’'-]{1,40}(?: [A-Z][\w&.’'-]{1,40}){0,3} "
+    r"(?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers|builds)\b")
 # a sentence ends at a full stop before a capital, never at a legal form or an initial ("Qnity Electronics, Inc. is ...", "the U.S. market")
 _SENTENCE_END = re.compile(r"(?<![A-Z]\.)(?<!\bInc\.)(?<!\bINC\.)(?<!\bCorp\.)(?<!\bLtd\.)(?<!\bCo\.)(?<!\bNo\.)(?<=[.!?])\s+(?=[A-Z“\"(])")
 
@@ -2396,9 +2408,17 @@ REIT_TAX = (r"\belect(?:ed|s)? to be (?:taxed|treated) as an? (?:reit|real estat
             r"\bqualif(?:y|ies|ied) (?:to be taxed )?as an? (?:reit|real estate investment trust)\b|\bfor federal income tax purposes\b|"
             r"\bconsolidated by the company for financial reporting purposes\b")
 _REIT_TAX = re.compile(REIT_TAX, re.I)
+# e85 (LIVE21A-009, the live R84 REITs log: Franklin BSP moved into "Mortgage REITs" because "The Company is the managing member of the OP and
+# directly or indirectly held 91% of the common units ..."; LIVE21A-002: Welltower's stored words, its 10-K's three sentences "Welltower Inc.
+# is the initial member and majority owner of Welltower OP ...", "... obligated to contribute as additional capital to Welltower OP", "All debt
+# ... is incurred by Welltower OP ... fully and unconditionally guaranteed", none of its senior housing): an operating company held as an LLC
+# (its managing or initial member, "the OP", its common units of membership interests, the equity it contributes to it, the debt the parent
+# guarantees) tells how the company is held as an operating partnership does
+_OP_LLC = (r"|\b(?:managing|initial|sole)\s+member\b|(?-i:\bOP\b)|\bcommon units of (?:membership|limited partnership) interests?\b|"
+           r"\bcontribute\w* (?:it )?as additional capital\b|\bfully and unconditionally guarantee\w*\b")
 _STRUCTURE = re.compile(r"\boperating partnership\b|\bgeneral partner\b|\blimited partnership (?:interest|units?)\b|\bumbrella partnership\b|"
                         r"\bupreit\b|\bability to pay dividends\b|\bobligations to (?:its |their )?creditors\b|\bdirect and indirect subsidiaries\b|"
-                        + REIT_TAX, re.I)
+                        + REIT_TAX + _OP_LLC, re.I)
 _LIST_ITEM = re.compile(r"^\s*(?:[•●▪◦·‣∙○■□–—-]|\(?[a-z0-9ivx]{1,3}[.)])\s*")
 LIST_CHARS = 420                        # of a list's items joined into the sentence that introduces them
 
@@ -2446,6 +2466,14 @@ def structure_only(text: str) -> bool:
     xs = [x for x in _SENTENCE_END.split(str(text or "").strip()) if len(x.split()) >= 4]
     return bool(xs) and all(_STRUCTURE.search(x) or not _SAYS_WORK.search(x) and not re.search(r"\b(?:own|operat|lease|sell|make|provid)\w*\b", x, re.I)
                             for x in xs) and any(_STRUCTURE.search(x) for x in xs)
+
+
+def structure_opens(text: str) -> bool:
+    """e85 (LIVE21A-009: Franklin BSP's stored words opening "Substantially all of the Company's business is conducted through FBRT OP LLC
+    ... (the "OP")", then "The Company is the managing member of the OP ..."): whether a stored description's first sentence tells how the
+    company is held (_STRUCTURE), the opening a reader kept before it passed such sentences over (read again, theme_routes.reader_due)."""
+    xs = [x for x in _SENTENCE_END.split(str(text or "").strip()) if len(x.split()) >= 4]
+    return bool(xs) and bool(_STRUCTURE.search(xs[0]))
 
 
 def reit_tax_said(text: str) -> bool:

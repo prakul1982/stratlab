@@ -143,6 +143,9 @@ export function landingAction(o: Offer | null | undefined, plan: PlanId): { labe
 /** The yearly choice's label. Basic's year is exactly ten months; Pro's is ₹9 over (19,999 against 1,999 × 10), so the
  * label says "about" and each yearly card states its own exact saving (`yearlySaving`). */
 export const YEARLY_LABEL = "Yearly · about 2 months free";
+/** On a phone the choice is "Yearly" alone (owner, 20 Nov: the full label wrapped to two lines, or ran past its half): each yearly card states
+ *  its own saving under its price (`yearlySaving`), so nothing is lost. */
+export const YEARLY_SHORT = "Yearly";
 
 /** What paying for a year saves against twelve monthly payments, as an amount in the price's own units (null when a
  * year isn't cheaper). */

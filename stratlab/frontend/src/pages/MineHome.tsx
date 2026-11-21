@@ -81,7 +81,7 @@ export function MineHome() {
 
   const change = (next: Layout) => { setRaw(next); void savePrefs({ mine: next }, true); };
   const cardFor = (id: CardId) => ({
-    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={comingShown} more={upAll ? upAll.length - (comingShown?.length ?? 0) : 0} />, watch: <WatchCard />,
+    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={comingShown} more={upAll ? upAll.length - (comingShown?.length ?? 0) : 0} />, watch: <WatchCard onRows={setWatchRows} />,
     saved: <SavedList id="mine-saved" title="Saved searches and reads" />,
   })[id];
   // each card's width from its place in the chosen order, so the grid keeps that order with no gaps (DI-005)
@@ -90,7 +90,11 @@ export function MineHome() {
   const { items: watchItems } = useWatchlist();
   // beside a watchlist of one to three stocks, "Coming up" is a few rows shorter than its six, so the pair ends near level instead of one at half
   // the other's height with a block of nothing under it (LIVE1C-091); the rest are one tap away in the calendar ("+N more")
-  const comingShown = coming && watchItems && watchItems.length > 0 && watchItems.length <= 3 ? coming.slice(0, Math.max(3, watchItems.length + 2)) : coming;
+  // LIVE21B-003: counted from the rows the watchlist card shows (a list of five with three priced showed three rows beside six dated ones, 150px
+  // of nothing under the watchlist): as many dated rows as watchlist rows, two at least
+  const [watchRows, setWatchRows] = useState<number | null>(null);
+  const shownWatch = watchRows ?? (watchItems && watchItems.length > 0 ? Math.min(6, watchItems.length) : null);
+  const comingShown = coming && shownWatch && shownWatch < 6 ? coming.slice(0, Math.max(2, shownWatch)) : coming;
   // R19: the saved searches and reads take their place only once there is one (no empty card for everyone else)
   const { items: savedItems } = useSaved();
   if (!savedItems?.length) shown = shown.filter((id) => id !== "saved");
@@ -371,14 +375,14 @@ function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
 /* ---------- the watchlist today ---------- */
 type Mover = { region: Region; symbol: string; name: string | null; q: Quote };
 
-function WatchCard() {
+function WatchCard({ onRows }: { onRows?: (n: number | null) => void }) {
   const { items, failed, retry } = useWatchlist();
   const { markets, me } = useApp();
   // the last rows this card showed for this account: painted at once, said as the earlier read, until today's arrive (LIVE9B-010)
   const kept = useMemo(() => readKeptMovers<Mover>(me?.id), [me?.id]);
   const day = (m: Mover) => { const mk = markets.find((x) => x.id === m.region); return moverDay(m.region, m.q, new Date(), !!mk && mk.status !== "soon" && !marketState(mk).open); };
   const [movers, setMovers] = useState<Mover[] | null>(null);
-  // the prices of the watchlist's first 24 in each market, biggest movers first: read when the list arrives and again each minute
+  // the prices of the watchlist's first 24 in each market, in the list's order: read when the list arrives and again each minute
   // while a market trades, the rows shown kept when a read fails or finds no price (LIVE-1)
   const read = useCallback((items: NonNullable<ReturnType<typeof useWatchlist>["items"]>) =>
     Promise.all((["IN", "US"] as Region[]).map(async (r) => {
@@ -386,7 +390,10 @@ function WatchCard() {
       if (!mine.length) return [] as Mover[];
       const q = await researchApi.quotes(r, mine.map((w) => w.symbol)).catch(() => ({} as Record<string, Quote | null>));
       return mine.flatMap((w) => (q[w.symbol]?.price != null ? [{ region: r, symbol: w.symbol, name: w.name, q: q[w.symbol]! }] : []));
-    })).then((parts) => parts.flat().sort((a, b) => Math.abs(b.q.change_pct ?? 0) - Math.abs(a.q.change_pct ?? 0)).slice(0, 6)), []);
+    // LIVE21B-003: in the watchlist's own order, as /invest and /research/watchlist list it (it was the biggest movers first: ABB, RELIANCE,
+    // ADANIPORTS here against RELIANCE, ADANIPORTS, ABB there)
+    })).then((parts) => { const at = (m: Mover) => items.findIndex((w) => w.region === m.region && w.symbol === m.symbol);
+      return parts.flat().sort((a, b) => at(a) - at(b)).slice(0, 6); }), []);
   useEffect(() => {
     if (items === null) return;
     if (!items.length) { setMovers([]); return; }
@@ -401,6 +408,7 @@ function WatchCard() {
   // VR2-004: six rows each said "Mon 26 Oct" under the name: when every row is from the same earlier day it is said once, under the list
   const earlier = movers === null && !failed && kept && items !== null && items.length > 0 ? kept : null;
   const rows = movers ?? earlier?.rows ?? null;
+  useEffect(() => { onRows?.(rows ? rows.length : null); }, [rows?.length, onRows]);    // eslint-disable-line react-hooks/exhaustive-deps
   const days = (rows ?? []).map((m) => day(m));
   const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
   return (
@@ -412,7 +420,7 @@ function WatchCard() {
         : !rows.length ? (
           items && items.length
             ? <EmptyState title="No prices yet" action={{ label: "Open the watchlist", to: "/research/watchlist" }}>Today's prices for your watchlist are not available right now.</EmptyState>
-            : <EmptyState title="Your watchlist is empty" action={{ label: "Find a company", to: "/research" }}>Press Watch on any company to follow it here, with the biggest movers first.</EmptyState>
+            : <EmptyState title="Your watchlist is empty" action={{ label: "Find a company", to: "/research" }}>Press Watch on any company to follow it here, with its price today.</EmptyState>
         ) : (
           <>
           {earlier && <p className="k-note k-muted" role="status" data-testid="mine-movers-earlier">As read {asOf(earlier.at, { year: false })}; today's prices are on their way.</p>}

@@ -775,6 +775,9 @@ td.num, .num { font-family: var(--sans); }
 @media (max-width: 640px) { .legal-tabs a { min-height: 44px; } }
 .legal-body ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .lp-foot { padding: 28px 0 40px; border-top: 1px solid var(--line); }
+/* LIVE5 (site85): the landing on a phone measured 9,022 px against its 9,000 budget (the same with Release 84's code on this machine's fonts):
+   the closing call and the footer a little tighter there, 56 px in all, nothing taken out */
+@media (max-width: 640px) { .lp-final { padding: 48px 0; } .lp-foot { padding: 20px 0 24px; } }
 .lp-h3 { font-size: clamp(24px, 2.6vw, 32px); line-height: 1.1; font-weight: 400; letter-spacing: -.02em; }
 .lp-anchor { scroll-margin-top: 80px; }
 .lp-split-top { align-items: start; }
@@ -3369,6 +3372,12 @@ details.k-fold { display: block; }   /* the fold button's flex row (.k-fold, a s
   .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { overflow-wrap: normal; word-break: normal; }
   .k-tbl-wrap.k-fit .k-table tbody th > a:first-child, .k-tbl-wrap.k-fit .k-table tbody th > b:first-child,
   .k-tbl-wrap.k-fit .k-table :is(button, .btn, .k-badge, .k-chip, .k-delta) { white-space: nowrap; }
+}
+
+/* LIVE21B-012: the tax report's sales name a fund in full ("Parag Parikh Flexi Cap Fund - Direct Plan - Growth"): on a laptop two lines at most,
+   about 16 characters wide (all of it in the title), so the name never holds the first column wide and the table fits its card at 1000 px */
+@media (min-width: 641px) {
+  .tax-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 16ch; white-space: normal; }
 }
 
 /* R15 #3 (owner, 7 Nov): Net worth's "Where you stand": the headline (figure large, its change beside it) on the left half, what you own,

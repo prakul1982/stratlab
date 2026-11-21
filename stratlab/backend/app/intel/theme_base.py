@@ -709,7 +709,7 @@ def fill_earlier(answer: dict, earlier: dict) -> dict:
 
 def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None, facts_of=None, carried: bool = False,
                previous: dict | None = None, off_before: dict | None = None, moved_before: dict | None = None, moved_out: dict | None = None,
-               figures_of=None, published: dict | None = None) -> tuple[dict, dict]:
+               figures_of=None, published: dict | None = None, recent: dict | None = None) -> tuple[dict, dict]:
     """(the map with every base company in one of the map's own layers, the answer as worked out: {"assign": {symbol: {"layer", "by"}},
     "rename": {layer: {"name", "description"}}, "extra": [{"name", "description", "symbols"}]}). Runs only when the map has layers of its own;
     companies in its official-industry or named-list layers (not a list grouped by industry) are placed: from `kept` (the answer kept with the map),
@@ -1094,7 +1094,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         # r59: a layer never mostly listed and left out, a company moved in on no line of its words back where it was
         out_vc, listed_rows = listed_out(out_vc, words_of, theme, moved_before, figures_for if figures_of is not None else None, published)
         out_vc, bar_rows = kind_bars(out_vc, words_of, theme)          # e81: a kind of company a layer can never hold
-        single_rows = single_rows + listed_rows + bar_rows
+        # e85 (LIVE21A-009): a move made within the last days under today's rules is not reversed by this re-check
+        out_vc, hold_rows = hold_reversals(out_vc, recent)
+        single_rows = single_rows + listed_rows + bar_rows + hold_rows
         single_rows = other_rows + single_rows
         held_rows = held_rows + compute_rows + single_rows
     back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
@@ -1115,6 +1117,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     if scope_warn:
         print("theme base: theme-scope warning:", theme[:40], [x["layer"] for x in scope_warn])
         placements = {**(placements or {}), "scope_warning": scope_warn}
+        # e85 (the owner's R84 reassessment, P0: Fertilizers & Agrochemicals' "Property developers" layer, pp.10-11): such a layer is
+        # folded, never shown as a layer of the theme: its companies go to the theme's "Other" group, each with why
+        out_vc = fold_scope_layers(out_vc, f"{theme} {m.get('sector') or ''}", theme)
     if placements is not None and placements.get("dropped") and published is not None:
         out_vc, placements = layer_answer_removals(out_vc, placements, words_of, theme, facts_for)
     if placements is not None and placements.get("dropped"):
@@ -4350,8 +4355,17 @@ _WHOLE_PLAIN = {"care", "consumer", "health", "safety", "industrial", "services"
 # product ("cloud e-commerce platform", "cloud-based restaurant software", "cloud communications") is a word about that product
 COMPUTE_LAYER = r"\bcomput(?:e|ing)\b|\bhosting\b|data cent(?:er|re)s?|\bcapacity\b|cloud infrastructure|infrastructure providers?"
 COMPUTE_SAYS = (r"\bcomput(?:e|ing)\b|\bcapacity\b|\bhosting\b|data cent(?:er|re)s?|\bgpus?\b|infrastructure[- ]as[- ]a[- ]service|\biaas\b|"
-                r"\bservers?\b|colocation|\b(?:ai|cloud|it|computing|digital) infrastructure\b|hyperscale")
+                r"\bservers?\b|colocation|\b(?:ai|cloud|it|computing|digital) infrastructure\b|hyperscale|"
+                # e85 (CoreWeave's 10-K opening, read again for a line a page may quote: "The Essential Cloud for AI ... enables the full
+                # lifecycle of AI, including large-scale model training, inference ...", moved out of "Data centres, hosting and networks"):
+                # the training of AI models it runs for its customers is the computing it sells
+                r"\b(?:large-scale )?(?:ai )?model training\b|\b(?:ai|training) workloads\b|\bai hardware\b")
 CLOUD_ADJECTIVE = r"\bcloud(?:[- ]based|[- ]native)?\s+(?!comput\w*|infrastructure|hosting|servers?|capacity|data cent\w*)"
+
+
+# e85: word starts of no kind of work, never counted as words a company shares with a layer (compute_fit's last step)
+SHARE_GENERIC = {"one", "while", "run", "platf", "deliv", "desig", "engin", "servi", "solut", "busin", "compa", "custo", "provi", "offer",
+                 "build", "grow", "start", "every", "speed", "lead", "globa", "world", "focus", "help", "enabl"}
 
 
 def says_compute(text: str) -> bool:
@@ -4463,12 +4477,23 @@ def compute_fit(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[
             # properties", put in "Mortgage REITs" on the words it shares with it): a layer of lenders only for one whose words say it lends
             if not LENDS_SAYS.search(plain):
                 others_ = [w for w in others_ if not LENDING_LAYER.search(_HALF_RX.sub("", w.get("layer") or ""))]
+            # e85: a layer's name said in its opening or the sentences that say what the company sells (principal_words), never in a later one of its
+            # platform's qualities (Shopify's "reliability and security")
+            sells_ = " ".join(dict.fromkeys(x for x in ((_sentences(" ".join(plain.split())) or [""])[0], principal_words(plain)) if x)) or plain
             said = [w for w in others_ if layer_says(w, plain, tw)[1]]
+            said = [w for w in said if layer_says(w, sells_, tw)[1]] if len(said) == 1 else said
             to, how = (said[0], "its own words say what “{}” is") if len(said) == 1 else (None, "")
             if to is None:
-                mine = kind_stems(plain) - tw
-                best = max(others_, key=lambda w: len(mine & (kind_stems(f"{w.get('layer')} {w.get('description') or ''}") - tw)), default=None)
-                if best is not None and len(mine & (kind_stems(f"{best.get('layer')} {best.get('description') or ''}") - tw)) >= 2:
+                # e85 (the re-read Software words: Shopify sent to "Security software subscriptions" on "all-in-one", "platform", "while" and
+                # "reliability and security", a quality of its platform): words of no kind of work never count (SHARE_GENERIC), and a layer is
+                # taken on shared words only on two of them, or on a word of its name said in the company's opening sentence of what it is
+                mine = kind_stems(plain) - tw - SHARE_GENERIC
+                opening = kind_stems((_sentences(" ".join(plain.split())) or [""])[0]) - tw - SHARE_GENERIC
+                shared = lambda w: mine & (kind_stems(f"{w.get('layer')} {w.get('description') or ''}") - tw)      # noqa: E731
+                others_ = [w for w in others_ if len(shared(w)) >= 2
+                           or shared(w) & opening & kind_stems(_HALF_RX.sub("", w.get("layer") or ""))]
+                best = max(others_, key=lambda w: len(shared(w)), default=None)
+                if best is not None:
                     to, how = best, "its own words share most with what “{}” is"
             if to is None:
                 to = next((w for w in vc if w.get("official") and w.get("basis") == "rest"), None)
@@ -4929,7 +4954,17 @@ MAJOR_MIN = 1000.0              # a market value under this (in $ million or ₹
 PROPERTY_LAYER = re.compile(r"\bpropert(?:y|ies)\b|\breal\s+estate\b|\brealty\b", re.I)
 PROPERTY_THEME = re.compile(r"\bpropert|\breal\s*estate|\brealty|\breit|\bhous|\bhomes?\b|\bconstruct|\binfra|\blandlord|\bbuilding", re.I)
 PROPERTY_SAYS = re.compile(r"\breal\s+estate\b|\brealty\b|\bpropert(?:y|ies)\b|\bresidential\s+(?:projects?|development)|"
-                           r"\b(?:housing|township|commercial)\s+(?:projects?|development)", re.I)
+                           r"\b(?:housing|township|commercial)\s+(?:projects?|development)|"
+                           # e85 (the owner's review of the R84 Hotels & Casinos deck, P0: Host Hotels, "the largest publicly traded lodging
+                           # REIT, with a ... portfolio of luxury and upper-upscale hotels", Ryman and Sunstone out of "Hotel property owners
+                           # (lodging REITs)" as words that "don't say property is its business"): a REIT, or a portfolio of hotels, resorts
+                           # or casinos it owns, is property as its business
+                           r"\breits?\b|\breal\s+estate\s+investment\s+trusts?\b|"
+                           # e85 (the owner's R84 reassessment: Bharat Agri Fert & Realty "has no property evidence" beside its quoted
+                           # construction words): building homes, flats or commercial buildings is property as its business
+                           r"\b(?:construct\w*|develop\w*|build\w*)\b[^.;]{0,40}?\b(?:buildings?|flats?|apartments?|houses|homes|villas|"
+                           r"complex(?:es)?|towers?)\b|"
+                           r"\b(?:portfolio|own|owns|owned|owning|invests?\s+in|investing\s+in)\b(?!\s+(?:and\s+operated\s+)?by\b)[^.;]{0,80}?\b(?:hotels?|resorts?|casinos?)\b", re.I)
 # e82 (LIVE18A-004, the live R80 REITs: Omega Healthcare, a healthcare property owner whose words also name "real estate loans", and
 # Blackstone Real Estate Income Trust, one segment of nine "Investments in Real Estate Debt", moved to "Mortgage REITs" on one phrase):
 # words that say a company owns, leases or invests in property it holds (never "owned by" a borrower or a sponsor). A lender is one whose
@@ -5005,6 +5040,37 @@ def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
             return (f"its own words don't say property is its business"
                     + (f" (they say “{q}”)" if q else "") + f"; a {theme} theme holds “{name}” only for those whose do"), ""
     return "", ""
+
+
+_DEVELOPER_LAYER = re.compile(r"\bdevelop\w*|\bconstruct\w*|\bbuilders?\b|\brealty\b", re.I)
+
+
+def fold_scope_layers(vc: list[dict], scope: str, theme: str) -> list[dict]:
+    """e85: each named layer of property or real estate in a theme that names no such business (property_scope_layer) folded into the theme's
+    "Other" group, its companies there with why (a business beside the theme's own work); the layers as they were when there is none."""
+    rest_v = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
+    out = []
+    for v in vc:
+        name_ = _HALF_RX.sub("", v.get("layer") or "")
+        if v.get("official") or not v.get("layer") or not v.get("companies") or not property_scope_layer(v["layer"], scope) \
+                or not _DEVELOPER_LAYER.search(name_) or (kind_stems(name_) & kind_stems(scope)):
+            # (a layer of the theme's own kind of property, Hotels & Casinos' "Hotel property owners", stays: only a property developers'
+            # layer that shares no kind word with the theme is folded)
+            out.append(v)
+            continue
+        if rest_v is None:
+            rest_v = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+            vc = vc + [rest_v]
+        frm = _HALF_RX.sub("", v["layer"])
+        why = f"“{frm}” is a property business beside the theme's own work, no layer of a {theme} theme; listed here, out of every layer's figures"
+        rest_v["companies"] = list(rest_v.get("companies") or []) + [
+            {**{k: x for k, x in c.items() if k not in ("fit", "placed_by")}, "moved": True, "refit": {"from": frm, "to": "", "why": why, "scope": True}}
+            for c in v["companies"]]
+        # (the layer stays in its place, emptied and marked: the map's layers keep their order for every step that reads them by position)
+        out.append({**v, "companies": [], "folded": why})
+    if rest_v is not None and rest_v not in out:
+        out.append(rest_v)
+    return out
 
 
 def first_line(text: str) -> str:
@@ -5455,7 +5521,13 @@ COMMERCIAL_LAYER = r"\bcommercial\b|\blarge\b|\bbig\b|\bestablished\b|\bportfoli
 COMMERCIAL_SAYS = (r"\blargest\b[^.;]{0,80}\bby (?:revenue|sales)\b|\b(?:largest|biggest) (?:\w+ ){0,2}(?:pharmaceutical|biopharmaceutical|drug|"
                    r"biotech\w*|biomedical|medical) compan|\bproducts? (?:are|is) (?:marketed|sold) in\b|\bprimary products are\b|\bmarketed products\b|"
                    r"\bapproved (?:products|medicines|drugs|therapies)\b|\bproduct sales\b|\bcommercial[- ]stage\b|\bglobal commercial\b|"
-                   r"\bportfolio of (?:marketed |approved |branded )?(?:products|medicines|drugs)\b|\bsells? (?:its )?(?:products|medicines|drugs) in\b")
+                   r"\bportfolio of (?:marketed |approved |branded )?(?:products|medicines|drugs)\b|\bsells? (?:its )?(?:products|medicines|drugs) in\b|"
+                   # e85 (Regeneron's 10-K opening, read again for a line a page may quote: "a fully integrated biotechnology company that
+                   # invents, develops, manufactures, and commercializes medicines ... Our products and product candidates", moved to a
+                   # clinical-stage layer on "product candidates"): a company that commercializes its medicines, or names its products
+                   # beside its candidates, is commercial too
+                   r"\bcommerciali[sz]es (?:\w+ ){0,2}(?:medicines|products|drugs|therapies)\b|\bfully integrated (?:bio\w*|pharma\w*) compan|"
+                   r"\bproducts and product candidates\b")
 DEVELOPMENT_SAYS = (r"\bclinical[- ]stage\b|\bpre-?revenue\b|\bdevelopment[- ]stage\b|\bpre-?clinical[- ]stage\b|\bproduct candidates?\b|"
                     r"\bdrug candidates?\b|\blead (?:product )?candidates?\b|\bno (?:approved )?products? (?:on (?:the )?market|approved)\b")
 STAGE_FACTOR = 10.0             # v55: revenue this many times the development layer's median developer's, with an operating profit: commercial
@@ -5831,6 +5903,36 @@ HOME_FORMS = re.compile(r"\((?:10-K|10-Q|8-K)\)")         # a US domestic filer'
 ABROAD_FORMS = re.compile(r"\((?:20-F|40-F|6-K)\)")        # a foreign private issuer's
 
 
+def hold_reversals(vc: list[dict], recent: dict | None) -> tuple[list[dict], list[dict]]:
+    """e85 (LIVE21A-009: Omega, Alexandria and Medalist moved on 19 Nov and back on 20 Nov): a company the stored log moved from A to B within
+    the last days under today's rules (`recent`, theme_changes.recent_moves) that this placement puts back in A stays in B, said as held
+    (a move needs evidence that holds: one reversed the next day on the same rules and words is no finding). Only when B is still a layer of
+    the map; with no such layer, the placement stands. (the layers, a row for each company held)."""
+    if not recent:
+        return vc, []
+    by_name = {_HALF_RX.sub("", v.get("layer") or ""): v for v in vc if v.get("layer")}
+    rows = []
+    for v in vc:
+        here = _HALF_RX.sub("", v.get("layer") or "")
+        keep = []
+        for c in v.get("companies") or []:
+            mv = recent.get(c.get("ticker"))
+            frm, to = (_HALF_RX.sub("", mv[0]), _HALF_RX.sub("", mv[1])) if mv else ("", "")
+            back = mv and here == frm and to != here and to in by_name
+            if not back:
+                keep.append(c)
+                continue
+            dest = by_name[to]
+            why = f"moved to “{to}” within the last {HOLD_REVERSAL_DAYS} days under these rules; not moved back on the same evidence"
+            dest["companies"] = list(dest["companies"]) + [{**c, "moved": True, "held": True, "refit": {"from": here, "to": to, "why": why}}]
+            rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": here, "to": to, "why": why})
+        v["companies"] = keep
+    return vc, rows
+
+
+HOLD_REVERSAL_DAYS = 3          # e85: theme_changes.HOLD_DAYS, said in the reason
+
+
 def domicile_moves(vc: list[dict], facts_for) -> tuple[list[dict], list[dict]]:
     """r62: a company in a layer whose name (or its description's first sentence) says its companies are foreign to the theme's market
     (FOREIGN_LAYER), whose stored filings are a domestic filer's own (HOME_FORMS, none of ABROAD_FORMS), is not foreign: it goes to the
@@ -5874,6 +5976,28 @@ def domicile_moves(vc: list[dict], facts_for) -> tuple[list[dict], list[dict]]:
             to = "" if dest is rest_v else _HALF_RX.sub("", dest.get("layer") or "")
             why = (f"its own filings are a domestic filer's ({', '.join(sorted({x.strip('()') for x in home.findall(filed)}))}), so it is not one of “{frm}”"
                    + (f"; in the layer of its official industry whose companies' market values are nearest its own" if to else ""))
+            dest["companies"] = list(dest["companies"]) + [{**{k: x for k, x in c.items() if k not in ("model_out", "out_why", "unfit", "line_says")},
+                                                            "moved": True, "refit": {"from": frm, "to": to, "why": why, "domicile": True}}]
+            rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": frm, "to": to, "why": why})
+        v["companies"] = keep
+    # e85 (LIVE21A-009: the R84 US Regional banks page with UBS in "Custody and asset servicing banks" and Banco Santander (Brasil) in
+    # "Mid-sized banks", while HSBC, RBC and Barclays sat in "Foreign banking groups earning loan interest"): the other way too, a company of a
+    # named layer whose stored filings are a foreign issuer's annual report (ABROAD_FORMS, none of HOME_FORMS) goes to the map's foreign
+    # layer (its largest), beside the other foreign companies, with the reason
+    dest = max((v for v in foreign if v.get("companies")), key=lambda v: len(v["companies"]), default=None)
+    for v in homes if dest is not None else ():
+        keep = []
+        for c in v["companies"]:
+            try:
+                filed = str((facts_for(c.get("ticker")) or {}).get("filings") or "")
+            except Exception:
+                filed = ""
+            if not abroad.search(filed) or home.search(filed):
+                keep.append(c)
+                continue
+            frm, to = _HALF_RX.sub("", v.get("layer") or ""), _HALF_RX.sub("", dest.get("layer") or "")
+            why = (f"its own filings are a foreign issuer's ({', '.join(sorted({x.strip('()') for x in abroad.findall(filed)}))}), so it is "
+                   f"one of “{to}”, not of “{frm}”")
             dest["companies"] = list(dest["companies"]) + [{**{k: x for k, x in c.items() if k not in ("model_out", "out_why", "unfit", "line_says")},
                                                             "moved": True, "refit": {"from": frm, "to": to, "why": why, "domicile": True}}]
             rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": frm, "to": to, "why": why})

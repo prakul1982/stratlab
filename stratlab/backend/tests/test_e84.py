@@ -286,9 +286,10 @@ def test_a_public_page_says_the_close_its_values_are_at(monkeypatch):
         for s in ("A", "B", "C")]})
     p = {"sector": "Gadgets", "value_chain": [{"layer": "L", "companies": [{"ticker": s, "name": s, "verified": True} for s in ("A", "B", "C")]}]}
     v = P.view({"region": "IN", "label": "Gadgets", "slug": "gadgets", "name": "gadgets", "rules": None}, p)
-    assert v["prices"] == "2026-11-20" and v["prices_other"] == [["2026-11-19", 1]]
+    # (updated on purpose, e85 LIVE21A-004: one count of the values at an earlier close, said once, never a bracket a close)
+    assert v["prices"] == "2026-11-20" and v["prices_older"] == 1
     html = P.render(v)
-    assert "market values at the 20 Nov 2026 close (1 at the 19 Nov 2026 close)" in html
+    assert "market values at the 20 Nov 2026 close; 1 company at an earlier close" in html and "(1 at the 19 Nov" not in html
 
 
 def test_a_deck_is_kept_per_price_date_and_the_sample_is_at_the_newest_close():
@@ -320,4 +321,4 @@ def test_a_dated_headline_row_is_no_financial_margin_and_consumer_lenders_are_sa
 def test_versions():
     from app import blog_research, deck
     assert B.RULES == 79 and TR.PLACE_CARRY[79] == 78 and TR.EARLIER_MAX == 34
-    assert D.DIVE_TEXT == 50 and deck.THEME_DECK_VERSION == 90 and blog_research.GEN == 12
+    assert D.DIVE_TEXT == 51 and deck.THEME_DECK_VERSION == 91 and blog_research.GEN == 12          # e85 (LIVE21A, the R84 decks): deck 91, dive text 51 (updated on purpose)

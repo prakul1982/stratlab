@@ -143,6 +143,56 @@ test.describe("centre alignment", () => {
     }
   });
 
+  // LIVE21B-012 (site85): the check above missed the tax report's sales live (738 px in a 548 px box at 1000 px; "Bought" cut at 1280 with More
+  // columns on) because it measured only at 1280, with the owner's short symbols, and never with More columns turned the other way. This is
+  // exactly the reviewer's case: a fund's long name, at 1000, 1280 and 1600 px, More columns on and off; nothing wider than its box, nothing cut.
+  test("tax report: the sales fit their card at 1000, 1280 and 1600 px, More columns on and off, with a fund's long name", async ({ page, request }, info) => {
+    test.skip(info.project.name === "phone", "desktop widths");
+    test.setTimeout(150_000);
+    const token = "site85-0", h = { Authorization: `Bearer ${token}` };
+    expect((await request.delete(`${API}/tax`, { headers: h })).ok()).toBeTruthy();
+    const csv = ["Date,Symbol,Type,Quantity,Price",
+      "2023-04-10,PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN - GROWTH,BUY,1250,52.35", "2025-05-10,PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN - GROWTH,SELL,1250,84.6",
+      "2024-01-10,RELIANCE,BUY,40,1210.5", "2025-06-10,RELIANCE,SELL,40,1488.2",
+      "2025-01-02,ICICIBANK,BUY,120,1270", "2025-08-01,ICICIBANK,SELL,120,1431.75"].join("\n") + "\n";
+    const r = await request.post(`${API}/tax/import?filename=trades.csv`, { headers: { ...h, "Content-Type": "application/octet-stream" }, data: Buffer.from(csv) });
+    expect(r.ok()).toBeTruthy();
+    await page.setViewportSize({ width: 1000, height: 900 });
+    await open(page, "/tax-report", "Capital gains on your shares", sessionAs(token, "u-site85-0", "site850@example.com"));
+    await settle(page);
+    await page.getByRole("combobox", { name: "Financial year" }).selectOption("2025");
+    const sales = page.locator(".k-tbl-wrap").filter({ has: page.getByRole("table", { name: "Realised sales" }) });
+    await expect(sales.getByText(/PARAG PARIKH/)).toBeVisible();
+    const more = page.getByTestId("cols-tax-sales");
+    const cut = () => sales.evaluate((w) => {
+      const box = w.getBoundingClientRect(), out: string[] = [];
+      if (w.scrollWidth > w.clientWidth + 1) out.push(`table ${w.scrollWidth} px in its ${w.clientWidth} px box`);
+      for (const c of w.querySelectorAll("th, td")) {
+        const r = c.getBoundingClientRect();
+        if (r.width && (r.right > box.right + 1 || r.left < box.left - 1)) out.push(`"${(c.textContent || "").trim().slice(0, 20)}" runs ${Math.round(r.left)}-${Math.round(r.right)} past ${Math.round(box.left)}-${Math.round(box.right)}`);
+      }
+      // the long name: two lines at most, and all of it in its title
+      const n = w.querySelector(".tax-name") as HTMLElement | null;
+      if (!n || !/PARAG PARIKH FLEXI CAP FUND/.test(n.title)) out.push("the name's title");
+      else if (n.getBoundingClientRect().height > 2 * parseFloat(getComputedStyle(n).lineHeight) + 1) out.push(`the name takes ${Math.round(n.getBoundingClientRect().height)} px`);
+      return out;
+    });
+    for (const w of [1000, 1280, 1600]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      for (const on of [false, true]) {
+        if ((await more.getAttribute("aria-pressed")) !== String(on)) await more.click();
+        await page.waitForTimeout(400);
+        await sales.scrollIntoViewIfNeeded();
+        await shot(page, `tax-sales-${w}-${on ? "more" : "fewer"}`);
+        expect(await cut(), `at ${w}px, More columns ${on ? "on" : "off"}`).toEqual([]);
+        expect(await misaligned(page), `at ${w}px, More columns ${on ? "on" : "off"}`).toEqual([]);
+      }
+    }
+    // every figure still there: the purchase day under the sale's with More columns on, the cost under the sale amount
+    await expect(sales.getByText("bought 10 Apr 2023")).toBeVisible();
+    await expect(sales.getByText(/^cost ₹65,4\d\d/)).toBeVisible();
+  });
+
   for (const [path, ready, file] of [["/holdings", "My Holdings", "holdings"], ["/money/net-worth", "Net worth", "net-worth"], ["/tax-report", "Capital gains on your shares", "tax-report"]] as const) {
     test(`${file}: every table row and fold row centred`, async ({ page }, info) => {
       if (info.project.name !== "phone") await page.setViewportSize({ width: 1280, height: 900 });

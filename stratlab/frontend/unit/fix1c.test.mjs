@@ -218,7 +218,8 @@ test("LIVE1C-090, LIVE1C-091: few watched stocks stack the Invest cards and fill
   // LIVE3-015 / LIVE2-015: the F&O note is left to the watchlist page (it was derivatives jargon here and wrapped off a phone's table)
   assert.doesNotMatch(read("src/components/Research.tsx"), /<FoBadges/);
   const mine = read("src/pages/MineHome.tsx");
-  assert.match(mine, /watchItems\.length <= 3 \? coming\.slice\(0, Math\.max\(3, watchItems\.length \+ 2\)\)/);
+  // (changed on purpose, site85 LIVE21B-003: as many dated rows as the watchlist card shows, two at least; it was still 150px taller live)
+  assert.match(mine, /shownWatch < 6 \? coming\.slice\(0, Math\.max\(2, shownWatch\)\)/);
   assert.match(mine, /<span className="sr-only">\{d\.w\} \{d\.d\} \{d\.m\}: <\/span>/);
 });
 

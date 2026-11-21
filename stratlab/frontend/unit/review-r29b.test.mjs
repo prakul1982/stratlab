@@ -83,7 +83,8 @@ test("R29B-017: the last price's line leaves the legend clear and no axis label 
 
 test("R29B-019: a saved sign-in never sees the marketing words while the app starts", () => {
   assert.match(read("public/boot.js"), /sb-\.\+-auth-token[\s\S]*data-saved/);
-  assert.match(read("index.html"), /html\[data-saved\] \[data-boot\] > \* \{ display: none; \}/);
+  // (changed on purpose, site85 LIVE21B-001: not the app's own start-up frame, which public/early.js draws for a saved sign-in)
+  assert.match(read("index.html"), /html\[data-saved\] \[data-boot\]:not\(\.boot-shell\) > \* \{ display: none; \}/);
   assert.match(read("src/entry.tsx"), /if \(!account\) holdStartup\(root\)/);
 });
 

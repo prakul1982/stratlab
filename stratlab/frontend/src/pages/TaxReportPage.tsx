@@ -249,20 +249,20 @@ export function TaxReportPage() {
     { key: "tax", header: "Tax", numeric: true, cell: (b) => inr(b.tax) },
   ];
   const saleCols: Column<Sale & { i: number }>[] = [
-    { key: "stock", header: "Stock", rowHeader: true, cell: (r) => (
-      <><b>{name(r.key)}</b>{rep?.kinds?.[r.key] && <> <span className="badge kind-etf">{rep.kinds[r.key]}</span></>}{r.bonus && <span className="k-note"> bonus</span>}
+    // LIVE21B-012: a fund's long name ("Parag Parikh Flexi Cap Fund - Direct Plan - Growth") wraps, two lines at most on a laptop (all of it
+    // in its title and on a phone's card), so it no longer holds the column wide: the table was 738 px in a 548 px box at 1000 px
+    { key: "stock", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
+      <><span className="tax-name" title={name(r.key)}><b>{name(r.key)}</b></span>{rep?.kinds?.[r.key] && <> <span className="badge kind-etf">{rep.kinds[r.key]}</span></>}{r.bonus && <span className="k-note"> bonus</span>}
         {r.gf === "applied" && <span className="k-note"> grandfathered</span>}{r.gf === "missing" && <span className="k-note k-down"> 31 Jan 2018 price missing</span>}
         {/* site83 (owner, 20 Nov: no table wider than its box): with every column shown, the quantity under the name and the rate under the
             term, so the sales are the card's width at 1280px (Qty and Rate scrolled out of view) */}
         {salesMore.on && <span className="k-sub-line">{qtyText(r.qty)} {r.qty === 1 ? "share" : "shares"}</span>}</>) },
     { key: "gain", header: "Gain or loss", numeric: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
     { key: "term", header: "Term", cell: (r) => <>{r.term === "LT" ? "Long" : "Short"}{salesMore.on && <span className="k-sub-line">{rate(r.rate)}</span>}</> },
-    { key: "sold", header: "Sold", numeric: true, cell: (r) => dateOnly(r.sold) },
-    { key: "cost", header: "Cost", numeric: true, cell: (r) => inr(r.cost) },
-    { key: "sale", header: "Sale", numeric: true, cell: (r) => inr(r.sale) },
-    ...(salesMore.on ? [
-      { key: "bought", header: "Bought", numeric: true, cell: (r: Sale) => dateOnly(r.bought) },
-    ] : []),
+    // LIVE21B-012: the purchase day under the sale's (More columns), and the cost under the sale amount: five columns that fit the card at
+    // 1000, 1280 and 1600 px whichever way More columns is set ("Bought" was cut at 1280 with every column shown, "Sold" at 1000)
+    { key: "sold", header: "Sold", numeric: true, cell: (r) => <>{dateOnly(r.sold)}{salesMore.on && <span className="k-sub-line">bought {dateOnly(r.bought)}</span>}</> },
+    { key: "sale", header: "Sale and cost", numeric: true, cell: (r) => <>{inr(r.sale)}<span className="k-sub-line">cost {inr(r.cost)}</span></> },
   ];
   const lotCols: Column<Lot & { i: number }>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <><Link className="link" to={`/research/IN/${encodeURIComponent(r.key)}`}><b>{name(r.key)}</b></Link>{r.bonus && <span className="k-note"> bonus</span>}</> },

@@ -132,7 +132,8 @@ def _gate(row: dict, m: dict, pub: dict | None) -> str:
     gate is judged on its stored read (broad industries) and its dive's own tally of companies not checked, read once per entry and dive
     count (memoised), only where its index meta and kept count don't say them."""
     need_p = "broad" not in m
-    need_t = not (isinstance(pub, dict) and isinstance(pub.get("unchecked"), int))
+    # e85 (LIVE21A-001): a count kept before the evidence share was kept with it reads the dive's tally for it too
+    need_t = not (isinstance(pub, dict) and isinstance(pub.get("unchecked"), int) and isinstance(pub.get("evidenced"), int))
     if not (need_p or need_t):
         return theme_library.gate_why(m, pub)
     k = (row.get("hk"), str(row.get("at") or ""), json.dumps(pub, sort_keys=True, default=str))
@@ -149,10 +150,12 @@ def _gate(row: dict, m: dict, pub: dict | None) -> str:
             _GATE_MEMO.clear()
         _GATE_MEMO[k] = (theme_library.broad_industries(p) if need_p and isinstance(p, dict) else None,
                          int(dt.get("membership_unverified") or 0) if dt and dt.get("total") else None,
-                         int(dt["total"]) if dt and dt.get("total") else None)
-    broad, unchecked, total = _GATE_MEMO[k]
+                         int(dt["total"]) if dt and dt.get("total") else None, evidenced(dive))
+    broad, unchecked, total, ev = _GATE_MEMO[k]
     if not isinstance(pub, dict):
         pub = {"total": total} if total else None
+    if ev and isinstance(pub, dict) and not isinstance(pub.get("evidenced"), int):
+        pub = {**pub, **ev}
     return theme_library.gate_why(m, pub, unchecked=unchecked, broad=broad)
 
 
@@ -382,6 +385,15 @@ def public_layers(p: dict, dive: dict | None = None) -> list[dict]:
     return out
 
 
+def evidenced(dive: dict | None) -> dict:
+    """e85 (LIVE21A-001): {"evidenced": the dive's companies in the theme on evidence of its work (description-verified or list-supported),
+    "tallied": of its tally's total}, the public gate's measure (theme_library.gate_why); {} with no tally of the states."""
+    dt = (dive or {}).get("tally") if isinstance((dive or {}).get("tally"), dict) else None
+    if not dt or not dt.get("total") or "description_verified" not in dt:
+        return {}
+    return {"evidenced": int(dt.get("description_verified") or 0) + int(dt.get("list_supported") or 0), "tallied": int(dt["total"])}
+
+
 def counts(p: dict, dive: dict | None = None) -> dict:
     """e81: the theme's one count, as its card, its page and its post say it: {"listed": companies its page lists, "layers": layers its page
     shows, "all": companies in the theme (the dive's tally, the app's and the deck's; else the read's own, each once), "unlisted": [[why, n]]
@@ -586,7 +598,11 @@ def view(entry: dict, p: dict) -> dict:
 
 
 def _price_label(once, caps, dcaps, newer, ddays, idays, dive_day, region, layers) -> dict:
-    """e84: {"prices": the close most of the page's market values are at, "prices_other": [[another close, how many], ...]}."""
+    """e84: {"prices": the close the page's market values are at, "prices_older": how many are at an earlier close}.
+    e85 (LIVE21A-004: IT services' head "market values at the 20 Nov 2026 close (9 at the 19 Nov 2026 close) (2 at the 18 Nov ...) ... (1 at
+    the 3 Sep 2026 close)", 14 brackets, while its app said "(2 companies at an earlier close)"): the latest close any value is at, as the
+    app's dive says it (theme_data.price_day), and one count of the values at an earlier one, of the same companies the dive counts
+    (theme_data.older_count)."""
     days = []
     for k in once:
         if not caps.get(k):
@@ -595,9 +611,9 @@ def _price_label(once, caps, dcaps, newer, ddays, idays, dive_day, region, layer
         if d_:
             days.append(d_)
     if not days:
-        return {"prices": dive_day or _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}), "prices_other": []}
-    got = Counter(days).most_common()
-    return {"prices": got[0][0], "prices_other": [[d_, n] for d_, n in sorted(got[1:], reverse=True)]}
+        return {"prices": dive_day or _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}), "prices_older": 0}
+    top = max(days)
+    return {"prices": top, "prices_older": sum(1 for d_ in days if d_ < top)}
 
 
 def _map_day(region: str, p: dict, entry: dict) -> str | None:
@@ -669,9 +685,10 @@ def render(v: dict) -> str:
             + (f" ({unlisted_said({**(v.get('counts') or {}), 'listed': v['members'], 'all': v.get('all') or 0})})"
                if (v.get("all") or 0) > v["members"] else "")
             + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "")
-            # LIVE9A-011: the close the market values are at, said once
+            # LIVE9A-011: the close the market values are at, said once; e85 (LIVE21A-004): with one count of those at an earlier close
             + (f" · market values at the {e(day_text(v['prices']))} close" if v.get("prices") else "")
-            + ("".join(f" ({n} at the {e(day_text(d_))} close)" for d_, n in v.get("prices_other") or []) if v.get("prices") else "") + "</p>")
+            + (f"; {v['prices_older']} compan{'y' if v['prices_older'] == 1 else 'ies'} at an earlier close"
+               if v.get("prices") and v.get("prices_older") else "") + "</p>")
     if v.get("older"):             # r66e (LIVE12A-001): a theme shown from its read under an earlier version of the checks says so
         body += ('<p class="note" data-older>' + e(OLDER_LINE + (" " + RECHECKING_LINE if v.get("rechecking") else "")) + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown

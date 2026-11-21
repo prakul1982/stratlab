@@ -1092,7 +1092,38 @@ def holiday_events(today: date, frm: date | None = None, to: date | None = None)
             pass
         out.append(_ev("holiday", d, f"Exchange holiday{': ' + name if name else ''}", "The exchanges are closed for equities and F&O.",
                        eid=_id("hol", d), status="released" if d < today else "scheduled"))
-    return out + special_sessions(today, frm, to)
+    return out + special_sessions(today, frm, to) + us_closures(today, frm, to)
+
+
+def us_closures(today: date, frm: date, to: date) -> list[dict]:
+    """The US exchanges' weekday holidays and early closes (LIVE21A-007: Thanksgiving, 26 Nov 2026, and the 13:00 ET close the day after were
+    on no list, though the page covers the US and lists eight results on the closed day). From the exchange calendar the app keeps."""
+    from .data import calendar as tc
+    out = []
+    try:
+        days = tc.holidays("US", frm, (to - frm).days + 1)
+    except Exception:
+        days = []
+    for iso in days:
+        d = _day(iso)
+        try:
+            name = tc.holiday_name("US", d)
+        except Exception:
+            name = None
+        out.append(_ev("holiday", d, f"US exchanges closed{': ' + name if name else ''}", "The New York Stock Exchange and Nasdaq are shut for the day.",
+                       eid=_id("hol-us", d), status="released" if d < today else "scheduled", market="US"))
+    d = frm
+    while d <= to:
+        if d.weekday() < 5:
+            try:
+                close = tc.day_close("US", d)
+            except Exception:
+                close = None
+            if close and close < "16:00":
+                out.append(_ev("holiday", d, f"US exchanges close early, at {close} ET", "A shortened session on the New York Stock Exchange and Nasdaq.",
+                               eid=_id("early-us", d), status="released" if d < today else "scheduled", market="US"))
+        d += timedelta(days=1)
+    return out
 
 
 def special_sessions(today: date, frm: date, to: date) -> list[dict]:

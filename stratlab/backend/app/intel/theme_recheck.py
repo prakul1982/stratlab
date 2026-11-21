@@ -228,9 +228,17 @@ def rebuild(region: str, name: str) -> None:
     r, theme, m, _ = R.theme_map(SYSTEM, region, name)
     if not m.get("_library") or m.get("_older"):
         raise NotDone("its read is not kept under today's rules")
-    m = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, m))
+    m0 = m
+    m = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, m0))
     if not (m.get("placements") or {}).get("checked"):
         raise NotDone("its checks are not finished yet", later=True)          # a dive is kept only for a checked map
+    # e85 (LIVE21A-002): its US companies whose stored words hold no line a page may quote read once more first (their annual reports,
+    # largest first, bounded), outside the memory guard's turn (reads only), so the dive judges them on those words
+    try:
+        if theme_routes.describe_quoted(r, m):
+            m = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, m0))          # its lines from the words read now
+    except Exception as e:
+        print("theme re-check: words to quote not read:", region, name, type(e).__name__, str(e)[:100])
     with _turn("dive"):
         theme_routes.dive_of(r, theme, m, rebuild=True)
     return theme_routes.dive_key(r, theme, m)
@@ -343,6 +351,17 @@ class Job:
         """One pass: the queue made when the versions changed, then one theme of it, in the memory guard's turn."""
         queue()
         if not _load().get("todo"):
+            # e85 (LIVE21A-018): with no theme to re-check, the sample deck made again at its theme's newer close
+            try:
+                from . import theme_routes
+                with _turn("sample deck"):
+                    made = theme_routes.refresh_sample(SYSTEM)
+                if made:
+                    print(f"theme re-check: the sample deck made again at the {made} close")
+            except Yielded:
+                pass
+            except Exception as e:
+                print("theme re-check: sample deck not made again:", type(e).__name__, str(e)[:120])
             return None
         # r69e: no turn held around the whole theme: each phase of the rebuild takes the memory guard's turn only when no other job holds
         # or waits for it (_turn), so a page's price job never waits behind the re-check
