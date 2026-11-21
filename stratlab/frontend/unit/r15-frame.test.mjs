@@ -84,9 +84,14 @@ test("every Card with a title, and every FoldCard, is a section with the close a
 
 test("every Show more has a Show less (owner, 7 Nov)", () => {
   assert.match(read("src/components/kit/DataTable.tsx"), /\{pages > 1 && <ShowLess onLess=\{\(\) => setPages\(1\)\} \/>\}/);
-  for (const f of ["src/components/Filings.tsx", "src/components/Deals.tsx", "src/components/NamedHolders.tsx", "src/components/BizUpdates.tsx",
-    "src/components/TaxUnits.tsx", "src/pages/TaxReportPage.tsx", "src/pages/EtfGapsPage.tsx", "src/components/ThemeDive.tsx", "src/components/HoldingsActions.tsx",
-    "src/components/CorpActions.tsx", "src/pages/ResultsPage.tsx", "src/pages/trade/ClosingAuctionPage.tsx", "src/pages/trade/StockFuturesPage.tsx",
+  // (changed on purpose, site86 SCROLL, owner 21 Nov: "add a scroll, don't extend it": the company page's filings, deals, named holders and
+  // corporate actions, the tax report's ETF sales and the dividends received show every row, scrolling inside the card, with no Show all)
+  for (const f of ["src/components/Filings.tsx", "src/components/Deals.tsx", "src/components/NamedHolders.tsx", "src/components/TaxUnits.tsx",
+    "src/components/HoldingsActions.tsx", "src/components/CorpActions.tsx"]) {
+    assert.doesNotMatch(read(f), /Show all \{|<ShowLess /, f);
+    assert.match(read(f), /scrollRows=\{\d+\}|<ScrollList /, f);
+  }
+  for (const f of ["src/components/BizUpdates.tsx", "src/pages/TaxReportPage.tsx", "src/pages/EtfGapsPage.tsx", "src/components/ThemeDive.tsx", "src/pages/ResultsPage.tsx", "src/pages/trade/ClosingAuctionPage.tsx", "src/pages/trade/StockFuturesPage.tsx",
     "src/pages/trade/JournalPage.tsx", "src/pages/admin/AuditPanel.tsx", "src/pages/Screens.tsx", "src/components/LibraryBits.tsx"]) {
     assert.match(read(f), /<ShowLess /, f);
   }

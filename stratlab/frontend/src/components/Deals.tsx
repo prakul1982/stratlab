@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { inr, safeHref, fmtDate } from "../lib/format";
-import { Badge, CardNote, DataTable, EmptyState, ErrorState, Seg, ShowLess, Skeleton } from "./kit";
+import { Badge, CardNote, DataTable, EmptyState, ErrorState, Seg, Skeleton } from "./kit";
 import { afterText, pairDeals } from "../lib/dealRows";
 
 export type DealKind = "insider" | "sast" | "bulk" | "block";
@@ -53,7 +53,6 @@ export function DealsPanel({ symbol }: { symbol: string }) {
   const [rep, setRep] = useState<DealsReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [show, setShow] = useState("all");
-  const [more, setMore] = useState(false);
   const [tries, setTries] = useState(0);
 
   useEffect(() => {
@@ -69,17 +68,18 @@ export function DealsPanel({ symbol }: { symbol: string }) {
   if (!rep) return <Skeleton label="Reading the exchange disclosures" lines={3} />;
   const kinds = (SHOW.find((s) => s[0] === show) ?? SHOW[0])[2];
   const rows: DealRow[] = pairDeals(rep.items.filter((d) => kinds.includes(d.kind)));
-  const list = more ? rows : rows.slice(0, 12);
+  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): every row, scrolling inside the card past twelve (it was the first twelve and "Show all")
+  const list = rows;
   return (
     <div className="k-stack deals">
       <span className="k-small">{rep.flow_text
         ? <>Promoters and insiders on the open market, last {Math.round(rep.flow_days / 30)} months: <b>{rep.flow_text}</b>.</>
         : <span className="k-muted">No open-market trades by promoters or insiders disclosed in the last {Math.round(rep.flow_days / 30)} months.</span>}
         {rep.trust_note && <span className="k-muted" data-testid="deals-trust-note"> {rep.trust_note}</span>}</span>
-      <Seg label="Which disclosures" value={show} onChange={(v) => { setShow(v); setMore(false); }} options={SHOW.map(([id, label]) => ({ value: id, label }))} />
+      <Seg label="Which disclosures" value={show} onChange={setShow} options={SHOW.map(([id, label]) => ({ value: id, label }))} />
       {rows.length === 0 ? <EmptyState title="Nothing disclosed">None disclosed in the last year.</EmptyState> : (
         <div className="deals-table">
-          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d: DealRow) => d.id} stack sticky={list.length > 14}
+          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d: DealRow) => d.id} stack scrollRows={12}
             columns={[
               { key: "who", header: "Who", rowHeader: true, wrap: true, cell: (d) => <><span className="deal-who">{d.who}</span>{d.from ? <span className="k-sub-line">from {d.from}</span>
                 : d.trust ? <span className="k-sub-line" data-testid="deal-trust">Employee stock option trust: buys for staff options</span>
@@ -94,8 +94,6 @@ export function DealsPanel({ symbol }: { symbol: string }) {
             ]} />
         </div>
       )}
-      {rows.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {rows.length}</button>}
-      {more && rows.length > 12 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
       {rep.insider_from === "BSE" && <p className="k-note" data-testid="deals-from-bse">Insider trades here are from BSE's disclosures: NSE's list didn't answer just now.</p>}
       {rep.problems.length > 0 && <p className="k-note">Not available right now: {rep.problems.join(", ")}. Try again later.</p>}
       <CardNote><p>From exchange disclosures over the last year, as filed: insider trades and pledges by promoters, directors and key staff, substantial acquisitions, and bulk and block deals. Facts, not advice.</p></CardNote>

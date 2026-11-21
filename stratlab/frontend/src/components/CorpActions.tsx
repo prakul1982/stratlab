@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { price, safeHref, fmtDate } from "../lib/format";
 import type { Region } from "../lib/research";
-import { Badge, DataTable, ErrorState, ShowLess, Skeleton } from "./kit";
+import { Badge, DataTable, ErrorState, Skeleton } from "./kit";
 
 /* Corporate actions: dividends, bonus issues, splits, buybacks, rights issues and demergers, by ex-date. */
 
@@ -84,7 +84,6 @@ type ActionRow = { id: string; a: CorpAction; ahead: boolean } | { id: string; g
 export function CompanyActions({ region, symbol }: { region: Region; symbol: string }) {
   const [data, setData] = useState<CompanyActions | null>(null);
   const [failed, setFailed] = useState(false);
-  const [all, setAll] = useState(false);
   const [tries, setTries] = useState(0);
   useEffect(() => {
     let live = true;
@@ -94,7 +93,8 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
   }, [region, symbol, tries]);
   if (failed) return <ErrorState title="Corporate actions are unavailable right now" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} />;
   if (!data) return <Skeleton label="Reading the corporate actions" lines={3} />;
-  const past = all ? data.past : data.past.slice(0, 5);
+  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): every row, scrolling inside the card (it was the last five and "Show all")
+  const past = data.past;
   const ccy = region === "IN" ? "INR" : "USD";
   const none = data.ahead_known ? (region === "US" ? "No dividend declared with an ex-date in the next four weeks." : "Nothing announced with an ex-date ahead.")
     : "Dividends declared for the next four weeks couldn't be read yet, so none is listed. A split ahead isn't listed until its ex-date; past ones are below.";
@@ -110,7 +110,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
       {data.dividends_12m && (
         <span className="k-small">Dividends with an ex-date in the last 12 months: <b>{price(data.dividends_12m.amount, ccy)}</b> a share{data.dividends_12m.adjusted ? " in today's shares" : ""} ({data.dividends_12m.count} payment{data.dividends_12m.count === 1 ? "" : "s"})</span>
       )}
-      <div className="ca-table"><DataTable label="Corporate actions: ahead, and the past three years, newest first" rows={rows} rowKey={(r) => r.id} stack={false}
+      <div className="ca-table"><DataTable label="Corporate actions: ahead, and the past three years, newest first" rows={rows} rowKey={(r) => r.id} stack={false} scrollRows={8}
         rowNote={(r) => ("gap" in r ? <span className="k-small k-muted">{r.gap}</span> : undefined)}
         columns={[
           { key: "ex", header: "Ex-date", rowHeader: true, cell: (r) => ("gap" in r ? <b className="k-small">{r.head}</b> : (
@@ -125,7 +125,6 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
               {r.a.url && <a className="link k-note" href={safeHref(r.a.url)} target="_blank" rel="noopener noreferrer">Notice ↗</a>}</span>)) },
         ]} /></div>
       {notes.length > 0 && <ul className="k-note cmp-foots" data-testid="div-now">{notes.map((x) => <li key={x.id}><sup>{x.n}</sup> {x.label} of {x.when}: {x.text}</li>)}</ul>}
-      {data.past.length > 5 && (all ? <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} /> : <button className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {data.past.length}</button>)}
       <Link className="link k-small" to={`/research/corporate-actions?region=${region}`}>Every company's corporate actions →</Link>
     </div>
   );
