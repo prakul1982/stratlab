@@ -29,7 +29,7 @@ import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 import {
   Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, ConfirmDialog, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg,
-  Pager, Range, Select, Skeleton, Stat, StatRow,
+  Range, Select, Skeleton, Stat, StatRow,
 } from "../components/kit";
 
 /* ---------- Trend scan: Stage 2 + Supertrend, and the preset rule sets (Basic and up) ---------- */
@@ -733,8 +733,12 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
   const frmP = params.get("frm") ?? "";
   const toP = params.get("to") ?? "";
   const qP = params.get("q") ?? "";
-  const page = Math.max(1, Number(params.get("page")) || 1);
   const [text, setText] = useState(qP);
+  // AUTO-LOAD (site87, owner: "why do we have double scrolls, then next page, worst UI"): one block sized to the screen, its rows scrolling
+  // inside it, the server's next 25 asked for on their own as the reader nears its end; no Next page
+  const [items, setItems] = useState<AllOut["items"]>([]);
+  const [pageAt, setPageAt] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const setParam = (changes: Record<string, string | null>, keepPage = false) => {
     const p = new URLSearchParams(params);
@@ -756,10 +760,22 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
     if (!pro) return;
     let live = true;
     setError(null);
-    const qs = new URLSearchParams({ region, scope, flag, frm, to, q: qP, page: String(page), size: "25" });
-    api<AllOut>(`/research/redflags?${qs}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
+    const qs = new URLSearchParams({ region, scope, flag, frm, to, q: qP, page: "1", size: "25" });
+    api<AllOut>(`/research/redflags?${qs}`).then((x) => { if (live) { setData(x); setItems(x.items); setPageAt(1); } }).catch((e) => live && setError((e as Error).message));
     return () => { live = false; };
-  }, [pro, region, scope, flag, frm, to, qP, page, tries]);
+  }, [pro, region, scope, flag, frm, to, qP, tries]);
+  const filterKey = `${region}|${scope}|${flag}|${frm}|${to}|${qP}|${tries}`;
+  const loadMore = () => {
+    if (!data || loadingMore || pageAt >= data.pages) return;
+    const at = filterKey, next = pageAt + 1;
+    setLoadingMore(true);
+    const qs = new URLSearchParams({ region, scope, flag, frm, to, q: qP, page: String(next), size: "25" });
+    api<AllOut>(`/research/redflags?${qs}`)
+      .then((x) => { if (at !== keyRef.current) return; setItems((cur) => { const seen = new Set(cur.map((r) => r.id)); return [...cur, ...x.items.filter((r) => !seen.has(r.id))]; }); setPageAt(next); })
+      .catch(() => undefined).finally(() => setLoadingMore(false));
+  };
+  const keyRef = useRef(filterKey);
+  keyRef.current = filterKey;
 
   if (!pro) return null;
   const noun = scope === "mine" ? "of your stocks" : "across companies";
@@ -798,7 +814,8 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
           <Card>
             <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"} ${noun}`}
               actions={<span className="k-small k-muted">{data.companies.toLocaleString("en-IN")} compan{data.companies === 1 ? "y" : "ies"} · {asOf(data.from)} to {asOf(data.to)}</span>} />
-            <DataTable csv="red-flag filings" stack label="Red-flag filings, newest first" rows={data.items} rowKey={(r) => r.id} empty="Nothing matches these filters."
+            <DataTable csv="red-flag filings" stack label="Red-flag filings, newest first" rows={items} rowKey={(r) => r.id} empty="Nothing matches these filters."
+              more={{ total: data.pages > pageAt ? Math.max(data.total, items.length + 1) : items.length, load: loadMore, busy: loadingMore, noun: "filings" }}
               columns={[
                 { key: "d", header: "Filed", cell: (r) => asOf(r.at.slice(0, 10)) ?? "–" },
                 { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
@@ -808,7 +825,6 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
                 { key: "s", header: "The filing", wrap: true, cell: (r) => (
                   <>{r.subject}{(r.copies ?? 1) > 1 && <span className="k-note"> · listed {r.copies} times by the exchange</span>}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span>}</>) },
               ]} />
-            <Pager page={data.page} pages={data.pages} total={data.total} noun="filings" onPage={(n) => setParam({ page: n > 1 ? String(n) : null }, true)} />
           </Card>
         )
       )}

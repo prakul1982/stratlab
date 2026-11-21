@@ -6,7 +6,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate, openDays, openFor } from "../../lib/format";
 import { oldAudit } from "./auditAge";
-import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, ShowLess, Disclosure, EmptyState, Field, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, ScrollList, Disclosure, EmptyState, Field, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
 
 /** fact: true of the company (a recent listing, no calls held), not a gap of ours; pending: a source turned the check away, so it runs again. */
 type Level = "mismatch" | "gap" | "error" | "fact" | "pending";
@@ -26,8 +26,9 @@ interface AuditState {
   sets: { id: string; name: string; count: number }[];
 }
 
-const SHOWN = 300;
-const PAGE_ROWS = 30;          // companies shown at a time, then "Show more" (DJ-030: a 10,880px page on a phone)
+/** Companies drawn at first and added each time the reader nears the end of the list's block (site87, owner: no "Show more"; DJ-030: the
+ *  block is sized to the screen, so a phone's page is never 10,880 px). */
+const PAGE_ROWS = 60;
 
 /** The whole-market check's state while it runs, from its own counts: "every company checked" only when every listed company has a
  * result (LIVE3-024: it said so with 4,970 listed and 4,967 checked, the day's three new listings not yet reached). */
@@ -314,8 +315,8 @@ function Findings({ rows: all, sum, running, file, region, onRecheck, old }: { r
         ]} />); })()}
       {rows.length === 0 ? <EmptyState title={`Nothing of this kind${running ? " yet" : ""}`}>Pick another kind above to see the rest.</EmptyState> : (
         <div className="k-stack">
-          {rows.length > SHOWN && <p className="k-small k-muted">Showing {SHOWN} of {rows.length} companies; the CSV has all of them.</p>}
-          {rows.slice(0, Math.min(SHOWN, upTo)).map((r) => (
+          <ScrollList label={`${SHOWS[show]}: the companies`} onEnd={rows.length > upTo ? () => setUpTo((n) => n + PAGE_ROWS) : undefined}><div className="k-stack adm-audit-rows">
+          {rows.slice(0, upTo).map((r) => (
             <div key={r.symbol} className="k-stack k-small">
               <span className="k-row">
                 <span><Link className="link" to={`/research/${region}/${encodeURIComponent(pageSymbol(r.symbol))}/deep`}><b>{r.name}</b></Link> <span className="adm-mono k-muted">{r.symbol} · {r.seconds}s</span>
@@ -327,11 +328,8 @@ function Findings({ rows: all, sum, running, file, region, onRecheck, old }: { r
                 {!old && i.level !== "fact" && openDays(i.since ?? r.at) != null && <span className="k-muted" data-testid="audit-age"> · {openFor(openDays(i.since ?? r.at)!)}</span>}</span>)}
             </div>
           ))}
-          {((rows.length > upTo && upTo < SHOWN) || (upTo > PAGE_ROWS && rows.length > PAGE_ROWS)) && (
-            <div className="k-row"><span className="k-note">Showing {Math.min(upTo, rows.length, SHOWN)} of {Math.min(rows.length, SHOWN)}.</span>
-              {rows.length > upTo && upTo < SHOWN && <button type="button" className="btn quiet sm" onClick={() => setUpTo((n) => n + PAGE_ROWS)}>Show {Math.min(PAGE_ROWS, Math.min(rows.length, SHOWN) - upTo)} more</button>}
-              {upTo > PAGE_ROWS && rows.length > PAGE_ROWS && <ShowLess onLess={() => setUpTo(PAGE_ROWS)} />}</div>
-          )}
+          </div></ScrollList>
+          {rows.length > PAGE_ROWS && <p className="k-note" aria-live="polite" data-testid="k-loaded">Loaded {Math.min(upTo, rows.length).toLocaleString("en-IN")} of {rows.length.toLocaleString("en-IN")} companies{rows.length > upTo ? "; more load as you scroll" : ""}.</p>}
         </div>
       )}
     </>

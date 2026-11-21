@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
-import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Pager, Seg, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Seg, Skeleton, type Column } from "../../components/kit";
 import { endsAt } from "../../lib/offer";
 import { useAdmin } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
@@ -11,7 +11,6 @@ import { PLAN_FILTERS, PLAN_NAME, monthShort, planNote, untilWords, usersPath, t
 
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null; currency?: string | null }
 
-const PAGE = 25;
 
 type AccountsView = { orphans: { id: string; email: string | null; created_at: string | null; last_sign_in: string | null }[];
   ending: { id: string; email: string | null; plan: "basic" | "pro"; until: string; ended: boolean; plan_now: string }[];
@@ -116,7 +115,6 @@ export function UsersSection() {
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [q, setQ] = useState("");
   const [plan, setPlan] = useState<PlanFilter>("all");
-  const [page, setPage] = useState(1);
   const [open, setOpen] = useState<UserRow | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [usersFailed, setUsersFailed] = useState(false);
@@ -192,8 +190,6 @@ export function UsersSection() {
   const until = ov?.server.promo_until;
   const by = (u: UserRow) => (sort.key === "active" ? u.last_active : u.created_at) ?? "";
   const sorted = users ? [...users].sort((a, b) => (by(a) < by(b) ? -1 : by(a) > by(b) ? 1 : 0) * (sort.desc ? -1 : 1)) : null;
-  const pages = Math.max(1, Math.ceil((users?.length ?? 0) / PAGE));
-  const at = Math.min(page, pages);
 
   return (
     <>
@@ -204,16 +200,16 @@ export function UsersSection() {
             {more.toggle}
           </>} />
         <div className="k-row adm-filters">
-          <input className="k-input adm-search" type="search" placeholder="Search by email" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Search users by email" />
-          <Seg label="Plan" options={PLAN_FILTERS} value={plan} onChange={(v) => { setPlan(v as PlanFilter); setPage(1); }} />
+          <input className="k-input adm-search" type="search" placeholder="Search by email" value={q} onChange={(e) => { setQ(e.target.value); }} aria-label="Search users by email" />
+          <Seg label="Plan" options={PLAN_FILTERS} value={plan} onChange={(v) => { setPlan(v as PlanFilter); }} />
         </div>
         {!users ? (usersFailed ? <ErrorState title="The users couldn't be read" action={{ label: "Try again", onClick: () => void loadUsers(q, plan) }} /> : <Skeleton label="Loading users" />) : users.length === 0 ? (
           <EmptyState title="No users match">{plan === "all" ? "Try part of an email address." : `No ${PLAN_NAME[plan]} users${q ? " with that in their email" : ""}.`}</EmptyState>
         ) : (
           <>
-            <DataTable label="Users" rows={(sorted ?? users).slice((at - 1) * PAGE, at * PAGE)} rowKey={(u) => u.id} columns={cols} stack
-              sort={{ ...sort, onSort: (key) => { setSort((x) => ({ key, desc: x.key === key ? !x.desc : true })); setPage(1); } }} />
-            <Pager page={at} pages={pages} total={users.length} noun={users.length === 1 ? "user" : "users"} onPage={setPage} />
+            {/* site87 (owner: no paging buttons): every user loaded, the table a block sized to the screen that scrolls inside itself */}
+            <DataTable label="Users" rows={sorted ?? users} rowKey={(u) => u.id} columns={cols} stack
+              sort={{ ...sort, onSort: (key) => { setSort((x) => ({ key, desc: x.key === key ? !x.desc : true })); } }} />
             {users.length >= 200 && <p className="k-small k-muted">The newest 200 are listed. Search by email to find others.</p>}
           </>
         )}

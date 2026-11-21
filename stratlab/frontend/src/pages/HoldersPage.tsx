@@ -7,8 +7,9 @@ import { useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { asOf, ET, fmtDate, safeHref } from "../lib/format";
 import { LockedPreview } from "../components/LockedPreview";
+import { useAutoPages } from "../lib/autoPages";
 import { useApp } from "../lib/app";
-import { Badge, Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
+import { Badge, Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
 
 /* Named holders across companies: search a name in every company's latest shareholding pattern (holders above 1%),
  * pick the spellings that are the same holder, see each company alphabetically with the change since the quarter
@@ -242,7 +243,7 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
   const [params, setParams] = useSearchParams();
   const symbol = (params.get("symbol") ?? "").toUpperCase();
   const form = params.get("form") ?? "";
-  const page = Math.max(1, Number(params.get("page")) || 1);
+  const page = 1;                 // site87: the next pages load on their own as the reader nears the block's end (useAutoPages)
   const holder = params.get("holder") ?? "";
   const [holderText, setHolderText] = useState(holder);
   const [holderErr, setHolderErr] = useState<string | null>(null);
@@ -265,6 +266,7 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
       .catch((e) => { if (!live) return; if ((e as ApiError).status === 402) { setLocked(true); setData(null); } else setError((e as Error).message); });
     return () => { live = false; };
   }, [symbol, form, page, holder, tries]);
+  const pages = useAutoPages(data, (n) => api<UsOut>(`/research/holders-us?${new URLSearchParams({ symbol, form, page: String(n), size: "25", ...(holder ? { holder } : {}) })}`));
   const findHolder = (e: React.FormEvent) => {
     e.preventDefault();
     const v = holderText.trim();
@@ -310,7 +312,8 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
           <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"}${symbol ? ` for ${symbol}` : " across companies"}${holder ? ` by holders named like “${holder}”` : ""}`}
             actions={data.updated_at ? <span className="k-small k-muted">Read {asOf(data.updated_at, { tz: ET })}{data.newest ? ` · newest filed ${fmtDate(data.newest)}` : ""}</span> : undefined} />
           {holder && data.unread > 0 && <p className="k-small k-muted">Only filings whose cover page has been read can be found by holder: {data.unread.toLocaleString("en-IN")} {data.unread === 1 ? "is" : "are"} still waiting to be read.</p>}
-          <DataTable stack label="13D and 13G filings, newest first" rows={data.items} rowKey={(r) => r.id} empty={symbol ? `No 13D or 13G filing found for ${symbol} in the last 13 months.` : "No filings stored yet."}
+          <DataTable stack label="13D and 13G filings, newest first" rows={pages.rows} rowKey={(r) => r.id}
+            more={{ total: pages.done ? pages.rows.length : Math.max(data.total, pages.rows.length + 1), load: pages.load, busy: pages.busy, noun: "filings" }} empty={symbol ? `No 13D or 13G filing found for ${symbol} in the last 13 months.` : "No filings stored yet."}
             columns={[
               { key: "d", header: "Filed", cell: (r) => asOf(r.at, { tz: ET }) ?? "–" },
               { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
@@ -325,7 +328,6 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
                 : <>{`${r.pct.toFixed(2)}%`}{r.pct <= 5 && r.amendment && <span className="k-sub-line">at or below 5%: the stake has fallen under the filing level</span>}</>) },
               { key: "f", header: "Filing", wrap: true, cell: (r) => <>{r.label}<span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span></> },
             ]} />
-          <Pager page={data.page} pages={data.pages} total={data.total} noun="filings" onPage={(n) => setParam({ page: n > 1 ? String(n) : null }, true)} />
         </Card>
       )}
     </div>

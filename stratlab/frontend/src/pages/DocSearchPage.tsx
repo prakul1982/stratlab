@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -8,7 +8,7 @@ import { download as saveFile } from "../lib/share";
 import { RegionSwitch } from "../components/Research";
 import { apiPath, lockedFilters, planLine, readQuery, snippetParts, totalLine, whereLine, writeQuery,
   type DocAnswer, type DocHit, type DocQuery, type DocRegion, type DocStatus } from "../lib/docSearch";
-import { Badge, Card, CardHead, ChipSet, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager,
+import { Badge, Card, CardHead, ChipSet, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, ScrollList,
   PlanNote, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
 import "./docsearch.css";
 
@@ -66,6 +66,23 @@ export function DocSearchPage() {
   const dropped = filters ? [] : lockedFilters(query);
 
   useEffect(() => { setDraft(query); }, [query]);
+  // AUTO-LOAD (site87, owner: no Next page): the results are one block sized to the screen; the next page of hits comes on its own as the
+  // reader nears the block's end
+  const [extra, setExtra] = useState<{ page: number; hits: DocHit[] }>({ page: 0, hits: [] });
+  const [moreBusy, setMoreBusy] = useState(false);
+  useEffect(() => { setExtra({ page: 0, hits: [] }); }, [ans]);
+  const hits = ans ? [...ans.hits, ...extra.hits.filter((h) => !ans.hits.some((x) => x.id === h.id))] : [];
+  const atPage = ans ? Math.max(ans.page, extra.page) : 0;
+  const loadMore = () => {
+    if (!ans || moreBusy || atPage >= ans.pages) return;
+    const for_ = ans;
+    setMoreBusy(true);
+    api<DocAnswer>(apiPath({ ...query, page: atPage + 1 }, filters))
+      .then((a) => setExtra((cur) => (for_ !== ansRef.current ? cur : { page: a.page, hits: [...cur.hits, ...a.hits] })))
+      .catch(() => undefined).finally(() => setMoreBusy(false));
+  };
+  const ansRef = useRef(ans);
+  ansRef.current = ans;
   useEffect(() => {
     let live = true;
     api<DocStatus>("/research/docs/status").then((s) => live && setStatus(s)).catch(() => undefined);
@@ -181,9 +198,11 @@ export function DocSearchPage() {
               {ans.floor ? ` Filed since ${fmtDate(ans.floor)}.` : ""}
               {Object.keys(ans.facets.kinds).length > 1 ? ` ${Object.entries(ans.facets.kinds).map(([k, n]) => `${n} ${kinds.find((x) => x.id === k)?.label.toLowerCase() ?? k}${n === 1 ? "" : "s"}`).join(", ")}.` : ""}
             </p>
-            <ol className="ds-hits" aria-label={`Results for ${ans.q}`}>{ans.hits.map((h) => <Hit key={h.id} h={h} />)}</ol>
+            <ScrollList label={`Results for ${ans.q}`} testId="ds-hits-box" onEnd={atPage < ans.pages ? loadMore : undefined}>
+              <ol className="ds-hits" aria-label={`Results for ${ans.q}`}>{hits.map((h) => <Hit key={h.id} h={h} />)}</ol>
+            </ScrollList>
+            {ans.pages > 1 && <p className="k-note" aria-live="polite" data-testid="k-loaded">Loaded {hits.length.toLocaleString("en-IN")} of {ans.total.toLocaleString("en-IN")} documents{moreBusy ? "; loading more…" : atPage < ans.pages ? "; more load as you scroll" : ""}.</p>}
             {ans.locked > 0 && <PlanNote>Free shows the first {ans.hits.length} of the {totalLine(ans.total, ans.more).toLowerCase()} found. Every result, with filters by sector, theme, kind of document and date, is on the Basic plan.</PlanNote>}
-            <Pager page={ans.page} pages={ans.pages} total={ans.total} noun="documents" onPage={(n) => { go({ ...query, page: n }); document.getElementById("results")?.scrollIntoView({ block: "start" }); }} />
           </>
         )}
         {ans?.ready && <p className="k-note">{ans.note} {planLine(ans.limits)}</p>}
