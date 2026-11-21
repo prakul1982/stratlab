@@ -109,8 +109,8 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
               ]} />
             );
           })()}
-          {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack phonePage={8} /></>}
-          {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack scrollRows={6} /></>}
+          {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack /></>}
+          {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack /></>}
           {data.checking > 0 && <div data-testid="ha-checking"><Working small label="Collecting the rest of your stocks' dividends…" /></div>}
         </Card>
       )}

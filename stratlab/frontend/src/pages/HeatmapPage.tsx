@@ -218,7 +218,7 @@ export function HeatmapPage() {
             {noIndex && <p className="k-note">The index has no figure for this period yet, so there is nothing to set the changes against. Pick Change, or another period.</p>}
             {table ? (
               <ReportScope section={`Heatmap: ${name}`} source={view.live && line ? `Daily closing prices brought to the ${line.source}` : `Daily closing prices${asOf ? `, the latest ${asOf}` : ""}`}>
-              <DataTable csv={`heatmap ${name} ${PERIOD_SHORT[period]}`} label={`${name}: every company`} columns={cols} rows={shown} rowKey={(t) => t.s} stack compact phonePage={40} pageDesktop
+              <DataTable csv={`heatmap ${name} ${PERIOD_SHORT[period]}`} label={`${name}: every company`} columns={cols} rows={shown} rowKey={(t) => t.s} stack compact
                 sort={{ key: sort.key, desc: sort.desc, onSort: (k) => setSort((s) => ({ key: k, desc: s.key === k ? !s.desc : true })) }}
                 empty="No company matches what you typed." />
               </ReportScope>

@@ -249,7 +249,7 @@ export function MutualFundsPage() {
             )}
             {result.problems.length > 0 && (
               // TABLE-SWEEP: every line left out, as a table (it was the first 20 as a list)
-              <DataTable label="Lines left out" phonePage={10} columns={problemCols} rows={result.problems.map((p, i) => ({ ...p, i }))} rowKey={(p) => String(p.i)} />
+              <DataTable label="Lines left out" columns={problemCols} rows={result.problems.map((p, i) => ({ ...p, i }))} rowKey={(p) => String(p.i)} />
             )}
           </div>
         )}
@@ -447,7 +447,7 @@ function SchemeSales({ sales, name }: { sales: SaleIn[]; name: string }) {
     <section aria-label={`Sales, ${name}`}>
       <h3>Redemptions matched to purchases</h3>
       {/* TABLE-SWEEP: every redemption, none held back behind a "Show all" (a phone shows them ten cards at a time) */}
-      <DataTable label={`Redemptions matched to purchases, ${name}`} stack phonePage={10} columns={cols} rows={sales.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
+      <DataTable label={`Redemptions matched to purchases, ${name}`} stack columns={cols} rows={sales.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
     </section>
   );
 }

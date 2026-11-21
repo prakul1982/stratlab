@@ -110,7 +110,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
       {data.dividends_12m && (
         <span className="k-small">Dividends with an ex-date in the last 12 months: <b>{price(data.dividends_12m.amount, ccy)}</b> a share{data.dividends_12m.adjusted ? " in today's shares" : ""} ({data.dividends_12m.count} payment{data.dividends_12m.count === 1 ? "" : "s"})</span>
       )}
-      <div className="ca-table"><DataTable label="Corporate actions: ahead, and the past three years, newest first" rows={rows} rowKey={(r) => r.id} stack={false} scrollRows={8}
+      <div className="ca-table"><DataTable label="Corporate actions: ahead, and the past three years, newest first" rows={rows} rowKey={(r) => r.id} stack={false}
         rowNote={(r) => ("gap" in r ? <span className="k-small k-muted">{r.gap}</span> : undefined)}
         columns={[
           { key: "ex", header: "Ex-date", rowHeader: true, cell: (r) => ("gap" in r ? <b className="k-small">{r.head}</b> : (

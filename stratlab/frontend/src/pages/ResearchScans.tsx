@@ -328,7 +328,7 @@ export function ScanPage() {
             const said = scanNotes(preset.rows.map((r) => r.detail));
             const rows = preset.rows.map((r, i) => ({ ...r, detail: said.details[i] ?? r.detail }));
             return <>
-          <DataTable csv={`scan ${preset.name}`} stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
+          <DataTable csv={`scan ${preset.name}`} stack label={`${preset.name}: ${preset.scan_name}`} rows={rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
@@ -370,7 +370,7 @@ export function ScanPage() {
             <Stat label="Stocks checked" value={(st2.checked ?? (st2.rows.length + st2.problems.length + st2.missing.length)).toLocaleString("en-IN")}
               note={st2.stored ? "read after the close; matches only are kept" : st2.problems.length + st2.missing.length ? `${st2.problems.length + st2.missing.length} skipped, named below` : "read just now"} />
           </StatRow>
-          <DataTable csv={`scan ${st2.name}`} stack phonePage={25} label={`${st2.name}: stage and Supertrend`} rows={rows} rowKey={(r) => r.id} sticky={rows.length > 12} empty="Nothing matches right now."
+          <DataTable csv={`scan ${st2.name}`} stack label={`${st2.name}: stage and Supertrend`} rows={rows} rowKey={(r) => r.id} sticky={rows.length > 12} empty="Nothing matches right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>

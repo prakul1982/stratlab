@@ -71,7 +71,6 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   const [results, setResults] = useState<Instrument[] | null>(null);
   const [on, setOn] = useState(-1);
   const [open, setOpen] = useState(false);
-  const [allOpts, setAllOpts] = useState(false);
   const timer = useRef<number>(undefined);
   const asked = useRef(0);
   // a contract isn't listed where it is locked: the owner's "View as Free" asks the server as the owner, and the list showed
@@ -82,8 +81,8 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   const surv = useSurveillance(market.id === "IN");
 
   useEffect(() => { setQ(""); setResults(null); }, [market.id]);
-  useEffect(() => { setAllOpts(false); }, [q]);
-  const arranged = results ? arrange(results, allOpts) : null;
+  // site87 (owner: no "Show N more" on any list): every match, the options list scrolling inside its box
+  const arranged = results ? arrange(results, true) : null;
   const list = arranged?.rows ?? [];
   useEffect(() => {
     window.clearTimeout(timer.current);
@@ -143,9 +142,6 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
               </button>
               </Fragment>
             ))}
-            {arranged && arranged.hidden > 0 && (
-              <button type="button" className="search-more" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => setAllOpts(true)}>Show {arranged.hidden} more option{arranged.hidden === 1 ? "" : "s"}</button>
-            )}
           </div>
         )}
       </div>

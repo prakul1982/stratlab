@@ -513,7 +513,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         {phone && allTrades.length > 1 && (
           <Seg label="Trade cards" options={[{ value: "short", label: "Short cards" }, { value: "full", label: "Every detail" }]} value={tradeCards} onChange={(x) => setTradeCards(x as "short" | "full")} />
         )}
-        <DataTable stack label="Every trade" columns={shownCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period." phonePage={30}
+        <DataTable stack label="Every trade" columns={shownCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period."
           foot={list.hidden ? { [shownCols[0].key]: `${list.hidden.toLocaleString("en-IN")} earlier closed trade${list.hidden === 1 ? "" : "s"}, not listed`, pnl: <span className={upDown(list.hiddenPnl)}>{money(list.hiddenPnl, cur)}</span> } : undefined} />
         {allTrades.some((t) => t.spans_split || t.part === "unseen") && (
           <p className="k-note" data-testid="unseen-legend">

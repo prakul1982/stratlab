@@ -5,7 +5,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { useMarketRefresh } from "../lib/marketLive";
 import { FUND_NAME, dayCount, gapAtLastTrade, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
 import { EtfGapDetailView } from "../components/EtfGap";
-import { Badge, Card, CardHead, ChipBar, DataTable, ShowLess, ErrorState, Field, FieldGroup, FormGrid, PageHeader, Select, Skeleton, StockPicker, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ChipBar, DataTable, ErrorState, Field, FieldGroup, FormGrid, PageHeader, Select, Skeleton, StockPicker, type Column } from "../components/kit";
 
 /* Indian ETFs' price against their NAV: every ETF on the exchange's list, the widest gap first, with each one's 30-day
  * range. Picking one opens its own view (the gap now and each day's close against that day's NAV). Facts only. */
@@ -13,7 +13,6 @@ import { Badge, Card, CardHead, ChipBar, DataTable, ShowLess, ErrorState, Field,
 type Sort = "wide" | "above" | "below";
 const SORTS: { value: Sort; label: string }[] = [{ value: "wide", label: "Widest gap" }, { value: "above", label: "Most above" }, { value: "below", label: "Most below" }];
 const FUNDS: (Fund | "all")[] = ["all", "equity", "gold", "silver", "debt", "intl"];
-const TOP = 50;
 
 /** The last trade's own day as a date (2026-10-26), when it is known. */
 function tradeDayOf(r: EtfGap): string | null {
@@ -38,7 +37,6 @@ export function EtfGapsPage() {
   const [q, setQ] = useState("");
   const [tries, setTries] = useState(0);
   // the widest gaps first, a page of them: all 350-odd made a 38,000 px page on a phone (R5O-017)
-  const [all, setAll] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -120,12 +118,8 @@ export function EtfGapsPage() {
             <Field label="Find an ETF">{(id) => <StockPicker id={id} placeholder="e.g. NIFTYBEES" onText={setQ} onPick={(s) => { setQ(""); open(s); }} />}</Field>
           </FormGrid>
           {/* stack: on a phone each ETF is a card with every figure labelled, instead of columns cut off at the edge */}
-          <DataTable csv={{ name: "ETF gaps to NAV", rows }} label="ETFs by gap to NAV" rows={all || q.trim() ? rows : rows.slice(0, TOP)} rowKey={(r) => r.symbol} stack phonePage={25} sticky={rows.length > 14} empty="No ETF matches that."
+          <DataTable csv={{ name: "ETF gaps to NAV", rows }} label="ETFs by gap to NAV" rows={rows} rowKey={(r) => r.symbol} stack empty="No ETF matches that."
             rowAttrs={(r) => ({ "data-etf": r.symbol, className: pick === r.symbol ? "on" : "" })} columns={columns} />
-          {!all && !q.trim() && rows.length > TOP && (
-            <div className="k-row"><span className="k-note">Showing {TOP} of {rows.length} ETFs, in the order above.</span>
-              <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>Show all {rows.length}</button></div>)}
-          {all && !q.trim() && rows.length > TOP && <div className="k-row"><ShowLess onLess={() => setAll(false)} /></div>}
           <p className="k-note">{data.alerts ? <>Set an alert on a gap from an ETF's view, or on the <Link className="link" to="/alerts">Alerts page</Link>.</>
             : <>Alerts when a gap passes a level you set are on the <Link className="link" to="/plans">Basic plan</Link>.</>}</p>
         </Card>

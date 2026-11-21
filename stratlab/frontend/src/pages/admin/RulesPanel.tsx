@@ -20,7 +20,6 @@ export function RulesPanel() {
   const { fail, notify } = useApp();
   const [r, setR] = useState<Rules | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [all, setAll] = useState(false);
   const [failed, setFailed] = useState(false);
   const [tries, setTries] = useState(0);
   useEffect(() => { setFailed(false); api<Rules>("/admin/rules").then(setR).catch(() => setFailed(true)); }, [tries]);
@@ -77,8 +76,9 @@ export function RulesPanel() {
         ))}
       </div>
 
-      <div className="k-row"><button type="button" className="btn quiet sm" aria-expanded={all} onClick={() => setAll(!all)}>{all ? "Hide the rules" : `Show all ${r.rules.length} rules`}</button></div>
-      {all && <DataTable label="All rules" rows={r.rules} rowKey={(x) => x.id} columns={rules} />}
+      {/* site87 (owner: no "Show all N" on any list): every rule, the table a block sized to the screen that scrolls inside itself */}
+      <h3 className="k-sub">All {r.rules.length} rules</h3>
+      <DataTable label="All rules" rows={r.rules} rowKey={(x) => x.id} columns={rules} />
     </Card>
   );
 }

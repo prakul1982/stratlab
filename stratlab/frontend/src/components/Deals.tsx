@@ -79,7 +79,7 @@ export function DealsPanel({ symbol }: { symbol: string }) {
       <Seg label="Which disclosures" value={show} onChange={setShow} options={SHOW.map(([id, label]) => ({ value: id, label }))} />
       {rows.length === 0 ? <EmptyState title="Nothing disclosed">None disclosed in the last year.</EmptyState> : (
         <div className="deals-table">
-          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d: DealRow) => d.id} stack scrollRows={12}
+          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d: DealRow) => d.id} stack
             columns={[
               { key: "who", header: "Who", rowHeader: true, wrap: true, cell: (d) => <><span className="deal-who">{d.who}</span>{d.from ? <span className="k-sub-line">from {d.from}</span>
                 : d.trust ? <span className="k-sub-line" data-testid="deal-trust">Employee stock option trust: buys for staff options</span>

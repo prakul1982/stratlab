@@ -7,7 +7,7 @@ import { AlertButton } from "../../components/AlertForm";
 import { Info } from "../../components/ui";
 import { Search } from "../../components/Icons";
 import { POSITIONING_VIEWS, RouteSeg } from "../../components/RouteSeg";
-import { Card, CardHead, ChipBar, DataTable, ShowLess, EmptyState, ErrorState, FactTable, PageHeader, RangeChips, Select, Signed, Skeleton, useRange, type Column } from "../../components/kit";
+import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, FactTable, PageHeader, RangeChips, Select, Signed, Skeleton, useRange, type Column } from "../../components/kit";
 import "./trade.css";
 import "./positioning.css";
 
@@ -25,7 +25,7 @@ type Filter = "all" | Buildup | "mwpl" | "roll";
 type SortKey = "symbol" | "pc" | "oc" | "m" | "r" | "ba";
 const SORTS: [SortKey, string][] = [["symbol", "Stock (A–Z)"], ["pc", "Price change"], ["oc", "OI change"], ["m", "MWPL use"], ["r", "Rollover"], ["ba", "Basis, annualised"]];
 const BUILDUPS: Buildup[] = ["LB", "SB", "SC", "LU"];
-/** Rows shown before "Show more" (DC-009: 213 rows in one 14,815 px scroll). */
+/** No longer used (site87): every row is drawn in a block sized to the screen. Kept for importers. */
 export const SF_PAGE = 50;
 
 /** A stock's open interest in contracts (lots), as the participant table and the option chain count them (DC-009: shares
@@ -151,12 +151,10 @@ export function StockFuturesPage() {
   const [sort, setSort] = useState<SortKey>("symbol");
   const [desc, setDesc] = useState(true);
   const [q, setQ] = useState("");
-  const [limit, setLimit] = useState(SF_PAGE);
   useEffect(() => {
     setError(null);
     desksApi.futures().then(setT).catch((e) => setError(e instanceof ApiError ? e.message : "The stock futures couldn't be read."));
   }, [again]);
-  useEffect(() => { setLimit(SF_PAGE); }, [filter, sort, desc, q]);
   const rows = useMemo(() => {
     const s = q.trim().toUpperCase();
     const out = (t?.rows ?? []).filter((r) => (!s || r.symbol.includes(s))
@@ -176,7 +174,7 @@ export function StockFuturesPage() {
   const same = commonDays(t?.rows ?? []);
   // a filter that keeps every stock (or none) filters nothing: the expiry-week chip shows only when it narrows (DC-009)
   const filters = (["all", ...BUILDUPS, "mwpl", "roll"] as Filter[]).filter((f) => f !== "roll" || (count(f) > 0 && count(f) < (t?.rows.length ?? 0)));
-  const shown = rows.slice(0, limit);
+  const shown = rows;          // site87 (owner: no "Show more"): every stock, the table a block sized to the screen (DC-009)
 
   const cols: Column<FutRow>[] = t ? [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <>
@@ -216,11 +214,6 @@ export function StockFuturesPage() {
               </div>
               {same && <p className="k-note" data-testid="sf-expiry">Every stock's near futures expire {same.e ? dayText(same.e) : "on the same day"}: {same.td} trading day{same.td === 1 ? "" : "s"} to go{same.td <= t.roll_window ? ", so the share in later expiries is read as the rollover" : ""}.</p>}
               <DataTable csv={{ name: "stock futures", rows }} label="Stock futures by stock" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={(r): Record<string, string> => ({ "data-stock": r.symbol, ...(pick === r.symbol ? { "data-on": "1" } : {}) })} empty="No stock matches that." />
-              {(rows.length > shown.length || (limit > SF_PAGE && rows.length > SF_PAGE)) && (
-                <div className="k-row">{rows.length > shown.length && <button type="button" className="btn quiet sm" data-testid="sf-more" onClick={() => setLimit((n) => n + SF_PAGE)}>
-                  Show {Math.min(SF_PAGE, rows.length - shown.length)} more ({rows.length - shown.length} not shown)</button>}
-                  {limit > SF_PAGE && rows.length > SF_PAGE && <ShowLess onLess={() => setLimit(SF_PAGE)} />}</div>
-              )}
               <p className="k-note">
                 {t.full ? <>Pick a stock for its history and an alert when its MWPL use crosses 80%.</>
                   : <>Each stock's history and MWPL alerts are on the <Link className="link" to="/plans">{t.plan_needed} plan</Link>.</>}

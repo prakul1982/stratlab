@@ -41,7 +41,7 @@ export function BizCoveragePanel() {
             { key: "c", header: "Companies", numeric: true, cell: (r) => String(cov.counts[r.key] ?? 0) },
             { key: "a", header: "Meaning", wrap: true, cell: (r) => <span className="k-muted">{r.about}</span> },
           ]} />
-          {cov.without.length > 0 && <DataTable label={`${cov.index} companies without a business update`} rows={cov.without} rowKey={(r) => r.symbol} columns={COLUMNS} stack phonePage={10} />}
+          {cov.without.length > 0 && <DataTable label={`${cov.index} companies without a business update`} rows={cov.without} rowKey={(r) => r.symbol} columns={COLUMNS} stack />}
         </>
       )}
     </Card>
