@@ -311,7 +311,8 @@ export function lintPage(opts: LintOpts): LintResult {
       const rows = rowsIn(box);
       if (rows.length < 2) continue;
       const b = R(box);
-      const hidden = rows.filter((r) => R(r).top >= b.bottom - 1).length;
+      const inner = b.top + box.clientTop + box.clientHeight;          // the rows' area ends inside the box's bottom edge (its border)
+      const hidden = rows.filter((r) => R(r).top >= inner - 1).length;
       if (hidden < 3) add("R30", box, `(b) a scroll box that hides ${hidden} row${hidden === 1 ? "" : "s"}: fewer than three hidden rows show in full`);
       if (b.height > room + 2) add("R30", box, `(c) a scroll box ${Math.round(b.height)}px tall on a ${Math.round(room)}px screen: a block is never taller than the screen`);
     }
