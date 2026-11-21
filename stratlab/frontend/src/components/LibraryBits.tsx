@@ -174,7 +174,7 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
   return (
     <>
       <div className="lib-table">
-        <DataTable label={label} rows={sorted} rowKey={(e) => e.id} columns={cols} stack
+        <DataTable label={label} rows={sorted} rowKey={(e) => e.id} columns={cols} stack noScroll
           rowAttrs={(e): Record<string, string> => (extraRow.has(e.id) ? { className: "lib-extra" } : {})}
           sort={{ key: by?.key ?? "", desc: by?.desc ?? true, onSort: (k) => setBy((b) => (b?.key === k ? { key: k as SortKey, desc: !b.desc } : { key: k as SortKey, desc: true })) }}
           detail={{ label: "Rules and details", render: details }} />

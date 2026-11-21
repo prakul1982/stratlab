@@ -124,7 +124,7 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
 /** A table box's rows, for its scroll height (useScrollRows). */
 const bodyRows = (el: HTMLElement): HTMLElement[] => Array.from(el.querySelectorAll<HTMLElement>(":scope > table > tbody > tr"));
 
-export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, scrollRows, stack: stackProp, grid, pinHead, sort, phonePage, pageDesktop, scrollEnd, csv, detail, selectAll, compact }: {
+export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, scrollRows, noScroll, stack: stackProp, grid, pinHead, sort, phonePage, pageDesktop, scrollEnd, csv, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
    * holds more than the table shows now (a group showing its first 12). */
@@ -134,6 +134,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   /** SCROLL: how many rows show before the table scrolls inside its box (TABLE_ROWS unless a card's short list says fewer). Given, a phone's
    *  cards scroll too (about eight), instead of every card making the page longer. */
   scrollRows?: number;
+  noScroll?: boolean;                        // site86: a table that is its page's own list (the Library) grows with the page, never a box of its own
   /** On a phone, each row becomes a card (the first column as its title, every other cell under its own column name),
    * so nothing is cut off at the edge and the figures that matter are all in view. Desktop is unchanged. */
   stack?: boolean;
@@ -217,7 +218,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   const cardsNow = stack && phone;
   // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): past TABLE_ROWS rows the table scrolls inside its box, its header row kept at the
   // top; a phone's cards keep their own "Show more"
-  useScrollRows(box, { rows: scrollRows ?? TABLE_ROWS, items: bodyRows, off: cardsNow && scrollRows == null });
+  useScrollRows(box, { rows: scrollRows ?? TABLE_ROWS, items: bodyRows, off: !!noScroll || (cardsNow && scrollRows == null) });
   // "Report an error in this figure" (owner, 12 Nov): inside a ReportScope each row's name carries the flag, with the row's figures to pick from
   const scope = useReportScope();
   const figureCols = columns.filter((c) => !c.rowHeader && !c.action && c.numeric);

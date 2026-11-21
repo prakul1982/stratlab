@@ -50,7 +50,7 @@ test("ScrollList: one shared component, sized with watchSize, named and focusabl
   assert.match(read("src/components/kit/index.ts"), /export \{ ScrollList, useScrollRows \} from "\.\/ScrollList";/);
   // the kit's tables use it: past TABLE_ROWS rows, header row kept at the top
   const dt = read("src/components/kit/DataTable.tsx");
-  assert.match(dt, /useScrollRows\(box, \{ rows: scrollRows \?\? TABLE_ROWS, items: bodyRows, off: cardsNow && scrollRows == null \}\);/);
+  assert.match(dt, /useScrollRows\(box, \{ rows: scrollRows \?\? TABLE_ROWS, items: bodyRows, off: !!noScroll \|\| \(cardsNow && scrollRows == null\) \}\);/);   // (changed on purpose: the Library's own list opts out, noScroll)
 });
 
 test("the scroll's look: whole rows, a thin themed scrollbar, the fade, the focus ring, overscroll contained, sticky table header", () => {
