@@ -106,6 +106,11 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const meIn = useRef(false);
   const [toast, setToast] = useState<Toast>(null);
   const timer = useRef<number>(undefined);
+  // preference saves: each waits for the one before (prefsQueue); every change made here, as sent (prefsLog), and how many of
+  // them the account has answered (prefsDone; they finish in order, so the answered ones are the first prefsDone of the log)
+  const prefsQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const prefsLog = useRef<NonNullable<Me["prefs"]>[]>([]);
+  const prefsDone = useRef(0);
   const [spaceHere, setSpaceHere] = useState<SpaceView | null>(savedView);
   const [theme, setThemeState] = useState<"light" | "dark" | "system">(() => {
     try { return (localStorage.getItem("stratlab-theme") as "light" | "dark") || "system"; } catch { return "system"; }
@@ -141,13 +146,18 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
 
   const refreshMe = useCallback(async () => {
     try {
+      // the preference changes not yet confirmed by the account when this read starts: an answer read before they reached it
+      // still shows them, so a /me arriving after a click on My space doesn't put back the order from before it (DI-006)
+      const from = prefsDone.current;
       // one quiet second try when the server or the network had a moment (a 503 or no answer): the person sees the
       // error and its Retry button only if that fails too (R5O-002)
-      const m = await api<Me>("/me").catch(async (e: ApiError) => {
+      let m = await api<Me>("/me").catch(async (e: ApiError) => {
         if (e?.status && e.status !== 503 && e.status !== 502 && e.status !== 504) throw e;
         await new Promise((ok) => window.setTimeout(ok, ME_RETRY_MS));
         return api<Me>("/me");
       });
+      const newer = prefsLog.current.slice(from);
+      if (newer.length) m = { ...m, prefs: Object.assign({ level: null }, m.prefs, ...newer) };
       setMe(m);
       setMeError(null);
       meIn.current = true;
@@ -265,13 +275,13 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   /** Save some of the preferences in one request (two at once could each overwrite the other's change). The requests go one at a
    * time, in the order they were made: two quick changes (My space's card moved up twice) sent at once could land the other way
    * round, and the account kept the older layout while this screen showed the newer one. */
-  const prefsQueue = useRef<Promise<unknown>>(Promise.resolve());
   const savePrefs = useCallback(async (p: Prefs, quiet = false) => {
     if (p.space) { setSpaceHere(p.space); saveView(p.space); }
     setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...p, space: p.space ? viewToServer(p.space) : m.prefs?.space } } : m));
     const body = p.space ? { ...p, space: viewToServer(p.space) } : p;
+    prefsLog.current.push(body as NonNullable<Me["prefs"]>);
     const sent = prefsQueue.current.then(() => api("/me/prefs", { method: "PUT", body }));
-    prefsQueue.current = sent.catch(() => undefined);
+    prefsQueue.current = sent.catch(() => undefined).finally(() => { prefsDone.current += 1; });
     try { await sent; return true; } catch (e) { if (!quiet) fail(e); return false; }
   }, [fail]);
   const setLevel = useCallback((l: Level) => savePrefs({ level: l }), [savePrefs]);
