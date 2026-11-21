@@ -267,6 +267,7 @@ ALL_LIMIT = 120                    # nothing typed: every stored theme of the ma
 
 
 def suggest(region: str, q: str, limit: int | None = None) -> list[dict]:
+    from .theme_market import foreign
     """Stored themes for the search box: the one this search is for first, then names starting with or containing what's typed; with
     nothing typed, every stored theme of the market, most searched first."""
     limit = limit or (8 if (q or "").strip() else ALL_LIMIT)
@@ -279,6 +280,8 @@ def suggest(region: str, q: str, limit: int | None = None) -> list[dict]:
         # LIVE11A-013: every stored theme the public pages list, the newest entry of each (a theme not read again since a rules bump keeps
         # its newest stored map, as public_themes.entries does): the app listed 4 "Ready to open" beside 29 public India theme pages
         if e.get("region") != region or not isinstance(m.get("rules"), int) or m["rules"] > theme_base.RULES:
+            continue
+        if foreign(str(e.get("label") or m.get("q") or ""), region):      # site87: a theme of the other market's country is never offered here
             continue
         key = str(m.get("q") or "").lower()
         if key in seen and seen[key] >= m["rules"]:

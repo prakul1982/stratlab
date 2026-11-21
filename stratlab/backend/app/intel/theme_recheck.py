@@ -216,6 +216,9 @@ def rebuild(region: str, name: str) -> None:
     from . import ai as A
     from . import routes as R
     from . import theme_library, theme_routes
+    from .theme_market import foreign
+    if foreign(name, region):                     # site87: a theme of the other market's country (kept by the old switch bug) is never checked here
+        raise NotDone("it names the other market's country, so it isn't mapped in this market", final=True)
     q = next((x for x in _queries(region, name) if A.peek("sector", (region, x.lower()))), None)
     cur = theme_library.stored(region, name)
     if cur is None:
