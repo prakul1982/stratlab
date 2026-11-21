@@ -241,9 +241,14 @@ export function lintPage(opts: LintOpts): LintResult {
       const [l, r] = [...row].sort((a, b) => R(a).left - R(b).left);
       if (R(r).left < R(l).right - 2) continue;
       if (row.some((c) => c.matches("aside, nav, header, footer, main, [role=navigation]"))) continue;
-      // the card itself, or the one card that fills its slot (My space's .mine-slot holds its card)
-      const cardOf = (c: Element): Element | null => isCard(c) ? c
-        : Array.from(c.querySelectorAll("[class*=card]")).find((d) => isCard(d) && Math.abs(R(d).top - R(c).top) < 2 && Math.abs(R(d).width - R(c).width) < 2) ?? null;
+      // the card itself, or the one card that fills its slot (My space's .mine-slot holds its card); a column of two or more cards is a stack,
+      // not one card, and is left to R1
+      const cardOf = (c: Element): Element | null => {
+        if (isCard(c)) return c;
+        const inner = Array.from(c.querySelectorAll("[class*=card]")).filter((d) => isCard(d) && shown(d));
+        const top = inner.filter((d) => !inner.some((o) => o !== d && o.contains(d)));
+        return top.length === 1 && Math.abs(R(top[0]).top - R(c).top) < 2 && Math.abs(R(top[0]).width - R(c).width) < 2 ? top[0] : null;
+      };
       const a = cardOf(l), b = cardOf(r);
       if (!a || !b) continue;
       const d = R(a).height - R(b).height;
