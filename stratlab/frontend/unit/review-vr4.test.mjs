@@ -47,7 +47,7 @@ test("VR4-013: the company page does not say the one-line description and the en
 
 test("VR4-014: My space's watchlist card has a title short enough to stay on one line beside Open at 1280px", () => {
   const src = read("src/pages/MineHome.tsx");
-  assert.match(src, /every\(\(m\) => day\(m\)\) \? "Your watchlist" : "Your watchlist today"/);
+  assert.match(src, /every\(\(m\) => !m\.q \|\| day\(m\)\) \? "Your watchlist" : "Your watchlist today"/);   // (site86: a row with no price yet has no day)
   assert.doesNotMatch(src, /Your watchlist, last session/);
 });
 

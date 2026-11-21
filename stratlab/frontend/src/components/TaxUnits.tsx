@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { dateOnly, inr, qty as qtyText, signTone } from "../lib/format";
-import { Card, CardHead, DataTable, ShowLess, type Column } from "./kit";
+import { Card, CardHead, DataTable, type Column } from "./kit";
 
 /** Gold, silver, international and debt ETFs and gold bonds in one year: each sale under the head the law puts it,
  * from the server's instrument_kinds.other_year. Equity ETFs, REITs and InvITs are taxed like shares and sit with them. */
@@ -18,9 +17,9 @@ const HEADS: Record<UnitSale["head"], string> = { slab: "Short term, slab rate",
 const tone = (v: number) => { const t = signTone(v); return t ? `k-${t}` : undefined; };
 
 export function UnitsCard({ units, notes, name, label }: { units: Units | null | undefined; notes: string[]; name: (k: string) => string; label: string }) {
-  const [all, setAll] = useState(false);
   if (!units) return null;
-  const rows = (all ? units.rows : units.rows.slice(0, 20)).map((r, i) => ({ ...r, i }));
+  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): every row, scrolling inside the card past fifteen (it was the first twenty and "Show all")
+  const rows = units.rows.map((r, i) => ({ ...r, i }));
   const cols: Column<UnitSale & { i: number }>[] = [
     { key: "unit", header: "Unit", rowHeader: true, cell: (r) => <><b>{name(r.key)}</b> <span className={`badge kind-${r.kind.split("-")[0]}`}>{r.label}</span></> },
     { key: "bought", header: "Bought", numeric: true, cell: (r) => dateOnly(r.bought) },
@@ -44,9 +43,7 @@ export function UnitsCard({ units, notes, name, label }: { units: Units | null |
         {units.lt_10 && <> Gold bonds where 10% without indexation is the lower tax: <b>{inr(units.lt_10.gains)}</b> of gains{units.lt_10.losses > 0 && <>, {inr(units.lt_10.losses)} of losses</>}.</>}
         {units.old != null && <> Sold before 23 Jul 2024 under the old long-term rules, but the cost can't be indexed (bought before the index starts), so not worked out: {inr(units.old)}.</>}
       </p>
-      <DataTable label="ETF and gold bond sales" columns={cols} rows={rows} rowKey={(r) => String(r.i)} />
-      {units.rows.length > 20 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {units.rows.length}</button>}
-      {units.rows.length > 20 && all && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} />}
+      <DataTable label="ETF and gold bond sales" columns={cols} rows={rows} rowKey={(r) => String(r.i)} scrollRows={15} />
       {notes.length > 0 && <ul className="k-list muted">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
     </Card>
   );

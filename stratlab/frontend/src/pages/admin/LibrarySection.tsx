@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { fmtDateTime, IST } from "../../lib/format";
 import { deckStaleText, keptSpan } from "./library";
 import { bytesText, hoursText } from "../../lib/usageText";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, Select, Skeleton, Working, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, Select, Skeleton, Working, type Column, ScrollList } from "../../components/kit";
 
 /* Admin → Library (R19, owner 7 Nov: "make a tab in admin too where i can see all the data"): everything kept once for every user.
  * The shared store's kinds with their counts, sizes, hits, refreshes and the work the hits saved; the theme library row by row with
@@ -107,10 +107,10 @@ export function LibrarySection() {
         </Disclosure>);
     } },
     { key: "d", header: "Dropped before it shipped", wrap: true, cell: (d) => (!d.gate || !d.gate.dropped_n ? "Nothing" : (
-      <span className="k-stack k-tight">
-        {d.gate.dropped.slice(0, 3).map((x, k) => <span key={k} className="k-note">{itemLabel(d.gate as Gate, x.rule)}{x.slide ? ` (${x.slide})` : ""}: {x.text}</span>)}
-        {d.gate.dropped_n > 3 && <span className="k-note">and {d.gate.dropped_n - 3} more</span>}
-      </span>)) },
+      // every dropped item, scrolling in the cell past three (SCROLL, owner 21 Nov; it was three and "and N more")
+      <><ScrollList label="Dropped before it shipped" rows={3}><span className="k-stack k-tight">
+        {d.gate.dropped.map((x, k) => <span key={k} className="k-note">{itemLabel(d.gate as Gate, x.rule)}{x.slide ? ` (${x.slide})` : ""}: {x.text}</span>)}
+      </span></ScrollList>{d.gate.dropped_n > d.gate.dropped.length && <span className="k-note">{d.gate.dropped_n} in all; the first {d.gate.dropped.length} are kept with the run</span>}</>)) },
   ];
   const prefixCols: Column<Stored>[] = [
     { key: "l", header: "What", rowHeader: true, wrap: true, cell: (s) => s.label },

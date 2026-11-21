@@ -219,7 +219,9 @@ test("LIVE1C-090, LIVE1C-091: few watched stocks stack the Invest cards and fill
   assert.doesNotMatch(read("src/components/Research.tsx"), /<FoBadges/);
   const mine = read("src/pages/MineHome.tsx");
   // (changed on purpose, site85 LIVE21B-003: as many dated rows as the watchlist card shows, two at least; it was still 150px taller live)
-  assert.match(mine, /shownWatch < 6 \? coming\.slice\(0, Math\.max\(2, shownWatch\)\)/);
+  // (changed on purpose again, site86 SCROLL, owner 21 Nov: every date, scrolling inside the card; a long list gives way to a shorter neighbour)
+  assert.doesNotMatch(mine, /coming\.slice\(0,/);
+  assert.match(mine, /<ScrollList label="Coming up, every date" testId="mine-coming-list"><ul className="mine-tl">/);
   assert.match(mine, /<span className="sr-only">\{d\.w\} \{d\.d\} \{d\.m\}: <\/span>/);
 });
 

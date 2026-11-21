@@ -282,7 +282,7 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
   // docs/UI_CHECKER.md names every rule the checker has, R1 to R28 (VR7 added R26, LIVE5 R27, the owner's alignment sweep of 18 Nov R28)
   const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
   const doc = readFileSync(new URL("../../../docs/UI_CHECKER.md", import.meta.url), "utf8");
-  assert.equal(rules.length, 29);     // (updated on purpose, owner 18 Nov: R28 off-centre; site83, owner 20 Nov: R29 off its row's centre)
+  assert.equal(rules.length, 30);     // (updated on purpose, owner 18 Nov: R28 off-centre; site83, owner 20 Nov: R29 off its row's centre; site86, owner 21 Nov: R30 uneven pair or hidden items)
   for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
 });
 

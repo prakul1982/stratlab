@@ -17,7 +17,7 @@ import { surpriseShown } from "../lib/surprise";
 import { tinyBase } from "../lib/researchFormat";
 import { Star } from "./Icons";
 import { Info } from "./ui";
-import { Card, CardNote, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton, type Column } from "./kit";
+import { Card, CardNote, CardHead, DataTable, Delta, Disclosure, Meter, Notice, ScrollList, Seg, Signed, Skeleton, type Column } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { AiAd } from "./AiAd";
 import { StoredNote, StoredStamp, useStoredRefresh } from "./StoredStamp";
@@ -391,14 +391,15 @@ function ReadTable({ r }: { r: CompanyAI }) {
 }
 
 /* ---------- lists ---------- */
+/** Every headline, newest first; past `limit` rows the list scrolls inside its card (SCROLL, owner 21 Nov; it showed the first `limit`). */
 export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: number }) {
   if (!items.length) return <p className="k-small k-muted">No recent headlines.</p>;
   // newest first; an item over a week old says how old it is beside its date, so it never reads as today's news
   const when = (n: NewsItem) => (n.at ? new Date(n.at).getTime() : -Infinity);
   const sorted = [...items].sort((a, b) => when(b) - when(a));
   return (
-    <div className="inv-news">
-      {sorted.slice(0, limit).map((n, i) => {
+    <ScrollList label="Headlines" rows={limit}><div className="inv-news">
+      {sorted.map((n, i) => {
         return (
           <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
             <span>{n.headline}</span>
@@ -406,7 +407,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
           </a>
         );
       })}
-    </div>
+    </div></ScrollList>
   );
 }
 
@@ -414,26 +415,26 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
 /** The Invest home's watchlist as a table (LIVE3-015: tiles two across left an empty cell beside an odd one, and "Tables
  * everywhere"): the stock with its name and any exchange or F&O note under it, its price and the day's change; each opens the
  * company (its F&O lot changes are on the watchlist page). The prices are asked again each minute while they are live, each row kept until its new price comes (LIVE-1). */
-export function WatchTable({ region, symbols, names, label = "Your watchlist" }: { region: Region; symbols: string[]; names?: Record<string, string | null>; label?: string }) {
+export function WatchTable({ region, symbols, names, label = "Your watchlist", rows }: { region: Region; symbols: string[]; names?: Record<string, string | null>; label?: string; rows?: number }) {
   const [q, setQ] = useState<Record<string, Quote | null> | null>(null);
   const key = symbols.join(",");
   useEffect(() => {
     let live = true;
     setQ(null);
     if (!symbols.length) return;
-    researchApi.quotes(region, symbols).then((r) => live && setQ(r)).catch(() => live && setQ({}));
+    researchApi.quotesAll(region, symbols).then((r) => live && setQ(r)).catch(() => live && setQ({}));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
   useLiveRefresh(!!q && Object.values(q).some((x) => liveQuote(x?.at)), () => {
-    researchApi.quotes(region, symbols).then((r) => setQ((cur) => ({ ...cur, ...Object.fromEntries(Object.entries(r).filter(([, x]) => x?.price != null)) }))).catch(() => undefined);
+    researchApi.quotesAll(region, symbols).then((r) => setQ((cur) => ({ ...cur, ...Object.fromEntries(Object.entries(r).filter(([, x]) => x?.price != null)) }))).catch(() => undefined);
   });
   const ccy = region === "IN" ? "INR" : "USD";
   return (
     <div className="watch-table">
       {/* on a phone a card a row (the app's phone pattern): beside a stock's name and its surveillance note the Change column ran off
           a 390px screen */}
-      <DataTable csv={`watchlist ${label}`} label={label} rows={symbols} rowKey={(s) => s} stack
+      <DataTable csv={`watchlist ${label}`} label={label} rows={symbols} rowKey={(s) => s} stack scrollRows={rows}
         columns={[
           { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (s) => (
             <>

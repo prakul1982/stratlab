@@ -134,7 +134,7 @@ async function watcher(request: APIRequestContext, phone: boolean, API: string) 
   return { head, who: session(`load-${n}`, `u-load-${n}`, `load${n}@example.com`) };
 }
 
-test("VR5-owner-1: the Invest home's watchlist card shows six of a longer list, with See all to the full watchlist, and ends near its neighbour column", async ({ page, request }, info) => {
+test("VR5-owner-1: the Invest home's watchlist card shows every stock of a longer list (scrolling inside the card), with See all to the full watchlist, and ends near its neighbour column", async ({ page, request }, info) => {
   const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
   const { head, who } = await watcher(request, info.project.name === "phone", API);
   const before = await (await request.get(`${API}/research/watchlist`, { headers: head })).json();
@@ -146,7 +146,7 @@ test("VR5-owner-1: the Invest home's watchlist card shows six of a longer list, 
     // LIVE3-015: the six are rows of a table now (they were tiles)
     const rows = card.getByRole("table", { name: "Your watchlist" }).locator("tbody tr");
     await expect(rows.first()).toBeVisible({ timeout: 30_000 });
-    await expect(rows).toHaveCount(6);
+    await expect(rows).toHaveCount(8);                                 // (changed on purpose, site86 SCROLL, owner 21 Nov: every stock is in the card, which scrolls past six; it was the first six)
     await expect(card.getByTestId("watch-see-all")).toHaveText("See all 8 →");
     await expect(card.getByTestId("watch-see-all")).toHaveAttribute("href", "/research/watchlist");
     await expect(card.getByText(/^India$/i)).toHaveCount(0);           // the market is the toggle above, not a label again over the stocks

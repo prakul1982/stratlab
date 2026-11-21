@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { asOf, safeHref } from "../../lib/format";
 import { evDay, evWhen, failedLine, happened, istHm, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
 import { Info } from "../../components/ui";
-import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton } from "../../components/kit";
+import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton, ScrollList } from "../../components/kit";
 import "./trade.css";
 import "./events.css";
 
@@ -101,12 +101,13 @@ function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | 
       {unread.length > 0 && (
         <div className="ev-idx-item" data-testid="ev-index-unread" role="group" aria-label="Index notices not read into stocks">
           <CardHead level={3} title={`Index changes in the press release (${unread.length})`} />
-          <ul className="k-list plain">
-            {unread.slice(0, 8).map((c) => (
+          {/* every notice, scrolling inside the card past a few (SCROLL, owner 21 Nov; it listed the first eight of the count in the title) */}
+          <ScrollList label="Index notices not read into stocks"><ul className="k-list plain">
+            {unread.map((c) => (
               <li key={c.id} className="k-small">{c.effective ? `From ${evDay(c.effective, true)}: ` : ""}{c.title} · announced {asOf(c.announced)} ·{" "}
                 <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></li>
             ))}
-          </ul>
+          </ul></ScrollList>
           {/* LIVE10A-039: what the link holds, without an excuse */}
           <p className="k-note">Each press release lists the stocks going in and out of the index.</p>
         </div>

@@ -111,7 +111,9 @@ test("DI-009: a results day reads the same whichever calendar it came from, and 
   assert.deepEqual(resultsLine("AAVAS", "Financial Results/Other business matters"), { title: "AAVAS results", detail: "Among your stocks · Other business matters" });
   assert.deepEqual(resultsLine("BHARATCOAL", null, "after market"), { title: "BHARATCOAL results", detail: "Among your stocks · after market" });
   assert.equal(resultsLine("TCS", "Financial Results").detail, "Among your stocks");
-  assert.match(read("src/pages/MineHome.tsx"), /\+\{more\} more in the calendar/);
+  // (changed on purpose, site86 SCROLL, owner 21 Nov: every date is in the card's scrolling list; the link to the calendar stays)
+  assert.doesNotMatch(read("src/pages/MineHome.tsx"), /\+\{more\} more in the calendar/);
+  assert.match(read("src/pages/MineHome.tsx"), /to="\/money\/calendar" data-testid="mine-coming-more">See them by month in the calendar<\/Link>/);
 });
 
 test("DI-010, DI-011, DI-012: the markets' period and colours in words, India's date says so, and the polish", () => {

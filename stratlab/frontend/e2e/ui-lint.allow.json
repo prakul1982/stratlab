@@ -1,5 +1,5 @@
 {
-  "_about": "Layout violations accepted on purpose. Each entry: page (a route like /holdings, or * for every page), rule (R1..R29), element (a piece of the element label shown in the report) and a reason. Only used by UI_LINT_STRICT=1 runs (npm run ui-lint) to pass; the report still lists them.",
+  "_about": "Layout violations accepted on purpose. Each entry: page (a route like /holdings, or * for every page), rule (R1..R30), element (a piece of the element label shown in the report) and a reason. Only used by UI_LINT_STRICT=1 runs (npm run ui-lint) to pass; the report still lists them.",
   "allow": [
     {
       "page": "/plans",

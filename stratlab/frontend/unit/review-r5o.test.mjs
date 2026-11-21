@@ -297,8 +297,10 @@ test("polish: Help's title, candle colours, card heights, option tiles, the menu
   const pc = read("src/charts/price/priceChart.css");
   assert.equal((pc.match(/--pc-up: var\(--up\); --pc-down: var\(--down\);/g) || []).length, 3);
   assert.doesNotMatch(pc, /#1F4FB5|#B4500F/);
-  assert.match(read("src/styles-invest.css"), /^\.k-cols \{[^}]*align-items: start; \}/m);
-  assert.match(read("src/styles.css"), /\.mine-slot\[data-card="coming"\], \.mine-slot\[data-card="watch"\] \{ align-self: start; \}/);
+  // (changed on purpose, site86 SCROLL, owner 21 Nov: cards side by side are one height, ui-lint R30; a long list scrolls inside its card)
+  assert.match(read("src/styles-invest.css"), /^\.k-cols \{[^}]*align-items: stretch; \}/m);
+  // (changed on purpose, site86 SCROLL, owner 21 Nov: the two cards are the same height; the longer list scrolls inside its card instead)
+  assert.doesNotMatch(read("src/styles.css"), /\.mine-slot\[data-card="coming"\], \.mine-slot\[data-card="watch"\] \{ align-self: start; \}/);
   assert.match(read("src/styles.css"), /\.k-tiles \{ display: grid; grid-template-columns: repeat\(auto-fill, minmax\(max\(140px, calc\(\(100% - 30px\) \/ 4\)\), 1fr\)\)/);
   assert.match(read("src/components/Shell.tsx"), /className="side-more"/);
 });

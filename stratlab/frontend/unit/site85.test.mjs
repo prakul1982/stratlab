@@ -108,10 +108,12 @@ test("LIVE21B-012: the tax report's sales are five columns, the long name wraps 
 
 test("LIVE21B-003: /mine lists the watchlist in its own order, and Coming up has as many rows as the watchlist shows", () => {
   const mine = read("src/pages/MineHome.tsx");
-  assert.match(mine, /return parts\.flat\(\)\.sort\(\(a, b\) => at\(a\) - at\(b\)\)\.slice\(0, 6\)/);
+  // (changed on purpose, site86 SCROLL, owner 21 Nov: every stock, not the first six, scrolling inside the card)
+  assert.match(mine, /return parts\.flat\(\)\.sort\(\(a, b\) => at\(a\) - at\(b\)\); \}\), \[\]\);/);
   assert.doesNotMatch(mine, /Math\.abs\(b\.q\.change_pct \?\? 0\) - Math\.abs\(a\.q\.change_pct \?\? 0\)/);
-  assert.match(mine, /const comingShown = coming && shownWatch && shownWatch < 6 \? coming\.slice\(0, Math\.max\(2, shownWatch\)\) : coming;/);
-  assert.match(mine, /watch: <WatchCard onRows=\{setWatchRows\} \/>/);
+  // (replaced on purpose, site86: the cards are the same height and the longer list scrolls; no row count is shared between them)
+  assert.doesNotMatch(mine, /comingShown|setWatchRows/);
+  assert.match(mine, /coming: <ComingCard rows=\{coming\} \/>, watch: <WatchCard \/>,/);
 });
 
 test("owner, 20 Nov: the phone's billing choice reads \"Yearly\", the saving on each yearly card", () => {

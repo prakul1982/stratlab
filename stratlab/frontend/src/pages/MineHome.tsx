@@ -19,7 +19,7 @@ import { useAfterPaint } from "../lib/defer";
 import { researchApi, savedRegion, useWatchlist, type Quote, type Region } from "../lib/research";
 import { greetingAt, greetingZone, hourIn } from "../lib/greeting";
 import type { LiveRow } from "../lib/types";
-import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, Signed, Skeleton, Spark, Stat } from "../components/kit";
+import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, ScrollList, Signed, Skeleton, Spark, Stat } from "../components/kit";
 import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { FreeChangeNotice } from "../components/FreeChangeNotice";
@@ -59,8 +59,8 @@ export function MineHome() {
   // the calendars (the money calendar, market events, results) are below the first screen: they are read once the page has
   // painted, so the net worth, holdings and prices at the top get the connections first (R9R-010)
   const later = useAfterPaint();
-  const upAll = useComingUpAll(later);
-  const coming = upAll ? upAll.slice(0, 6) : null;
+  // SCROLL (owner, 21 Nov): every dated row, scrolling inside the card (kit ScrollList), not the first six and a count of the rest
+  const coming = useComingUpAll(later);
   const first = firstName(session?.user?.user_metadata as Record<string, unknown> | undefined);
   let shown = layout.order.filter((id) => !layout.hidden.includes(id));
 
@@ -81,20 +81,16 @@ export function MineHome() {
 
   const change = (next: Layout) => { setRaw(next); void savePrefs({ mine: next }, true); };
   const cardFor = (id: CardId) => ({
-    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={comingShown} more={upAll ? upAll.length - (comingShown?.length ?? 0) : 0} />, watch: <WatchCard onRows={setWatchRows} />,
+    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={coming} />, watch: <WatchCard />,
     saved: <SavedList id="mine-saved" title="Saved searches and reads" />,
   })[id];
   // each card's width from its place in the chosen order, so the grid keeps that order with no gaps (DI-005)
   // VR6-010: an empty watchlist is one short message: it takes its own row (Coming up widens to fill the one before), instead of standing
   // beside six dated rows with 230px of nothing under it. Until the list is read the two keep sharing the row.
   const { items: watchItems } = useWatchlist();
-  // beside a watchlist of one to three stocks, "Coming up" is a few rows shorter than its six, so the pair ends near level instead of one at half
-  // the other's height with a block of nothing under it (LIVE1C-091); the rest are one tap away in the calendar ("+N more")
-  // LIVE21B-003: counted from the rows the watchlist card shows (a list of five with three priced showed three rows beside six dated ones, 150px
-  // of nothing under the watchlist): as many dated rows as watchlist rows, two at least
-  const [watchRows, setWatchRows] = useState<number | null>(null);
-  const shownWatch = watchRows ?? (watchItems && watchItems.length > 0 ? Math.min(6, watchItems.length) : null);
-  const comingShown = coming && shownWatch && shownWatch < 6 ? coming.slice(0, Math.max(2, shownWatch)) : coming;
+  // SCROLL (owner, 21 Nov): Coming up and the watchlist side by side are the same height whatever their lengths: each list scrolls inside its
+  // card, and a long one gives way to a neighbour that fits (kit ScrollList). This replaces LIVE1C-091 / LIVE21B-003's "as many dated rows as
+  // watchlist rows".
   // R19: the saved searches and reads take their place only once there is one (no empty card for everyone else)
   const { items: savedItems } = useSaved();
   if (!savedItems?.length) shown = shown.filter((id) => id !== "saved");
@@ -344,14 +340,14 @@ function MarketsCard({ later }: { later: boolean }) {
 }
 
 /* ---------- coming up ---------- */
-function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
+function ComingCard({ rows }: { rows: Up[] | null }) {
   return (
     <Card testId="mine-coming">
       <CardHead title="Coming up" actions={<Link className="btn quiet sm" to="/money/calendar" aria-label="Open the money calendar">Open</Link>} />
       {rows === null ? <Skeleton label="Reading your calendars" lines={3} />
         : !rows.length ? <EmptyState title="Nothing dated yet" action={{ label: "Open the money calendar", to: "/money/calendar" }}>Tax dates, results and dividends for your stocks and market events show here.</EmptyState>
         : (
-          <ul className="mine-tl">
+          <ScrollList label="Coming up, every date" testId="mine-coming-list"><ul className="mine-tl">
             {rows.map((u) => {
               const d = dayNum(u.date);
               return (
@@ -364,36 +360,38 @@ function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
                 </li>
               );
             })}
-          </ul>
+          </ul></ScrollList>
         )}
-      {/* the list is the next six: the rest are named as a count, not dropped in silence (DI-009) */}
-      {more > 0 && <Link className="link k-small" to="/money/calendar" data-testid="mine-coming-more">+{more} more in the calendar</Link>}
+      {/* every date is in the list above (it scrolls); the calendar has them by month, with the filters (DI-009) */}
+      {rows !== null && rows.length > 0 && <Link className="link k-small" to="/money/calendar" data-testid="mine-coming-more">See them by month in the calendar</Link>}
     </Card>
   );
 }
 
 /* ---------- the watchlist today ---------- */
-type Mover = { region: Region; symbol: string; name: string | null; q: Quote };
+type Mover = { region: Region; symbol: string; name: string | null; q: Quote | null };
 
-function WatchCard({ onRows }: { onRows?: (n: number | null) => void }) {
+function WatchCard() {
   const { items, failed, retry } = useWatchlist();
   const { markets, me } = useApp();
   // the last rows this card showed for this account: painted at once, said as the earlier read, until today's arrive (LIVE9B-010)
   const kept = useMemo(() => readKeptMovers<Mover>(me?.id), [me?.id]);
-  const day = (m: Mover) => { const mk = markets.find((x) => x.id === m.region); return moverDay(m.region, m.q, new Date(), !!mk && mk.status !== "soon" && !marketState(mk).open); };
+  const day = (m: Mover) => { if (!m.q) return null; const mk = markets.find((x) => x.id === m.region); return moverDay(m.region, m.q, new Date(), !!mk && mk.status !== "soon" && !marketState(mk).open); };
   const [movers, setMovers] = useState<Mover[] | null>(null);
-  // the prices of the watchlist's first 24 in each market, in the list's order: read when the list arrives and again each minute
-  // while a market trades, the rows shown kept when a read fails or finds no price (LIVE-1)
+  // the prices of every stock on the watchlist, in the list's order (24 to a read, the server's limit): read when the list arrives and again
+  // each minute while a market trades, the rows shown kept when a read fails or finds no price (LIVE-1). SCROLL (owner, 21 Nov: "it doesn't show
+  // all the stocks"): every stock is a row, the list scrolling inside the card; one with no price yet says so with a dash
   const read = useCallback((items: NonNullable<ReturnType<typeof useWatchlist>["items"]>) =>
     Promise.all((["IN", "US"] as Region[]).map(async (r) => {
-      const mine = items.filter((w) => w.region === r).slice(0, 24);
+      const mine = items.filter((w) => w.region === r);
       if (!mine.length) return [] as Mover[];
-      const q = await researchApi.quotes(r, mine.map((w) => w.symbol)).catch(() => ({} as Record<string, Quote | null>));
-      return mine.flatMap((w) => (q[w.symbol]?.price != null ? [{ region: r, symbol: w.symbol, name: w.name, q: q[w.symbol]! }] : []));
+      const q = await researchApi.quotesAll(r, mine.map((w) => w.symbol));
+      if (!mine.some((w) => q[w.symbol]?.price != null)) return [] as Mover[];
+      return mine.map((w): Mover => ({ region: r, symbol: w.symbol, name: w.name, q: q[w.symbol]?.price != null ? q[w.symbol]! : null }));
     // LIVE21B-003: in the watchlist's own order, as /invest and /research/watchlist list it (it was the biggest movers first: ABB, RELIANCE,
     // ADANIPORTS here against RELIANCE, ADANIPORTS, ABB there)
     })).then((parts) => { const at = (m: Mover) => items.findIndex((w) => w.region === m.region && w.symbol === m.symbol);
-      return parts.flat().sort((a, b) => at(a) - at(b)).slice(0, 6); }), []);
+      return parts.flat().sort((a, b) => at(a) - at(b)); }), []);
   useEffect(() => {
     if (items === null) return;
     if (!items.length) { setMovers([]); return; }
@@ -404,18 +402,17 @@ function WatchCard({ onRows }: { onRows?: (n: number | null) => void }) {
   const on = useRef(true);
   useEffect(() => { on.current = true; return () => { on.current = false; }; }, []);
   const trading = useMarketsLive(["IN", "US"]);
-  useLiveRefresh(trading && !!items?.length && movers !== null, () => { void read(items!).then((m) => { if (on.current && m.length) { setMovers(m); keepMovers(me?.id, m); } }); });
+  useLiveRefresh(trading && !!items?.length && movers !== null, () => { void read(items!).then((m) => { if (on.current && m.some((x) => x.q)) { setMovers(m); keepMovers(me?.id, m); } }); });
   // VR2-004: six rows each said "Mon 26 Oct" under the name: when every row is from the same earlier day it is said once, under the list
   const earlier = movers === null && !failed && kept && items !== null && items.length > 0 ? kept : null;
   const rows = movers ?? earlier?.rows ?? null;
-  useEffect(() => { onRows?.(rows ? rows.length : null); }, [rows?.length, onRows]);    // eslint-disable-line react-hooks/exhaustive-deps
-  const days = (rows ?? []).map((m) => day(m));
+  const days = (rows ?? []).filter((m) => m.q).map((m) => day(m));
   const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
   return (
     <Card testId="mine-watch">
-      <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
+      <CardHead title={movers?.length && movers.every((m) => !m.q || day(m)) ? "Your watchlist" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
-        // the placeholder as tall as the rows it waits for (up to six), so their arrival doesn't move the page (LIVE9B-010)
+        // the placeholder as tall as the rows it waits for (up to six, the list's height before it scrolls), so their arrival doesn't move the page (LIVE9B-010)
         : rows === null ? <Skeleton label="Reading your watchlist prices" lines={Math.max(3, Math.min(6, items?.length ?? 3))} />
         : !rows.length ? (
           items && items.length
@@ -424,17 +421,17 @@ function WatchCard({ onRows }: { onRows?: (n: number | null) => void }) {
         ) : (
           <>
           {earlier && <p className="k-note k-muted" role="status" data-testid="mine-movers-earlier">As read {asOf(earlier.at, { year: false })}; today's prices are on their way.</p>}
-          <ul className={`mine-movers${earlier ? " k-muted" : ""}`}>
+          <ScrollList label="Your watchlist, every stock" testId="mine-watch-list"><ul className={`mine-movers${earlier ? " k-muted" : ""}`}>
             {rows.map((m) => (
               <li key={`${m.region}-${m.symbol}`}>
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
-                <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>
-                <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta>
+                <span className="px">{m.q ? price(m.q.price, m.region === "US" ? "USD" : "INR") : <span className="k-muted" title="No price yet">–</span>}</span>
+                {m.q ? <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta> : <span className="k-note k-muted">No price yet</span>}
                 {/* VR2-004: a row names its day only when the rows' days differ (India and the US can be on different sessions) */}
                 {!sameDay && (() => { const d = day(m); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
               </li>
             ))}
-          </ul>
+          </ul></ScrollList>
           {sameDay && <p className="k-note" data-testid="mine-mover-day">Prices from {fmtDate(sameDay, { weekday: true, year: false })}</p>}
           </>
         )}

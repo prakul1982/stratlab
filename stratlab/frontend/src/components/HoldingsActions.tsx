@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { inr, price, qty as qtyText } from "../lib/format";
 import { exDay } from "./CorpActions";
 import { fyLink } from "../lib/fy";
-import { Card, CardHead, DataTable, FactTable, Notice, ShowLess, Working, type Column } from "./kit";
+import { Card, CardHead, DataTable, FactTable, Notice, Working, type Column } from "./kit";
 
 /* My Holdings: bonuses and splits since the holdings were saved (offered, never made silently), and dividend income. */
 interface IncomeLine { symbol: string; label: string; ex_date: string; record_date: string | null; amount: number; qty: number; total: number }
@@ -44,7 +44,6 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
   const { fail, notify } = useApp();
   const [data, setData] = useState<HoldingsActions | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
   const [again, setAgain] = useState(0);              // how many times the page has asked again while some stocks were still being read
   useEffect(() => {
     let live = true;
@@ -71,7 +70,8 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
   };
 
   if (!data) return null;
-  const received = showAll ? data.received : data.received.slice(0, 6);
+  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): every row, scrolling inside the card past six (it was the first six and "Show all")
+  const received = data.received;
   const key = (d: IncomeLine) => `${d.symbol}-${d.ex_date}-${d.label}`;
   return (
     <>
@@ -110,8 +110,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
             );
           })()}
           {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack phonePage={8} /></>}
-          {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack phonePage={8} /></>}
-          {data.received.length > 6 && (showAll ? <ShowLess className="btn quiet sm k-btn-end" onLess={() => setShowAll(false)} /> : <button type="button" className="btn quiet sm k-btn-end" onClick={() => setShowAll(true)}>Show all {data.received.length}</button>)}
+          {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack scrollRows={6} /></>}
           {data.checking > 0 && <div data-testid="ha-checking"><Working small label="Collecting the rest of your stocks' dividends…" /></div>}
         </Card>
       )}

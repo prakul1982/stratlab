@@ -61,6 +61,10 @@
 //                                            fold row side by side whose centres differ by > 2px, or its chevron not centred; a fold's opened body
 //                                            whose left and right insets differ by > 2px, or (beside a chevron column) whose tables don't run to
 //                                            the row's own left and right edges; (desktop) a table wider than its box
+// Owner, 21 Nov ("add a scroll, don't extend it, and do it everywhere so this kind of mismatch doesn't happen"):
+//   R30 uneven pair / hidden items          two cards side by side whose heights differ by > 2px (a long list scrolls inside its card: kit
+//                                            ScrollList); a "+N more" / "and N more" with nothing to press; a list's rows cut off below a box that
+//                                            doesn't scroll
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
 export interface PageFrame { h1Top: number; h1Left: number; right: number }
@@ -220,6 +224,53 @@ export function lintPage(opts: LintOpts): LintResult {
         const dead = bottom - usedBottom(it, box);
         if (dead > 60 && dead / rowH > 0.25) add("R1", it, `${Math.round(dead)}px of ${Math.round(rowH)}px row height empty under it (content ends ${Math.round(usedBottom(it, box) - top)}px down; ${row.length} side by side)`);
       }
+    }
+  }
+
+  // ---- R30 cards side by side of different heights; a list that hides items (owner, 21 Nov: "add a scroll, don't extend it, and do it everywhere
+  // so this kind of mismatch doesn't happen") ----------------------------------------------------------------------------------------------------
+  // two cards in one row are the same height (a long list scrolls inside its card, kit ScrollList); "+24 more" with nothing to press, or a list's
+  // rows cut off by a box that does not scroll, hides items
+  for (const p of all) {
+    const s = S(p);
+    if (!flexish(s) || p.matches(SKIP) || !shown(p)) continue;
+    if (s.display.includes("flex") && s.flexDirection.startsWith("column")) continue;
+    const items = kids(p).filter((c) => R(c).width >= 140 && R(c).height >= 40 && S(c).position !== "absolute" && S(c).position !== "fixed");
+    for (const row of rowsOf(items, 4)) {
+      if (row.length !== 2) continue;
+      const [l, r] = [...row].sort((a, b) => R(a).left - R(b).left);
+      if (R(r).left < R(l).right - 2) continue;
+      if (row.some((c) => c.matches("aside, nav, header, footer, main, [role=navigation]"))) continue;
+      // the card itself, or the one card that fills its slot (My space's .mine-slot holds its card); a column of two or more cards is a stack,
+      // not one card, and is left to R1
+      const cardOf = (c: Element): Element | null => {
+        if (isCard(c)) return c;
+        const inner = Array.from(c.querySelectorAll("[class*=card]")).filter((d) => isCard(d) && shown(d));
+        const top = inner.filter((d) => !inner.some((o) => o !== d && o.contains(d)));
+        return top.length === 1 && Math.abs(R(top[0]).top - R(c).top) < 2 && Math.abs(R(top[0]).width - R(c).width) < 2 ? top[0] : null;
+      };
+      const a = cardOf(l), b = cardOf(r);
+      if (!a || !b) continue;
+      const d = R(a).height - R(b).height;
+      if (Math.abs(d) > 2) add("R30", d > 0 ? a : b, `${Math.round(Math.max(R(a).height, R(b).height))}px tall beside a ${Math.round(Math.min(R(a).height, R(b).height))}px card in the same row (two cards side by side are the same height)`);
+    }
+  }
+  for (const e of all) {
+    if (e.children.length || !shown(e) || e.closest("a, button, [role=button], [role=link], [role=tab], summary")) continue;
+    const t = textOf(e);
+    if (/^(\+\s?\d[\d,]*|and \d[\d,]*) more\b/i.test(t)) add("R30", e, `"${t.slice(0, 40)}" counts items the list leaves out, with no scroll or link to them`);
+  }
+  for (const l of all) {
+    if (!l.matches("ul, ol, tbody") || !shown(l)) continue;
+    const rowsL = Array.from(l.children).filter((c) => R(c).height > 0);
+    if (rowsL.length < 2) continue;
+    for (let p: Element | null = l.parentElement; p && p !== document.body; p = p.parentElement) {
+      const oy = S(p).overflowY;
+      if (oy === "auto" || oy === "scroll") break;
+      if (oy !== "hidden" && oy !== "clip") continue;
+      const pb = R(p), cut = rowsL.filter((c) => R(c).top >= pb.bottom - 1).length;
+      if (cut > 0 && pb.height >= 40) add("R30", l, `${cut} of ${rowsL.length} rows cut off below a box that doesn't scroll`);
+      break;
     }
   }
 
@@ -953,7 +1004,7 @@ export function lintPage(opts: LintOpts): LintResult {
     if (counts[f.rule] <= 25) violations.push({ rule: f.rule, element: f.el === document.body ? "body" : labelOf(f.el), key: f.el === document.body ? "body" : keyOf(f.el), detail: f.detail });
   }
   if (opts.mark) {
-    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500", R27: "#ff8c00", R28: "#00b894", R29: "#e84393" };
+    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500", R27: "#ff8c00", R28: "#00b894", R29: "#e84393", R30: "#ff6b00" };
     const st = document.createElement("style");
     st.textContent = Object.entries(colour).map(([r, c]) => `[data-uilint~="${r}"]{outline:3px solid ${c} !important;outline-offset:-2px !important}`).join("\n");
     document.head.appendChild(st);

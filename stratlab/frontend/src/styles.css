@@ -1981,6 +1981,27 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .k-tbl-wrap.pinhead .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
 @media (max-width: 900px) { .k-tbl-wrap.pinhead .k-table thead th { top: 56px; } }
 @media (max-width: 640px) { .k-tbl-wrap.pinhead .k-table th, .k-tbl-wrap.pinhead .k-table td { white-space: normal; padding-left: var(--s2); padding-right: var(--s2); min-width: 0; } }
+/* SCROLL (owner, 21 Nov: "add a scroll, don't extend it, and do it everywhere"): a list or table shows every item and, past a few rows,
+   scrolls inside its card (kit/ScrollList.tsx sets data-over and the height, in whole rows; data-more while more is below). A thin
+   scrollbar in the theme's colours, a fade at the bottom until the end, the page not dragged along at the list's ends. */
+.k-scroll-box { position: relative; min-width: 0; }
+/* the rows' hidden parts (a screen reader's words, a whole-row link's cover) are held by the list itself, so rows scrolled out of view never make the page taller */
+.k-scroll { position: relative; }
+.k-scroll-box[data-over] { flex: 1 0 auto; height: var(--k-scroll-in, auto); }
+.k-scroll[data-over], .k-tbl-wrap[data-over], .k-tbl-wrap.pinhead[data-over] { overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.k-tbl-wrap.pinhead[data-over] { overflow-x: auto; }
+.k-scroll[data-over]::-webkit-scrollbar, .k-tbl-wrap[data-over]::-webkit-scrollbar { width: 6px; height: 6px; }
+.k-scroll[data-over]::-webkit-scrollbar-thumb, .k-tbl-wrap[data-over]::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
+.k-scroll[data-over]::-webkit-scrollbar-track, .k-tbl-wrap[data-over]::-webkit-scrollbar-track { background: transparent; }
+.k-scroll[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
+.k-tbl-wrap[data-more], .k-tbl-wrap.pinhead[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
+.k-scroll:focus-visible { outline-offset: -2px; border-radius: 8px; -webkit-mask-image: none; mask-image: none; }
+.k-tbl-wrap[data-over]:focus-visible { -webkit-mask-image: none; mask-image: none; }
+/* a phone's table drawn as cards that scrolls (a card's short list: DataTable scrollRows) keeps its box: the cards' rule lets them spill */
+.k-tbl-wrap.stack[data-over] { overflow-x: hidden; overflow-y: auto; }
+.k-tbl-wrap.stack[data-more] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
+/* a long table's header row stays at the top of its box while its rows scroll */
+.k-tbl-wrap[data-over]:not(.stack) .k-table thead th, .k-tbl-wrap.pinhead[data-over] .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
 /* on a phone, a link or a small button in a table or a calendar's list is a 32px target, not a line of text's height
    (R5O-017: hundreds of targets under 32px on ETF vs NAV, Market events and the screener) */
 @media (max-width: 640px) {
@@ -2514,8 +2535,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-slot .k-card-head:not(:has(> .k-card-actions)) { align-items: flex-start; }
 /* the lines sit on one level across a row, whatever text a tile has above its line (DI-010: Gold's note pushed its line down) */
 .mine-mkt .k-spark { margin-top: auto; }
-/* two lists side by side keep their own height: stretched to the longer one, the shorter left a big blank box (R5O-036) */
-.mine-slot[data-card="coming"], .mine-slot[data-card="watch"] { align-self: start; }
+/* SCROLL (owner, 21 Nov): Coming up and the watchlist side by side are the same height; each list scrolls inside its card, and a long one
+   gives way to a neighbour that fits (kit ScrollList), so neither card is left with a blank box under a short list (R5O-036) */
 @media (max-width: 1100px) {
   .mine-slot[data-card="networth"], .mine-slot[data-card="coming"], .mine-slot[data-card="watch"] { grid-column: span 12; }
   .mine-slot[data-card="networth"], .mine-slot[data-card="pnl"], .mine-slot[data-card="paper"] { grid-column: span 12; }
@@ -2566,8 +2587,6 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-movers li:last-child { border-bottom: 0; }
 /* LIVE9B-012: the watchlist and Coming up share a row; the shorter list's rows share out the card's height, so neither ends with a block of
    nothing under its last row (the watchlist sat ~110px short of Coming up) */
-.mine-slot[data-card="watch"] .mine-movers, .mine-slot[data-card="coming"] .mine-tl { flex: 1 0 auto; }
-.mine-movers li, .mine-tl-i { flex: 1 0 auto; }
 .mine-movers a { display: flex; flex-direction: column; min-width: 0; color: inherit; text-decoration: none; }
 .mine-movers a .k-stat-d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mine-movers .px { font-weight: 500; }

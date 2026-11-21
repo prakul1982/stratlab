@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
 import { bodyAfter } from "../lib/filingText";
-import { Badge, CardNote, CheckField, EmptyState, ErrorState, ShowLess, Skeleton } from "./kit";
+import { Badge, CardNote, CheckField, EmptyState, ErrorState, ScrollList, Skeleton } from "./kit";
 
 export type Severity = "red" | "amber" | "info";
 export interface FilingItem { id: string; at: string; category: string; label: string; severity: Severity; subject: string; text: string; url: string | null;
@@ -67,7 +67,6 @@ export function FilingsPanel({ symbol }: { symbol: string }) {
   const [rep, setRep] = useState<FilingReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [all, setAll] = useState(false);
-  const [more, setMore] = useState(false);
   const [tries, setTries] = useState(0);
 
   useEffect(() => {
@@ -82,7 +81,8 @@ export function FilingsPanel({ symbol }: { symbol: string }) {
   if (error) return <ErrorState title="The filings couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>;
   if (!rep) return <Skeleton label="Reading the exchange filings" lines={3} />;
   const shown = rep.items.filter((i) => all || i.severity !== "info");
-  const list = more ? shown : shown.slice(0, 8);
+  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): every row, scrolling inside the card past eight (it was the first eight and "Show all")
+  const list = shown;
   return (
     <div className="k-stack">
       <SummaryLine s={rep.summary} />
@@ -97,9 +97,7 @@ export function FilingsPanel({ symbol }: { symbol: string }) {
         <span className="k-note">Last {Math.round(rep.lookback_days / 30)} months · {rep.items.length} filings</span>
       </div>
       {list.length === 0 ? <EmptyState title="Nothing to look at">No red flags or items to look closer at in the last year.</EmptyState>
-        : <div className="inv-rows">{list.map((i) => <FilingRow key={i.id} i={i} />)}</div>}
-      {shown.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {shown.length}</button>}
-      {more && shown.length > 8 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
+        : <ScrollList label="Filings" rows={8}><div className="inv-rows">{list.map((i) => <FilingRow key={i.id} i={i} />)}</div></ScrollList>}
       <CardNote><p>From the company's filings with the exchange. Labels come from fixed keyword rules on each filing's subject; open the filing to read it. Not advice.</p></CardNote>
     </div>
   );

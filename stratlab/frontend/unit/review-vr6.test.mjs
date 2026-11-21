@@ -113,5 +113,6 @@ test("VR6-024: a phone shows twelve strategy cards, ten positions and eight divi
   assert.match(read("src/pages/HoldingsPage.tsx"), /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Positions".*stack phonePage=\{10\} \/>/);
   const act = read("src/components/HoldingsActions.tsx");
   assert.match(act, /rows=\{data\.ahead\} rowKey=\{key\} stack phonePage=\{8\}/);
-  assert.match(act, /rows=\{received\} rowKey=\{key\} stack phonePage=\{8\}/);
+  // (changed on purpose, site86 SCROLL: every dividend received, six rows before the table scrolls inside its card, about eight on a phone)
+  assert.match(act, /rows=\{received\} rowKey=\{key\} stack scrollRows=\{6\}/);
 });

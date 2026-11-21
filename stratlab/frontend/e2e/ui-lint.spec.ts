@@ -66,6 +66,7 @@ export const RULES: Record<string, string> = {
   R27: "A table cut on a desktop: a list table with a column past its scrolling box's edge, or a row's name cut by an ellipsis to under 56px",
   R28: "Off-centre (owner, 18 Nov): a table header aligned otherwise than its column's cells, or a card head's controls > 2px off the middle of the title's line",
   R29: "Off its row's centre (owner, 20 Nov): a table cell's contents > 2px off the cell's centre, fold-row cells side by side with centres > 2px apart or an off-centre chevron, an opened fold with unequal insets or tables not the row's width, a table wider than its box on a desktop",
+  R30: "Uneven pair or hidden items (owner, 21 Nov): two cards side by side whose heights differ by > 2px, a \"+N more\" with nothing to press, or a list's rows cut off by a box that doesn't scroll",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -320,6 +321,14 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   const wide29 = (w: number) => `<div class="k-tbl-wrap" style="width:300px;overflow-x:auto"><table class="k-table" style="width:${w}px"><tbody><tr><td>A</td><td>B</td></tr></tbody></table></div>`;
   expect(await fire(wide29(500)), "R29 a table wider than its box").toContain("R29");
   expect(await fire(wide29(280)), "R29 a table that fits").not.toContain("R29");
+  // R30 (owner, 21 Nov: "add a scroll, don't extend it") two cards side by side of different heights; "+24 more" with nothing to press
+  const pair30 = (h: number) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;width:800px;align-items:start"><section class="k-card" style="border:1px solid #888;height:300px">A</section><section class="k-card" style="border:1px solid #888;height:${h}px">B</section></div>`;
+  expect(await fire(pair30(360)), "R30 a card 60px taller than its neighbour").toContain("R30");
+  expect(await fire(pair30(301)), "R30 two cards level").not.toContain("R30");
+  expect(await fire(`<div><ul><li>One</li><li>Two</li></ul><span>+24 more in the calendar</span></div>`), "R30 a count with nothing to press").toContain("R30");
+  expect(await fire(`<div><ul><li>One</li><li>Two</li></ul><a href="/money/calendar">+24 more in the calendar</a></div>`), "R30 a count that is a link").not.toContain("R30");
+  expect(await fire(`<div style="height:60px;overflow:hidden"><ul style="margin:0"><li style="height:40px">One</li><li style="height:40px">Two</li><li style="height:40px">Three</li></ul></div>`), "R30 rows cut by a box that doesn't scroll").toContain("R30");
+  expect(await fire(`<div style="height:60px;overflow:auto"><ul style="margin:0"><li style="height:40px">One</li><li style="height:40px">Two</li><li style="height:40px">Three</li></ul></div>`), "R30 rows in a box that scrolls").not.toContain("R30");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });

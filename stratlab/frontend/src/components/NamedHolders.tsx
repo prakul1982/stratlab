@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
-import { DataTable, CardNote, ErrorState, ShowLess, Signed, Skeleton } from "./kit";
+import { DataTable, CardNote, ErrorState, Signed, Skeleton } from "./kit";
 import { GroupLink } from "./GroupLink";
 
 /* Named holders above 1% from the quarterly shareholding pattern (shareholders.py): the promoter group's members and
@@ -59,7 +59,6 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
   const [v, setV] = useState<CompanyHolders | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [none, setNone] = useState(false);
-  const [all, setAll] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -73,7 +72,8 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
   if (none) return null;
   if (error) return wrap(<ErrorState title="The shareholding filing couldn't be read">{error}</ErrorState>);
   if (!v) return wrap(<Skeleton label="Reading the shareholding filing" lines={3} />);
-  const list = all ? v.holders : v.holders.slice(0, 12);
+  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): every row, scrolling inside the card past twelve (it was the first twelve and "Show all")
+  const list = v.holders;
   const right = v.search ? <Link className="btn quiet sm" to="/invest/holders">Search a holder</Link> : null;
   return wrap(
     <div className="k-stack named-holders">
@@ -81,7 +81,7 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
         {v.url && <> · <a className="link" href={safeHref(v.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a></>}</span>
       <GroupLink symbol={symbol} />
       {v.holders.length === 0 ? <p className="k-small k-muted">The filing names no holder above 1%.</p> : (
-        <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} stack sticky={list.length > 14} rowAttrs={(h) => ({ "data-holder": h.name })}
+        <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} stack scrollRows={12} rowAttrs={(h) => ({ "data-holder": h.name })}
           columns={[
             { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <>{h.name}<span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span>
               {h.was_named && <span className="k-sub-line">filed last quarter as {h.was_named}</span>}</> },
@@ -90,8 +90,6 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
             { key: "c", header: "Since last quarter", numeric: true, cell: (h) => <><ChangeText c={h.change} d={h.pct_change} />{h.prev_pct != null && h.change !== "same" && <span className="k-sub-line">was {h.prev_pct.toFixed(2)}%</span>}</> },
           ]} />
       )}
-      {v.holders.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {v.holders.length}</button>}
-      {all && v.holders.length > 12 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} />}
       {v.dropped.length > 0 && <p className="k-small"><span className="k-muted">Listed last quarter, not this one (below 1%, or sold):</span>{" "}
         {v.dropped.map((d) => `${d.name} (${d.prev_pct.toFixed(2)}%)`).join("; ")}</p>}
       <CardNote><p>{v.note}{!v.search && <> Searching a holder across companies and following one is on the <Link className="link" to="/plans">Basic plan</Link>.</>}</p></CardNote>
