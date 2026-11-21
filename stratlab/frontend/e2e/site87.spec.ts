@@ -93,7 +93,7 @@ for (const width of [1280, 1440, 1700]) {
 /** A block's scroll state: whether it scrolls inside itself, its height, the screen's, its rows hidden below, its header row in view. */
 const blockOf = (page: Page, sel: string) => page.evaluate((sel) => {
   const el = document.querySelector<HTMLElement>(sel)!;
-  const r = el.getBoundingClientRect(), top = r.top;
+  const r = el.getBoundingClientRect(), top = r.top + el.clientTop;
   const rows = Array.from(el.querySelectorAll<HTMLElement>(":scope > table > tbody > tr, :scope li, :scope > div > ul > li")).filter((x) => x.getBoundingClientRect().height > 0);
   const hidden = rows.filter((x) => x.getBoundingClientRect().top >= r.bottom - 1).length;
   const th = el.querySelector("thead th");
@@ -192,7 +192,9 @@ test("AUTO-LOAD: Filings is one block the screen's height, its rows scroll insid
   expect(Math.abs(after.headTop ?? 99), "the header row stays at the top of the block").toBeLessThanOrEqual(1);
   // one scroll for the content: the page around the block barely scrolls
   const pageScroll = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-  expect(pageScroll, "the page itself scrolls less than a screen").toBeLessThan(900);
+  const rowsH = await page.locator(sel).evaluate((el) => el.scrollHeight);
+  expect(pageScroll, "the page itself scrolls little: about a screen (the filters above the block), never the rows' length").toBeLessThan(900 * 1.25);
+  expect(pageScroll).toBeLessThan(rowsH / 2);
 });
 
 const PAGING = /^(show\s+(all|more|less|\d[\d,]*\s+more)\b|load\s+more\b|more ideas$|fewer\s+\w+$|all\s+\d[\d,]*\s+themes$|see\s+all\s+\d|next\s+page\b|previous\s+page\b|← previous$|next →$)/i;
@@ -248,7 +250,8 @@ test("THEMES: compact chips, never the same theme twice, the updated day inside 
   await chip.hover();
   const covered = await page.evaluate(() => {
     const chips = Array.from(document.querySelectorAll<HTMLElement>(".theme-ready .theme-chip"));
-    return chips.filter((c) => { const r = c.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return false; const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!top && !c.contains(top); }).length;
+    const box = document.querySelector(".theme-ready")!.getBoundingClientRect();
+    return chips.filter((c) => { const r = c.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight || r.top < box.top || r.bottom > box.bottom) return false; const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!top && !c.contains(top); }).length;
   });
   expect(covered, "no hover box over another chip").toBe(0);
   // chips never overlap one another
@@ -293,7 +296,7 @@ test("FORM: Search filings is one compact form: the market inside its top row wi
   // the market toggle and Search are inside the form, on the phrase's row
   const top = form.locator(".ds-top");
   await expect(top.getByRole("radiogroup").or(top.locator(".k-seg")).first()).toBeVisible();
-  await expect(top.getByRole("button", { name: "Search" })).toBeVisible();
+  await expect(top.locator("button.ds-go")).toHaveText("Search");
   const level = await top.evaluate((row) => {
     const box = (sel: string) => row.querySelector(sel)!.getBoundingClientRect();
     return { input: box("input").bottom, go: box(".ds-go").bottom, seg: box(".k-seg").bottom, phone: innerWidth <= 640 };

@@ -104,7 +104,8 @@ export function useScrollRows(scroller: RefObject<HTMLElement | null>, { box, it
       if (peer !== null && bottoms.length) avail = Math.min(avail, Math.max(Math.floor(peer - head - below), Math.ceil(bottoms[Math.min(FLOOR_ROWS, bottoms.length) - 1])));
       const cut = scrollCut(bottoms, avail);
       if (!cut.over) clear();
-      else { el.setAttribute("data-over", ""); el.style.maxHeight = `${cut.fit}px`; }
+      // the box's own edges (its borders, a sideways scrollbar) are added, so the rows' area ends exactly on the last whole row
+      else { el.setAttribute("data-over", ""); el.style.maxHeight = `${cut.fit + Math.max(0, el.offsetHeight - el.clientHeight)}px`; }
       more();
       setOver(cut.over);
     };
