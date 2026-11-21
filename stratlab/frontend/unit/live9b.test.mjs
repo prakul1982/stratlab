@@ -64,7 +64,8 @@ test("LIVE9B-012: owner patterns: centred sign-in, net worth said once, even hom
   assert.match(read("src/pages/Login.tsx"), /\$\{login \? " lp-hero-login" : ""\}/);
   const css = read("src/styles.css");
   assert.match(css, /\.lp-hero-login \{ max-width: 640px; \}/);
-  assert.match(css, /\.mine-movers li, \.mine-tl-i \{ flex: 1 0 auto; \}/);
+  // (changed on purpose, site86 SCROLL: the shorter card no longer spreads its rows; the longer list gives way to it and scrolls, kit ScrollList)
+  assert.match(css, /\.k-scroll-box\[data-over\] \{ flex: 1 0 auto; height: var\(--k-scroll-in, auto\); \}/);
   assert.match(css, /@media \(min-width: 900px\) \{ \.h-sum \{ grid-template-columns: minmax\(0, 560px\) minmax\(0, 1fr\); \} \}/);
   assert.match(css, /\.screens-fname \{ display: block; font-size: 14px; \}/);
   const nw = read("src/pages/money/NetWorthPage.tsx");

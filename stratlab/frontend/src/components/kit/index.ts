@@ -40,3 +40,4 @@ export { Calendar, type CalEvent, type CalKind } from "./Calendar";
 export { Light, HealthGrid, HealthTile, StatusList, StatusRow, type HealthState } from "./Health";
 export { Coachmark } from "./Coachmark";
 export { PageNav } from "./PageNav";
+export { ScrollList, useScrollRows } from "./ScrollList";

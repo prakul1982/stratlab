@@ -74,7 +74,7 @@ test("the report flag is in the shared table and figure components, only inside 
   const kit = read("src/components/kit/ReportFigure.tsx");
   assert.match(kit, /if \(!scope \|\| !label\.trim\(\)\) return null;/);
   assert.match(kit, /aria-label=\{`Report an error in \$\{name\}`\}/);
-  assert.match(read("vite.config.ts"), /ShowLess\|ReportFigure\)\\\.tsx/);       // in the public kit's file, not the account kit's
+  assert.match(read("vite.config.ts"), /ShowLess\|ReportFigure\|ScrollList\)\\\.tsx/);   // (site86: the scroll list joins it, DataTable uses it)       // in the public kit's file, not the account kit's
   for (const [f, section] of [["src/pages/Research.tsx", 'section="Key numbers"'], ["src/pages/Research.tsx", 'section="Sales and profit, by year"'],
     ["src/pages/DeepDive.tsx", 'section="Growth and margins"'], ["src/components/ThemeDive.tsx", "section={`Theme layer: ${layer.layer}`}"],
     ["src/pages/ResultsPage.tsx", "section={`Results on ${resultDay(d)}`}"], ["src/pages/HeatmapPage.tsx", "section={`Heatmap: ${name}`}"]]) {

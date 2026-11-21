@@ -1,4 +1,6 @@
 import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useScrollRows } from "./ScrollList";
+import { TABLE_ROWS } from "../../lib/scrollRows";
 import { ShowLess } from "./ShowLess";
 import { Info } from "../ui";
 import { textOf } from "./Card";
@@ -119,12 +121,15 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
   );
 }
 
+/** A table box's rows, for its scroll height (useScrollRows). */
+const bodyRows = (el: HTMLElement): HTMLElement[] => Array.from(el.querySelectorAll<HTMLElement>(":scope > table > tbody > tr"));
+
 export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, pageDesktop, scrollEnd, csv, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
    * holds more than the table shows now (a group showing its first 12). */
   csv?: string | { name: string; rows?: R[] };
-  /** No longer used: a long table scrolls with the page, never in a box of its own. Kept so callers need not change. */
+  /** No longer used: past TABLE_ROWS rows every table scrolls inside its box with its header row in view (SCROLL, owner 21 Nov). Kept so callers need not change. */
   sticky?: boolean;
   /** On a phone, each row becomes a card (the first column as its title, every other cell under its own column name),
    * so nothing is cut off at the edge and the figures that matter are all in view. Desktop is unchanged. */
@@ -207,6 +212,9 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
       {withText && <span>{selectAll.label ?? "Select all"}</span>}
     </label>);
   const cardsNow = stack && phone;
+  // SCROLL (owner, 21 Nov: "add a scroll, don't extend it"): past TABLE_ROWS rows the table scrolls inside its box, its header row kept at the
+  // top; a phone's cards keep their own "Show more"
+  useScrollRows(box, { rows: TABLE_ROWS, items: bodyRows, off: cardsNow });
   // "Report an error in this figure" (owner, 12 Nov): inside a ReportScope each row's name carries the flag, with the row's figures to pick from
   const scope = useReportScope();
   const figureCols = columns.filter((c) => !c.rowHeader && !c.action && c.numeric);

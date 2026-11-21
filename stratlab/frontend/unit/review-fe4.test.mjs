@@ -180,7 +180,8 @@ test("the journal's hour breakdown names the market's zone, and 'today' follows 
 test("a symbol in the margin-funding link is encoded; the invoice date and the mover price are formatted", () => {
   assert.match(read("src/pages/MarginFundingPage.tsx"), /href=\{`\?s=\$\{encodeURIComponent\(r\.symbol\)\}`\}/);
   assert.match(read("src/components/InvoicesCard.tsx"), /\{fmtDate\(r\.date\)\} · \{r\.supply\}/);
-  assert.match(read("src/pages/MineHome.tsx"), /\{price\(m\.q\.price, m\.region === "US" \? "USD" : "INR"\)\}/);
+  // (site86: a stock with no price yet is a row too, with a dash)
+  assert.match(read("src/pages/MineHome.tsx"), /\{m\.q \? price\(m\.q\.price, m\.region === "US" \? "USD" : "INR"\) :/);
 });
 
 test("answering a holdings notice puts focus on the next thing, not the top of the page", () => {
