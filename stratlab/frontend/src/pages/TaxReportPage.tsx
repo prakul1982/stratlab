@@ -483,7 +483,7 @@ export function TaxReportPage() {
             <Disclosure summary="The set-off rules, and how this report works">
               <ScrollList label="The set-off rules"><ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList>
               <h3 className="k-sub">How this report works</h3>
-              <ScrollList label="How this report works"><ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList>
+              <ScrollList label="Notes on how this report works"><ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList>
               {!!rep.unit_notes?.length && <><h3 className="k-sub">ETFs, REITs, InvITs and gold bonds</h3>
                 <ScrollList label="ETF, REIT, InvIT and gold bond rules"><ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></ScrollList></>}
             </Disclosure>
