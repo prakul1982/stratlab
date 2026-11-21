@@ -319,7 +319,7 @@ function NextEvents({ limit = 5, testId = "invest-events", region }: { limit?: n
 /** The watchlist's prices for the market picked at the top (R9R-008: the US tab left India's panels in place). */
 /** How many watchlist stocks the Invest home's card shows before its list scrolls inside the card (SCROLL, owner 21 Nov: every stock is in
  * it; it was the first six and "See all"). */
-export const WATCH_SHOWN = 6;
+export const WATCH_SHOWN = 7;                  // site86 CI: seven rows end the card level with the two dated cards stacked beside it (six left it 94px short on CI's fonts)
 
 function WatchPanel({ region }: { region: Region }) {
   const { items, failed, retry } = useWatchlist();
