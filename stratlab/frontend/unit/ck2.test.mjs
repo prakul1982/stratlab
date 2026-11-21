@@ -98,7 +98,10 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.deepEqual(allow.map((x) => `${x.page} ${x.rule} ${x.element}`), ["/plans R1 k-plan", "* R27 StrategyMarketAfter costsBuy and holdvs",
     "* R27 StockGain or lossTermSoldCostSaleBought", "* R27 StockCloseDay %StageSupertrendSince",
     // (updated on purpose, site83: R29's "wider than its box" accepts the same two known tables, with their reasons)
-    "* R29 StrategyMarketAfter costsBuy and holdvs", "* R29 StockCloseDay %StageSupertrendSince"]);
+    "* R29 StrategyMarketAfter costsBuy and holdvs", "* R29 StockCloseDay %StageSupertrendSince",
+    // (changed on purpose, site87: the owner's level-pairs rule now counts a card beside a column of cards, and his screen rule caps the
+    // screener's results at the screen: the long filters form beside them is accepted, with its reason)
+    "/research/screens R30 screens-filters"]);
   // the company page: the peers' tiles in equal rows, the news under them
   assert.match(read("src/pages/Research.tsx"), /<div className="k-stack">\s*\{c\.peers\.length > 0 && <Card><CardHead title="Similar companies"/);
   assert.match(read("src/pages/Research.tsx"), /<QuoteTable region=\{region\} symbols=\{c\.peers\} label="Similar companies" \/>/);      // (UI-CO: the peers are a table, not tiles)

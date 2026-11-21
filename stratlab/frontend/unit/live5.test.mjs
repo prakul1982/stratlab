@@ -174,7 +174,8 @@ test("LIVE5 partial, then LIVE6-014: signed in, the analytics question never mov
 test("LIVE5-002 globally: a list table wider than its box on a desktop wraps its words (k-fit) instead of hiding columns past the edge", () => {
   const dt = readFileSync(new URL("../src/components/kit/DataTable.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-  assert.match(dt, /if \(!fit && !phone && !grid && !scrollEnd && b && b\.scrollWidth > b\.clientWidth \+ 2\) setFit\(true\);/);
+  // (changed on purpose, site87: 2px over is over, as ui-lint R29 counts it)
+  assert.match(dt, /if \(!fit && !phone && !grid && !scrollEnd && b && b\.scrollWidth > b\.clientWidth \+ 1\) setFit\(true\);/);
   assert.match(dt, /\$\{fit \? " k-fit" : ""\}/);
   // (updated on purpose, site83: 8px, for room in the centred page column at 1280)
   assert.match(css, /\.k-tbl-wrap\.k-fit \.k-table th, \.k-tbl-wrap\.k-fit \.k-table td \{ white-space: normal; padding-left: 8px; padding-right: 8px; \}/);
