@@ -66,7 +66,7 @@ test("the kit table sorts every column by default: a header button with aria-sor
   assert.match(t, /sort\?: \{ key: string; desc: boolean; onSort: \(key: string\) => void \} \| false;/);
   assert.match(t, /const autoOn = sort === undefined && !grid && !scrollEnd && rows\.length > 1;/);
   assert.match(t, /aria-sort=\{by \? \(on \? \(by\.desc \? "descending" : "ascending"\) : "none"\) : undefined\}/);
-  assert.match(t, /<button type="button" className="k-th-sort" data-sort-key=\{c\.key\} onClick=\{\(\) => onSort\(c\)\}>/);
+  assert.match(t, /<button type="button" className="k-th-hit" data-sort-key=\{c\.key\} aria-label=\{headText\(c\)\} onClick=\{\(\) => onSort\(c\)\} \/>/);
   assert.match(t, /<span>Sort by<\/span>/);
   assert.match(t, /shown\.map\(\(\{ r, i: ri \}\) =>/);           // a row keeps its index, so its key and its open details go with it
   assert.doesNotMatch(t, /new ResizeObserver\(/);                 // R7T-014: watchSize

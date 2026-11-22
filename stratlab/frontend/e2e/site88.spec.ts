@@ -65,7 +65,7 @@ async function sortBy(table: Locator, header: string, read: (t: string) => numbe
   await btn.focus();
   await btn.press("Enter");                                           // a keyboard-operable button
   await expect(th).toHaveAttribute("aria-sort", firstDesc ? "descending" : "ascending");
-  await expect(btn).toContainText(firstDesc ? "↓" : "↑");
+  await expect(th).toContainText(firstDesc ? "↓" : "↑");
   ordered(await column(table, header), read, firstDesc);
   await btn.click();                                                  // the second click the other way
   await expect(th).toHaveAttribute("aria-sort", firstDesc ? "ascending" : "descending");
