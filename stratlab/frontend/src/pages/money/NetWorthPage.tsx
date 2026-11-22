@@ -488,7 +488,7 @@ export function NetWorthPage() {
 
   // the history's snapshots, each removable: under the chart when there is one (DP2-006)
   const snapsTable = (
-    <DataTable label="The history's snapshots" rows={[...hist].reverse()} rowKey={(h) => h.d} columns={[
+    <DataTable sort={false} label="The history's snapshots" rows={[...hist].reverse()} rowKey={(h) => h.d} columns={[
       { key: "d", header: "Date", rowHeader: true, cell: (h) => <b>{dateOnly(h.d)}</b> },
       { key: "n", header: "Net worth", numeric: true, cell: (h) => inr(h.net) },
       { key: "w", header: "How it was taken", wrap: true, cell: (h) => <span className="k-note">{[h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ")}</span> },

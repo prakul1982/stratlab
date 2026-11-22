@@ -1613,7 +1613,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .biz-day { grid-area: day; } .biz-link { grid-area: link; } .biz-subject { grid-area: subject; }
 }
 
-.holder-names label { align-items: center; }
+/* site88: the spellings counted as a holder, a compact table under a one-line fold: the tick box column narrow, each spelling on one line cut with … */
+.holder-spellings .k-table th:first-child, .holder-spellings .k-table td:first-child { width: 44px; }
+.holder-spelling { display: block; max-width: min(56ch, 60vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.holder-spellings-review { color: var(--blue); }
+.holder-tick { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; }
 
 /* the per-stock desks: stock futures (a Positioning tab), stock lending fees, margin funding */
 
@@ -1943,6 +1947,11 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 /* a table's "select all" box (DataTable selectAll): in the first header cell, lined up with the rows' boxes under it; over a phone's cards, at the left */
 .k-tap.k-th-check { margin: -9px -1px -9px -9px; vertical-align: middle; }   /* the header text then starts where the rows' names do (.rot-name: the box, then 8px) */
 .k-tbl-tools .k-select-all { margin-right: auto; min-height: 40px; flex: 1 1 auto; min-width: 0; }
+/* SORT EVERYWHERE (site88): a phone's cards sort by a small "Sort by" select over them, at the left of the tools row */
+.k-sort-by { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; min-width: 0; font-size: 13px; color: var(--muted); }
+.k-tbl-tools > label.k-sort-by { flex: 0 1 auto; white-space: normal; }
+.k-sort-by select { min-height: 40px; max-width: 100%; min-width: 0; font: inherit; font-size: 16px; color: var(--ink); background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px; padding: 4px 8px; text-overflow: ellipsis; }
+.k-select-all + .k-sort-by { margin-right: 0; }
 .k-tbl-tools > :not(.k-select-all) { flex: none; white-space: nowrap; }   /* the CSV button keeps its one line beside a long "select all" */   /* its own row above the table: at -4px it sat on the table's top edge (owner, 5 Nov) */
 .k-tbl-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 12px;   /* overflow-y: with overflow-x auto it computed to auto too, and a 1px spill drew a vertical scrollbar beside the screener's filters (owner, 5 Nov) */
   /* no painted edge (owner, 7 Nov: a light stripe at the right of a table that did not scroll, where the card's colour under the

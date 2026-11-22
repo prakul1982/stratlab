@@ -373,11 +373,13 @@ function ReadyGrid({ items, onPick }: { items: LibraryTheme[]; onPick: (t: strin
       <span className="k-small k-muted" id="theme-ready-head">{LIBRARY_HEAD}</span>
       <div className="theme-ready" ref={grid} role={over ? "region" : undefined} aria-labelledby={over ? "theme-ready-head" : undefined} tabIndex={over ? 0 : undefined}>
         {/* site88 (owner, "Cement 13 Nov"): no date on the chips at all, the name only; the theme's own page keeps its dates */}
-        {sorted.map((i) => (
-          <button key={i.q} type="button" className="theme-chip" aria-label={libraryLabel(i, (d) => fmtDate(d, { year: false }), false)} onClick={() => onPick(i.name)}>
-            <span className="theme-chip-name">{shortTheme(i.name)}</span>
-          </button>
-        ))}
+        {sorted.map((i) => {
+          return (
+            <button key={i.q} type="button" className="theme-chip" aria-label={libraryLabel(i, (d) => fmtDate(d, { year: false }), false)} onClick={() => onPick(i.name)}>
+              <span className="theme-chip-name">{shortTheme(i.name)}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
