@@ -315,7 +315,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
             return (
               <th key={c.key} scope="col" role={stack ? "columnheader" : undefined} className={cls(c)}
                 // the column keeps its own name (not "… Sort by …") where a sort button is laid over its words
-                aria-label={by && !page && !c.info ? headText(c) : undefined} aria-sort={by ? (on ? (by.desc ? "descending" : "ascending") : "none") : undefined}>
+                aria-label={by && !page ? headText(c) : undefined} aria-sort={by ? (on ? (by.desc ? "descending" : "ascending") : "none") : undefined}>
                 {/* a number column's (i) goes before its words, so the words end where the figures do (RC2B-027: "Of shares issued") */}
                 {c.numeric && c.info && info(c)}
                 {ci === 0 && !cardsNow && allBox(false)}
