@@ -59,8 +59,8 @@ function ordered(texts: string[], read: (t: string) => number | string | null, d
 }
 
 async function sortBy(table: Locator, header: string, read: (t: string) => number | string | null, firstDesc: boolean) {
-  const th = table.locator("thead th").filter({ has: table.page().getByRole("button", { name: `Sort by ${header}`, exact: true }) });
-  const btn = th.getByRole("button", { name: `Sort by ${header}`, exact: true });
+  const th = table.locator("thead th").filter({ has: table.page().getByRole("button", { name: `Sort ${header}`, exact: true }) });
+  const btn = th.getByRole("button", { name: `Sort ${header}`, exact: true });
   await expect(table.getByRole("columnheader", { name: header, exact: true })).toHaveCount(1);      // the column keeps its own name
   await expect(th).toHaveAttribute("aria-sort", "none");
   await btn.focus();
@@ -170,8 +170,8 @@ test("a holder's spellings: one folded line opening a compact table", async ({ p
   const all = table.locator("thead").getByRole("checkbox", { name: "Count every spelling" });
   await all.check();
   await expect(fold.locator("summary")).toHaveText(`${n} spellings counted as this holder · Review`);
-  // it sorts like every table: by companies, high to low first
-  await sortBy(table, "Companies", num, true);
+  // it sorts like every table: by companies, high to low first (a phone has no header buttons: its select is for long lists)
+  if (!(await page.evaluate(() => matchMedia("(max-width: 640px)").matches))) await sortBy(table, "Companies", num, true);
   const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
   expect(scroll, "the page scrolls sideways").toBeLessThanOrEqual(width + 1);
   expect(errors).toEqual([]);

@@ -323,7 +323,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
                   // SORT EVERYWHERE: the header's words stay plain text that wraps as before (no table grows wider for a one-line button), and a
                   // button over them, named by them, sorts: the whole header is the target, by keyboard too; the arrow only on the sorted one
                   : by && !phone ? <span className="k-th-auto"><span aria-hidden="true">{c.header}</span>{on && <span className="k-th-arrow" aria-hidden="true">{by.desc ? " ↓" : " ↑"}</span>}
-                    <button type="button" className="k-th-hit" data-sort-key={c.key} aria-label={`Sort by ${headText(c)}`} onClick={() => onSort(c)} /></span>
+                    <button type="button" className="k-th-hit" data-sort-key={c.key} aria-label={`Sort ${headText(c)}`} onClick={() => onSort(c)} /></span>
                   : c.header === "" || c.header == null ? <span className="sr-only">{c.action ? "Actions" : c.key}</span> : c.header}
                 {!c.numeric && c.info && info(c)}
               </th>
