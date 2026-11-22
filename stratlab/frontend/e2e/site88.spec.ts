@@ -59,8 +59,9 @@ function ordered(texts: string[], read: (t: string) => number | string | null, d
 }
 
 async function sortBy(table: Locator, header: string, read: (t: string) => number | string | null, firstDesc: boolean) {
-  const th = table.locator("thead th").filter({ has: table.page().getByRole("button", { name: header, exact: true }) });
-  const btn = th.getByRole("button", { name: header, exact: true });
+  const th = table.locator("thead th").filter({ has: table.page().getByRole("button", { name: `Sort by ${header}`, exact: true }) });
+  const btn = th.getByRole("button", { name: `Sort by ${header}`, exact: true });
+  await expect(table.getByRole("columnheader", { name: header, exact: true })).toHaveCount(1);      // the column keeps its own name
   await expect(th).toHaveAttribute("aria-sort", "none");
   await btn.focus();
   await btn.press("Enter");                                           // a keyboard-operable button
@@ -107,6 +108,15 @@ test("sorting by a number, a word and a day on another page: corporate actions",
 
 test("a phone's cards sort by a small Sort by select", async ({ page }, info) => {
   test.skip(info.project.name !== "phone", "phone cards");
+  // a long list (the select is only for 8 rows or more): the holder's three companies and six made-up ones
+  await page.route((u) => u.href.startsWith(API) && u.pathname === "/invest/holders/holdings", async (r) => {
+    const res = await r.fetch();
+    const body = await res.json();
+    const first = body.rows[0];
+    body.rows = [...body.rows, ...[1, 2, 3, 4, 5, 6].map((k) => ({ ...first, symbol: `TEST${k}`, company: `Test company ${k}`, pct: k * 1.5, prev_pct: k * 1.5, change: "same" }))];
+    body.count = body.rows.length;
+    await r.fulfill({ response: res, json: body });
+  });
   const errors = await open(page, "/invest/holders?q=kacholia", "Named holders across companies", 185);
   const card = page.locator("#holder");
   const select = card.getByTestId("k-sort-by");
@@ -116,6 +126,7 @@ test("a phone's cards sort by a small Sort by select", async ({ page }, info) =>
   ordered(stakes, num, true);
   await select.selectOption({ label: "Company, Z to A" });
   await expect(card.locator("tbody tr").first()).toHaveAttribute("data-company", "XPROINDIA");
+  await expect(card.getByLabel("Sort the table by")).toHaveCount(1);
   await select.selectOption({ label: "As listed" });
   await expect(card.locator("tbody tr").first()).toHaveAttribute("data-company", "RELIANCE");
   const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
