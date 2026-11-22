@@ -1,4 +1,4 @@
-import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { watchSize } from "../../lib/resize";
 import { firstDesc, kindOf, sortByValues, valueOf, type SortKind, type SortValue } from "../../lib/tableSort";
 import { useScrollRows } from "./ScrollList";
@@ -229,13 +229,15 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   };
   const kindAt = (c: Column<R>): SortKind => valuesOf(c).kind;
   const sortCol = autoOn && auto ? columns.find((c) => c.key === auto.key && canSort(c)) : undefined;
-  // each row with its own place in the list, so a row's key (and its open details) go with it
-  const shown = useMemo(() => {
-    const at = rows.map((r, i) => ({ r, i }));
-    if (!sortCol || !auto) return at;
-    return sortByValues(at, valuesOf(sortCol).values, auto.desc);
+  // each row with its own place in the list, so a row's key (and its open details) go with it. The cells' words are read after the render,
+  // never during it: a cell's component read for its words (cellText) may use hooks, which inside this render would be counted as the table's
+  const [order, setOrder] = useState<number[] | null>(null);
+  useLayoutEffect(() => {
+    if (!sortCol || !auto) { setOrder(null); return; }
+    setOrder(sortByValues(rows.map((_, i) => i), valuesOf(sortCol).values, auto.desc));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, auto, sortCol?.key]);
+  const shown = order && sortCol && order.length === rows.length ? order.map((i) => ({ r: rows[i], i })) : rows.map((r, i) => ({ r, i }));
   const autoSort = (c: Column<R>) => setAuto((a) => (a?.key === c.key ? { key: c.key, desc: !a.desc } : { key: c.key, desc: firstDesc(kindAt(c)) }));
   const sortState = page ? { key: page.key, desc: page.desc } : auto;
   const onSort = (c: Column<R>) => (page ? page.onSort(c.key) : autoSort(c));
@@ -250,9 +252,12 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   const cardsNow = stack && phone;
   // a phone's cards have no header row: the table's own sort is a small "Sort by" select over them (a page sorting its rows itself has its own)
   const sortCols = cardsNow && !page ? columns.filter(canSort) : [];
-  const kinds = useMemo(() => Object.fromEntries(sortCols.map((c) => [c.key, kindAt(c)])) as Record<string, SortKind>,
+  const [kinds, setKinds] = useState<Record<string, SortKind>>({});
+  useLayoutEffect(() => {          // after the render, as the order above
+    const k = Object.fromEntries(sortCols.map((c) => [c.key, kindAt(c)])) as Record<string, SortKind>;
+    setKinds((o) => (JSON.stringify(o) === JSON.stringify(k) ? o : k));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, sortCols.length]);
+  }, [rows, sortCols.length]);
   const dirWords = (k: SortKind | undefined, desc: boolean) => (k === "text" ? (desc ? "Z to A" : "A to Z") : k === "date" ? (desc ? "newest first" : "oldest first") : desc ? "high to low" : "low to high");
   const sortBy = sortCols.length > 0 && (
     <label className="k-sort-by">
