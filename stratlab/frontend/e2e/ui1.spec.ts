@@ -33,7 +33,7 @@ test("item 6: the Themes box is one row, the library two rows of equal short chi
   await expect(chips).toHaveCount(30);
   const util = grid.getByRole("button", { name: /^Utilities \(Indian power, gas and water-linked infrastructure\) · updated 10 Nov$/ });
   await expect(util.locator(".theme-chip-name")).toHaveText("Utilities");
-  await expect(util.locator(".theme-chip-day")).toHaveText("10 Nov");
+  await expect(util.locator(".theme-chip-day")).toHaveCount(0);       // (changed on purpose, site88, owner: no date on the chips)
   expect(await grid.locator(".theme-ready > button[title]").count()).toBe(0);
   const boxes = await chips.evaluateAll((els) => els.map((e) => { const b = e.getBoundingClientRect(); return { h: Math.round(b.height) }; }));
   expect(new Set(boxes.map((b) => b.h)).size, "equal heights").toBe(1);

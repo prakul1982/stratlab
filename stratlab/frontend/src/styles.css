@@ -2154,7 +2154,6 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .theme-chip:hover { border-color: var(--line-2); background: var(--paper); }
 .theme-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .theme-chip-name { overflow: hidden; text-overflow: ellipsis; }
-.theme-chip-day { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .theme-chip.idea { background: none; border-color: var(--line); }
 .theme-ideas { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px var(--s2); }   /* LIVE10A-021 */
 .theme-more .k-disclosure-body { padding-left: 0; }

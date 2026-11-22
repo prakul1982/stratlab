@@ -341,8 +341,8 @@ function useLibrary(region: "IN" | "US", typed: string): LibraryTheme[] {
 /** Lines of chips the ready area shows before it scrolls inside itself (it scrolls only when that hides three lines or more). */
 const READY_LINES = 3;
 
-/** Ready to open: every ready theme of the market as a compact chip, A to Z: its short name and, small inside it, the day its map was
- *  updated (its full name in the chip's accessible name, no hover box over the next chips). Past READY_LINES lines the area scrolls inside
+/** Ready to open: every ready theme of the market as a compact chip, A to Z: its short name only, no date (site88; its full name in the
+ *  chip's accessible name, no hover box over the next chips). Past READY_LINES lines the area scrolls inside
  *  itself, so no "All N themes" / "Fewer themes" button (site87, owner: no show-more control on any list). */
 function ReadyGrid({ items, onPick }: { items: LibraryTheme[]; onPick: (t: string) => void }) {
   const grid = useRef<HTMLDivElement>(null);
@@ -372,15 +372,12 @@ function ReadyGrid({ items, onPick }: { items: LibraryTheme[]; onPick: (t: strin
     <div className="theme-already" data-testid="theme-already">
       <span className="k-small k-muted" id="theme-ready-head">{LIBRARY_HEAD}</span>
       <div className="theme-ready" ref={grid} role={over ? "region" : undefined} aria-labelledby={over ? "theme-ready-head" : undefined} tabIndex={over ? 0 : undefined}>
-        {sorted.map((i) => {
-          const day = i.day ?? (i.at ? i.at.slice(0, 10) : null);
-          return (
-            <button key={i.q} type="button" className="theme-chip" aria-label={libraryLabel(i, (d) => fmtDate(d, { year: false }), false)} onClick={() => onPick(i.name)}>
-              <span className="theme-chip-name">{shortTheme(i.name)}</span>
-              {day && <small className="theme-chip-day" aria-hidden="true">{fmtDate(day, { year: false })}</small>}
-            </button>
-          );
-        })}
+        {/* site88 (owner, "Cement 13 Nov"): no date on the chips at all, the name only; the theme's own page keeps its dates */}
+        {sorted.map((i) => (
+          <button key={i.q} type="button" className="theme-chip" aria-label={libraryLabel(i, (d) => fmtDate(d, { year: false }), false)} onClick={() => onPick(i.name)}>
+            <span className="theme-chip-name">{shortTheme(i.name)}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
