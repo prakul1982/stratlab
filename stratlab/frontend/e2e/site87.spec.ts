@@ -242,7 +242,8 @@ test("THEMES: compact chips, never the same theme twice, the updated day inside 
   await expect(page.getByText("More ideas")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^(Fewer themes|All \d+ themes)$/ })).toHaveCount(0);
   // the day inside each chip, no title tooltip that would open over the next row
-  await expect(ready.locator(".theme-chip").first().locator(".theme-chip-day")).toHaveText(/^\d{1,2} [A-Z][a-z]{2}$/);
+  // (changed on purpose, site88, owner: no date on the chips at all)
+  await expect(ready.locator(".theme-chip-day")).toHaveCount(0);
   expect(await ready.locator(".theme-chip[title]").count()).toBe(0);
   await expect(ready.locator(".theme-chip").first()).toHaveAttribute("aria-label", /· updated \d{1,2} [A-Z][a-z]{2}/);
   // hovering a chip covers no other chip

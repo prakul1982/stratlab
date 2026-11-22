@@ -340,7 +340,7 @@ function Risks({ f }: { f: Facts }) {
   if (!risks.length) return null;
   const [head, rest] = firstAndRest(risks, 5);
   const table = (rows: typeof risks, label: string) => (
-    <DataTable stack label={label} rows={rows} rowKey={(x) => String(x.n)} columns={[
+    <DataTable stack sort={false} label={label} rows={rows} rowKey={(x) => String(x.n)} columns={[
       { key: "n", header: "#", numeric: true, cell: (x) => x.n },
       { key: "t", header: "Risk, as the document words it", rowHeader: true, wrap: true, cell: (x) => x.text },
       { key: "p", header: "Page", numeric: true, cell: (x) => x.page },

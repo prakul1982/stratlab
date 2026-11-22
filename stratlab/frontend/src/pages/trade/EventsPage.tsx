@@ -224,7 +224,7 @@ export function EventsPage() {
                 {/* TABLES EVERYWHERE (LIVE9B-032): the week's events as one table (day, event, figure), not three uneven columns of lines */}
                 {week.length ? (
                   <div className="ev-week" data-testid="ev-week">
-                    <DataTable label="The next seven days" rows={week.slice(0, 10)} rowKey={(e) => e.id} rowAttrs={(e) => ({ "data-kind": e.kind })}
+                    <DataTable label="The next seven days" sort={false} rows={week.slice(0, 10)} rowKey={(e) => e.id} rowAttrs={(e) => ({ "data-kind": e.kind })}
                       columns={[
                         { key: "d", header: "Day", cell: (e) => <span className="nowrap">{evWhen(e)}{e.time ? ` · ${e.time} IST` : ""}</span> },
                         { key: "t", header: "Event", rowHeader: true, wrap: true, cell: (e) => <b>{e.title}</b> },

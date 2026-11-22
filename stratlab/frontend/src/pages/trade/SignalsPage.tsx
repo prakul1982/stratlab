@@ -193,7 +193,7 @@ function SignalLog({ rows, cur }: { rows: Sig[]; cur: string }) {
     { key: "alert", header: "Alert's price", numeric: true, cell: (s) => (s.alert_px != null ? price(s.alert_px, cur) : "–") },
   ];
   if (!rows.length) return <p className="k-small k-muted">No signals yet. Send a test one above, or fire your alert.</p>;
-  return <DataTable label="Signal log" columns={cols} rows={rows.slice().reverse()} rowKey={(s) => `${s.at}${s.action}${s.id ?? ""}`} rowAttrs={(s) => ({ "data-status": s.status })} />;
+  return <DataTable sort={false} label="Signal log" columns={cols} rows={rows.slice().reverse()} rowKey={(s) => `${s.at}${s.action}${s.id ?? ""}`} rowAttrs={(s) => ({ "data-status": s.status })} />;
 }
 
 function SessionView({ sid, onGone }: { sid: string; onGone: () => void }) {

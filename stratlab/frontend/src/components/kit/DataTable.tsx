@@ -1,4 +1,11 @@
 import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { watchSize } from "../../lib/resize";
+import type { SortKind, SortValue } from "../../lib/tableSort";
+
+// SORT EVERYWHERE: the sorting code loads on the first sort, never with a page (the landing and login bundles stay as they were)
+type SortLib = typeof import("../../lib/tableSort");
+let sortLib: SortLib | null = null;
+const loadSort = (): Promise<SortLib> => (sortLib ? Promise.resolve(sortLib) : import("../../lib/tableSort").then((m) => (sortLib = m)));
 import { useScrollRows } from "./ScrollList";
 import { useSection } from "./Section";
 import { Info } from "../ui";
@@ -19,7 +26,11 @@ export type Column<R> = {
   wrap?: boolean;                            // lets long text in this column wrap (a name with notes under it)
   action?: boolean;                          // the last column's buttons (Edit, Remove): as narrow as they are, right-aligned
   corner?: boolean;                          // with `action`, on a phone card the one button sits at the card's top right beside the name, not alone on a last row (VR2-017)
-  sortable?: boolean;                        // the header is a button that sorts by this column (needs the table's `sort`)
+  /** With the table's own `sort`: the header is a button that sorts by this column. Without one (SORT EVERYWHERE, site88) every column with
+   *  a header sorts on a click; false keeps this one out (a chart, a column whose order means nothing). */
+  sortable?: boolean;
+  /** SORT EVERYWHERE: the value this column sorts by, when the words the cell shows aren't it (a number drawn as a bar). */
+  sortValue?: (row: R) => number | string | null;
   cell: (row: R) => ReactNode;
   cardLabel?: string;                        // the figure's name on a phone card when the header isn't plain text (R88-003)
   up?: boolean;                              // on a phone card, this figure comes right under the row's name with its label, ahead of the other columns: the gain, not the ninth figure (VR1-147)
@@ -151,8 +162,11 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   pinHead?: boolean;
   /** A wide table of periods opens scrolled to its right end, where the latest column is (R25-003). The order stays. */
   scrollEnd?: boolean;
-  /** Which column the rows are sorted by now, and what a click on a sortable header does. */
-  sort?: { key: string; desc: boolean; onSort: (key: string) => void };
+  /** Which column the rows are sorted by now, and what a click on a sortable header does. Without it (SORT EVERYWHERE, site88, owner) a
+   *  click on any column's header sorts the rows drawn by it: numbers and days high to low first, words A to Z, a second click the other way,
+   *  the blanks last; a row's open details stay under it, and an auto-loading list sorts the rows loaded. `false` where the order is the
+   *  meaning (a ranked list, a timeline); a `grid` or `scrollEnd` table (read across its rows: a statement's lines) keeps its order too. */
+  sort?: { key: string; desc: boolean; onSort: (key: string) => void } | false;
   /** A totals row under the rows: a cell for each column key (the first column's names the row). */
   foot?: Record<string, ReactNode>;
   rowAttrs?: (row: R) => Record<string, string>; rowNote?: (row: R) => ReactNode | undefined;
@@ -194,10 +208,8 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   const [boxW, setBoxW] = useState(0);
   useEffect(() => {
     const b = box.current;
-    if (!b || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setBoxW((w) => (Math.abs(w - b.clientWidth) > 1 ? b.clientWidth : w)));
-    ro.observe(b);
-    return () => ro.disconnect();
+    if (!b) return;
+    return watchSize(b, () => setBoxW((w) => (Math.abs(w - b.clientWidth) > 1 ? b.clientWidth : w)));      // a frame later (R7T-014)
   }, []);
   useLayoutEffect(() => { setFit(false); }, [boxW, columns.length, allRows.length]);
   useLayoutEffect(() => {
@@ -208,6 +220,37 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const uid = useId();
   const rows = allRows;
+  // SORT EVERYWHERE (site88): with no sort of the page's own, the table sorts the rows it has by a clicked column (`auto`)
+  const page = sort || null;
+  const [auto, setAuto] = useState<{ key: string; desc: boolean } | null>(null);
+  const autoOn = sort === undefined && !grid && !scrollEnd && rows.length > 1;
+  const headText = (c: Column<R>) => (c.cardLabel ?? (typeof c.header === "string" ? c.header : textOf(c.header))).trim();
+  const canSort = (c: Column<R>) => (page ? !!c.sortable : autoOn && !c.action && c.sortable !== false && headText(c) !== "");
+  const valuesOf = (c: Column<R>, { kindOf, valueOf }: SortLib): { kind: SortKind; values: SortValue[] } => {
+    if (c.sortValue) { const f = c.sortValue; const values = rows.map((r) => f(r)); return { kind: values.some((v) => typeof v === "string") ? "text" : "number", values }; }
+    const texts = rows.map((r) => cellText(c.cell(r)));
+    const kind = kindOf(texts, c.numeric);
+    return { kind, values: texts.map((t) => valueOf(t, kind)) };
+  };
+
+  const sortCol = autoOn && auto ? columns.find((c) => c.key === auto.key && canSort(c)) : undefined;
+  // each row with its own place in the list, so a row's key (and its open details) go with it. The cells' words are read after the render,
+  // never during it: a cell's component read for its words (cellText) may use hooks, which inside this render would be counted as the table's
+  const [order, setOrder] = useState<number[] | null>(null);
+  useLayoutEffect(() => {
+    if (!sortCol || !auto) { setOrder(null); return; }
+    let live = true;
+    void loadSort().then((m) => { if (live) setOrder(m.sortByValues(rows.map((_, i) => i), valuesOf(sortCol, m).values, auto.desc)); });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, auto, sortCol?.key]);
+  const shown = order && sortCol && order.length === rows.length ? order.map((i) => ({ r: rows[i], i })) : rows.map((r, i) => ({ r, i }));
+  const autoSort = (c: Column<R>) => {
+    if (auto?.key === c.key) { setAuto({ key: c.key, desc: !auto.desc }); return; }
+    void loadSort().then((m) => setAuto({ key: c.key, desc: m.firstDesc(valuesOf(c, m).kind) }));
+  };
+  const sortState = page ? { key: page.key, desc: page.desc } : auto;
+  const onSort = (c: Column<R>) => (page ? page.onSort(c.key) : autoSort(c));
   const file = typeof csv === "string" ? { name: csv, rows: allRows } : csv ? { name: csv.name, rows: csv.rows ?? allRows } : null;
   const allBox = (withText: boolean) => selectAll && allRows.length > 0 && (
     <label className={withText ? "k-check k-select-all" : "k-tap k-th-check"}>
@@ -217,6 +260,23 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
       {withText && <span>{selectAll.label ?? "Select all"}</span>}
     </label>);
   const cardsNow = stack && phone;
+  // a phone's cards have no header row: the table's own sort is a small "Sort by" select over them (a page sorting its rows itself has its own)
+  // only for a long list (8 rows or more), and only on a phone, where the header row is hidden or too small to tap: until someone sorts, a
+  // table looks and reads exactly as before (site88 CI). The options name the column and the direction, numbers high to low first.
+  const sortCols = phone && !page && rows.length >= 8 ? columns.filter(canSort) : [];
+  const sortBy = sortCols.length > 0 && (
+    <label className="k-sort-by">
+      <span>Sort the table by</span>
+      <select data-testid="k-sort-by" className="k-input" value={auto && sortCol ? `${auto.key}:${auto.desc ? "d" : "a"}` : ""} onChange={(e) => {
+        const [key, d] = e.target.value.split(":");
+        setAuto(key ? { key, desc: d === "d" } : null);
+      }}>
+        <option value="">As listed</option>
+        {/* the words in `label`, not as text: a search of the page for a column's name finds the column, not a hidden option */}
+        {sortCols.flatMap((c) => [!!c.numeric, !c.numeric].map((desc) => (
+          <option key={`${c.key}:${desc}`} value={`${c.key}:${desc ? "d" : "a"}`} label={`${headText(c)}, ${c.numeric ? (desc ? "high to low" : "low to high") : desc ? "Z to A" : "A to Z"}`} />)))}
+      </select>
+    </label>);
   // SCROLL BY SCREEN (owner, site87): a table taller than the screen gives it scrolls inside its block, its header row kept at the top, whole
   // rows at rest and the fade while more is below (the owner's reference: Movers); one that fits is drawn whole. A phone's cards the same.
   // AUTO-LOAD: nearing the end of the rows drawn asks the server for the next ones (no button)
@@ -243,21 +303,27 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
       .filter(([, v]) => v !== "" && !dashOnly(v))} />);
   return (
     <>
-    {((file && file.rows.length > 0 && !menuCsv) || (cardsNow && selectAll && allRows.length > 0)) && (
-      <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && !menuCsv && <CsvButton name={file.name} label={label} columns={allColumns} rows={file.rows} />}</div>)}
+    {((file && file.rows.length > 0 && !menuCsv) || (cardsNow && selectAll && allRows.length > 0) || sortBy) && (
+      <div className="k-tbl-tools">{cardsNow && allBox(true)}{sortBy}{file && file.rows.length > 0 && !menuCsv && <CsvButton name={file.name} label={label} columns={allColumns} rows={file.rows} />}</div>)}
     <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && compact ? " compact" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${columns.some((c) => c.narrow === false || c.tight === false) ? " has-narrow" : ""}${fit ? " k-fit" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}
       onScroll={scrollEnd ? (e) => markScrolled(e.currentTarget) : undefined}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c, ci) => {
-            const by = sort && c.sortable ? sort : null;
-            const on = by?.key === c.key;
+            const by = canSort(c) && (page || !phone) ? (sortState ?? { key: "", desc: false }) : null;      // a phone sorts by its select
+            const on = !!sortState && by?.key === c.key && (!!page || !!sortCol);
             return (
-              <th key={c.key} scope="col" role={stack ? "columnheader" : undefined} className={cls(c)} aria-sort={by ? (on ? (by.desc ? "descending" : "ascending") : "none") : undefined}>
+              <th key={c.key} scope="col" role={stack ? "columnheader" : undefined} className={cls(c)}
+                // the column keeps its own name (not "… Sort by …") where a sort button is laid over its words
+                aria-label={by && !page ? headText(c) : undefined} aria-sort={by ? (on ? (by.desc ? "descending" : "ascending") : "none") : undefined}>
                 {/* a number column's (i) goes before its words, so the words end where the figures do (RC2B-027: "Of shares issued") */}
                 {c.numeric && c.info && info(c)}
                 {ci === 0 && !cardsNow && allBox(false)}
-                {by ? <button type="button" className="k-th-sort" onClick={() => by.onSort(c.key)}>{c.header}<span aria-hidden="true">{on ? (by.desc ? " ↓" : " ↑") : ""}</span></button>
+                {by && page ? <button type="button" className="k-th-sort" data-sort-key={c.key} onClick={() => onSort(c)}>{c.header}<span aria-hidden="true">{on ? (by.desc ? " ↓" : " ↑") : ""}</span></button>
+                  // SORT EVERYWHERE: the header's words stay plain text that wraps as before (no table grows wider for a one-line button), and a
+                  // button over them, named by them, sorts: the whole header is the target, by keyboard too; the arrow only on the sorted one
+                  : by && !phone ? <span className="k-th-auto"><span aria-hidden="true">{c.header}</span>{on && <span className="k-th-arrow" aria-hidden="true">{by.desc ? " ↓" : " ↑"}</span>}
+                    <button type="button" className="k-th-hit" data-sort-key={c.key} aria-label={`Sort ${headText(c)}`} onClick={() => onSort(c)} /></span>
                   : c.header === "" || c.header == null ? <span className="sr-only">{c.action ? "Actions" : c.key}</span> : c.header}
                 {!c.numeric && c.info && info(c)}
               </th>
@@ -266,7 +332,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
         </thead>
         <tbody>
           {rows.length === 0 && <tr><td className="k-empty-row" colSpan={columns.length}>{empty}</td></tr>}
-          {rows.map((r, ri) => {
+          {shown.map(({ r, i: ri }) => {
             const note = rowNote?.(r);
             const k = rowKey(r, ri), isOpen = !!detail && openRows.has(k), did = `${uid}-d-${ri}`;
             const attrs = rowAttrs?.(r) ?? {};

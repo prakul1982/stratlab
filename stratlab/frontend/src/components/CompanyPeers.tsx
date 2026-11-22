@@ -81,7 +81,7 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
         {/* on a phone the company and its five nearest, then "Show more" (LIVE8B-012: eleven stacked cards ran 2,400 px) */}
         <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot}
           rowAttrs={(r): Record<string, string> => (r.own ? { className: "ct-own", "data-own": "" } : { "data-peer": r.symbol })}
-          sort={v.can_sort ? { key: sort?.key ?? "", desc: sort?.desc ?? true, onSort } : undefined} />
+          sort={v.can_sort ? { key: sort?.key ?? "", desc: sort?.desc ?? true, onSort } : false} />
       </div>
       {v.locked && <PlanNote plan={v.locked.plan}>{v.locked.message}</PlanNote>}
       {v.export_locked && <p className="k-note">{v.export_locked.message}</p>}

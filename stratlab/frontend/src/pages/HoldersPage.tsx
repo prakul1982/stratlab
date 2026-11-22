@@ -9,7 +9,7 @@ import { asOf, ET, fmtDate, safeHref } from "../lib/format";
 import { LockedPreview } from "../components/LockedPreview";
 import { useAutoPages } from "../lib/autoPages";
 import { useApp } from "../lib/app";
-import { Badge, Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
+import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
 
 /* Named holders across companies: search a name in every company's latest shareholding pattern (holders above 1%),
  * pick the spellings that are the same holder, see each company alphabetically with the change since the quarter
@@ -190,15 +190,26 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
                 // following says so, and the way to stop is its own plain button (DF-019: "Following · stop")
                 actions={following ? <span className="k-row tight"><Badge tone="plain">Following</Badge><button className="btn quiet sm" onClick={() => unfollow(following.id)}>Stop following</button></span>
                   : <button className="btn quiet sm" onClick={follow} disabled={!picked.length}>Follow this holder</button>} />
-              {group.names.length > 1 && (
-                <FieldGroup label="Spellings counted as this holder (untick any that's someone else)">
-                  <div className="k-stack holder-names">
-                    {group.names.map((n) => (
-                      <CheckField key={n.key} checked={picked.includes(n.key)} onChange={() => toggle(n.key)}
-                        label={<>{n.name}{n.companies > 0 && <span className="k-note"> {companies(n.companies)}</span>}</>} />))}
-                  </div>
-                </FieldGroup>
-              )}
+              {group.names.length > 1 && (() => {
+                // site88 (owner: "what is this UI": one tick box a row and "N companies" wrapping in a narrow column): one line folded, "N spellings
+                // counted as this holder · Review", opening a compact table: a tick box column, the spelling on one line (cut with …, the whole of it
+                // on hover) and its companies at the right; a block no taller than the screen, its header kept in view (SCROLL BY SCREEN)
+                const n = group.names.length, on = group.names.filter((x) => picked.includes(x.key)).length;
+                return (
+                  <Disclosure className="holder-spellings" testId="holder-spellings"
+                    summary={<span>{on === n ? `${n} spellings counted as this holder` : `${on} of ${n} spellings counted as this holder`} · <span className="holder-spellings-review">Review</span></span>}>
+                    <p className="k-note">Untick any spelling that's someone else.</p>
+                    <DataTable label="Spellings counted as this holder" stack={false} rows={group.names} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-spelling": x.key })}
+                      selectAll={{ on: on === n ? true : on === 0 ? false : "mixed", set: (all) => setPicked(all ? group.names.map((x) => x.key) : []), label: "Count every spelling" }}
+                      columns={[
+                        { key: "Counted", header: "", sortable: false, csv: null, cell: (x) => (
+                          <label className="k-tap holder-tick"><input type="checkbox" checked={picked.includes(x.key)} onChange={() => toggle(x.key)} aria-label={`Count ${x.name}`} /></label>) },
+                        { key: "s", header: "Spelling", rowHeader: true, cell: (x) => <span className="holder-spelling" title={x.name}>{x.name}</span> },
+                        { key: "c", header: "Companies", numeric: true, cell: (x) => (x.companies > 0 ? x.companies.toLocaleString("en-IN") : "–") },
+                      ]} />
+                  </Disclosure>
+                );
+              })()}
               {!hold ? (picked.length ? <Skeleton label="Reading their holdings" lines={3} /> : <p className="k-small k-muted">Tick at least one spelling.</p>) : (
                 <>
                   <div className="k-row">

@@ -435,7 +435,7 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
       <Card id="numbers-size" label="Size and shape">
         <CardHead title="Size and shape" info={`Companies in the theme with a stored company page. Market value is price times shares in issue, as each company's page shows it.`} />
         <h3 className="k-sub">The biggest companies by market value</h3>
-        <DataTable label="The theme's biggest companies by market value" columns={[
+        <DataTable sort={false} label="The theme's biggest companies by market value" columns={[
           { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof s.size.biggest)[number]) => <Name r={r} sym={x.symbol} name={x.name} wide={dive.company_wide.includes(x.symbol)} /> },
           { key: "m", header: "Market value", numeric: true, cell: (x) => amount(x.cap, r) },
           { key: "s", header: "Share of the theme", numeric: true, cell: (x) => pc(x.share) },
