@@ -105,7 +105,7 @@ export function CorpActionsPage() {
       </span>) },
     { key: "act", header: "Action", wrap: true, cell: (r) => <ActionCell a={r} cur={cur} /> },
     { key: "fig", header: "Amount or ratio", numeric: true, cell: (r) => <ActionFigure a={r} cur={cur} /> },
-    { key: "rec", header: "Record date", cell: (r) => recordCell(r) },
+    { key: "rec", header: "Record date", cell: (r) => recordCell(r), sortValue: (r) => (r.record_date ? Date.parse(r.record_date) : null) },     // "Same day" sorts as its day (site88)
     { key: "px", header: "Price now", numeric: true, cell: (r) => {
       const x = quotes[r.symbol];
       if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur)}</span>;

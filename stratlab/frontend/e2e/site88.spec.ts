@@ -8,6 +8,8 @@ import { parseDate, parseNumber } from "../src/lib/tableSort";
 //    line cut with …, its companies at the right), not a column of tick boxes with "N companies" wrapping beside them.
 // 3. Themes: no date on the Ready to open chips ("Cement 13 Nov").
 
+const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
+// fake Pro users (tests/fake_db.py: load-N, the plan by N % 3) that only read here
 function sessionFor(n: number) {
   return { access_token: `load-${n}`, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r",
     user: { id: `u-load-${n}`, aud: "authenticated", email: `load${n}@example.com`, role: "authenticated", app_metadata: {}, user_metadata: {} } };
@@ -76,7 +78,7 @@ const word = (t: string) => t.toLowerCase();
 
 test("sorting by a number, a word and a day: a holder's companies", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "the phone's Sort by select is its own test");
-  const errors = await open(page, "/invest/holders?q=kacholia", "Named holders across companies", 881);
+  const errors = await open(page, "/invest/holders?q=kacholia", "Named holders across companies", 176);
   const table = page.locator("#holder").getByRole("table", { name: "Companies where the holder is named" });
   await expect(table.locator("tbody tr")).toHaveCount(3);
   await sortBy(table, "Stake", num, true);
@@ -86,21 +88,26 @@ test("sorting by a number, a word and a day: a holder's companies", async ({ pag
   expect(errors).toEqual([]);
 });
 
-test("sorting by a day and a number on another page: FII and DII flows by day", async ({ page }, info) => {
+test("sorting by a number, a word and a day on another page: corporate actions", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "desktop headers");
-  const errors = await open(page, "/invest/flows", "Every recorded day", 882);
-  const table = page.getByRole("table", { name: "FII and DII net buying by day" });
-  test.skip((await table.count()) === 0 || (await table.locator("tbody tr").count()) < 2, "no recorded days in this world");
-  await sortBy(table, "FII/FPI net", num, true);
-  await sortBy(table, "Day", day, true);
-  // the totals row stays under the rows
-  await expect(table.locator("tfoot tr")).toHaveCount(1);
+  const errors = await open(page, "/research/corporate-actions?scope=all", "Corporate actions", 179);
+  const tables = page.getByRole("table", { name: /^Corporate actions going ex on/ });
+  await expect(tables.first()).toBeVisible();
+  // the day with the most companies
+  const counts = await tables.evaluateAll((ts) => ts.map((t) => t.querySelectorAll("tbody > tr").length));
+  const table = tables.nth(counts.indexOf(Math.max(...counts)));
+  expect(Math.max(...counts), "a day with two or more companies").toBeGreaterThanOrEqual(2);
+  await sortBy(table, "Market value", num, true);                    // "₹9.60 lakh cr" beside "₹45,000 cr"
+  await sortBy(table, "Company", word, false);
+  // "Same day" is the table's ex day; "Not given" has no day and goes last
+  const exOn = parseDate((await table.getAttribute("aria-label"))!.replace(/^Corporate actions going ex on /, ""));
+  await sortBy(table, "Record date", (t) => (/^Same day/.test(t) ? exOn : parseDate(t)), true);
   expect(errors).toEqual([]);
 });
 
 test("a phone's cards sort by a small Sort by select", async ({ page }, info) => {
   test.skip(info.project.name !== "phone", "phone cards");
-  const errors = await open(page, "/invest/holders?q=kacholia", "Named holders across companies", 883);
+  const errors = await open(page, "/invest/holders?q=kacholia", "Named holders across companies", 185);
   const card = page.locator("#holder");
   const select = card.getByTestId("k-sort-by");
   await expect(select).toBeVisible();
@@ -118,14 +125,14 @@ test("a phone's cards sort by a small Sort by select", async ({ page }, info) =>
 
 test("a holder's spellings: one folded line opening a compact table", async ({ page }) => {
   const LONG = "ASHISH RAMESHCHANDRA KACHOLIA JOINTLY WITH RASHMI ASHISH KACHOLIA AS TRUSTEES OF THE FAMILY BENEFICIARY TRUST";
-  await page.route(/\/invest\/holders\?q=kacholia/, async (r) => {
+  await page.route((u) => u.href.startsWith(API) && u.pathname === "/invest/holders" && u.searchParams.get("q") === "kacholia", async (r) => {
     const res = await r.fetch();
     const body = await res.json();
     body.groups = body.groups.slice(0, 1).map((g: { names: { key: string; name: string; companies: number }[] }) => ({
       ...g, names: [...g.names, { key: LONG, name: LONG, companies: 2 }, { key: "ASHISH R KACHOLIA", name: "ASHISH R KACHOLIA", companies: 12 }] }));
     await r.fulfill({ response: res, json: body });
   });
-  const errors = await open(page, "/invest/holders?q=kacholia", "Named holders across companies", 884);
+  const errors = await open(page, "/invest/holders?q=kacholia", "Named holders across companies", 206);
   const card = page.locator("#holder");
   const fold = card.getByTestId("holder-spellings");
   await expect(fold.locator("summary")).toHaveText(/^\d+ spellings counted as this holder · Review$/);
@@ -160,10 +167,13 @@ test("a holder's spellings: one folded line opening a compact table", async ({ p
 });
 
 test("themes: the Ready to open chips carry no date", async ({ page }) => {
-  await open(page, "/research/themes?region=IN", "Map it", 885);
+  const names = ["Cement (Indian cement makers and their suppliers)", "Utilities (Indian power, gas and water-linked infrastructure)", "Defence (India's defence makers)"];
+  await page.route("**/research/theme-library/suggest**", (r) => r.fulfill({ json: { items: names.map((name) => ({ name, q: name.toLowerCase(), region: "IN", at: "2026-11-13T09:00:00Z", day: "2026-11-13", members: 40, searched: 3 })) } }));
+  await open(page, "/research/themes?region=IN", "Map it", 176);
   const chips = page.getByTestId("theme-already").locator(".theme-chip");
   await expect(chips.first()).toBeVisible();
   await expect(page.getByTestId("theme-already").locator(".theme-chip-day")).toHaveCount(0);
   const texts = await chips.allInnerTexts();
+  expect(texts).toContain("Cement");
   for (const t of texts) expect(t, "no date on a chip").not.toMatch(/\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/);
 });
