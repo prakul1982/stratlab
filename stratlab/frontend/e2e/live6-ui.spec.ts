@@ -153,7 +153,9 @@ test("the Themes search box offers the shared library as Ready to open, never Al
   // (updated on purpose, fix13 LIVE11A-013: under the India tab a chip no longer repeats "· India")
   // (updated on purpose, owner 18 Nov: a chip says the theme's short name; its full name and the day it was updated are its title)
   // (changed on purpose, site87, owner: the updated day is small inside the chip, never a hover box over the next row: the full name and day are its name)
-  await expect(list.getByRole("button").first()).toHaveAttribute("aria-label", /· updated \d{1,2} [A-Z][a-z]{2}/);
+  // (changed on purpose, site89, owner: no "updated" date in the chip's spoken name either)
+  await expect(list.getByRole("button").first()).toHaveAttribute("aria-label", /^[^·]+$/);
+  expect(await list.locator("button[aria-label*='updated']").count()).toBe(0);
   await shot(other, "themes-library", info);
   await sane(other, errors);
 });
