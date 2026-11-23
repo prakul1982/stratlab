@@ -37,7 +37,7 @@ test("Ready to open: short names (full name and date in the title), two rows of 
   const page = read("src/pages/ThemesPage.tsx");
   // (changed on purpose, site87, owner: the updated day small inside the chip, not a hover box over the next row; every ready theme, the area
   // scrolling past three lines, no "All N themes" / "Fewer themes"; the ideas a row of their own with none the chips already show, no fold)
-  assert.match(page, /aria-label=\{libraryLabel\(i, \(d\) => fmtDate\(d, \{ year: false \}\), false\)\}/);
+  assert.match(page, /aria-label=\{libraryLabel\(i, false\)\}/);     // (changed on purpose, site89, owner: no date in the spoken name either)
   assert.match(page, /<span className="theme-chip-name">\{shortTheme\(i\.name\)\}<\/span>/);
   assert.doesNotMatch(page, /theme-chip-day/);     // (changed on purpose, site88, owner: no date on the chips at all)
   assert.doesNotMatch(page, /title=\{libraryLabel|All \{items\.length\} themes|<Disclosure summary="More ideas"/);
