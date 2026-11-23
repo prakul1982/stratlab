@@ -142,13 +142,11 @@ export function shortTheme(name: string): string {
   const s = name.replace(/\s*\([^)]*\)\s*$/, "").split(/\s+[–—-]\s+|:\s+/)[0].trim();
   return s || name;
 }
-export function libraryLabel(i: { name: string; region: string; at: string | null; day?: string | null }, fmtDay: (iso: string) => string, withMarket = true): string {
+export function libraryLabel(i: { name: string; region: string }, withMarket = true): string {
   const where = ({ IN: "India", US: "US" } as Record<string, string>)[i.region] ?? i.region;
-  // LIVE7A-008: the map's own day in the market's time zone, the date its page says "Last updated" (theme_library.updated_at)
-  const day = i.day ?? (i.at ? i.at.slice(0, 10) : null);
-  // LIVE11A-013: under a market's tab the market isn't said again on every chip
-  if (!withMarket) return `${i.name}${day ? ` · updated ${fmtDay(day)}` : ""}`;
-  return `${i.name} · ${where}${day ? `, updated ${fmtDay(day)}` : ""}`;
+  // site89 (owner, 23 Nov: "remove it all together"): no "updated" date in the chip's spoken name either, as none is shown on it (site88);
+  // the theme's own page keeps its dates. LIVE11A-013: under a market's tab the market isn't said again on every chip
+  return withMarket ? `${i.name} · ${where}` : i.name;
 }
 
 /** A layer's operating figures by its own companies, never by its place in the list (LIVE7A-005: the map's layers and the page's are not the

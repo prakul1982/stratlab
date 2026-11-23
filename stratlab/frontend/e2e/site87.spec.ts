@@ -245,7 +245,9 @@ test("THEMES: compact chips, never the same theme twice, the updated day inside 
   // (changed on purpose, site88, owner: no date on the chips at all)
   await expect(ready.locator(".theme-chip-day")).toHaveCount(0);
   expect(await ready.locator(".theme-chip[title]").count()).toBe(0);
-  await expect(ready.locator(".theme-chip").first()).toHaveAttribute("aria-label", /· updated \d{1,2} [A-Z][a-z]{2}/);
+  // (changed on purpose, site89, owner: no "updated" date in the chip's spoken name either)
+  await expect(ready.locator(".theme-chip").first()).toHaveAttribute("aria-label", /\S/);
+  expect(await ready.locator(".theme-chip[aria-label*='updated']").count()).toBe(0);
   // hovering a chip covers no other chip
   const chip = ready.locator(".theme-chip").nth(3);
   await chip.hover();

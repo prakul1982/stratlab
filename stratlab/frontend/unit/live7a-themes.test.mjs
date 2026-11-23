@@ -40,9 +40,9 @@ test("LIVE7A-009: an EBITDA margin filed in whole points prints whole on the pag
 
 test("LIVE7A-008: the theme list says the day the theme's page says (the map's own day, in the market's time zone)", async () => {
   const TF = await import("../src/lib/themeFormat.ts");
-  const fmt = (d) => d;
-  assert.equal(TF.libraryLabel({ name: "Automotive", region: "IN", at: "2026-11-07T21:30:00+00:00", day: "2026-11-08" }, fmt), "Automotive · India, updated 2026-11-08");
-  assert.equal(TF.libraryLabel({ name: "Chips", region: "US", at: "2026-11-07T21:30:00+00:00" }, fmt), "Chips · US, updated 2026-11-07");
+  // (changed on purpose, site89, owner: no "updated" date in the chip's spoken name either)
+  assert.equal(TF.libraryLabel({ name: "Automotive", region: "IN" }), "Automotive · India");
+  assert.equal(TF.libraryLabel({ name: "Chips", region: "US" }), "Chips · US");
 });
 
 test("LIVE7A-005: a layer's operating figures are its own companies', whatever the map's order of layers", async () => {

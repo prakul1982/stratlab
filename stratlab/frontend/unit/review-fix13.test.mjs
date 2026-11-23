@@ -39,8 +39,9 @@ test("LIVE11A-019: the Usual move column goes when no answered row has one; zero
 
 test("LIVE11A-013: every stored theme is listed, without the market the tab names", async () => {
   const { libraryLabel } = await import("../src/lib/themeFormat.ts");
-  assert.equal(libraryLabel({ name: "Cement", region: "IN", at: null, day: "2026-11-13" }, (d) => d, false), "Cement · updated 2026-11-13");
-  assert.equal(libraryLabel({ name: "Cement", region: "IN", at: null, day: "2026-11-13" }, (d) => d), "Cement · India, updated 2026-11-13");
+  // (changed on purpose, site89, owner: no "updated" date in the chip's spoken name either)
+  assert.equal(libraryLabel({ name: "Cement", region: "IN" }, false), "Cement");
+  assert.equal(libraryLabel({ name: "Cement", region: "IN" }), "Cement · India");
   const page = read("src/pages/ThemesPage.tsx");
   assert.doesNotMatch(page, /\.slice\(0, 4\);\n  if \(!shown\.length\) return null;/);
   // (changed on purpose, site87, owner: no "All N themes" / "Fewer themes": every ready theme is a chip, the area scrolling past three lines)

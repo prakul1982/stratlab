@@ -31,7 +31,8 @@ test("item 6: the Themes box is one row, the library two rows of equal short chi
   await expect(grid).toContainText("Ready to open:");
   const chips = grid.locator(".theme-ready > button");
   await expect(chips).toHaveCount(30);
-  const util = grid.getByRole("button", { name: /^Utilities \(Indian power, gas and water-linked infrastructure\) · updated 10 Nov$/ });
+  // (changed on purpose, site89, owner: no "updated" date in the chip's spoken name either)
+  const util = grid.getByRole("button", { name: /^Utilities \(Indian power, gas and water-linked infrastructure\)$/ });
   await expect(util.locator(".theme-chip-name")).toHaveText("Utilities");
   await expect(util.locator(".theme-chip-day")).toHaveCount(0);       // (changed on purpose, site88, owner: no date on the chips)
   expect(await grid.locator(".theme-ready > button[title]").count()).toBe(0);
