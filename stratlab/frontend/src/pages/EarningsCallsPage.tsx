@@ -84,24 +84,29 @@ export function EarningsCallsPage() {
   // (the DataTable's AUTO-LOAD), and a page for a list that has since changed is dropped
   const gen = useRef(0);
   const [busy, setBusy] = useState(false);
+  // a list the first answer didn't hold whole keeps its "Loaded N of M" line once every row is in
+  const [paged, setPaged] = useState(false);
   useEffect(() => {
     let live = true;
     const ticket = ++gen.current;
     setError(null); setBusy(false);
     const t = setTimeout(() => {
-      api<CallsView>(`/research/earnings-calls?${listQs()}`).then((x) => { if (live && ticket === gen.current) { setData(x); if (!x.full) setTeaser(true); } })
+      api<CallsView>(`/research/earnings-calls?${listQs()}`).then((x) => { if (live && ticket === gen.current) { setData(x); setPaged(x.matching > x.rows.length); if (!x.full) setTeaser(true); } })
         .catch((e) => { if (!live) return; if (e instanceof ApiError && e.status === 402) setTeaser(true); else setError((e as Error).message); });
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
   }, [region, scope, when, kind, q, tries, full]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const asking = useRef<string | null>(null);     // the page being read: the end of the rows can be reached twice before the page redraws
   const loadMore = () => {
     if (!data || busy) return;
-    const ticket = gen.current;
+    const ticket = gen.current, at = `${ticket}:${data.rows.length}`;
+    if (asking.current === at) return;
+    asking.current = at;
     const qs = listQs(); qs.set("offset", String(data.rows.length));
     setBusy(true);
     api<CallsView>(`/research/earnings-calls?${qs}`)
       .then((x) => { if (ticket === gen.current) setData((cur) => (cur ? { ...cur, rows: [...cur.rows, ...x.rows.filter((r) => !cur.rows.some((c) => c.id === r.id))], more: x.more } : cur)); })
-      .catch(() => undefined)
+      .catch(() => { asking.current = null; })          // a page that couldn't be read is asked again at the next nearing of the end
       .finally(() => { if (ticket === gen.current) setBusy(false); });
   };
 
@@ -151,7 +156,7 @@ export function EarningsCallsPage() {
             <CardHead title={when === "past" ? "Held" : "Coming up"} actions={data.rows.length ? <CsvButton name="earnings calls" label={when === "past" ? "Earnings calls and meetings held" : "Earnings calls and meetings coming up"} columns={cols} rows={data.rows} /> : undefined} />
             <DataTable stack label={when === "past" ? "Earnings calls and meetings held" : "Earnings calls and meetings coming up"} columns={cols}
               rows={data.rows} rowKey={(r) => r.id}
-              more={data.matching > data.rows.length ? { total: data.matching, load: loadMore, busy, noun: region === "IN" ? "calls and meetings" : "results days" } : undefined}
+              more={paged ? { total: data.matching, load: loadMore, busy, noun: region === "IN" ? "calls and meetings" : "results days" } : undefined}
               empty={data.scope === "mine" ? "None of your stocks has a call or meeting in these days." : q ? "No company by that name has a call in these days." : "Nothing in these days."} />
           </Card>
         )}

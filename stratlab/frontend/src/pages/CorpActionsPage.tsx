@@ -69,23 +69,32 @@ export function CorpActionsPage() {
   // its end (the DataTable's AUTO-LOAD), and a page for a list that has since changed (another filter, market or search) is dropped
   const gen = useRef(0);
   const [busy, setBusy] = useState<Part | null>(null);
+  // the lists the first answer didn't hold whole: each keeps its "Loaded N of M" line once every row is in
+  const [paged, setPaged] = useState<Record<Part, boolean>>({ ahead: false, recent: false });
   useEffect(() => {
     let live = true;
     const ticket = ++gen.current;
     setError(null); setBusy(null);
     const t = setTimeout(() => {
-      api<CalendarView>(`/research/corp-actions?${listQs()}`).then((x) => live && ticket === gen.current && setData(x)).catch((e) => live && setError((e as Error).message));
+      api<CalendarView>(`/research/corp-actions?${listQs()}`).then((x) => {
+        if (!live || ticket !== gen.current) return;
+        setData(x);
+        setPaged({ ahead: (x.ahead_total ?? 0) > x.ahead.length, recent: (x.recent_total ?? 0) > x.recent.length });
+      }).catch((e) => live && setError((e as Error).message));
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
   }, [region, scope, kind, q, tries, filters, sortName]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const asking = useRef<string | null>(null);     // the page being read: the end of the rows can be reached twice before the page redraws
   const loadPart = (part: Part) => {
     if (!data || busy) return;
-    const ticket = gen.current;
+    const ticket = gen.current, at = `${ticket}:${part}:${data[part].length}`;
+    if (asking.current === at) return;
+    asking.current = at;
     const qs = listQs(); qs.set("part", part); qs.set("offset", String(data[part].length));
     setBusy(part);
     api<CalendarView>(`/research/corp-actions?${qs}`)
       .then((x) => { if (ticket === gen.current) setData((cur) => (cur ? { ...cur, [part]: [...cur[part], ...x[part].filter((r) => !cur[part].some((c) => c.id === r.id))] } : cur)); })
-      .catch(() => undefined)
+      .catch(() => { asking.current = null; })          // a page that couldn't be read is asked again at the next nearing of the end
       .finally(() => { if (ticket === gen.current) setBusy(null); });
   };
   const totalOf = (part: Part) => (part === "ahead" ? data?.ahead_total : data?.recent_total) ?? data?.[part].length ?? 0;
@@ -150,7 +159,7 @@ export function CorpActionsPage() {
       <div key={d} className="inv-day" data-testid="actions-day">
         <span className="k-eyebrow">Ex-date {exDay(d)}{d === data?.today ? " · today" : ""} · {on.length} {on.length === 1 ? "action" : "actions"}{last && rows.length < total ? " so far" : ""}</span>
         <DataTable csv={`corporate actions ${d}`} label={`Corporate actions going ex on ${exDay(d)}`} rows={on} rowKey={(r) => r.id} columns={columns} stack
-          more={last && total > rows.length ? { total, loaded: rows.length, load: () => loadPart(part), busy: busy === part, noun: "actions" } : undefined} />
+          more={last && paged[part] ? { total, loaded: rows.length, load: () => loadPart(part), busy: busy === part, noun: "actions" } : undefined} />
       </div>
     );
   };
