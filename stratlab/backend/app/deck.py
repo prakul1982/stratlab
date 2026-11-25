@@ -1170,9 +1170,9 @@ FLOW_TEXT, FLOW_SUB, FLOW_PAD, FLOW_SEP = 12, BODY_MIN, 0.24, 0.28
 CONTENTS_MAX = 20                 # a section slide lists up to this many slides of its part (at 11 pt when it is that many)
 
 
-def _flow_item_h(it: dict, w: float) -> float:
+def _flow_item_h(it: dict, w: float, size: float = FLOW_TEXT) -> float:
     hh = 0.32 if it.get("tags") else 0
-    hh += len(wrap(it["text"], FLOW_TEXT, w)) * _lh(FLOW_TEXT)
+    hh += len(wrap(it["text"], size, w)) * _lh(size)
     if it.get("sub"):
         hh += 0.07 + len(wrap(it["sub"], FLOW_SUB, w)) * _lh(FLOW_SUB)
     return hh
@@ -1186,7 +1186,7 @@ def flow_layout(b: dict) -> list[tuple]:
     iw = cw - 2 * FLOW_PAD
     out, c, yy = [], 0, y + FLOW_PAD
     for it in b["items"]:
-        ih = _flow_item_h(it, iw)
+        ih = _flow_item_h(it, iw, b.get("size", FLOW_TEXT))
         if yy + ih > y + h - FLOW_PAD and yy > y + FLOW_PAD:
             c, yy = c + 1, y + FLOW_PAD
         if c >= cols:
@@ -1196,10 +1196,10 @@ def flow_layout(b: dict) -> list[tuple]:
     return out
 
 
-def flow_pages(items: list, box: tuple, cols: int = 2) -> list[list]:
+def flow_pages(items: list, box: tuple, cols: int = 2, size: float = FLOW_TEXT) -> list[list]:
     pages, i = [], 0
     while i < len(items):
-        k = max(1, len(flow_layout({"box": box, "cols": cols, "items": items[i:]})))
+        k = max(1, len(flow_layout({"box": box, "cols": cols, "items": items[i:], "size": size})))
         pages.append(items[i:i + k])
         i += k
     return pages
@@ -1290,8 +1290,9 @@ def hbar_labels(cats: list, w: float, h: float) -> tuple[float, list[list[str]],
     chart, a name on as many lines as a bar's share of the height holds (two, three for tall bars), said shorter before any of it is cut
     and set at 10 pt when that is what shows it whole (R35: "Life Insurance Corporation Of…")."""
     slot = max(h - 0.1, 0.2) / max(1, len(cats))
-    for size in (BODY_MIN, 10):
-        lines = 3 if slot >= 3 * _lh(size) else 2 if slot >= 0.3 else 1
+    size = BODY_MIN                 # deck89 (owner: text never under 11 pt): a name said shorter or on one more line, never smaller
+    for extra in (0, 1):
+        lines = (3 if slot >= 3 * _lh(size) else 2 if slot >= 0.3 else 1) + extra
         lw = min(w * 0.45, max([_width(str(c), size) for c in cats] or [0.5]) + 0.15)
         short = _distinct([str(c) for c in cats], [short_label(str(c), size, lw - 0.12, lines) for c in cats])
         got = [wrap(t, size, lw - 0.12) for t in short]
@@ -1336,8 +1337,9 @@ def column_labels(cats: list, w: float, size: float) -> tuple[list[list[str]], f
     """A column chart's names under their columns, each in lines no wider than its column's share of the plot: two lines at most, at a
     smaller size (10 pt) when that shows more of them whole."""
     slot = max(0.3, w / max(1, len(cats)) - 0.08)
-    for fs in dict.fromkeys((size, 10)):
-        short = _distinct([str(c) for c in cats], [short_label(str(c), fs, slot, 2) for c in cats])
+    fs = max(size, BODY_MIN)        # deck89: never under 11 pt; a third line before any name is cut
+    for n_l in (2, 3):
+        short = _distinct([str(c) for c in cats], [short_label(str(c), fs, slot, n_l) for c in cats])
         got = [wrap(t, fs, slot) for t in short]
         if not any(ls[-1].endswith("…") and not str(c).endswith("…") for ls, c in zip(got, cats)):
             break
@@ -1486,17 +1488,19 @@ class Canvas:
             lab = self.label(label, BODY_MIN, iw, 2)
             lh = len(wrap(lab, BODY_MIN, iw)) * _lh(BODY_MIN)
             self.text(cx + 0.18, y + 0.13, iw, lh, [lab], BODY_MIN, color=DARK_MUTED if dark else MUTED)
-            nh = min(0.6, len(wrap(note, BODY_MIN, iw)) * _lh(BODY_MIN)) if note else 0
+            ns = 13 if b.get("big") else BODY_MIN            # deck89: a big number's one plain sentence, readable
+            nh = min(0.6 if not b.get("big") else 0.95, len(wrap(note, ns, iw)) * _lh(ns)) if note else 0
             vy = y + 0.13 + lh + 0.06
             # R35 (every live cover: "Their market value" with its note and no figure): the figure always has its line; a long note gives way
             nh = min(nh, max(0.0, y + h - vy - 0.14 - _lh(15)))
             vh = y + h - vy - nh - (0.14 if note else 0.08)
-            vs = fit([value], iw, min(vh, 26 * 1.3 / 72), 26, 15, head=True)       # one line where a size from 26 down to 15 allows
+            top = 34 if b.get("big") else 26            # deck89: the findings' big numbers
+            vs = fit([value], iw, min(vh, top * 1.3 / 72), top, 15, head=True)       # one line where a size from 26 down to 15 allows
             if len(wrap(value, vs, iw, head=True)) > 1:
-                vs = fit([value], iw, vh, 26, 13, head=True)
+                vs = fit([value], iw, vh, top, 13, head=True)
             self.text(cx + 0.18, vy, iw, vh, [value], vs, color=it[3] if len(it) > 3 else (ON_DARK if dark else INK), head=True)
             if note:
-                self.text(cx + 0.18, y + h - 0.12 - nh, iw, nh, [note], BODY_MIN, color=DARK_MUTED if dark else MUTED)
+                self.text(cx + 0.18, y + h - 0.12 - nh, iw, nh, [note], ns, color=DARK_MUTED if dark else (INK2 if b.get("big") else MUTED))
 
     def b_stack(self, b):
         x, y, w, h = b["box"]
@@ -1542,7 +1546,8 @@ class Canvas:
         cols, gap = b.get("cols", 2), 0.3
         cw = (w - gap * (cols - 1)) / cols
         used = sorted({round((px - FLOW_PAD - x) / (cw + gap)) for _, px, _, _, _ in placed})
-        bottom = max(py + ph for _, _, py, _, ph in placed) + FLOW_PAD
+        bottom = y + h if b.get("fill") else max(py + ph for _, _, py, _, ph in placed) + FLOW_PAD
+        ts = b.get("size", FLOW_TEXT)
         for c in used:
             self.rect(x + c * (cw + gap), y, cw, bottom - y, CARD, line=LINE)
         last = {}
@@ -1560,8 +1565,8 @@ class Canvas:
                     self.text(tx, yy + 0.015, tw, 0.24, [label], BODY_MIN, color=fg, bold=True, align="center")
                     tx += tw + 0.1
                 yy += 0.32
-            th = len(wrap(it["text"], FLOW_TEXT, pw)) * _lh(FLOW_TEXT)
-            self.text(px, yy, pw, th, [it["text"]], FLOW_TEXT, color=INK)
+            th = len(wrap(it["text"], ts, pw)) * _lh(ts)
+            self.text(px, yy, pw, th, [it["text"]], ts, color=INK)
             yy += th
             if it.get("sub"):
                 sh = len(wrap(it["sub"], FLOW_SUB, pw)) * _lh(FLOW_SUB)
@@ -1579,7 +1584,10 @@ def _fmt(kind: str):
             "x1": (lambda v: whole_figures(f"{v:.1f}x"), 'General"x"'), "num1t": (lambda v: whole_figures(f"{v:,.1f}"), "General"),
             # LIVE7A-014: a chart one of whose values has a decimal prints every value with one
             "pctk1": (lambda v: _pc(v), '0.0"%"'), "chgk1": (lambda v: _chg(v), '+0.0"%";-0.0"%";0.0"%"'),
-            "xk1": (lambda v: f"{v:.1f}x", '0.0"x"'), "numk1": (lambda v: f"{v:,.1f}", "#,##0.0")}.get(kind, (lambda v: f"{v:,.0f}", "#,##0"))
+            "xk1": (lambda v: f"{v:.1f}x", '0.0"x"'), "numk1": (lambda v: f"{v:,.1f}", "#,##0.0"),
+            # deck89: amounts of money on a bar, as the tables print them (₹ crore in Indian grouping, lakh crore from 1,00,000; $ million)
+            "inr": (lambda v: cap_inr(v), '[>=10000000]"₹"##\\,##\\,##\\,##0" cr";[>=100000]"₹"##\\,##\\,##0" cr";"₹"##,##0" cr"'),
+            "usd": (lambda v: money(v, "$ million"), '"$"#,##0" m"'), "pts": (lambda v: _pts(v), '+0.0" pts";-0.0" pts";0.0" pts"')}.get(kind, (lambda v: f"{v:,.0f}", "#,##0"))
 
 
 # ---------- PowerPoint ----------
@@ -1749,7 +1757,7 @@ class PptxRenderer(Canvas):
         plot.gap_width, plot.overlap = 55, -10
         plot.has_data_labels = True
         dl = plot.data_labels
-        dl.font.size, dl.font.color.rgb = Pt(10), self.rgb(INK2)
+        dl.font.size, dl.font.color.rgb = Pt(11), self.rgb(INK2)
         small = max((abs(v) for _, vs, _ in b["series"] for v in vs if v is not None), default=0) < 100
         # Indian figures grouped as the tables are (12,34,567), never 1,234,567 (DD-053)
         fmt = _fmt(b["fmt"])[1] if b.get("fmt") else ("#,##0.0;-#,##0.0" if small else INDIAN_FORMAT if b.get("inr") else "#,##0")
@@ -1763,7 +1771,7 @@ class PptxRenderer(Canvas):
         va.has_major_gridlines = True
         va.major_gridlines.format.line.color.rgb = self.rgb(LINE)
         va.format.line.fill.background()
-        va.tick_labels.font.size, va.tick_labels.font.color.rgb = Pt(10), self.rgb(MUTED)
+        va.tick_labels.font.size, va.tick_labels.font.color.rgb = Pt(11), self.rgb(MUTED)
         if b.get("inr") and not small and not b.get("fmt"):
             va.tick_labels.number_format, va.tick_labels.number_format_is_linked = INDIAN_FORMAT, False
         ca = ch.category_axis
@@ -1813,7 +1821,7 @@ class PptxRenderer(Canvas):
             return
         x, y, w, h = self._title_box(b)
         cd = CategoryChartData()
-        short = axis_labels(b["cats"], w - 0.9, 10)              # y57: the slide's chart says the same labels as the PDF's, never run together
+        short = axis_labels(b["cats"], w - 0.9, 11)              # y57: the slide's chart says the same labels as the PDF's, never run together
         cd.categories = [c or " " * (i + 1) for i, c in enumerate(short)]
         for name, vals, *_ in b["series"]:
             cd.add_series(name, vals)
@@ -1835,14 +1843,14 @@ class PptxRenderer(Canvas):
             plot.has_data_labels = True
             plot.data_labels.number_format, plot.data_labels.number_format_is_linked = _fmt(b.get("fmt", "pct"))[1], False
             plot.data_labels.position = XL_LABEL_POSITION.ABOVE
-            plot.data_labels.font.size = Pt(10)
+            plot.data_labels.font.size = Pt(11)
         va = ch.value_axis
         va.has_major_gridlines = True
         va.major_gridlines.format.line.color.rgb = self.rgb(LINE)
         va.format.line.fill.background()
         va.tick_labels.number_format, va.tick_labels.number_format_is_linked = _fmt(b.get("fmt", "pct"))[1], False
-        va.tick_labels.font.size = Pt(10)
-        ch.category_axis.tick_labels.font.size = Pt(10)
+        va.tick_labels.font.size = Pt(11)
+        ch.category_axis.tick_labels.font.size = Pt(11)
         ch.category_axis.format.line.color.rgb = self.rgb(LINE2)
 
     def bytes(self) -> bytes:
@@ -1919,7 +1927,7 @@ class PdfRenderer(Canvas):
         chart.categoryAxis.labels.fontName, chart.categoryAxis.labels.fontSize = "Deck", size
         chart.categoryAxis.labels.fillColor = self.col(INK2)
         chart.categoryAxis.strokeColor = self.col(LINE2)
-        chart.valueAxis.labels.fontName, chart.valueAxis.labels.fontSize = "Deck", 10
+        chart.valueAxis.labels.fontName, chart.valueAxis.labels.fontSize = "Deck", 11
         chart.valueAxis.labels.fillColor = self.col(MUTED)
         chart.valueAxis.strokeColor = self.col(CARD)
         chart.valueAxis.gridStrokeColor = self.col(LINE)
@@ -1943,7 +1951,7 @@ class PdfRenderer(Canvas):
         ch.x, ch.y, ch.width, ch.height = 44, 28, w * 72 - 54, h * 72 - 70
         ch.data = [list(vs) for _, vs, _ in b["series"]]
         small = max((abs(v) for _, vs, _ in b["series"] for v in vs if v is not None), default=0) < 100
-        labels, fs = column_labels(b["cats"], ch.width / 72, 11 if len(b["cats"]) <= 8 else 10)
+        labels, fs = column_labels(b["cats"], ch.width / 72, 11)
         deep = max(len(ls) for ls in labels) - 1                # a name on two lines: the plot gives up a line's height to it
         ch.y, ch.height = ch.y + deep * fs * 1.2, ch.height - deep * fs * 1.2
         self._axes(ch, ["\n".join(ls) for ls in labels], fs)
@@ -1961,7 +1969,7 @@ class PdfRenderer(Canvas):
         bar_w = ch.width / max(1, len(b["cats"])) / max(1, len(b["series"]))
         ch.barLabelFormat = f
         ch.barLabels.fontName = "Deck"
-        ch.barLabels.fontSize = 10 if bar_w >= 34 else 9 if bar_w >= 26 else 8
+        ch.barLabels.fontSize = BODY_MIN          # deck89: never under 11 pt
         ch.barLabels.fillColor = self.col(INK2)
         ch.barLabels.nudge = 8
         d.add(ch)
@@ -2019,7 +2027,7 @@ class PdfRenderer(Canvas):
         ch.x, ch.y, ch.width, ch.height = 46, 28, w * 72 - 62, h * 72 - 70
         ch.data = [list(vs) for _, vs, *_ in b["series"]]
         cats = list(b["cats"])
-        self._axes(ch, axis_labels(cats, ch.width / 72, 10), 10)          # y57: labels that never run into each other
+        self._axes(ch, axis_labels(cats, ch.width / 72, 11), 11)          # y57: labels that never run into each other
         ch.valueAxis.labelTextFormat = f
         vals = [v for _, vs, *_ in b["series"] for v in vs if v is not None]
         if vals:
@@ -2037,7 +2045,7 @@ class PdfRenderer(Canvas):
             for i, (_, _, color, *_) in enumerate(b["series"]):
                 ch.lines[i].symbol = makeMarker("FilledCircle", size=5, fillColor=self.col(color), strokeColor=self.col(color))
             ch.lineLabelFormat = f
-            ch.lineLabels.fontName, ch.lineLabels.fontSize, ch.lineLabels.fillColor = "Deck", 10, self.col(INK2)
+            ch.lineLabels.fontName, ch.lineLabels.fontSize, ch.lineLabels.fillColor = "Deck", BODY_MIN, self.col(INK2)
             ch.lineLabelNudge = 9
         d.add(ch)
         self._legend(d, b["series"], ch.x, h * 72 - 6)
@@ -2118,7 +2126,7 @@ class Probe(Canvas):
 
     def b_columns(self, b):
         x, y, w, h = self._title_box(b)
-        self._labels(b["cats"], column_labels(b["cats"], w - 0.75, 11 if len(b["cats"]) <= 8 else 10)[0])
+        self._labels(b["cats"], column_labels(b["cats"], w - 0.75, 11)[0])
 
     def b_hbars(self, b):
         x, y, w, h = self._title_box(b)
@@ -4524,6 +4532,46 @@ def growth_base_line(rows: list, amt, limit: int = 5) -> str:
             + (f"; {len(xs) - limit} more" if len(xs) > limit else "") + ".")
 
 
+def findings_tiles(v: dict, cov: dict, ebm, cap, lender: bool = False) -> list[tuple]:
+    """deck89: the key findings' big numbers, each with one plain sentence and no page reference: the theme's market value, its median
+    margin (a lender's ROE), its revenue growth and its median P/E (else the latest quarter), each the figure a page's table shows. A figure
+    of fewer than MIN_BASE companies is no tile."""
+    from .intel.theme_data import relative_ok
+    sec = v.get("sections") or {}
+    size, meds, mk = sec.get("size") or {}, sec.get("medians") or {}, sec.get("market") or {}
+    agg, gmed = (sec.get("growth") or {}).get("aggregate") or {}, (sec.get("growth") or {}).get("median") or {}
+    val = sec.get("valuation") or {}
+    out = []
+    if size.get("total_cap") is not None and size.get("with_value"):
+        nv = size.get("with_value", 0)
+        note = f"{_n(nv, 'company', 'companies')} with figures and a market value"
+        if size.get("top3_share") is not None and nv > 3:
+            note += f"; the three largest are {_pc(size['top3_share'])} of it"
+        out.append(("The theme's market value", cap(size["total_cap"]), note + "."))
+    key, label, f = ("roe", "Median ROE", _pc) if lender else ("ebitda", "Median EBITDA margin", ebm)
+    m = meds.get(key) or {}
+    if m.get("median") is not None and (m.get("n") or 0) >= MIN_BASE:
+        bm = None if lender else (mk.get("opm") or {}).get("median")
+        out.append((label, f(m["median"]), f"The middle company of {m['n']:,}" + (f"; {f(bm)} for all listed companies" if bm is not None else "") + "."))
+    r1 = agg.get("revenue_1y") or {}
+    if r1.get("value") is not None and (r1.get("n") or 0) >= MIN_BASE:
+        g1 = gmed.get("revenue_1y") or {}
+        note = f"Revenue of {_n(r1.get('n') or 0, 'company', 'companies')} added together, latest year" + \
+            (f"; the median company {_chg(g1['median'])}" if g1.get("median") is not None and (g1.get("n") or 0) >= MIN_BASE else "") + "."
+        out.append(("Revenue growth", _chg(r1["value"]), note, UP if r1["value"] > 0 else DOWN if r1["value"] < 0 else INK))
+    pe = val.get("pe") or {}
+    q = sec.get("quarter") or {}
+    if pe.get("median") is not None and (pe.get("n") or 0) >= MIN_BASE:
+        mpe = (val.get("market_pe") or {}).get("median")
+        rel = relative_ok(val) and mpe is not None
+        out.append(("Median P/E", _times(pe["median"]), f"The middle of {pe['n']:,} companies with a P/E" + (f"; {_times(mpe)} for all listed companies" if rel else "") + "."))
+    elif q.get("quarter") and ((q.get("sales") or {}).get("n") or 0) >= MIN_BASE and (q.get("sales") or {}).get("median") is not None:
+        md = q["sales"]["median"]
+        out.append((f"Revenue, quarter to {q['quarter']}", _chg(md), f"The median company against the same quarter a year before, of {q['sales']['n']:,}.",
+                    UP if md > 0 else DOWN if md < 0 else INK))
+    return out[:4]
+
+
 def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: date, chained: bool = True, lender: bool = False) -> None:
     """The findings up front: what the figures show (with page references), the data-confidence page and "Dated company updates". Every sentence is a
     computed fact from the view; no AI writes a figure here, and nothing says what to buy or what is cheap."""
@@ -4619,24 +4667,25 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         cards.append({"title": "Sector operating figures", "lines": sl_[:2], "note": f"⟦{SECTOR_TITLE}⟧" if sector_paged(v) else ""})
     watch = watch_list(v, today)
     conf = confidence_rows(v, cov, today, lender)
-    cards.append({"title": "How far the figures go", "lines": [f"{counts_words(reconciled_counts(v, cov), short=True)}.", f"{len(conf)} checks on every figure, each with what it found."],
-                  "note": "⟦Data confidence⟧"})
-    cards.append({"title": UPDATES_TITLE, "lines": [f"{_n(len(watch), 'dated update')} at {_n(len({x['name'] for x in watch}), 'company', 'companies')}, "
-                                                    "picked by fixed rules, each with its date, status and source." if watch
-                                                    else "No company meets the rules today."], "note": f"⟦{UPDATES_TITLE}⟧" if watch else ""})
-    if len(cards) > 6:            # two short cards share one so the page keeps two rows of three
-        a_, b_ = cards[-2], cards.pop()
-        # n1 (the live R33 Private Banks deck: the merged card's updates line gave way to fit, so the deck said nothing of dated updates):
-        # one line of each first, so a line that gives way is never the only one of its card
-        first = (a_, b_)
-        cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": first[0]["lines"][:1] + first[1]["lines"][:1] + first[0]["lines"][1:] + first[1]["lines"][1:], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
-        if b_["title"] == UPDATES_TITLE and not watch:
-            # q1 (the live R34 Private Banks deck: the merged card kept only "No company meets the rules today", its coverage line given way):
-            # no dated update is said in the card's title, so the card's lines are the coverage summary and none of it gives way for it
-            cards[-1] = {**a_, "title": f"{a_['title']}; no dated company update today"}
-    s = Slide("Key findings", "What the reported figures show, each with the slide it comes from; findings, not advice", eyebrow=eyebrow)
-    ccols = 3 if len(cards) != 4 else 2
-    s.add("cards", (M, TOP, CW, BOT - TOP), cols=ccols, items=whole_lines(cards, (M, TOP, CW, BOT - TOP), ccols), fill=True, size=13)
+    # deck89 (owner, 25 Nov: "it looks absolutely trash"): the findings as a few big numbers, one plain sentence each, then the findings in
+    # plain sentences with no page reference; how far the figures go (the membership counts, the checks) is the appendix's "Method and coverage"
+    if watch:
+        cards.append({"title": UPDATES_TITLE, "lines": [f"{_n(len(watch), 'dated update')} at {_n(len({x['name'] for x in watch}), 'company', 'companies')}, "
+                                                        "picked by fixed rules, each with its date, status and source."]})
+    tiles = findings_tiles(v, cov, ebm, cap, lender)
+    s = Slide("Key findings", "What the reported figures show: findings, not advice", eyebrow=eyebrow)
+    th = 1.85 if tiles else 0.0
+    if tiles:
+        s.add("stats", (M, TOP, CW, th), items=tiles, big=True)
+    lines = [ln for it in cards for ln in it.get("lines") or [] if ln]
+    foot = "Each figure is from the companies' reported numbers. Every company's figures, how the companies got in and how each figure is built: the appendix, from ⟦Every company's figures⟧."
+    fh = note_h(foot)
+    box = (M, TOP + th + (0.25 if tiles else 0), CW, BOT - fh - 0.12 - (TOP + th + (0.25 if tiles else 0)))
+    card = whole_lines([{"title": "What the figures show", "lines": lines}], box, 1, bullets=True)[0]
+    # a line that gives way is said in full in the appendix's notes (nothing true lost)
+    s.dropped_lines = [ln for ln in lines if ln not in card["lines"]]
+    s.add("cards", box, cols=1, items=[card], fill=True, bullets=True, size=14)
+    s.add("text", (M, BOT - fh, CW, fh), paras=[foot], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
     slides.append(s)
 
     # data confidence on ONE page (R19, the owner: "just keep the important ones"): the checks, then every count in one line under them; a
@@ -4698,7 +4747,11 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         s.add("text", (M, TOP + th + 0.15, CW, nh), paras=[counts], size=BODY_MIN, floor=BODY_MIN, color=INK2)
         slides.append(s)
 
-    # dated company updates (m2; "Worth a watch" before): only when a company meets the rules, on one page, the latest day first (R19)
+
+
+def _updates(slides: list, watch: list, eyebrow: str) -> None:
+    """Dated company updates (m2; "Worth a watch" before): only when a company meets the rules, on one page, the latest day first (R19);
+    deck89: after the tailwinds and risks, the news-like part of the story, under that page when it is short and fits there."""
     if watch:
         dated = sorted(watch, key=lambda x: str(x.get("at") or ""), reverse=True)
         when = lambda at: _day(at) if re.match(r"^\d{4}-\d{2}-\d{2}", str(at)) else _month(at)      # noqa: E731
@@ -4722,6 +4775,34 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         used = max((b["box"][1] + b["box"][3] for b in prev.blocks), default=TOP) if prev is not None and prev.kind == "content" else None
         hh = note_h(f"{UPDATES_TITLE}. {sub}")
         tall = table_height(wh, rows, ww, CW)
+        fl = next((b for b in prev.blocks if b["kind"] == "flow"), None) if prev is not None and prev.title == "Tailwinds and risks" else None
+        if fl is not None and len(rows) <= MERGE_ROWS:
+            # deck89: under the tailwinds and risks, their type made smaller (down to the flow's own) until the short list fits above the
+            # page's footnote
+            ft = _footnote(prev)
+            floor_ = ft["box"][1] if ft else BOT
+            fx, fy, fw, fh0 = fl["box"]
+            need = 0.25 + hh + 0.07 + tall + 0.1 + nh + 0.05
+            for z in (17, 16, 15, 14, 13, FLOW_TEXT):
+                if z > fl.get("size", FLOW_TEXT):
+                    continue
+                placed = flow_layout({**fl, "size": z})
+                if len(placed) < len(fl["items"]):
+                    continue
+                nat = max(py + ph for _, _, py, _, ph in placed) + FLOW_PAD - fy
+                if fy + nat + need <= floor_:
+                    fl["box"], fl["size"] = (fx, fy, fw, nat), z
+                    used = fy + nat
+                    break
+            else:
+                used = None
+            if used is not None:
+                y = used + 0.25
+                prev.add("text", (M, y, CW, hh), paras=[f"{UPDATES_TITLE}. {sub}"], size=BODY_MIN, floor=BODY_MIN, color=INK2)
+                prev.add("table", (M, y + hh + 0.07, CW, tall), head=wh, rows=rows, widths=ww, numeric=[False] * len(wh))
+                prev.add("text", (M, y + hh + 0.07 + tall + 0.1, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+                prev.also = list(getattr(prev, "also", None) or []) + [UPDATES_TITLE]
+                return
         if used is not None and len(rows) <= MERGE_ROWS and used + 0.25 + hh + 0.07 + tall + 0.1 + nh <= BOT:
             y = used + 0.25
             prev.add("text", (M, y, CW, hh), paras=[f"{UPDATES_TITLE}. {sub}"], size=BODY_MIN, floor=BODY_MIN, color=INK2)
@@ -4744,7 +4825,7 @@ def source_records(ch: dict) -> list[dict]:
         [{**x, "key": "net", "value": x.get("net"), "state": "unverified_extreme", "checks": x.get("checks") or []} for x in ch.get("one_off") or []]
 
 
-SOURCES_HEAD, SOURCES_WIDTHS = ["Company", "Figure, state", "Source, period", "Statement lines, as stored", "What the lines show"], [2.0, 1.4, 2.0, 4.4, 2.4]
+SOURCES_HEAD, SOURCES_WIDTHS = ["Company", "Figure, state", "Source, period", "Statement lines, as stored", "What the lines show"], [1.9, 1.3, 1.8, 4.2, 2.9]
 
 
 def _figure_sources(slides: list, v: dict, eyebrow: str) -> None:
@@ -6515,7 +6596,7 @@ def complete_flags(slides: list) -> list[dict]:
             flag(s, s.title, "a page for a table of one row")           # LIVE6-008: one row joins another page
         m = _PAGED.match(s.title or "")
         base, k, n = (m.group(1), int(m.group(2)), int(m.group(3))) if m else (s.title, 1, 1)
-        if any(b["kind"] == "table" for b in s.blocks):
+        if any(b["kind"] == "table" for b in s.blocks) or m:          # deck89: a numbered page with no table (cards) is still one of its run
             runs.setdefault(base, []).append((k, n, s))
     for base, pages in runs.items():
         ks, ns = [k for k, _, _ in pages], {n for _, n, _ in pages}
@@ -6713,6 +6794,265 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
             "dropped_n": len(every)}
 
 
+# ---------- deck89 (the owner, 25 Nov, of the live alcoholic-beverages deck: "it looks absolutely trash ... sort everything out and get
+# fixing everything"): a theme deck that reads like research, not an engine's audit log. The story first (findings, the value chain, each
+# layer, growth, valuation, price, tailwinds and risks), a chart on most pages, big readable numbers, plain words and short footnotes; the
+# checks, the coverage, the marks' meanings and the long method notes in the appendix's "Method and coverage", so nothing true is lost ----------
+METHOD_TITLE = "Method and coverage"
+CONF_HEAD = ["Check", "What it found", "What the deck does"]
+NOTES_HEAD = ["Page", "Note"]
+# the engine's own words for how a company got in, said only in the appendix (one small legend line elsewhere is fine)
+AUDIT_WORDS = re.compile(r"description-verified|industry-supported|list-supported|\bnot checked\b|membership checked|in each calculation", re.I)
+PLACEHOLDER_CELL = re.compile(r"^–\s*\(\d[\d,]*(?: of \d[\d,]*)?\)$")          # "– (2)", "– (1 of 2)": a median of too few companies
+FEW_NOTE = f"–: fewer than {MIN_BASE} companies have the figure, so no median is shown."
+FILL_MIN = 0.45                   # a content page's blocks fill at least this share of its body's height (the cover and contents apart)
+FOOT_LINES = 2                    # a body page's footnote is at most this many lines; the rest of it goes to the appendix's notes
+FOOT_H = FOOT_LINES * _lh(BODY_MIN) + 0.05
+MORE_NOTES = f"More: ⟦{METHOD_TITLE}⟧."
+# the body's parts in the story's order, each with the titles it holds (a title that starts with one of them); the appendix after them
+STORY = (("Findings", ("Key findings",)),
+         ("The value chain", ("The value chain by layer", "Size and shape", "Layer ", "Smaller layers",
+                              "Operating figures", "Sector operating figures")),
+         ("Industry economics", ("Layers side by side", "Median EBITDA margin and ROCE", "Median ROE and Net margin", "Growth and profitability",
+                                 "What moved the aggregate margin", "Questions the figures raise")),
+         ("The theme in numbers", ("Valuation", "The latest quarter against a year earlier", "Balance sheet and cash", "Price")),
+         ("Tailwinds and risks", ("Tailwinds and risks", "Dated company updates")))
+APPENDIX_ORDER = ("Every company's figures", METHOD_TITLE, "How the figures are built", "Each layer on its own measures", "Who is in each layer's calculations",
+                  "Figure sources", "Comparison basis")
+
+
+def _story_rank(title: str) -> tuple[int, int]:
+    """Where a slide goes: (part, place within the part); the appendix's pages after every part, in APPENDIX_ORDER."""
+    base = re.sub(r" \(\d+ of \d+\)$", "", title)
+    for p, (_, heads) in enumerate(STORY):
+        for k, h in enumerate(heads):
+            if base.startswith(h):
+                return p, k
+    for k, h in enumerate(APPENDIX_ORDER):
+        if base.startswith(h):
+            return len(STORY), k
+    return len(STORY) - 1, 99           # anything else: at the end of the body, before the appendix
+
+
+def is_appendix(sl) -> bool:
+    return bool(sl.eyebrow) and sl.eyebrow.endswith("· Appendix")
+
+
+def placeholder_cells(slides: list) -> list[str]:
+    """deck89 (owner: no placeholder cells): every "– (2)" / "– (1 of 2)" cell made "–", a column "–" in every row dropped, and the slide's
+    one short note on why ("–: fewer than 3 companies have the figure"). The titles of the slides changed."""
+    out = []
+    for s in slides:
+        hit = False
+        for b in s.blocks:
+            if b["kind"] == "table":
+                for r in b.get("rows") or []:
+                    if isinstance(r, dict):
+                        continue
+                    for i, x in enumerate(r):
+                        if isinstance(x, str) and PLACEHOLDER_CELL.match(x.strip()):
+                            r[i] = "–"
+                            hit = True
+                if hit:
+                    _drop_dash_columns(b)
+            elif b["kind"] == "stats":
+                items = []
+                for it in b.get("items") or []:
+                    if isinstance(it, tuple) and isinstance(it[1], str) and PLACEHOLDER_CELL.match(it[1].strip()):
+                        it = (it[0], "–", *it[2:])
+                        hit = True
+                    items.append(it)
+                b["items"] = items
+        if hit:
+            out.append(s.title)
+            foot = _footnote(s)
+            if foot is not None and FEW_NOTE not in " ".join(map(str, foot["paras"])):
+                foot["paras"] = [FEW_NOTE + " " + " ".join(map(str, foot["paras"]))]
+            elif foot is None:
+                s.few = True                   # said in the appendix's notes (short_footnotes)
+    return out
+
+
+def _drop_dash_columns(b: dict) -> None:
+    """A table's columns "–" or empty in every row dropped (the first kept), its colours, bold columns and widths with them."""
+    head = b.get("head") or []
+    plain = [r for r in b.get("rows") or [] if not isinstance(r, dict)]
+    keep = [i for i in range(len(head)) if i == 0 or head[i] == "Slide" or any(_cell_text(r[i]).strip() not in ("", "–") for r in plain if i < len(r))]
+    if len(keep) == len(head):
+        return
+    at = {old: new for new, old in enumerate(keep)}
+    b["head"] = [head[i] for i in keep]
+    b["widths"] = [b["widths"][i] for i in keep]
+    if b.get("numeric"):
+        b["numeric"] = [b["numeric"][i] for i in keep]
+    b["rows"] = [r if isinstance(r, dict) else [r[i] for i in keep] for r in b.get("rows") or []]
+    if b.get("colors"):
+        b["colors"] = {(r, at[c]): col for (r, c), col in b["colors"].items() if c in at}
+    if b.get("full"):
+        b["full"] = [at[c] for c in b["full"] if c in at]
+
+
+def _footnote(s) -> dict | None:
+    """A body page's footnote: its last muted text block that sits on the page's bottom edge."""
+    got = [b for b in s.blocks if b["kind"] == "text" and b.get("color") == MUTED and b["box"][1] + b["box"][3] >= BOT - 0.12 and b.get("paras")]
+    return got[-1] if got else None
+
+
+def _lines(paras, w: float, size: float = BODY_MIN) -> int:
+    return sum(len(wrap(str(p), size, w)) for p in paras)
+
+
+def short_footnotes(slides: list, notes: list) -> None:
+    """deck89 (owner, R19 and 25 Nov: short footnotes): a body page's footnote longer than FOOT_LINES lines keeps its first whole sentences
+    that fit, with a pointer to the appendix, and its whole text goes to the appendix's notes (`notes`: [page title, note]); the room it
+    leaves goes back to the blocks above it."""
+    for s in slides:
+        if s.kind != "content" or is_appendix(s) or s.title == "Contents":
+            continue
+        if getattr(s, "few", False):
+            notes.append([s.title, FEW_NOTE])
+        b = _footnote(s)
+        if b is None:
+            continue
+        x, y, w, h = b["box"]
+        text = " ".join(str(p) for p in b["paras"])
+        if _lines([text], w) <= FOOT_LINES:
+            continue
+        notes.append([s.title, text])
+        short = text
+        while short and _lines([short + " " + MORE_NOTES], w) > FOOT_LINES:
+            short = _shorter(short) or ""
+        b["paras"] = [(short + " " + MORE_NOTES).strip()]
+        nh = _lines(b["paras"], w) * _lh(BODY_MIN) + 0.05
+        gain = h - nh
+        if gain <= 0.05:
+            continue
+        b["box"] = (x, BOT - nh, w, nh)
+        for o in s.blocks:                       # the blocks that stood on the old footnote's top take its room
+            if o is b:
+                continue
+            ox, oy, ow, oh = o["box"]
+            if 0 <= y - (oy + oh) <= 0.45 and o["kind"] in ("table", "hbars", "columns", "lines", "cards", "flow", "text"):
+                if o["kind"] == "text" and o.get("color") == MUTED:
+                    o["box"] = (ox, oy + gain, ow, oh)          # a line under a table moves down with it
+                    continue
+                o["box"] = (ox, oy, ow, oh + gain)
+
+
+def body_fill(sl) -> float:
+    """The share of a content page's body height its blocks fill, from the top of the body to the bottom of its lowest block that is not a
+    footnote (a table at its drawn height)."""
+    if sl.kind != "content":
+        return 1.0
+    low = TOP
+    for b in sl.blocks:
+        x, y, w, h = b["box"]
+        if b["kind"] == "text" and b.get("color") == MUTED and y + h >= BOT - 0.12:
+            continue
+        if b["kind"] == "table":
+            try:
+                h = sum(table_layout(b, w, h)["heights"])
+            except Exception:              # noqa: BLE001 (a table the layout can't size counts as its box)
+                pass
+        elif b["kind"] == "flow":
+            placed = flow_layout(b)
+            h = (max(py + ph for _, _, py, _, ph in placed) + FLOW_PAD - y) if placed and not b.get("fill") else h
+        elif b["kind"] == "cards" and not b.get("fill"):
+            bx = card_boxes(b)
+            h = max(cy + ch for _, cy, _, ch in bx) - y if bx else h
+        low = max(low, y + h)
+    return (low - TOP) / (BOT - TOP)
+
+
+def _method_pages(audit: list, cards: list, notes: list, eyebrow: str) -> list:
+    """deck89 (owner, 25 Nov: about 12 of 38 pages were the engine's audit): the appendix's "Method and coverage": first, in plain words, how
+    the companies got in, who is in the figures, how to read them and what the deck leaves out (four cards); then what the data-confidence
+    and coverage pages said (each check and what it found, the counts, the coverage table) and each body page's notes in full. One page
+    where it fits, else it runs on, "(2 of 3)"."""
+    conf_rows, cov_rows, counts = [], [], []
+    for s in audit:
+        for b in s.blocks:
+            if b["kind"] == "table" and b.get("head") == CONF_HEAD:
+                conf_rows += list(b.get("rows") or [])
+            elif b["kind"] == "table" and b.get("head") == COVERAGE_HEAD:
+                cov_rows += list(b.get("rows") or [])
+            elif b["kind"] == "text":
+                counts += [str(p) for p in b.get("paras") or [] if str(p).startswith("Counts:")]
+    line = "How the companies got in, how far the figures go and how to read them, in plain words; then every check, the coverage and each page's notes"
+    pages: list = []
+    y = BOT
+
+    def page():
+        nonlocal y
+        pages.append(Slide(METHOD_TITLE, line, eyebrow=eyebrow))
+        y = TOP
+
+    page()
+    cw2 = (CW - 0.25) / 2
+    cards = [c for c in cards if c.get("lines")]
+    size = next((z for z in (12, BODY_MIN) if sum(max(card_height(c, cw2, True, z) for c in cards[i:i + 2]) for i in (0, 2) if cards[i:i + 2]) + 0.25
+                 <= BOT - TOP), BODY_MIN)
+    for pair in (cards[:2], cards[2:]):
+        if not pair:
+            continue
+        h = max(card_height(c, cw2, True, size) for c in pair)
+        if y + h > BOT and y > TOP:
+            page()
+        h = min(h, BOT - y)
+        pages[-1].add("cards", (M, y, CW, h), cols=2, bullets=True, items=pair, size=size)
+        y += h + 0.22
+
+    def table(head, rows, widths, title=None):
+        """Whole rows packed onto the pages in turn (a row taller than a page cut into pieces first), the heading repeated on each."""
+        nonlocal y
+        rows = split_tall(head, list(rows), widths, CW, BOT - TOP - 0.45)
+        lead = title
+        while rows:
+            top = y + (0.34 if lead else 0)
+            k = 0
+            while k < len(rows) and top + table_height(head, rows[:k + 1], widths, CW) <= BOT:
+                k += 1
+            if not k:
+                if y > TOP:
+                    page()
+                    continue
+                k = 1
+            if lead:
+                pages[-1].add("text", (M, y, CW, 0.28), paras=[lead], size=12, floor=12, bold=True, color=INK2)
+                lead = None
+            h = min(BOT - top, table_height(head, rows[:k], widths, CW))
+            pages[-1].add("table", (M, top, CW, h), head=head, rows=rows[:k], widths=widths, numeric=[False] * len(head), tight=True)
+            y = top + h + 0.22
+            rows = rows[k:]
+            if rows:
+                page()
+
+    table(CONF_HEAD, conf_rows, [1.8, 6.6, 3.7], "Each check on the figures, what it found and what the deck does")
+    for c in counts:
+        h = note_h(c)
+        if y + h > BOT:
+            page()
+        pages[-1].add("text", (M, y, CW, h), paras=[c], size=BODY_MIN, floor=BODY_MIN, color=INK2)
+        y += h + 0.22
+    table(COVERAGE_HEAD, cov_rows, [1.8, 1.4, 8.9], "Coverage: how many companies, how much market value and which figures")
+    # each page's notes, a sentence said once: the same mark's meaning under five layers is one sentence, under the first
+    said, rows_ = set(), []
+    for t, n in notes:
+        keep = [x for x in _SENT.split(str(n)) if x.strip() and x.strip() not in said]
+        said |= {x.strip() for x in keep}
+        if keep:
+            rows_.append([t, " ".join(keep)])
+    table(NOTES_HEAD, rows_, [2.8, 9.3], "Notes to the pages")
+    if len(pages) > 1:
+        for k, x in enumerate(pages):
+            x.title = f"{METHOD_TITLE} ({k + 1} of {len(pages)})"
+    return pages
+
+
+def money_fmt(us: bool) -> str:
+    return "usd" if us else "inr"
+
+
 def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     """A theme deep dive's slides, one for each part of the page and in its order (DECK, 5 Nov: "it doesn't contain everything there is on
     the page about the theme"): the cover (the overview and the core), the theme at a glance (how its companies got in, the funds that track
@@ -6759,6 +7099,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     wide = set(v.get("company_wide") or [])
     med = v.get("median_ebitda")
     left_out: list[tuple] = []               # ("none" | "unread", what): what the page can show that this theme has none of, said once at the end
+    page_notes: list[list] = []              # deck89: [page title, note]: a body page's long notes, in full in the appendix's "Method and coverage"
     slides: list[Slide] = []
     eb = lambda part: f"{sector} · {part}"  # noqa: E731
     size = sec.get("size") or {}
@@ -6912,8 +7253,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         head, rows, widths, _ = drop_empty(head, rows, widths)
         mark = {chain.get("highest"): UP, chain.get("lowest"): DOWN}
         key = chain.get("measure") or "ebitda"
-        # a chart follows the table's rule (R21): a layer is plotted only on a median of MIN_BASE companies or more, its count in its label
-        charted = [r for r in rows_c if r.get(key) is not None and (r.get(f"{key}_n") or 0) >= MIN_BASE]
+        # deck89 (owner, 25 Nov): the value chain's chart is its revenue by layer, beside a narrow table or under a wide one; the layers'
+        # medians side by side are charted on "Layers side by side"
+        charted = [r for r in rows_c if r.get("revenue")]
         chart = 2 <= len(charted) <= 14 and len(head) <= 5         # a wide table keeps the full width (R25; R34, GPT review of R31.5: label columns pressed to a few letters)
         tw = 7.3 if chart else CW
         # e79 (LIVE15A-012, the live R77 Semiconductors deck: "amounts in $ million" under "$191.7 bn" cells): the units read off the table's
@@ -6970,36 +7312,26 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if figures_scope(v):              # r67e (P1-2): the map's members and the companies whose figures are worked out, said apart
             foot.append(figures_scope(v))
         # e54: room for the population, consolidated-figures and ways-of-earning notes too (the table goes on over more pages)
-        fh = min(2.3, len(wrap(" ".join(foot), BODY_MIN, CW)) * _lh(BODY_MIN) + 0.05)
+        fh = min(FOOT_H, len(wrap(" ".join(foot), BODY_MIN, CW)) * _lh(BODY_MIN) + 0.05)      # deck89: two lines on the page, the rest in the appendix
         th = BOT - TOP - fh - 0.2
         pages = table_pages(head, rows, widths, tw, th)
         for k, chunk in enumerate(pages):
             s = Slide("The value chain by layer" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
                       chain.get("line") or f"Each layer's companies, their revenue added together ({unit}), and the layer's median margins",
                       eyebrow=eb("The value chain"))
-            s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths,
+            tall = sum(table_layout({"head": head, "rows": chunk, "widths": widths, "tight": True, "compact": True}, tw, 99)["heights"])
+            below = k == 0 and not chart and 2 <= len(charted) <= 14 and th - tall - 0.3 >= max(1.7, 0.24 * len(charted) + 0.45)
+            s.add("table", (M, TOP, tw, tall if below else th), head=head, rows=chunk, widths=widths, tight=below, compact=below,
                   colors={(i, 0): mark[r[0]] for i, r in enumerate(chunk) if r[0] in mark and r[0]})
+            rv = dict(title=f"Revenue by layer ({unit}, its companies added together)", cats=[adjacent_label(r["layer"], r.get("adjacent")) for r in charted],
+                      vals=[r["revenue"] for r in charted], fmt=money_fmt(us))
             if chart and k == 0:
-                bcats, bcols = bar_marks(chain, charted, key)
-                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=bcats,
-                      vals=[r[key] for r in charted], colors=bcols, fmt="pctw" if whole and key == "ebitda" else "pct")
+                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), **rv)
+            elif below:
+                s.add("hbars", (M, TOP + tall + 0.3, CW, th - tall - 0.3), **rv)
             s.add("text", (M, BOT - fh, CW, fh), paras=[" ".join(foot)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
-        if not chart and len(head) > 5 and 2 <= len(charted) <= 14:
-            # R35: a table of more than four figure columns keeps the full width, so its chart (R34 left it out) has a page of its own
-            # after it: the layers' medians side by side, each name whole, only with two layers or more on a median of MIN_BASE companies
-            mname = "ROE" if key == "roe" else "EBITDA margin"
-            un_ = unranked_words(chain) if chain.get("highest") else ""
-            cnote = (f"Each bar: the layer's median company, latest full year; its count of companies in its label. A layer is drawn on a median of "
-                     f"{MIN_BASE} companies or more; every layer is in the table before this page."
-                     + (f" Grey bars are not ranked. {un_}" if un_ else "") + f" How the figure is built: ⟦{NOTES_TITLE}⟧.")
-            ch_ = note_h(cnote)
-            s = Slide(f"Median {mname} by layer", chain.get("line") or f"Each layer's median company's {mname}, the layers side by side", eyebrow=eb("The value chain"))
-            bcats, bcols = bar_marks(chain, charted, key)
-            s.add("hbars", (M, TOP, CW, min(BOT - TOP - ch_ - 0.2, 1.2 * len(charted) + 0.3)),
-                  cats=bcats, vals=[r[key] for r in charted], colors=bcols, fmt="pctw" if whole and key == "ebitda" else "pct")
-            s.add("text", (M, BOT - ch_, CW, ch_), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
-            slides.append(s)
+        # deck89: no page of one chart after the table; "Layers side by side" charts the layers' medians
     elif v.get("members_with_figures") == 0 or not shown:
         left_out.append(("none", "the value chain's figures (no company has stored figures)"))
 
@@ -7122,6 +7454,21 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                       + (common or "")).strip()
         card = {"title": "What this layer does", "lines": [clip(desc, 13, CW - 0.5, 3)] + [x for x in (common, official) if x], "note": AI_NOTE} if desc else \
             {"title": "Who is here", "lines": [x for x in (common, official) if x]} if official or common else None
+        # deck89 (owner, 25 Nov: more room for the figures and a chart): what the layer does in two lines above its table, who wrote it said
+        # with it; what its companies have in common and who is here go to the appendix's notes
+        lead_, full_ = "", f"What this layer does (written by AI from general knowledge, with no figures): {desc}" if desc else ""
+        if desc:
+            for n_l in (1, 2):
+                lead_ = clip(full_, 12, CW, n_l)
+                if lead_[-1:] in ".!?":
+                    break
+        rest_ = [x for x in (common, official) if x]
+        if not lead_ and rest_:
+            full_ = rest_[0]
+            lead_, rest_ = clip(rest_[0], 12, CW, 2), rest_[1:]
+        if rest_ or lead_ != full_:
+            page_notes.append([title, " ".join(([full_] if lead_ != full_ else []) + rest_)])
+        card, intro_lead = None, [lead_] if lead_ else []
         hist = layer.get("history") or {}
         mkey, mname = ("roe", "ROE") if lend else ("ebitda", "EBITDA margin")
         # r60b (R60, deck_check's "outlier range" on the live R59 Software deck, p.30: a company spending ahead of its revenue, −1080.1% EBITDA
@@ -7132,7 +7479,12 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         bars = [c for c in cos if c.get(mkey) is not None and c["symbol"] not in unsure | unmodelled and not not_meaningful(c, mkey)
                 and not (c.get("developer") and mkey in DEVELOPER_KEYS) and not (c.get("distress") and mkey in DISTRESS_KEYS)]
         chart = None
-        if len(hist.get("years") or []) >= 2 and not lend and (hist.get("n") or 0) >= MIN_BASE:       # an aggregate of 3 or more (R21)
+        # deck89 (owner, 25 Nov): a layer's chart is its companies' market value, the largest first (each one's margins are on its row)
+        capped = [c for c in cos if c.get("cap") and c["symbol"] not in unsure]
+        if len(capped) >= 2:
+            top = sorted(capped, key=lambda c: -c["cap"])[:8]
+            chart = {"kind": "hbars", "title": "Market value by company", "cats": [c["name"] for c in top], "vals": [c["cap"] for c in top], "fmt": money_fmt(us)}
+        elif len(hist.get("years") or []) >= 2 and not lend and (hist.get("n") or 0) >= MIN_BASE:       # an aggregate of 3 or more (R21)
             chart = {"kind": "lines", "title": f"Margins by year, the same {_n(hist.get('n') or 0, 'company', 'companies')}",
                      "cats": hist["years"], "series": [("EBITDA margin", hist["ebitda"], BLUE), ("Net margin", hist["net"], ORANGE)], "fmt": "pct", "labels": True}
         elif len(bars) >= 2:
@@ -7199,8 +7551,14 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if any(c.get("nc") for c in cos):
             fparts.append("n.c.: not comparable, the figure is on another basis than the rest of its column (latest full year against filed "
                           "results annualised), so it is left out of the median.")
-        chh = min(1.75, card_height(card, CW)) if card else 0.0
-        below = TOP + (chh + 0.2 if card else 0)
+        if fparts:
+            # deck89 (owner, 25 Nov: short footnotes): what the marks on the layer's rows mean and who is in its figures, in full in the
+            # appendix's notes; the page keeps one line that says where
+            page_notes.append([title, " ".join(fparts)])
+            fparts = [f"What the marks on its rows mean, and who is in its figures: ⟦{METHOD_TITLE}⟧."]
+        chh = 0.0
+        intro = list(intro_lead)
+        below = TOP + (len(wrap(intro[0], 12, CW)) * _lh(12) + 0.15 if intro else 0)
         rest_h = REST_H if len(body) > 1 else 0
         def foot(parts):            # the page's notes and the room they need: who is in the calculations, then what the marks mean
             ps = [x for x in (rline, " ".join(parts)) if x]
@@ -7213,6 +7571,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             while k > 1 and table_height(head, body[:k] + tail, widths, tw_) > room - (rest_h if k < len(body) else 0):
                 k -= 1
             return k
+        chart0 = chart                     # deck89: kept for a place under the table when there is none beside it
         if chart and len(head) > 8:          # a wide table (a lender's own measures and its filed figures, R23) keeps the full width: no words broken
             chart = None
         tw = CW - 3.9 if chart else CW
@@ -7242,7 +7601,6 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             head, widths = head[:j_] + head[j_ + 1:], widths[:j_] + widths[j_ + 1:]
             body, tail = [r_[:j_] + r_[j_ + 1:] for r_ in body], [r_[:j_] + r_[j_ + 1:] for r_ in tail]
             k_fit = fits(tw)
-        intro = []
         if k_fit < want and card:
             # the card's words as a paragraph at the notes' size above the table (what the layer does, in two lines of whole sentences
             # where they fit, who wrote it, and what its companies have in common)
@@ -7339,12 +7697,19 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if card:
             s.add("cards", (M, TOP, CW, chh), cols=1, fill=True, items=[card])
         elif intro:
-            s.add("text", (M, TOP, CW, below - TOP - 0.1), paras=intro, size=BODY_MIN, floor=BODY_MIN)
+            s.add("text", (M, TOP, CW, below - TOP - 0.1), paras=intro, size=12 if intro == intro_lead else BODY_MIN, floor=BODY_MIN, color=INK2)
         th = room - (REST_H if k_fit < len(body) else 0)
-        s.add("table", (M, below, tw, th), head=head, rows=body[:k_fit] + tail, widths=widths, strong=list(range(k_fit, k_fit + len(tail))), tight=True)
+        # deck89: a chart that has no room beside the table goes under it, where every row shows and room is left for its bars
+        tall_ = table_height(head, body[:k_fit] + tail, widths, CW)
+        n_bars = len(chart0.get("cats") or chart0.get("series") or []) if chart0 else 0
+        under = not chart and chart0 and k_fit == len(body) and tw == CW and room - tall_ - 0.3 >= max(1.6, 0.26 * n_bars + 0.45)
+        s.add("table", (M, below, tw, tall_ if under else th), head=head, rows=body[:k_fit] + tail, widths=widths, strong=list(range(k_fit, k_fit + len(tail))), tight=True)
         if chart:
             c = dict(chart)
             s.add(c.pop("kind"), (M + tw + 0.4, below, CW - tw - 0.4, room), **c)
+        elif under:
+            c = dict(chart0)
+            s.add(c.pop("kind"), (M, below + tall_ + 0.3, CW, room - tall_ - 0.3), **c)
         if k_fit < len(body):
             s.add("text", (M, below + th + 0.04, CW, REST_H - 0.04), paras=[f"{shown_label(cos, k_fit)}; every one: appendix, ⟦Every company's figures⟧."],
                   size=BODY_MIN, floor=BODY_MIN, color=MUTED)
@@ -7386,7 +7751,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
 
     # r60: a layer kept with one company on its own words (single_kept) shows those words, on the page, even as its one row
     if sum(confirmed_n(x) for x in small) >= 2 or any(x.get("single_kept") for x in small):      # LIVE6-008: no page for a table of one row: one such layer is a row of the value chain's
-        _smaller_layers(slides, small, amt, eb("The value chain"))         # table and its company a row of the appendix
+        _smaller_layers(slides, small, amt, eb("The value chain"), money_fmt(us))         # table and its company a row of the appendix
 
     # the operating figures of every layer and sub-theme on one or two pages, each company once, grouped by layer (R18: a page for each layer,
     # and HDFC Bank's figures on two layers' pages); the rest of a long list is in the appendix
@@ -7419,21 +7784,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             made[0].subtitle = (f"Operating figures filed with the exchange between results, as filed: {kept} of "
                                 f"{sum(1 for r in flat if 'group' not in r)} companies' figures; the rest are on the theme's page")       # R20: the rows, not the headings
 
-    # 5. sub-themes: one compact page, each sub-theme with up to five of its companies by name (R19: no long per-company list)
+    # 5. sub-themes (deck89, owner 25 Nov: "Sub-themes" repeats the layers): no page; how many there are, and that each with its companies is on
+    # the theme's page, is said in the appendix's "Method and coverage"
     all_subs = v.get("subs") or []
     subs = [sub for sub in all_subs if sub.get("companies")]           # a sub-theme with no confirmed company is a count, not a row
-    if subs:
-        rows = [[sub["name"], whole_clause(sub.get("detail") or "", 160) or "–", str(len(sub.get("companies") or [])),
-                 names5(sorted(sub.get("companies") or [], key=lambda c: -(c.get("cap") or 0))) or "None description-verified"] for sub in subs]
-        head, widths = ["Sub-theme", "What it is", "Companies", "The largest, by market value"], [2.4, 4.6, 1.2, 4.0]
-        note = "Each sub-theme's description is written by AI from general knowledge, with no figures; a company is shown only where its own description says it does that work."
-        nh = note_h(note)
-        first = table_pages(head, rows, widths, CW, BOT - TOP - nh - 0.07)[0]
-        s = Slide("Sub-themes", f"{_n(len(all_subs), 'sub-theme')}, {len(subs)} with a listed company" + (f"; {len(first)} shown, the rest on the theme's page" if len(first) < len(rows) else ""),
-                  eyebrow=eb(vc_part))
-        s.add("table", (M, TOP, CW, BOT - TOP - nh - 0.07), head=head, rows=first, widths=widths, numeric=[False, False, True, False])
-        s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
-        slides.append(s)
 
     # 5b. industry economics: the layers side by side, what moved the aggregate margin, and the questions the figures raise (R17-015)
     if chained:
@@ -7568,6 +7922,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         cols, pages = 2, flow_pages(items, box, 2)
         if len(pages) > 1 and len(flow_pages(items, box, 3)) < len(pages):
             cols, pages = 3, flow_pages(items, box, 3)
+        # deck89 (owner, 25 Nov: no page with a box at the top and nothing under it): the claims in the largest type that keeps them on one
+        # page, each column a card the page's height
+        fsize = next((z for z in (17, 16, 15, 14, 13) if len(flow_pages(pages[0], box, cols, z)) == 1), FLOW_TEXT)
         first = pages[0]
         nt, nr = sum(1 for x in first if x["tags"][0][0] == "Tailwind"), sum(1 for x in first if x["tags"][0][0] == "Risk")
         # R27: the count is of the claims this page shows (the denominator the page itself has), never of every claim the map holds
@@ -7584,9 +7941,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         section("", "Tailwinds and risks", f"{_n(nt, 'tailwind')} and {_n(nr, 'risk')} shown, {dated_n} with a dated source"
                 + ("; the rest are on the theme's page." if len(first) < len(claims) else "."))
         s = Slide("Tailwinds and risks", sub_line, eyebrow=eb("Tailwinds and risks"))
-        s.add("flow", box, cols=cols, items=first)
+        s.add("flow", box, cols=cols, items=first, size=fsize, fill=True)
         s.add("text", (M, BOT - cnh, CW, cnh), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
+    _updates(slides, watch_list(v, now_d), eb("Tailwinds and risks"))      # deck89: the dated updates after the tailwinds and risks
     left_out.append(("unread", "the latest headlines and new listings"))
 
     # 8. the theme in numbers
@@ -7624,45 +7982,56 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     cards_n = [{"title": "How the companies got in", "lines": overview_how}, {"title": "Who is in it", "lines": who},
                {"title": "Reading the figures", "lines": read}, {"title": "Not in this deck, and what the AI wrote", "lines": lo_text}]
     closing = THEME_DISCLAIMER + " The AI's layers and additions can be wrong: check a company's own description."
-    room = BOT - TOP - note_h(closing) - 0.1
-    cw2 = (CW - 0.25) / 2
-
-    def notes_h(size):
-        return max(card_height(cards_n[0], cw2, True, size), card_height(cards_n[1], cw2, True, size)) + 0.25 + \
-            max(card_height(cards_n[2], cw2, True, size), card_height(cards_n[3], cw2, True, size))
-    tsize = next((z for z in (13, 12, BODY_MIN) if notes_h(z) <= room), BODY_MIN)
-    while notes_h(tsize) > room and any(len(c["lines"]) > 1 for c in cards_n):          # one page whatever: the longest card gives up a line
-        big = max(cards_n, key=lambda c: card_height(c, cw2, True, tsize) if len(c["lines"]) > 1 else 0)
-        big["lines"] = big["lines"][:-1]
-    s = Slide("How to read this deck", "How each company got into the theme, what the figures are, and what the AI wrote", eyebrow=eb("Notes"))
-    h1 = max(card_height(cards_n[0], cw2, True, tsize), card_height(cards_n[1], cw2, True, tsize))
-    h2 = min(room - h1 - 0.25, max(card_height(cards_n[2], cw2, True, tsize), card_height(cards_n[3], cw2, True, tsize)))
-    s.add("cards", (M, TOP, CW, h1), cols=2, bullets=True, items=cards_n[:2], size=tsize)
-    s.add("cards", (M, TOP + h1 + 0.25, CW, h2), cols=2, bullets=True, items=cards_n[2:], size=tsize)
-    s.add("text", (M, BOT - note_h(closing), CW, note_h(closing)), paras=[closing], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
-    notes = s
-    slides.append(s)
+    if subs:              # deck89: no sub-themes page (it repeats the layers)
+        lo_text.insert(len(lo_text) - 1, f"The {_n(len(subs), 'sub-theme')} with a listed company, each with its companies: on the theme's page.")
+    lo_text.append(closing)
     fin = any(c.get("bank") for x in layers for c in x.get("companies") or []) or any(x.get("bank") for x in sec.get("leaders") or [])
-    built = notes_slides(slides + later_slides, eb("Notes"), fin, layers)      # R25: one page on how the figures shown are built, before the appendix
-    slides.extend(built)
+    built = notes_slides(slides + later_slides, eb("Appendix"), fin, layers)      # R25: how the figures shown are built (deck89: in the appendix)
     if not members:
         s = Slide("No company yet", "No company has been placed in this theme yet", eyebrow=eb("Notes"))
         s.add("cards", (M, TOP, CW, 1.2), cols=1, fill=True, items=[{"title": "What to do", "lines": ["Try a more specific theme on the Themes page, then download the deck again."]}])
         slides.append(s)
-    # the appendix: the one table of every confirmed company's figures, and nothing else
-    slides.extend(later_slides)
-    ends = [at for _, _, at in parts[1:]] + [len(slides)]
-    firsts = [(t, line, next(iter(slides[at:end]), None)) for (t, line, at), end in zip(parts, ends)]
-    crow = [[t, line, str(slides.index(first) + 1)] for t, line, first in firsts if first is not None and first.eyebrow and "Appendix" not in first.eyebrow]
-    crow.append(["Notes", "How the companies got in, how to read the figures and what isn't in this deck.", str(slides.index(notes) + 1)])
-    if built:
-        crow.append([NOTES_TITLE, "What each figure shown measures, how it is worked out, its period and source, and its limits.", str(slides.index(built[0]) + 1)])
-    if later_slides:
-        apx = [x for x in (f"Every member company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
-                           "who is in each layer's calculations" if roll_end > fig_pages else "",
-                           "each checked figure's source and statement lines" if sources_end > roll_end else "",              # R46
-                           "each comparison's companies and rule" if len(later_slides) > sources_end else "") if x]          # R48
-        crow.append(["Appendix", "; ".join(apx)[:1].upper() + "; ".join(apx)[1:] + ".", str(slides.index(later_slides[0]) + 1)])
+    # deck89 (owner, 25 Nov): the story first, the appendix after it. The data-confidence and coverage pages and the notes on how to read the
+    # deck become the appendix's "Method and coverage", with every long footnote of a body page and every placeholder said once there
+    audit = [x for x in slides if x.title == "Data confidence" or x.title.startswith(COVERAGE_TITLE)]
+    body = [x for x in slides if x not in audit]
+    apx_ = later_slides + built
+    for x in apx_:
+        x.eyebrow = eb("Appendix")
+    placeholder_cells(body + apx_ + audit)
+    short_footnotes(body, page_notes)
+    heads_ = {str(x.subtitle or "").rstrip(".") for x in body}
+    for x in body:
+        for ln in getattr(x, "dropped_lines", None) or []:          # a findings line that gave way on its page, said in full (unless a page's headline says it)
+            if ln.rstrip(".") not in heads_:
+                page_notes.append([x.title, ln])
+    method = _method_pages(audit, cards_n, page_notes, eb("Appendix"))
+    order = sorted(range(len(body)), key=lambda i: (0, 0, i) if i == 0 else (1, 0, i) if body[i] is contents else (2, *_story_rank(body[i].title), i))
+    body = [body[i] for i in order]
+    for x in body:              # each page's eyebrow says the part of the story it is in
+        if x.kind == "content" and x is not contents and x.eyebrow and _story_rank(x.title)[1] != 99:
+            x.eyebrow = eb(STORY[_story_rank(x.title)[0]][0])
+    apx_ = sorted(apx_ + method, key=lambda x: (_story_rank(x.title), (apx_ + method).index(x)))
+    slides[:] = body + apx_
+    # the contents: each part of the story with its first page, then the appendix
+    lines_ = {t: line for t, line, _ in parts}
+    lines_.setdefault("Industry economics", "Each layer's margins, returns, growth and valuation side by side, and what moved the aggregate margin.")
+    lines_["The theme in numbers"] = lines_.get("The theme in numbers") or "Valuation, the latest quarter and price."
+    crow = []
+    for k, (part, _) in enumerate(STORY):
+        got = [i for i, x in enumerate(slides) if x.kind == "content" and not is_appendix(x) and x is not contents and _story_rank(x.title)[0] == k]
+        if got:
+            crow.append([part, lines_.get(part) or "", str(got[0] + 1)])
+    fig_pages = sum(1 for x in slides if x.title.startswith("Every company's figures"))
+    apx = [x for x in (f"Every member company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
+                       "how the companies got in, every check and the notes to the pages",
+                       "how each figure is built" if built else "",
+                       "who is in each layer's calculations" if any(x.title.startswith(ROLL_TITLE) for x in slides) else "",
+                       "each checked figure's source and statement lines" if any(x.title.startswith(SOURCES_TITLE) for x in slides) else "",              # R46
+                       "each comparison's companies and rule" if any(x.title.startswith(COMPARE_TITLE) for x in slides) else "") if x]          # R48
+    first_apx = next((i for i, x in enumerate(slides) if is_appendix(x)), None)
+    if first_apx is not None:
+        crow.append(["Appendix", "; ".join(apx)[:1].upper() + "; ".join(apx)[1:] + ".", str(first_apx + 1)])
     contents.add("table", (M, TOP, CW, min(BOT - TOP, table_height(["Part", "What it holds", "Page"], crow, [2.6, 8.4, 0.9], CW))),
                  head=["Part", "What it holds", "Page"], rows=crow, widths=[2.6, 8.4, 0.9], numeric=[False, False, True], tight=True)
     slides[0].tidied = tidy_tables(slides)          # LIVE6-008: no line through under 4 points, no row of dashes, no table mostly dashes
@@ -7723,7 +8092,7 @@ LAYER_ROWS_MIN = 5              # d1: a layer's page shows at least this many of
 SPARSE_LINES = 2                # r60b: notes of this many lines or fewer never make a page of their own (they go with the layer's next rows)
 
 
-def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
+def _smaller_layers(slides: list, small: list, amt, eyebrow: str, mfmt: str = "inr") -> None:
     """Every layer with SMALL_MAX confirmed companies or fewer on one compact page (R28; d1: two as well as one): one row a company, in the
     value chain's order (never ranked): the layer (said on its first row), its company, what it does in its own words, and its key figures.
     A table that runs over a page goes on to the next."""
@@ -7792,7 +8161,14 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
                    f"{_n(len(small), 'layer')} of {SMALL_MAX} member companies or fewer, {len(rows_)} companies")
                   + ": the company, what it does and its key figures, one row each",
                   eyebrow=eyebrow)
-        s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, numeric=numeric)
+        # deck89 (owner, 25 Nov: no page with a box at the top and nothing under it): their companies' market value under a short table
+        tall = table_height(head, chunk, widths, CW)
+        capped = sorted((c for c in cos if c.get("cap")), key=lambda c: -c["cap"])[:8] if k == 0 else []
+        below = len(capped) >= 2 and th - tall - 0.3 >= max(1.7, 0.3 * len(capped) + 0.45)
+        s.add("table", (M, TOP, CW, tall if below else th), head=head, rows=chunk, widths=widths, numeric=numeric, tight=below)
+        if below:
+            s.add("hbars", (M, TOP + tall + 0.3, CW, th - tall - 0.3), title="Market value by company", cats=[c["name"] for c in capped],
+                  vals=[c["cap"] for c in capped], fmt=mfmt)
         s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
@@ -7951,17 +8327,25 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
                 + (" " + CONSOLIDATED_HEAD + "; ".join(f"{k} ({n})" for k, n in cons_) + "." if cons_ else "")
                 + (f" {prof_}" if prof_ else "")
                 + (f" Each ranking's layers, companies and rule: ⟦{COMPARE_TITLE}⟧." if bits else ""))
-        nh = note_h(note)
+        nh = min(FOOT_H, note_h(note))          # deck89: two lines on the page, the rest in the appendix (short_footnotes)
         for k, chunk in enumerate(pages := table_pages(head, rows, widths, tw, BOT - TOP - nh - 0.07)):
             s = Slide("Layers side by side" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""), msg, eyebrow=eyebrow)
             th = min(BOT - TOP - nh - 0.07, table_height(head, chunk, widths, tw))
             s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths, tight=True)
-            room.append((s, M, TOP + th + 0.25, tw, BOT - nh - 0.15 - (TOP + th + 0.25)))
             n1, n2 = ("ROE", "Net margin") if lender else ("EBITDA margin", "ROCE")
             series = [(n1, [x["ebitda"] for x in both], BLUE), (n2, [x["roce"] for x in both], ORANGE)]
+            space = BOT - nh - 0.15 - (TOP + th + 0.3)
             if beside and k == 0:
+                room.append((s, M, TOP + th + 0.25, tw, BOT - nh - 0.15 - (TOP + th + 0.25)))
                 s.add("columns", (M + tw + 0.4, TOP, CW - tw - 0.4, BOT - TOP - nh - 0.07), title=f"Median {n1} and {n2}", fmt="pct",
                       cats=[x["layer"] for x in both], series=series)
+            elif chart and k == 0 and space >= CHART_MIN:
+                # deck89 (owner, 25 Nov: no page with a box at the top and nothing under it): the layers' medians charted under the table
+                s.add("columns", (M, TOP + th + 0.3, CW, space), title=f"Median {n1} and {n2} by layer", fmt="pct", cats=[x["layer"] for x in both], series=series)
+                shrink.append((s, s.blocks[-1]))
+                charted_ = True
+            else:
+                room.append((s, M, TOP + th + 0.25, tw, BOT - nh - 0.15 - (TOP + th + 0.25)))
             s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
         if chart and not beside and not charted_:
@@ -7984,13 +8368,21 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         lw = 8.6 if len(md.get("layers") or []) > 1 else CW
         note = (f"Each company's part: its EBITDA as a share of all {md['n']} companies' revenue in {md['to']}, less the same in {md['from']}; the parts "
                 "add up to the change. A part moves with the company's own margin and with its weight in the group's revenue. The companies that moved it most.")
-        nh = note_h(note)
+        nh = min(FOOT_H, note_h(note))
         while len(rows) > 2 and table_height(head, rows, widths, lw) > BOT - TOP - nh - 0.07:
             rows.pop(-2)          # R35: long names made the table taller than its page and the total's row was left off; a company's row gives way
         s = Slide("What moved the aggregate margin", msg, eyebrow=eyebrow)
         th = min(BOT - TOP - nh - 0.07, table_height(head, rows, widths, lw))
         s.add("table", (M, TOP, lw, th), head=head, rows=rows, widths=widths, tight=True, strong=[len(rows) - 1])
-        room.append((s, M, TOP + th + 0.25, lw, BOT - nh - 0.15 - (TOP + th + 0.25)))
+        space = BOT - nh - 0.15 - (TOP + th + 0.3)
+        cos_ = md["companies"][:8]
+        if len(cos_) >= 2 and space >= max(1.8, 0.28 * len(cos_) + 0.45):
+            # deck89: each company's part of the move charted under the table, a rise green and a fall red
+            s.add("hbars", (M, TOP + th + 0.3, lw, space), title="Each company's part of the move, in points", cats=[x["name"] for x in cos_],
+                  vals=[x["part"] for x in cos_], fmt="pts", colors=[UP if (x["part"] or 0) >= 0 else DOWN for x in cos_])
+            shrink.append((s, s.blocks[-1]))
+        else:
+            room.append((s, M, TOP + th + 0.25, lw, BOT - nh - 0.15 - (TOP + th + 0.25)))
         if lw < CW:
             s.add("table", (M + lw + 0.3, TOP, CW - lw - 0.3, BOT - TOP - nh - 0.07), head=["Layer", "Part"],
                   rows=[[x["layer"], _pts(x["part"])] for x in md["layers"]], widths=[2.0, 1.0])
@@ -8921,7 +9313,10 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         rng_head = ("Range (10th to 90th percentile)" if any((val.get(k) or {}).get("p10") is not None for k in ("pe", "pb", "ev_ebitda"))
                     else "Range")
         hist = val.get("history") or []
-        lw = 7.0 if len(hist) >= MIN_POINTS else CW         # LIVE6-008: no "weekly" line through 2 points; the table keeps the page's width
+        # deck89 (owner, 25 Nov: a chart on most pages): with no P/E history to draw, the P/E of the largest companies that have one
+        pe_top = sorted((x for x in sec.get("leaders") or [] if (x.get("pe") or 0) > 0 and x.get("cap") and (v.get("status") or {}).get(x.get("symbol")) != "unverified"),
+                        key=lambda x: -x["cap"])[:10] if len(hist) < MIN_POINTS else []
+        lw = 7.0 if len(hist) >= MIN_POINTS or len(pe_top) >= 3 else CW         # LIVE6-008: no "weekly" line through 2 points; the table keeps the page's width
         # R27 (P2): how each is worked out, and who the peers are, live on the notes page; this page says only what its figures are of
         notes = []
         if val.get("losses"):
@@ -8960,6 +9355,9 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                 s.add("table", (M, y_, lw, lt), head=lh_, rows=lr_, widths=lwd, tight=True)
                 y_ += lt + 0.25
         s.add("cards", (M, y_, lw, BOT - y_), cols=1, fill=True, size=12, items=[{"title": "What the figures are of", "lines": notes}])
+        if len(pe_top) >= 3:
+            s.add("hbars", (M + lw + 0.4, TOP, CW - lw - 0.4, BOT - TOP), title=f"P/E of the {_n(len(pe_top), 'largest company', 'largest companies')} with one",
+                  cats=[name_of(x["symbol"], x["name"]) for x in pe_top], vals=[x["pe"] for x in pe_top], fmt="x")
         if len(hist) >= MIN_POINTS:
             h = hist[-26:]
             s.add("lines", (M + lw + 0.4, TOP, CW - lw - 0.4, BOT - TOP), title=f"The theme's median P/E, weekly ({_day(h[0]['d'])} to {_day(h[-1]['d'])})",
