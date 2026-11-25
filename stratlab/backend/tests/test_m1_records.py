@@ -162,7 +162,9 @@ def test_a_company_with_a_figure_but_no_revenue_stays_in_and_one_with_none_is_ou
     assert D.calc_record({"revenue": 5, "model_out": "other"})["why"] == "other business"
     assert D.calc_record({"revenue": 5, "model_out": True})["why"] == "way of earning not shown"   # a dive kept before the reason was named
     # (updated on purpose, ex49: the deck's rolls order the reasons by their precise kinds, one list: theme_data.CALC_KINDS)
-    assert set(D.CALC_WHY) == {"other business", "way of earning not shown", "not confirmed", "no revenue figure"} and deck.ROLL_WHY is D.CALC_KINDS
+    # (changed on purpose, e89: two more reasons, under the theme's size and quality floor and an unchecked excise revenue basis)
+    assert set(D.CALC_WHY) == {"other business", "way of earning not shown", "not confirmed", "no revenue figure", "too small or too stale",
+                               "revenue basis not confirmed"} and deck.ROLL_WHY is D.CALC_KINDS
     # a row of a dive kept before the record is read the same way
     assert not D.in_calc({"revenue": 5, "model_out": "unknown"}) and D.in_calc({"revenue": 5})
     assert D.in_calc({"revenue": None, "calc": {"in": True, "why": ""}})                         # the kept record is the one read

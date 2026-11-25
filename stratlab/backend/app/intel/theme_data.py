@@ -4791,7 +4791,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                        "not_confirmed": sum(1 for x in every_status.values() if x == "unverified")},
         # e54: the checked companies by what their place rests on (they add up to the membership's "placed"), and each one's state
         "membership_evidence": evidence_counts(every_evidence), "evidence": dict(sorted(every_evidence.items())),
-        "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": sum(1 for r in listed if has_figures(r) and r.get("status") != "unverified"),
+        "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": sum(1 for r in listed if has_figures(r) and r.get("status") != "unverified" and not r.get("dust")),     # e89: the floor's apart
         "without_figures": [{"symbol": r["symbol"], "name": r["name"]} for r in listed if not has_figures(r) and r.get("status") != "unverified"],
     }
     out["duplicates"] = dup_rows

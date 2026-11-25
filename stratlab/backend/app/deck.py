@@ -2257,7 +2257,8 @@ def shown_label(cos: list, k: int) -> str:
 
 
 ROLL_TITLE = "Who is in each layer's calculations"
-DUST_TITLE = "Too small or too stale to compare"      # e89: the theme's companies under its size and quality floor (theme_data.dust_of)
+# e89: the theme's companies under its size and quality floor (theme_data.dust_of), a page of the appendix's roll of who is in the calculations
+DUST_TITLE = ROLL_TITLE + ": too small or too stale to compare"
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
