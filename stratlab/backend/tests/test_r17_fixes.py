@@ -202,7 +202,9 @@ def test_long_tables_keep_their_first_page_in_the_core_and_the_rest_in_the_appen
                for t in titles[app:])
     assert not any("continued" in t or "all companies" in t for t in titles)
     conv = next(s for s in slides if s.title == "Layer 2 · Converters")
-    assert any(p.endswith(f"every one: appendix, p. {app + 1}.") for b in conv.blocks for p in b.get("paras") or [])
+    # deck89 (changed on purpose): the layer's table is set close and may show every company; when it doesn't, it says where the rest are
+    shown = [r for b in conv.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict) and not str(r[0]).startswith(("Median", "Range", "Together"))]
+    assert len(shown) == 14 or any(p.endswith(f"every one: appendix, p. {app + 1}.") for b in conv.blocks for p in b.get("paras") or [])
 
 
 def test_no_divider_without_anything_after_it_and_every_total_says_its_count():

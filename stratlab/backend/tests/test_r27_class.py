@@ -200,7 +200,7 @@ def test_unknown_and_low_confidence_companies_are_listed_but_left_out_of_the_lay
     # the page now shows at least 5 rows and room for them all, so LOW0's row and note are on it)
     shown_out = [x for x in cells if x.endswith("(insufficient evidence)")]          # (updated on purpose, ex49: the mark is the reason's kind)
     assert "Lendwell 0 Ltd" in cells and all(cells.index(x) > cells.index("Lendwell 0 Ltd") for x in shown_out)
-    assert bool(shown_out) == any("(insufficient evidence):" in str(p) for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or [])
+    assert bool(shown_out) == ("(insufficient evidence):" in deck.page_said(slides, page.title))          # deck89 (changed on purpose): its notes in the appendix
     assert D.model_fields({"companies": [{"ticker": "X", "model": "lending", "model_tags": [], "model_confidence": "low", "model_out": True}]}, "X") == \
         {"model": "lending", "model_tags": [], "model_confidence": "low", "model_out": True}
     assert D.model_fields({"companies": [{"ticker": "X"}]}, "X") == {}
@@ -224,7 +224,7 @@ def test_a_left_out_company_shown_on_the_layer_page_is_marked_with_its_note():
     cells = [str(r[0] if not isinstance(r[0], dict) else r[0].get("text")) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
     # (updated on purpose, ex49: the mark is the reason's kind, its note says what evidence is missing)
     assert "Vaguefin Ltd (insufficient evidence)" in cells and cells.index("Vaguefin Ltd (insufficient evidence)") == 3          # after the three counted
-    assert any("(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly" in str(p) for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or [])
+    assert "(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly" in deck.page_said(slides, page.title)          # deck89 (changed on purpose)
     assert "1 of 4 is listed but left out of this layer's figures and rankings, as its evidence shows how it earns only weakly." in texts(slides)
     every_rule("lenders, one left out (IN)", view, slides)
 

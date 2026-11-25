@@ -100,8 +100,9 @@ def test_the_informative_layers_and_each_layer_say_their_evidence_mix():
     region, mm, f = theme_a()
     v2, s2 = deck_of(region, mm, f)
     pages = [s for s in s2 if s.title.startswith("Layer ")]
-    assert pages and all(any(re.search(r"[Mm]embership of its \d+ compan(?:y|ies): \d+ description-verified, .*, 0 not checked", p)
-                             for p in [s.subtitle] + [p for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or []]) for s in pages)
+    # deck89 (changed on purpose, owner 25 Nov: short footnotes): the line is among the appendix's notes, under the layer's page
+    assert pages and all(re.search(r"[Mm]embership of its \d+ compan(?:y|ies): \d+ description-verified, .*, 0 not checked", deck.page_said(s2, s.title))
+                         for s in pages)
 
 
 def test_the_membership_check_is_said_apart_from_the_count_with_figures():

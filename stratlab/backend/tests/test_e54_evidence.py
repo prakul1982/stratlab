@@ -123,7 +123,7 @@ def test_every_count_says_its_population_and_the_layers_add_up_to_core_plus_adja
     names = [r[0] for s in slides if s.title.startswith(("The value chain by layer", "Layers side by side")) for b in s.blocks
              if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
     assert "Hospital and care facility operators (adjacent)" in names and "Implantable devices" in names
-    foot = " ".join(p for s in slides if s.title.startswith("The value chain by layer") for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    foot = deck.page_said(slides, "The value chain by layer")          # deck89 (changed on purpose): with its footnote in full in the appendix
     assert deck.ADJACENT_NOTE in foot and f"The theme's totals are of its {pop['core']:,} core members with figures." in foot
     assert deck.layer_count_flags(slides) == []                    # a layer's mark never makes its counts look like another layer's
 

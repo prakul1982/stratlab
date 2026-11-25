@@ -72,7 +72,7 @@ def test_a_ranking_headline_says_which_layers_it_ranks_and_why_a_layer_beyond_it
 def test_the_value_chains_footnote_and_chart_agree_with_the_headline():
     v, slides = steel()
     page = next(s for s in slides if s.title == "The value chain by layer")
-    foot = " ".join(p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
+    foot = deck.page_said(slides, "The value chain by layer")          # deck89 (changed on purpose, owner 25 Nov): its footnote in full in the appendix
     assert (f"among the layers ranked: those with {FLOOR} and one kind of business. "
             "Shown, not ranked: Aluminium smelting, a different commodity; Sponge iron makers, "
             f"fewer than {D.HEADLINE_MIN} companies with the figure.") in foot

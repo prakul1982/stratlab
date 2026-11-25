@@ -241,7 +241,10 @@ def test_a_crowded_layer_page_shows_five_rows_and_sends_its_notes_to_a_notes_pag
         said = " ".join(r[1] for r in deck.table_with(slides, deck.NOTES_HEAD)["rows"] if not isinstance(r, dict) and r[0].startswith("Layer 2 · Converters"))
         said += " " + " ".join(p for s in slides if s.title.startswith("Layer 2 · Converters (continued)") for b in s.blocks if b["kind"] == "text" for p in b["paras"])
         assert "Membership of its 14 companies" in said
-        assert ("In the layer's calculations (0 of 14)" in said) == heavy
+        # deck89 (changed on purpose): a page that shows all 14 says who is out on their rows, one that can't says it in its roll line
+        rows_ = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict) and not str(r[0]).startswith(("Median", "Range", "Together"))]
+        all_marked = len(rows_) == 14 and all(r_.endswith(")") for r_ in rows_)
+        assert ("In the layer's calculations (0 of 14)" in said or all_marked) if heavy else "In the layer's calculations (0 of 14)" not in said
         assert not any(p.startswith("Membership of its") for b in page.blocks if b["kind"] == "text" for p in b["paras"])
         # one record behind every count: the notes page's roll is of the same layer (lane m1's check; the heavy case's records are set by hand)
         assert heavy or not deck.layer_count_flags(slides)

@@ -31,7 +31,8 @@ def sector_table(slides, page):
 
 
 def sector_note(slides, page):
-    return " ".join(p for s in slides if s.title.startswith(f"{deck.SECTOR_TITLE}: {page}") for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    # deck89 (changed on purpose, owner 25 Nov: short footnotes): with the page's notes in full among the appendix's notes
+    return deck.page_said(slides, f"{deck.SECTOR_TITLE}: {page}")
 
 
 # ---------- 1. one registry ----------
@@ -95,7 +96,8 @@ def test_semiconductors_show_makers_own_figures_and_rpo_only_for_the_design_lice
     assert chip[head.index("RPO growth")] == "n/a" and chip[head.index("Capex / revenue")] == "15.0%" and chip[head.index("Inventory days")].endswith(" days")
     assert byname["Chip IP 0 Inc"][head.index("RPO growth")].startswith("+") and byname["Chip IP 0 Inc"][head.index("Inventory days")] == "n/a"
     t = texts(slides)
-    card = next(c for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for c in b["items"] if c["title"] == "Sector operating figures")
+    # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences; the sector's filed figures are lines of it
+    card = {"lines": [ln for ln in deck.findings_lines(slides) if ln.startswith("Median of the") or "capex / revenue" in ln]}
     assert "RPO" not in " ".join(card["lines"]) and "deferred" not in " ".join(card["lines"]) and "capex / revenue" in " ".join(card["lines"])
     assert "Median RPO growth" not in t                                                # no question built on a figure that doesn't headline
     assert R.LEGEND in sector_note(slides, "US companies")
@@ -136,7 +138,9 @@ def test_insurers_are_summarised_by_type_never_one_median_across_types_and_reins
     life = next(r for r in rows if r[0] == "Life Cover 0 Ltd")
     assert life[head.index("Combined ratio")] == "n/a" and life[head.index("13th-month persistency")] == "85%"
     reins = next(r for r in rows if r[0] == "Median, reinsurers (companies)")
-    assert reins[head.index("Combined ratio")] == "– (1 of 1)"     # one reinsurer: its own figure, no median (R29: "N of M" in every sector median cell)
+    # one reinsurer: its own figure, no median (R29: "N of M" in every sector median cell; deck89, changed on purpose, owner 25 Nov: no
+    # placeholder cell, "–", the page's one note saying why)
+    assert reins[head.index("Combined ratio")] == "–" and deck.FEW_NOTE in deck.page_said(slides, deck.SECTOR_TITLE)
     lines = deck.sector_lines({"sector": v["sections"]["sector"]})
     assert any(x.startswith("Median of the 3 health insurers with filed figures:") for x in lines)
     assert not any("reinsurer" in x for x in lines)
@@ -155,7 +159,7 @@ def test_banks_nii_over_assets_comes_from_the_filings_already_read_replaces_the_
     b4 = next(r for r in plain(t["rows"]) if r[0] == "Bank 4 Ltd")
     assert b4[t["head"].index("NII / assets")] == "n.c."
     assert v["layers"][1]["stats"]["nii_assets"]["n"] == 3 and v["layers"][0]["stats"]["nii_assets"]["n"] == 4
-    assert "n.c.: not comparable" in " ".join(p for b in lay.blocks if b["kind"] == "text" for p in b["paras"])
+    assert "n.c.: not comparable" in deck.page_said(slides, lay.title)          # deck89 (changed on purpose): the layer's notes in the appendix
     txt = texts(slides)
     assert "NII / assets" in txt and not re.search(r"\bNIM\b(?! and CASA)(?!\))", txt.replace("Not the bank's own net interest margin (NIM)", "")
                                                     .replace("not the bank's own NIM", ""))

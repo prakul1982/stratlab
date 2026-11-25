@@ -196,9 +196,8 @@ def test_the_deck_states_each_layers_revenue_model_in_one_line():
         if s.title.startswith("Layer ") and "Other IT service" not in s.title:
             # l55 (R55, updated on purpose): the layer's membership-evidence note can take the room the card needs, and the page then says
             # the card's words as a paragraph above its table (d1's fallback): the line is on the page either way
-            card = next((b for b in s.blocks if b["kind"] == "cards"), None)
-            lines = card["items"][0]["lines"] if card else [p for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or []]
-            assert any(str(x).startswith("In common: ") for x in lines), s.title
+            # deck89 (changed on purpose, owner 25 Nov): what its companies have in common is said among the appendix's notes, under its page
+            assert "In common: " in deck.page_said(slides, s.title), s.title
     every_rule("IT services, split by model (IN)", v, slides)
 
 

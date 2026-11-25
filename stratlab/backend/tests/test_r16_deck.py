@@ -154,8 +154,10 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values beside
     # it (lane d1, updated on purpose: a layer of 2 is rows of "Smaller layers", its "– (2)" in the value chain's table)
     # changed on purpose (R25): a count beside the layer's own reads "N of M" ("– (1 of 2)"), the layer's full count alone ("– (2)")
+    # deck89 (changed on purpose, owner 25 Nov: no placeholder cells): those medians are "–", a column "–" in every row is dropped, and the
+    # page's one note says why
     chain = plain(table_of(slides, "The value chain by layer")["rows"])
-    assert "– (2)" in chain[0] and "– (1 of 2)" in chain[1]
+    assert not any(deck.PLACEHOLDER_CELL.match(str(x)) for r in chain for x in r) and deck.FEW_NOTE in deck.page_said(slides, "The value chain by layer")
     assert [r[1] for r in plain(table_of(slides, deck.SMALL_TITLE)["rows"])][:2] == ["Mine A", "Mine B"]
     assert "P/E, the 4 companies with one (67% of 6; 2 loss-makers with none)" in [r[0] for r in table_of(slides, "Valuation")["rows"]]
 

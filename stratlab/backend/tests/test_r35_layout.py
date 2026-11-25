@@ -87,7 +87,8 @@ def test_a_chart_s_names_are_whole_on_their_lines():
     names = ["Northfield Life Insurance Corporation Of India", "Harbour Prudential Life Insurance Company Limited", "Kestrel Life",
              "Stonebridge Life Insurance Company Limited", "Canal General Insurance Company Ltd", "Maxwell Financial Services Ltd"]
     lw, labels, size = deck.hbar_labels(names, 3.5, 3.4)
-    assert lw <= 3.5 * 0.45 + 1e-6 and size in (BODY_MIN, 10)
+    # deck89 (changed on purpose, owner 25 Nov: text never under 11 pt): the names' column may take up to 55% of the chart, never a smaller type
+    assert lw <= 3.5 * 0.55 + 1e-6 and size == BODY_MIN
     assert not any(ls[-1].endswith("…") for ls in labels), labels
     assert all(deck._width(ln, size) <= lw - 0.12 + 0.01 for ls in labels for ln in ls)
     cols, fs = deck.column_labels(LAYERS, CW - 0.75, 11)

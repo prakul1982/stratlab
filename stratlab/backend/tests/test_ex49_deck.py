@@ -148,7 +148,7 @@ def test_a_layer_page_names_both_models_of_a_company_left_out_for_its_revenue_mo
     v, slides = deck_of("IN", m, f)
     page = next(s for s in slides if s.title.endswith("· " + lay["layer"]))
     rows = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
-    notes = " ".join(p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
+    notes = deck.page_said(slides, page.title)          # deck89 (changed on purpose, owner 25 Nov): the layer's notes in full in the appendix
     assert "Custom Chem 0 Ltd (different model)" in rows
     assert ("(different model): Custom Chem 0 Ltd: the way of earning of “Platforms and marketplaces” (commissions, listing fees or advertising "
             "on platforms they run), not the layer's, that of “Retail”") in notes

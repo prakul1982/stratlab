@@ -184,7 +184,7 @@ def test_a_layer_with_companies_left_out_states_one_pair_on_every_page():
     chain = next(b for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "table")
     row = next(r for r in chain["rows"] if r[0] == "Retail and commercial lenders")
     assert row[chain["head"].index("Companies")] == "6 of 7"
-    notes = " ".join(p for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    notes = deck.page_said(slides, "The value chain by layer")          # deck89 (changed on purpose): with its footnote in full in the appendix
     assert deck.COMPANIES_NOTE in notes                                           # the two scopes are named where they differ
     layer = next(x for x in v["layers"] if x["layer"] == "Retail and commercial lenders")
     assert D.layer_counts(layer) == {"listed": 7, "n": 6, "out": {"way of earning not shown": 1}} and layer["n"] == 6
@@ -315,7 +315,7 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
     page = next(s for s in slides if any(str(r[0]).startswith(name) for b in s.blocks if b["kind"] == "table" for r in b["rows"])
                 and deck._LAYER_PAGE.match(s.title or ""))
     cell = next(str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if str(r[0]).startswith(name))
-    notes = " ".join(p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
+    notes = deck.page_said(slides, page.title)          # deck89 (changed on purpose, owner 25 Nov): the layer's notes in full in the appendix
     assert cell.endswith("(no figures)") and "(no figures): no revenue or other figure is stored" in notes or "no figure stored: " in notes      # (updated on purpose, ex49)
     assert deck.layer_count_flags(slides) == []
 

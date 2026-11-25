@@ -155,8 +155,7 @@ def test_every_synthetic_deck_has_the_coverage_table_and_it_reconciles():
     for name, v, slides in S.decks():
         # R44 (updated on purpose): the checks' longer rows (verified figures, the coverage of informative layers) can need the room, and the
         # coverage then has a page of its own (d1); the table is checked wherever it is
-        tab = next(b for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks
-                   if b["kind"] == "table" and b.get("head") == deck.COVERAGE_HEAD)
+        tab = deck.table_with(slides, deck.COVERAGE_HEAD)          # deck89 (changed on purpose): the table's rows over every page it runs on
         kinds = [r[0] for r in tab["rows"]]
         # tx2 (R46, updated on purpose): the screening populations first (considered = screened out + members), then the companies by count
         assert kinds[:2] == ["Screening", "Companies, by count"] and "Each figure" in kinds and "Each layer" in kinds, name

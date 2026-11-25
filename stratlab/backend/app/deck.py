@@ -7005,7 +7005,7 @@ def short_footnotes(slides: list, notes: list) -> None:
             if o is b:
                 continue
             ox, oy, ow, oh = o["box"]
-            if 0 <= y - (oy + oh) <= 0.45 and o["kind"] in ("table", "hbars", "columns", "lines", "cards", "flow", "text"):
+            if 0 <= y - (oy + oh) <= 0.45 and o["kind"] in ("hbars", "columns", "lines", "cards", "flow", "text"):      # a table keeps its box (its type size with it)
                 if o["kind"] == "text" and o.get("color") == MUTED:
                     o["box"] = (ox, oy + gain, ow, oh)          # a line under a table moves down with it
                     continue
@@ -7161,6 +7161,14 @@ def page_said(slides: list, title: str) -> str:
     return " ".join(out)
 
 
+def findings_lines(slides: list) -> list[str]:
+    """deck89: every line of the key findings: the lines of its "What the figures show" card and any that gave way there, said in full among
+    the appendix's notes."""
+    out = [str(ln) for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b.get("items") or []
+           for ln in it.get("lines") or []]
+    return out + [r[1] for r in (table_with(slides, NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict) and r[0] == "Key findings"]
+
+
 def table_with(slides: list, head: list) -> dict | None:
     """deck89: the deck's table with this heading, its rows from every page it runs over (the checks' table, the coverage table)."""
     tabs = [b for s in slides for b in s.blocks if b["kind"] == "table" and b.get("head") == head]
@@ -7174,6 +7182,27 @@ def bars_fit(cats: list, w: float, h: float) -> bool:
     lw, got, size = hbar_labels(cats, w, h - 0.36)
     slot = max(h - 0.46, 0.2) / len(cats)
     return not any(ls and ls[-1].endswith("…") and not str(c).endswith("…") for ls, c in zip(got, cats)) and max(len(ls) for ls in got) * _lh(size) <= slot + 0.02
+
+
+def settle_tables(slides: list) -> None:
+    """deck89: a table that, as it will print, needs more height than its box (its words changed after it was laid out) takes it from the
+    chart under it, which moves down and gets shorter (and goes when too little of it would be left), so no row is ever left off."""
+    charts = ("hbars", "columns", "lines")
+    for s in slides:
+        for t in [b for b in s.blocks if b["kind"] == "table"]:
+            x, y, w, h = t["box"]
+            if len(table_layout(t, w, h)["rows"]) >= len(t.get("rows") or []):
+                continue
+            need = sum(table_layout({**t, "tight": True}, w, 99)["heights"])
+            under = [b for b in s.blocks if b["kind"] in charts and b["box"][1] >= y + h - 0.01 and b["box"][0] < x + w and x < b["box"][0] + b["box"][2]]
+            if not under or need <= h:
+                continue
+            delta = need - h + 0.02
+            t["box"] = (x, y, w, h + delta)
+            for c in under:
+                cx, cy, cw, ch = c["box"]
+                c["box"] = (cx, cy + delta, cw, ch - delta)
+            s.blocks = [b for b in s.blocks if not (b in under and b["box"][3] < 1.2)]
 
 
 def money_fmt(us: bool) -> str:
@@ -8199,6 +8228,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 b["head"], b["rows"], b["widths"], b["numeric"] = drop_empty(b["head"], b["rows"], b["widths"], b.get("numeric"), keep=tuple(range(len(b["head"]) - 1)))
     signed_colors(slides)             # deck89: rises green, falls red, on the tables as they will print
     whole_deck(slides)
+    settle_tables(slides)             # deck89: and every row of a table above a chart on its page
     lay = layout_gate(slides)
     # R48: a page reference that found no page (a provenance or comparison reference that would print as nothing) fails the source item
     lay["failed"] += [{"slide": t, "text": f"⟦{ref}⟧", "why": "a page reference that finds no page", "rule": "sourced"}

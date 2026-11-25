@@ -81,8 +81,10 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     # industry economics, the theme in numbers, tailwinds and risks), then the appendix: every company's figures, "Method and coverage" (what
     # the data-confidence, coverage and how-to-read pages said, and each page's notes in full) and how the figures are built
     method = [t for t in titles if t.startswith(deck.METHOD_TITLE)]
-    assert titles == ["Test theme", "Contents", "Key findings", "The value chain by layer", "Size and shape", "Smaller layers", "Layers side by side",
-                      "Growth and profitability", "What moved the aggregate margin", "Valuation", "Price", "Tailwinds and risks",
+    # (no "Layers side by side": no layer of this fixture has a median of 3 companies, so the page would hold only names; the questions the
+    # figures raise have a page of their own)
+    assert titles == ["Test theme", "Contents", "Key findings", "The value chain by layer", "Smaller layers", "Growth and profitability",
+                      "What moved the aggregate margin", "Questions the figures raise", "Size and shape", "Valuation", "Price", "Tailwinds and risks",
                       "Every company's figures", *method, "How the figures are built"] and method
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
     assert not [s for s in slides if s.kind == "section"]

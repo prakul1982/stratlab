@@ -214,7 +214,10 @@ def test_fix20_the_us_deck_says_its_layer_based_abroad_and_its_names_without_art
     # participant, never "another business"
     assert "Adjacent participants: most of its companies are listed in the US but based abroad" not in flat
     assert "5 companies listed in the US but based abroad (a foreign issuer's annual report, 20-F or 40-F) are adjacent participants" in flat
-    assert "SAP SE (based abroad)" in flat and "SAP SE (another business)" not in flat and "In the layer's calculations (1 of 5): Wix.com" in flat
+    # deck89 (changed on purpose, owner 25 Nov): a layer page that shows every company (its table set close) says who is in its figures on
+    # their rows, the other four marked "(based abroad)"; a page that can't show them all says it in its roll line
+    assert "SAP SE (based abroad)" in flat and "SAP SE (another business)" not in flat
+    assert "In the layer's calculations (1 of 5): Wix.com" in flat or (flat.count("(based abroad)") >= 4 and "Wix.com" in flat)
     assert "is of listed in the US" not in flat and "based abroad 5" not in flat
     assert deck.ADJACENT_NOTE_ABROAD not in flat and deck.ADJACENT_NOTE not in flat
     names = {r["symbol"]: r["name"] for b in v["layers"] for r in b["companies"]}

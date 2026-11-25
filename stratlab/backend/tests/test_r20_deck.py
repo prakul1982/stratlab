@@ -185,7 +185,9 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
         for b in s.blocks:
             if b["kind"] == "hbars" and str(b.get("title", "")).startswith("Median"):
                 for cat in b["cats"]:
-                    assert int(re.search(r"\((\d+)(?: of \d+)?\)$", cat).group(1)) >= 3, cat        # R25: "(5 of 6)" when the layer has more
+                    # deck89 (changed on purpose): the value chain's own page charts the medians now, its labels saying "not ranked" or
+                    # "adjacent" after the count (bar_marks); the count still at least 3
+                    assert int(re.search(r"\((\d+)(?: of \d+)?(?:, [^()]*)?\)$", cat).group(1)) >= 3, cat        # R25: "(5 of 6)" when the layer has more
     # no card line cut with an ellipsis
     for s in slides:
         for b in s.blocks:
@@ -240,8 +242,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
         tiles = {it[0]: it for s in slides if s.title == "The latest quarter against a year earlier" for b in s.blocks if b["kind"] == "stats" for it in b["items"]}
         n_of = lambda k: (q.get(k) or {}).get("n") or (q.get(f"{k}_up", 0) + q.get(f"{k}_down", 0))      # noqa: E731
         assert tiles["Median revenue change"][2].endswith(f"of {n_of('sales')}") and tiles["Median net profit change"][2].endswith(f"of {n_of('profit')}")
-        card = next(c for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for c in b["items"] if c["title"] == "What changed")
-        said = next((x for x in card["lines"] if x.startswith("Quarter to")), None)
+        # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences (a line that gives way, in the appendix's notes)
+        said = next((x for x in deck.findings_lines(slides) if x.startswith("Quarter to")), None)
         if said:
             assert f"({_count(q['sales']['n'])})" in said
             if (q.get("profit") or {}).get("n", 0) >= 3:

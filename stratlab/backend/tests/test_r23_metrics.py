@@ -226,8 +226,8 @@ def test_a_bank_theme_shows_its_filed_figures_in_the_layer_tables_findings_econo
     body = plain(next(b for b in layer.blocks if b["kind"] == "table")["rows"])
     assert next(r for r in body if r[0] == "Private Lender 0 Ltd")[head.index("Gross NPA")] == "1.4%" == f"{row['gnpa_f']:.1f}%"      # the filed figure
     findings = next(s for s in slides if s.title == "Key findings")
-    card = next(it for b in findings.blocks if b["kind"] == "cards" for it in b["items"] if it["title"] == "Sector operating figures")
-    assert card["lines"][0].startswith(f"Median of the {len(placed)} banks with filed figures: gross NPA ")
+    # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences; the sector's filed figures are a line of it
+    assert any(ln.startswith(f"Median of the {len(placed)} banks with filed figures: gross NPA ") for ln in deck.findings_lines(slides))
     assert len(next(b for b in findings.blocks if b["kind"] == "cards")["items"]) <= 6
     assert "Median advances growth" in t and "The figures show the two rates, not the funding mix." in t
     assert "SBC" not in t and "Solvency" not in t and "Combined ratio" not in t

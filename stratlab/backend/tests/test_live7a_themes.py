@@ -215,7 +215,8 @@ def test_the_contents_line_for_tailwinds_and_risks_uses_the_page_s_own_counts():
     page = next(s for s in slides if s.title == "Tailwinds and risks")
     row = next(r for s in slides if s.title == "Contents" for b in s.blocks for r in b.get("rows") or [] if r[0] == "Tailwinds and risks")
     # the live deck's contents said "4 tailwinds and 4 risks; 5 with a dated headline ... that shows it is still current" over a page of 2 and 2
-    assert row[1] == "4 tailwinds and 4 risks shown, 4 with a dated source; the rest are on the theme's page."
+    # deck89 (changed on purpose, owner 25 Nov): the dated updates follow the tailwinds and risks, and the contents' line says so after them
+    assert row[1].removesuffix("; then the companies' dated updates.").rstrip(".") + "." == "4 tailwinds and 4 risks shown, 4 with a dated source; the rest are on the theme's page."
     assert page.subtitle.startswith("4 tailwinds and 4 risks, 4 of the 8 with a dated source")
 
 
