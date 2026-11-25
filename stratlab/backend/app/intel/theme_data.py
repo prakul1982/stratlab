@@ -1374,7 +1374,9 @@ def theme_period(rows) -> str:
 
 
 def _money(region: str, v: float) -> str:
-    return f"₹{v:,.0f} crore" if region == "IN" else f"${v:,.1f} million".replace(".0 million", " million")
+    """e89: an amount as the floor's reason says it: whole from 10 up, one decimal under 10, two under 1 (never "₹0 crore" for ₹0.03 crore)."""
+    d = 0 if v >= 10 else 1 if v >= 1 else 2
+    return f"₹{v:,.{d}f} crore" if region == "IN" else f"${v:,.{d}f} million"
 
 
 def dust_of(region: str, r: dict, period: str = "") -> str:

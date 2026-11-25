@@ -113,7 +113,7 @@ def test_a_shell_is_in_no_layers_table_or_median_and_listed_once_with_why():
     assert grain["stats"]["ebitda"]["min"] > 0 and grain["n"] == 2
     small = {x["symbol"]: x for x in dive["too_small"]}
     assert set(small) == {"TAHMARENT"} and small["TAHMARENT"]["layer"] == "Grain distilling and extra neutral alcohol"
-    assert small["TAHMARENT"]["why"] == "revenue of ₹2 crore in Mar 2026 and no market value"
+    assert small["TAHMARENT"]["why"] == "revenue of ₹2.3 crore in Mar 2026 and no market value"
     assert dive["evidence"]["TAHMARENT"]              # still a member of the theme, with its evidence
     assert "TAHMARENT" not in {r["symbol"] for r in dive["sections"]["size"].get("biggest") or []}
 
@@ -122,14 +122,14 @@ def test_the_floor_takes_small_or_stale_companies_and_leaves_the_rest():
     """The floor (dust_of): revenue and market value both under it, no market value with small revenue, or a latest year a year or more
     before the theme's; guards: a small company over either floor, a pre-revenue company with a large market value."""
     base = {"status": "core", "revenue": 9.0, "cap": 75.18, "year": "Mar 2026", "profit": -10.0}       # Kati Patang Lifestyle, live
-    assert D.dust_of("IN", base, "Mar 2026").startswith("revenue of ₹9 crore in Mar 2026 and a market value of ₹75 crore, both under")
+    assert D.dust_of("IN", base, "Mar 2026").startswith("revenue of ₹9.0 crore in Mar 2026 and a market value of ₹75 crore, both under")
     assert D.dust_of("IN", {**base, "revenue": None, "cap": 200.71}, "Mar 2026").startswith("no revenue in Mar 2026")     # Cupid Breweries
     assert D.dust_of("IN", {**base, "year": "Mar 2025 (S)", "revenue": 500.0, "cap": 900.0}, "Mar 2026") == \
         "its latest full year is Mar 2025 (S), a year or more before the theme's Mar 2026"
     assert D.dust_of("IN", {**base, "revenue": 19.8, "cap": 42.04}, "Mar 2026") == ""         # Ravikumar Distilleries: revenue over the floor
     assert D.dust_of("IN", {**base, "revenue": 9.0, "cap": 337.0}, "Mar 2026") == ""          # a market value over the floor
     assert D.dust_of("US", {**base, "revenue": None, "cap": 900.0, "year": "Dec 2025"}, "Dec 2025") == ""      # pre-revenue, valued
-    assert D.dust_of("US", {**base, "revenue": 0.7, "cap": 1.2, "year": "Dec 2025"}, "Dec 2025").startswith("revenue of $0.7 million")
+    assert D.dust_of("US", {**base, "revenue": 0.7, "cap": 1.2, "year": "Dec 2025"}, "Dec 2025").startswith("revenue of $0.70 million")
     assert D.dust_of("IN", {**base, "status": "unverified"}, "Mar 2026") == ""
     assert D.theme_period([{"year": "Mar 2026", "revenue": 5, "status": "core"}] * 3 + [{"year": "Dec 2025", "revenue": 5, "status": "core"}]) == "Mar 2026"
 
@@ -146,7 +146,7 @@ def test_the_deck_lists_the_floors_companies_once_in_its_appendix():
     small = [s for s in slides if s.title.startswith(deck.DUST_TITLE)]
     assert len(small) == 1
     rows = [r for b in small[0].blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
-    assert rows == [["Tahmar Enterprises Ltd", "Grain distilling and extra neutral alcohol", "revenue of ₹2 crore in Mar 2026 and no market value"]]
+    assert rows == [["Tahmar Enterprises Ltd", "Grain distilling and extra neutral alcohol", "revenue of ₹2.3 crore in Mar 2026 and no market value"]]
     others = [r for s in slides if not s.title.startswith(deck.DUST_TITLE) for b in s.blocks if b["kind"] == "table"
               for r in b["rows"] if not isinstance(r, dict) and any("Tahmar" in str(x) for x in r)]
     assert not others
