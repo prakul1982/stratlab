@@ -201,6 +201,35 @@ def recorded_tests() -> set:
         return set()
 
 
+# Stray profile rows (admin90): a profile whose id is not a sign-in account's but a settings key's tail, made by a job that took the
+# part of a key after its prefix for a user id and read the profile, which makes one when it is missing (db.get_profile). The monthly
+# net worth pass did this for every "holdings:files:<uid>" key, making a "files:<uid>" profile with no email. Supabase's profiles table
+# refused them (its id is a uuid tied to a sign-in account); Railway's, where users live since 16 Oct, takes any text, so they were
+# counted as users. A real user's id is the sign-in service's uuid and never has a colon: a row whose id does is never a user.
+def is_stray(uid: str | None) -> bool:
+    return ":" in str(uid or "")
+
+
+def stray_rows() -> list[dict]:
+    """The stray profile rows (is_stray), in one small read. Never fails the counts: on an error (Supabase, whose uuid ids can't be
+    matched as text) none are left out."""
+    try:
+        return [r for r in db.sb().table("profiles").select(_COUNT_COLS).like("id", "%:%").limit(1000).execute().data or []
+                if is_stray(r.get("id"))]
+    except Exception as e:
+        print("admin stray profiles read failed:", str(e)[:160])
+        return []
+
+
+def remove_stray_profiles() -> int:
+    """Delete the stray profile rows (Admin → Users and growth, owner-pressed, at most 1000 a press). Nothing else is touched: a stray
+    row has no sign-in account, plan or data of its own."""
+    ids = [r["id"] for r in stray_rows()]
+    for i in range(0, len(ids), 100):
+        db.sb().table("profiles").delete().in_("id", ids[i:i + 100]).execute()
+    return len(ids)
+
+
 def _count_since_for(kind: str, since_iso: str, ids: list[str]) -> int:
     """usage_events of one kind since a time for these users only (the test accounts', taken off the month's count)."""
     n = 0
@@ -270,14 +299,14 @@ def users(q: str, month_start: str, limit: int = 200, plan: str | None = None, i
     is_test = lambda r: r["id"] in tests or is_test_email(r.get("email"))    # noqa: E731
     if plan in PLANS:
         rows = sorted(_profiles(cols, plan, q), key=lambda r: r.get("created_at") or "", reverse=True)
-        rows = [r for r in rows if effective_plan(r) == plan and (include_test or not is_test(r))][:limit]
+        rows = [r for r in rows if effective_plan(r) == plan and not is_stray(r["id"]) and (include_test or not is_test(r))][:limit]
     else:
         query = db.sb().table("profiles").select(cols)
         if q:
             query = query.ilike("email", f"%{q.strip()}%")
-        # a few more than the page, so leaving the test accounts out still lists `limit` real users
-        rows = query.order("created_at", desc=True).limit(limit + (0 if include_test else len(tests) + 10)).execute().data
-        rows = [r for r in rows if include_test or not is_test(r)][:limit]
+        # a few more than the page, so leaving the test accounts and stray rows out still lists `limit` real users
+        rows = query.order("created_at", desc=True).limit(limit + (0 if include_test else len(tests)) + 10).execute().data
+        rows = [r for r in rows if not is_stray(r["id"]) and (include_test or not is_test(r))][:limit]
     last: dict = {}
     usage = _usage_since(month_start, [r["id"] for r in rows], last)
     seen, seen_error = sign_ins()
@@ -341,7 +370,7 @@ def active_users(days: int = 7, include_test: bool = False) -> int | None:
     try:
         rows = _paged(lambda: db.sb().table("usage_events").select("id,user_id").in_("kind", list(ACTIVE_KINDS))
                       .gte("created_at", since.isoformat()))
-        ids |= {r["user_id"] for r in rows if r.get("user_id")}
+        ids |= {r["user_id"] for r in rows if r.get("user_id") and not is_stray(r["user_id"])}
     except Exception as e:
         print("admin active users read failed:", str(e)[:160])
         if error:
@@ -401,18 +430,22 @@ def stats(month_start: str, extra: dict | None = None, include_test: bool = Fals
     jobs = {"users": (_count_profiles, ()), "new_7d": (_count_profiles, (week_ago.isoformat(),)),
             "signups_today": (_count_profiles, (today.isoformat(),)), "paid": (_paid_profiles, ()), "given": (granted, ()),
             "experiments_month": (_count_since, ("backtest", month_start)), "ai_month": (_count_since, ("ai", month_start)),
-            "ai_reads_month": (_count_since, ("research_ai", month_start)), "tests": (_test_rows, ()),
+            "ai_reads_month": (_count_since, ("research_ai", month_start)), "tests": (_test_rows, ()), "stray": (stray_rows, ()),
             **{k: (fn, ()) for k, fn in (extra or {}).items()}}
     futures = {k: _stats_pool.submit(fn, *args) for k, (fn, args) in jobs.items()}
     got = {k: f.result() for k, f in futures.items()}
     tests = got["tests"]
-    out_ids = set() if include_test else {r["id"] for r in tests}
+    test_ids = set() if include_test else {r["id"] for r in tests}
+    # stray rows (is_stray) are never users, whatever the switch; test accounts only while they are left out
+    left = {r["id"]: r for r in [*(r for r in got["stray"] if r.get("id")), *(r for r in tests if r["id"] in test_ids)]}
+    out_ids = set(left)
     if out_ids:
-        made = [t for t in (_at(r.get("created_at")) for r in tests) if t]
-        got["users"] -= len(tests)
+        made = [t for t in (_at(r.get("created_at")) for r in left.values()) if t]
+        got["users"] -= len(left)
         got["new_7d"] -= sum(1 for t in made if t >= week_ago)
         got["signups_today"] -= sum(1 for t in made if t >= today)
-        ids = sorted(out_ids)
+    if test_ids:
+        ids = sorted(test_ids)
         for key, kind in (("experiments_month", "backtest"), ("ai_month", "ai"), ("ai_reads_month", "research_ai")):
             got[key] -= _count_since_for(kind, month_start, ids)
     rows, given = [r for r in got["paid"] if r.get("id") not in out_ids], got["given"]
@@ -432,7 +465,7 @@ def week_stats(since: datetime) -> dict:
     """Users joined since a time, everyone so far, paid users by plan, and experiments and AI builds since then. The test
     accounts are left out (DJ-001), as on Overview."""
     tests = {r["id"] for r in _test_rows()}
-    rows = [r for r in _profiles(_COUNT_COLS) if r.get("id") not in tests]
+    rows = [r for r in _profiles(_COUNT_COLS) if r.get("id") not in tests and not is_stray(r.get("id"))]
     plans = Counter(effective_plan(r) for r in rows)
     # paying (a subscription) apart from given by the owner, as Overview counts them (R6V-010)
     given = granted()
