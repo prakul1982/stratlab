@@ -4795,7 +4795,8 @@ def outsiders_of_other(vc: list[dict], placements: dict, words_of, theme: str) -
     layer's answer). Such a company goes to the layer whose name its own words say most of (two or more of what the name says is made or
     done, half or more of them: the test of layer_work_stems and says_most_of), else it leaves the theme as another business, its words quoted ("scope"). One whose own words say the theme's own work (layer_work_stems:
     its name's words, or two of a layer's) stays, of the theme with no layer of its own; one with no words of its own stored stays, not
-    checked yet (in no figure); a company of the theme's own list is moved the same way when its words say a layer, else it stays. (the layers, the placements, the moves made)."""
+    checked yet (in no figure). A company of the theme's official industries or of its own list is not touched: "Other" holds it as
+    before. (the layers, the placements, the moves made)."""
     rest = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
     if rest is None or not rest.get("companies"):
         return vc, placements, []
@@ -4807,7 +4808,8 @@ def outsiders_of_other(vc: list[dict], placements: dict, words_of, theme: str) -
     for c in rest.get("companies") or []:
         basis = c.get("basis")
         own_ind = basis == "industry" or (c.get("industry") and key(c.get("industry")) in inds)
-        if own_ind or not c.get("ticker"):
+        # (a company of the theme's own list is the theme's as an official industry's is: its "Other" holds it, as before)
+        if own_ind or basis == "list" or not c.get("ticker"):
             keep.append(c)
             continue
         try:
@@ -4832,7 +4834,7 @@ def outsiders_of_other(vc: list[dict], placements: dict, words_of, theme: str) -
                                                                        "refit": {"from": _HALF_RX.sub("", rest["layer"]), "to": shown, "why": why}}]
             rows.append({"ticker": c["ticker"], "name": c.get("name"), "from": _HALF_RX.sub("", rest["layer"]), "to": shown, "why": why})
             continue
-        if basis == "list" or not w.strip() or theme_work_said(fit_w, vc, theme):
+        if not w.strip() or theme_work_said(fit_w, vc, theme):
             # (one whose own words say the theme's own work, its name's or two words of a layer's: of the theme with no layer of its own)
             # the theme's own list: its "Other" holds it as an official industry's company; and with no words of its own stored, its
             # membership is not checked yet (c54: missing data never removes a member; it is in no figure until its words are read)

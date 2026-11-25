@@ -193,13 +193,22 @@ C1 = {
 
 
 
+# e89 (approved on purpose: brief rule 1 in full, "Other" never holds a company the map named from another industry): the moves its rule
+# makes on this older fixture, each with why; kept apart from APPROVED so the earlier lanes' checks of their own moves stand
+E89 = {
+    'retail:LULU': ('Apparel and accessory stores', "e89 (approved on purpose): named by the map from another industry (apparel makers) and "
+                                                    "in \"Other\"; its own words, \"technical athletic apparel, footwear, and accessories\", say "
+                                                    "two of the three words of \"Apparel and accessory stores\" (theme_base.outsiders_of_other)"),
+}
+
+
 def test_no_company_in_any_theme_changes_its_layer_unless_approved():
     moved = []
     for t in LAYERS["themes"]:
         got = layer_of(replay_vc(t))
         for c in t["companies"]:
             k = f"{t['key']}:{c['s']}"
-            want = None if k in DROPPED else C1[k][0] if k in C1 else D1[k][0] if k in D1 else APPROVED[k][0] if k in APPROVED else c["e"]          # lane d1: D1 (updated on purpose)
+            want = None if k in DROPPED else E89[k][0] if k in E89 else C1[k][0] if k in C1 else D1[k][0] if k in D1 else APPROVED[k][0] if k in APPROVED else c["e"]          # e89: E89 (changed on purpose, e89); lane d1: D1 (updated on purpose)
             if got.get(c["s"]) != want:
                 moved.append(f"{k} ({c['n']}): expected {want!r}, got {got.get(c['s'])!r}")
     assert not moved, "a rule change moved these companies to another layer (edit APPROVED, with the reason, if on purpose):\n" + "\n".join(moved)
