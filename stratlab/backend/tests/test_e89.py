@@ -333,9 +333,10 @@ def _payments_vc() -> list[dict]:
 
 
 def test_a_company_the_map_named_from_another_industry_is_placed_by_its_words_or_out_never_in_other():
-    """Fails on R88: JPMorgan (a universal bank), WISeQey (no words of its own) and West Pharmaceutical (drug packaging, in Biotech) sat in
-    their themes' "Other" groups, named by the map from other industries. Now each goes to the layer its own words say, or out with why;
-    a company of the theme's own list (FIS: its 10-K names no Payments layer's work, its merchant business sold in 2024) stays."""
+    """Fails on R88: JPMorgan (a universal bank) and West Pharmaceutical (drug packaging, in Biotech) sat in their themes' "Other" groups,
+    named by the map from other industries. Now each goes to the layer its own words say, or out with why; a company of the theme's own
+    list (FIS: its 10-K names no Payments layer's work, its merchant business sold in 2024) stays, and one with no words of its own stored
+    (WISeQey) stays not checked, in no figure (missing data never removes a member)."""
     words = {"JPM": JPM_10K, "FIS": FIS_10K, "WQEY": "",
              "NEWP": "New Pay Inc provides merchant acquiring and payment processing for small merchants across the United States."}
     vc, pl, rows = B.outsiders_of_other(_payments_vc(), {"industries": []}, words.get, "Payments and fintech")
@@ -343,18 +344,26 @@ def test_a_company_the_map_named_from_another_industry_is_placed_by_its_words_or
     assert where["FIS"] == "Other payments and fintech companies"
     assert where["NEWP"] == "Merchant acquiring and processing" and [r["ticker"] for r in rows] == ["NEWP"]
     out = {x["ticker"]: x for x in pl["dropped"]}
-    assert set(out) == {"JPM", "WQEY"} and "JPM" not in where and "WQEY" not in where
+    assert set(out) == {"JPM"} and "JPM" not in where and where["WQEY"] == "Other payments and fintech companies"
     assert out["JPM"]["scope"].startswith("another business: from another industry (National Commercial Banks), its own words say “JPMorganChase")
-    assert out["WQEY"]["scope"].endswith("no description of its own to place it in a layer")
     bio = [{"layer": n, "companies": [{"ticker": "X" + n[:2], "name": n, "basis": "industry"}]}
            for n in ("Research tools and diagnostics suppliers", "Bioprocessing, animal health and mixed healthcare products",
                      "Branded and generic drug portfolio makers")] + \
         [{"layer": "Other biotech companies", "official": True, "basis": "rest", "companies": [
             {"ticker": "WST", "name": "West Pharmaceutical Services Inc", "basis": "added", "industry": "Surgical & Medical Instruments & Apparatus"},
-            {"ticker": "OWN", "name": "Own Bio Inc", "basis": "industry", "industry": "Biological Products"}]}]
+            {"ticker": "OWN", "name": "Own Bio Inc", "basis": "industry", "industry": "Biological Products"},
+            {"ticker": "VFL", "name": "Vedant Fashions", "basis": "added", "industry": "Speciality Retail"}]}]
     vc, pl, _ = B.outsiders_of_other(bio, {"industries": ["Biological Products"]}, {"WST": WST_10K}.get, "Biotech")
     assert [x["ticker"] for x in pl["dropped"]] == ["WST"]
-    assert [c["ticker"] for c in vc[-1]["companies"]] == ["OWN"]          # guard: a company of the theme's official industries stays
+    assert [c["ticker"] for c in vc[-1]["companies"]] == ["OWN", "VFL"]     # guards: an official industry's company; one with no words
+    # guard: words that say the theme's own work keep a company of another industry in "Other" (Vedant Fashions' celebration wear in
+    # Textiles; lululemon, "a ... retailer of technical athletic apparel", in Consumer retail)
+    tex = [{"layer": "Branded apparel companies", "companies": []}, {"layer": "Other textile companies", "official": True, "basis": "rest",
+                                                                      "companies": [{"ticker": "VFL", "name": "Vedant Fashions Limited", "basis": "added"}]}]
+    vfl = "Vedant Fashions Limited caters to the Indian celebration wear market with a diverse portfolio of brands."
+    assert not B.outsiders_of_other(tex, {"industries": []}, {"VFL": vfl}.get, "Textiles")[1].get("dropped")
+    assert B.theme_work_said("lululemon athletica inc. is principally a designer, distributor, and retailer of technical athletic apparel.",
+                             [], "Consumer retail")
 
 
 # ---------- follow-up 2: a layer named for gold and silver never holds a coal miner ----------

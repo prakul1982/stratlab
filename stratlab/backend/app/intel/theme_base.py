@@ -1124,10 +1124,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         out_vc, placements = layer_answer_removals(out_vc, placements, words_of, theme, facts_for)
     # e89 (the coordinator's follow-up to the owner's Alcoholic beverages deck: "Other" is never a home for a company of another industry):
     # one the map named from another industry is placed in the layer its own words say, or it is out of the theme
-    if placements is not None:
-        out_vc, placements, outsider_rows = outsiders_of_other(out_vc, placements, words_of, theme)
-        if outsider_rows:
-            placements = {**placements, "outsiders": outsider_rows}
+    out_vc, placed_, outsider_rows = outsiders_of_other(out_vc, placements or {}, words_of, theme)
+    if placed_ != (placements or {}) or outsider_rows:
+        placements = {**placed_, **({"outsiders": outsider_rows} if outsider_rows else {})}
     if placements is not None and placements.get("dropped"):
         # p57 (lane g57: 60 companies in 20 themes carried a business-membership removal while still in the theme, Sarepta in "Other"):
         # a company the check left out of a map group that is still in the theme was moved, never removed: its answer is a layer decision
@@ -4770,13 +4769,33 @@ def layer_work_stems(stems: set, vc: list[dict], theme: str) -> set:
     return set()
 
 
+def theme_work_said(text: str, vc: list[dict], theme: str) -> bool:
+    """e89: whether a company's own words say the theme's own work: a word of the theme's name ("retailer" of "Consumer retail"), two words
+    of one layer's name (layer_work_stems), or a product of the theme's kind (theme_data.WORK_KINDS: Manyavar's "celebration wear" of
+    Textiles)."""
+    t = str(text or "")
+    if not t.strip():
+        return False
+    if layer_work_stems(kind_stems(t), vc, theme):
+        return True
+    tn = {b for b in _stems(_short_joined(theme)) if len(b) >= 4} - _FIT_STOP
+    mine = _stems(_short_joined(t))
+    if any(_near(a, b) for a in mine for b in tn):
+        return True
+    from .theme_data import WORK_KINDS, _root
+    roots = {_root(w) for n in [theme] + [x for v in vc if not v.get("official") for x in _names(v)]
+             for w in re.findall(r"[a-z]+", _HALF_RX.sub("", n).lower())}
+    return any(re.search(says, t, re.I) for names, says in WORK_KINDS if any(re.search(names, r) for r in roots))
+
+
 def outsiders_of_other(vc: list[dict], placements: dict, words_of, theme: str) -> tuple[list[dict], dict, list[dict]]:
     """e89 (the coordinator's follow-up to the owner's Alcoholic beverages deck: Payments' "Other" holding JPMorgan and WISeQey, Biotech's
     West Pharmaceutical, each named by the map from another industry): the theme's "Other" group holds the companies of its official
     industries and of its own list that fit no layer, never one the map named from another industry (or one kept on its words against a
     layer's answer). Such a company goes to the layer whose name its own words say most of (two or more of what the name says is made or
-    done, half or more of them: the test of layer_work_stems and says_most_of), else it leaves the theme as another business, its words quoted ("scope"; with no words of its own stored, said so). A company of
-    the theme's own list is moved the same way when its words say a layer, else it stays. (the layers, the placements, the moves made)."""
+    done, half or more of them: the test of layer_work_stems and says_most_of), else it leaves the theme as another business, its words quoted ("scope"). One whose own words say the theme's own work (layer_work_stems:
+    its name's words, or two of a layer's) stays, of the theme with no layer of its own; one with no words of its own stored stays, not
+    checked yet (in no figure); a company of the theme's own list is moved the same way when its words say a layer, else it stays. (the layers, the placements, the moves made)."""
     rest = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
     if rest is None or not rest.get("companies"):
         return vc, placements, []
@@ -4797,7 +4816,8 @@ def outsiders_of_other(vc: list[dict], placements: dict, words_of, theme: str) -
             w = own_text(c.get("what") or "")
         best, said_n = None, 0
         # (the customers it names are not what it does: a sentence of them is left out, "Our customers include leading ... generic ...")
-        mine = whole_stems(" ".join(x for x in re.split(r"(?<=[.;!?])\s+", _fit_text(w)) if not re.search(r"\b(?:customers|clients)\b", x, re.I)))
+        fit_w = " ".join(x for x in re.split(r"(?<=[.;!?])\s+", _fit_text(w)) if not re.search(r"\b(?:customers|clients)\b", x, re.I))
+        mine = whole_stems(fit_w)
         for v in layers:
             for n in _names(v):
                 rest_w = whole_stems(n) - tw          # what the layer's name says is made or done (no word of how any company earns)
@@ -4812,7 +4832,10 @@ def outsiders_of_other(vc: list[dict], placements: dict, words_of, theme: str) -
                                                                        "refit": {"from": _HALF_RX.sub("", rest["layer"]), "to": shown, "why": why}}]
             rows.append({"ticker": c["ticker"], "name": c.get("name"), "from": _HALF_RX.sub("", rest["layer"]), "to": shown, "why": why})
             continue
-        if basis == "list":            # the theme's own list: its "Other" holds it as an official industry's company
+        if basis == "list" or not w.strip() or theme_work_said(fit_w, vc, theme):
+            # (one whose own words say the theme's own work, its name's or two words of a layer's: of the theme with no layer of its own)
+            # the theme's own list: its "Other" holds it as an official industry's company; and with no words of its own stored, its
+            # membership is not checked yet (c54: missing data never removes a member; it is in no figure until its words are read)
             keep.append(c)
             continue
         q = first_sentence(w)
