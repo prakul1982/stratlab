@@ -133,7 +133,10 @@ def alco_view() -> dict:
                                "3Y": {"theme": None, "bench": 34.6}},
                    "line": {"weeks": weeks, "theme": theme, "bench": bench, "rs": [round(t / b * 100, 1) for t, b in zip(theme, bench)]}}
     sec = v["sections"]
-    qc = [(r[0], r[1], round(r[5] / 3 + 2, 1), round(r[7] - 5, 1)) for r in ROWS[:28]]
+    # (changed on purpose, e89: the latest quarter is of the companies in the theme's figures, as theme_data.quarter_section reads them: the
+    # floor's companies and a business demerged since its year, the dive's "too_small", are in it no more than in any other figure)
+    apart = {x["symbol"] for x in dive.get("too_small") or []}
+    qc = [(r[0], r[1], round(r[5] / 3 + 2, 1), round(r[7] - 5, 1)) for r in ROWS[:28] if r[0] not in apart]
     sales = sorted(x[2] for x in qc)
     sec["quarter"] = {"quarter": "Sep 2026", "companies": [{"symbol": s, "name": n, "of": "Sep 2026", "sales": a, "profit": p} for s, n, a, p in qc],
                       "sales_up": sum(1 for x in qc if x[2] > 0), "sales_down": sum(1 for x in qc if x[2] <= 0),

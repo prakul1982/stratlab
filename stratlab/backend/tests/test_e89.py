@@ -143,11 +143,14 @@ def test_the_deck_lists_the_floors_companies_once_in_its_appendix():
     dive = _alco_dive()
     m = {"sector": "Alcoholic beverages", "value_chain": [], "placements": {"checked": True}}
     slides = deck.theme_plan(TR.deck_view("IN", m, dive), now=NOW)[0]
+    # (rel90: the roll's pages are records kept with the deck, read with it: deck.with_held)
+    slides = deck.with_held(slides)
     small = [s for s in slides if s.title.startswith(deck.DUST_TITLE)]
     assert len(small) == 1
     rows = [r for b in small[0].blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
     assert rows == [["Tahmar Enterprises Ltd", "Grain distilling and extra neutral alcohol", "revenue of ₹2.3 crore in Mar 2026 and no market value"]]
-    others = [r for s in slides if not s.title.startswith(deck.DUST_TITLE) for b in s.blocks if b["kind"] == "table"
+    # (the method page names it with the floor's line, rel90: a name, never a row of figures)
+    others = [r for s in slides if not s.title.startswith((deck.DUST_TITLE, deck.METHOD_TITLE)) for b in s.blocks if b["kind"] == "table"
               for r in b["rows"] if not isinstance(r, dict) and any("Tahmar" in str(x) for x in r)]
     assert not others
 
@@ -457,3 +460,17 @@ def test_a_revenue_on_an_unchecked_basis_is_said_so_on_the_theme_page_and_the_de
                                                        {"symbol": "MONIKA"}]}]}
     assert P.basis_apart_of(dive) == {"IGLSPIRITS"} and P.BASIS_NOTE == "revenue basis not confirmed"
     assert deck.ROLL_TAG[D.BASIS_KIND] == "basis not confirmed" and D.BASIS_KIND == P.BASIS_NOTE
+
+
+def test_every_count_of_companies_with_figures_leaves_out_the_floors_companies():
+    """Fails on R88 (rel90's publication gate: "latest quarter 28 above with figures 25"): the latest quarter, the valuation, growth and price
+    counts and the price endpoint's members are of the companies in the theme's figures, never one under the floor."""
+    from app.intel import theme_routes as TR
+    from tests.test_theme1 import facts
+    tah = facts("TAHMARENT", "Tahmar Enterprises Ltd", [2.56, 5.45, 3.87, 2.3], [-5.08, -44.95, -206.2, -361.74], [0.0, 0.05, -2.61, -5.6],
+                cap=None, latest_yoy={"basis": "quarter", "of": "Sep 2026 vs Sep 2025", "sales": -100.0, "profit": None})
+    dive = _alco_dive({"TAHMARENT": tah})
+    q = {c["symbol"] for c in dive["sections"]["quarter"].get("companies") or []}
+    assert "TAHMARENT" not in q and len(q) <= dive["members"]
+    assert dive["sections"]["price"]["near_low"]["n"] <= dive["members"]
+    assert TR.apart_symbols(dive) == {"TAHMARENT"} and TR.apart_symbols(None) == set()

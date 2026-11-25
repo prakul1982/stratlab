@@ -7287,9 +7287,15 @@ def _method_page(printed: list, cards: list, built: list, v: dict, asof: str, ey
         read.append(f"{VERIFIED_MARK} on a figure in the companies' table: {VERIFIED_NOTE}.")
     period = (f"Each company's latest full year and quarter as it reported them, from its results stored on its StratLab page "
               f"(/stocks/{mk}/SYMBOL); market value is price times shares" + (f", prices to {asof}." if asof else "."))
-    small_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol")]          # lane e89's floor, when the view has it
-    small_line = (f"{_n(len(small_), 'company', 'companies')} of the theme too small or too stale to compare, in no layer's table, median or total: "
-                  + names5([{"name": clean_name(x.get("name") or x["symbol"])} for x in small_]) + f"; each one's reason {THEME_PAGE}.") if small_ else ""
+    small_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol") and x.get("kind") != "demerged"]          # lane e89's floor
+    moved_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol") and x.get("kind") == "demerged"]
+    # (e89: each one's reason is a record kept with the deck, never on the theme's page: RECORDS)
+    small_line = " ".join(x for x in (
+        (f"{_n(len(small_), 'company', 'companies')} of the theme too small or too stale to compare, in no layer's table, median or total: "
+         + names5([{"name": clean_name(x.get("name") or x["symbol"])} for x in small_]) + f"; each one's reason {RECORDS}.") if small_ else "",
+        (f"{_n(len(moved_), 'company', 'companies')} whose business of the theme was demerged since its year into another listed company, in no "
+         "layer's table, median or total: " + names5([{"name": clean_name(x.get("name") or x["symbol"])} for x in moved_]) + f"; why {RECORDS}.")
+        if moved_ else "") if x)
     t_ = evidence_tally(v, len(v.get("members") or []))
     who_ = list(lines.get("Who is in it") or [])
     if t_ and who_:          # the membership counts by evidence state, after who is in it
