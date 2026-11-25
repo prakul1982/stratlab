@@ -163,10 +163,7 @@ export function CorpActionsPage() {
       </div>
     );
   };
-  const groups = (rows: ActionRow[], part: Part) => {
-    const days = [...new Set(rows.map((r) => r.ex_date))];
-    return <div className="k-stack">{days.map((d, i) => day(rows, d, part, i === days.length - 1))}</div>;
-  };
+  const groups = (rows: ActionRow[], part: Part) => <div className="k-stack">{[...new Set(rows.map((r) => r.ex_date))].map((d, i, days) => day(rows, d, part, i === days.length - 1))}</div>;
 
   return (
     <div className="k-page">

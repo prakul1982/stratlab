@@ -1,5 +1,4 @@
 /* The results calendar's rows: pure helpers the page and the unit tests share (rel1, LIVE9A-014). */
-import { resultDay } from "./resultDay";
 
 /** The day after an ISO day, as an ISO day. */
 export function nextDay(iso: string): string {
@@ -30,12 +29,6 @@ export function capAt(cap: number | null | undefined, last: number | null | unde
 /** When a company reports, short, for its own place on the row's first line: "After the close", "Before the open". */
 export const whenShort = (when: string | null | undefined): string | null =>
   when ? when.replace(/^./, (c) => c.toUpperCase()) : null;
-
-/** site89b: a usual move's basis in words, for its hover: the average size of the moves over which earlier results days, measured how. */
-export function usualTitle(m: { n: number; dates: string[]; basis?: string }): string {
-  const days = m.dates.length ? ` (${m.dates.map((d) => resultDay(d)).join(", ")})` : "";
-  return `Average size of the move over ${m.n} earlier results day${m.n === 1 ? "" : "s"}${days}: ${m.basis ?? "close before the results day to the close of the session after it"}`;
-}
 
 /** Rows with a usual move the "Usual move" column needs to stay (or half the answered rows, when fewer are answered). */
 export const MIN_MOVES = 3;

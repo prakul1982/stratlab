@@ -40,7 +40,9 @@ test("the one scroll: every table and list block uses it; no phone paging, no ro
   const dt = read("src/components/kit/DataTable.tsx");
   assert.match(dt, /useScrollRows\(box, \{ items: bodyRows, onEnd: loadMore \}\);/);
   assert.doesNotMatch(dt, /phonePage \* pages|Show \{Math\.min|<ShowLess /);
-  assert.match(dt, /Loaded \{allRows\.length\.toLocaleString\("en-IN"\)\} of /);
+  // (changed on purpose, site89b: a list drawn a table a day says the whole list's rows loaded, `more.loaded`, the table's own otherwise)
+  assert.match(dt, /const loaded = more\?\.loaded \?\? allRows\.length;/);
+  assert.match(dt, /Loaded \{loaded\.toLocaleString\("en-IN"\)\} of /);
   const sl = read("src/components/kit/ScrollList.tsx");
   assert.doesNotMatch(sl, /new ResizeObserver\(/);                          // R7T-014
   assert.match(sl, /let avail = screenRoom\(window\.innerHeight, stickyTop\(\), head, below\);/);

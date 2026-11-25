@@ -15,7 +15,8 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { capAt, laterDays, movesEmpty, purposeShown, quarterLabel, reportedQuarter, usualTitle, whenShort } from "../lib/resultsRows";
+import { capAt, laterDays, movesEmpty, purposeShown, quarterLabel, reportedQuarter, whenShort } from "../lib/resultsRows";
+import { usualTitle } from "../lib/usualMove";
 import { resultDay } from "../lib/resultDay";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */

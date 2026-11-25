@@ -64,16 +64,20 @@ test("FORMS: Business updates' choices are in one card, each under its label", a
   }
 });
 
-test("FORMS: Figures' save form has the name and Save screen on one line, the weekly email under them", async ({ page }, info) => {
+test("FORMS: Figures' save form has the name, the weekly email and Save screen on one line, their boxes level", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "the save card is under the folded filters on a phone");
   await signIn(page);
   await page.goto("/research/screens");
   const form = page.getByRole("form", { name: "Save this screen" });
   await expect(form.getByRole("button", { name: "Save screen" })).toBeVisible({ timeout: 20_000 });
+  // measured once the card has settled (its saved count and plan line come after the form)
+  await expect.poll(async () => { const n = await form.getByLabel("Name").boundingBox(), g = await form.getByRole("button", { name: "Save screen" }).boundingBox();
+    return Math.abs(n!.y + n!.height - (g!.y + g!.height)); }, { message: "Save screen level with the name's box" }).toBeLessThanOrEqual(2);
   const name = await form.getByLabel("Name").boundingBox(), go = await form.getByRole("button", { name: "Save screen" }).boundingBox();
-  expect(Math.abs(name!.y + name!.height - (go!.y + go!.height)), "Save screen level with the name's box").toBeLessThanOrEqual(2);
-  const tick = await form.getByLabel("Weekly email of new matches").boundingBox();
-  expect(tick!.y, "the weekly email under the name").toBeGreaterThan(name!.y + name!.height - 1);
+  const tick = await form.locator(".k-check").first().boundingBox();
+  expect(Math.abs(tick!.y + tick!.height - (name!.y + name!.height)), "the weekly email level with the name's box (VR3-007)").toBeLessThanOrEqual(2);
+  expect(tick!.x, "between the name and Save screen").toBeGreaterThan(name!.x + name!.width - 1);
+  expect(go!.x).toBeGreaterThan(tick!.x + tick!.width - 1);
   // the size chips two to a row of equal cells in the filter column
   const sizes = page.getByRole("group", { name: "Company size", exact: true }).getByRole("button");
   const a = await sizes.nth(0).boundingBox(), b = await sizes.nth(1).boundingBox();

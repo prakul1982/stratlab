@@ -3569,8 +3569,10 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .k-sform-market .k-seg, .k-sform-row > .k-field > .k-seg { height: 44px; }
 .k-sform-go { height: 44px; min-width: 120px; }
 .k-sform-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
-.k-sform-save { grid-template-columns: minmax(0, 1fr) auto; }
-.k-sform-save.two { grid-template-columns: minmax(0, 1fr); }           /* an open screen's two buttons go under the name, side by side */
+.k-sform-save { grid-template-columns: minmax(0, 1fr) auto auto; }
+.k-sform-save .k-check { min-height: 44px; white-space: nowrap; }
+.k-sform-save.two { grid-template-columns: minmax(0, 1fr) auto; }      /* an open screen's two buttons go under the name and the email, side by side */
+.k-sform-save.two > .k-sform-acts { grid-column: 1 / -1; }
 .k-sform-acts { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: end; }
 /* Figures' filters (site89b): the size and stage chips two to a row of equal cells in the narrow filter column, their words centred and
    wrapping inside each, not one pill a line of different widths */
