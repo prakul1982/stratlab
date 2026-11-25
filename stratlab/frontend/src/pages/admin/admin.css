@@ -95,3 +95,6 @@
 .adm-email { overflow-wrap: break-word; word-break: normal; }
 /* admin90: Needs your attention's badges one width ("Fix" as wide as "Look", with room for CI's wider font), so every row's words start at one line */
 .adm-todo-t > .k-badge { flex: none; min-width: 5.5em; justify-content: center; }
+/* admin90: a figure typed in a numeric column (Prices outside India) sits under its right-aligned header, with its note under it, not at the
+   cell's left edge 60px short of the header's words */
+.adm-main td.k-num > .k-stack { align-items: flex-end; text-align: right; }
