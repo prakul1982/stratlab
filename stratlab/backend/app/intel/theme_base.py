@@ -4718,6 +4718,25 @@ def theme_clause(text: str, name: str, theme_words: set) -> str:
     return ""
 
 
+def layer_work_stems(stems: set, vc: list[dict], theme: str) -> set:
+    """e89 (the owner's Alcoholic beverages deck: Borosil Renewables' "extra clear patterned glass and Low Iron Solar Glass" kept in the theme
+    on "glass" of "Glass bottle and packaging manufacturing" and "extra" of "Grain distilling and extra neutral alcohol"): the words of a
+    company's own words (their kind_stems) that say the theme's work: those of the theme's own name, else those of one layer's name when they
+    say at least two of its words (all of a one-word name): what that layer makes or does, never one word it shares with another trade (a
+    material, a qualifier). Empty when they say neither."""
+    hit = stems & kind_stems(theme)
+    if hit:
+        return hit
+    for v in vc:
+        if v.get("official"):
+            continue
+        for n in _names(v):
+            ns = kind_stems(n)
+            if ns and len(stems & ns) >= min(2, len(ns)):
+                return stems & ns
+    return set()
+
+
 def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str, facts_for=None) -> tuple[list[dict], dict]:
     """r572 (R57.2, the release gate's "layer-only removal" on the live R57.1 inputs: Abbott and Johnson & Johnson out of Medical devices,
     Spotify and Sirius XM out of Media, JPMorgan out of Payments, each on the map check's "no" for one or two of its groups): a company the
@@ -4746,7 +4765,11 @@ def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str
         except Exception:
             ind = ""
         # round 2: with no words of its own, its official industry decides; with neither, the answer alone moves nothing: it stays
-        says_theme = bool(kind_stems(own_text(w)) & tw) if quote else (not ind or bool(kind_stems(ind) & tw))
+        # e89 (the owner's Alcoholic beverages deck, 25 Nov: Borosil Renewables, a solar glass maker, kept in "Other alcoholic beverage
+        # companies" on "glass" of the bottle layer and "extra" of "extra neutral alcohol"): its own words keep it only when they say the
+        # theme's own name or a layer's work (layer_work_stems: two words of one layer's name), never one shared word
+        said_by = layer_work_stems(kind_stems(own_text(w)), vc, theme) if quote else set()
+        says_theme = bool(said_by) if quote else (not ind or bool(kind_stems(ind) & tw))
         if not quote and ind and not says_theme:
             keep.append({**x, "said": "scope", "scope": f"another business: filed under {ind}, and no description of its own is stored"})
             continue
@@ -4755,7 +4778,7 @@ def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str
             # r581 (the owner's open items on the live R57.2 Aerospace deck: BWX, Curtiss-Wright, Howmet and Palantir added "with no
             # stated reason"): the sentence of its own words that says the theme's work, quoted
             # (a word of the theme's own name first, then one of its layers' names: what kept it)
-            said_s = (theme_clause(own_text(w), x.get("name") or "", kind_stems(theme)) or theme_clause(own_text(w), x.get("name") or "", tw)) if quote else ""
+            said_s = (theme_clause(own_text(w), x.get("name") or "", kind_stems(theme)) or theme_clause(own_text(w), x.get("name") or "", said_by)) if quote else ""
             said_ = ((f"its own words say the theme's work: “{said_s}”" if said_s else "its own words say the theme's work") if quote else f"its official industry ({ind}) is of the theme's work" if ind else
                      "no description of its own or official industry is stored, so the answer alone moves nothing")
             # (one with neither words nor an official industry stored is not checked yet: never said to be kept on an industry)
