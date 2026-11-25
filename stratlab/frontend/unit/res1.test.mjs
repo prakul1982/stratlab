@@ -59,7 +59,7 @@ test("RES-1: live prices, earlier moves and implied moves are read for every row
 });
 
 test("RES-1: the corporate actions calendar is a table a day with the same filters and live prices", () => {
-  assert.match(corp, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Corporate actions going ex on \$\{exDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => r\.id\} columns=\{columns\} stack \/>/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen)
+  assert.match(corp, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Corporate actions going ex on \$\{exDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => r\.id\} columns=\{columns\} stack\n\s+more=\{last && paged\[part\] \? \{ total, loaded: rows\.length, load: \(\) => loadPart\(part\), busy: busy === part, noun: "actions" \} : undefined\} \/>/);   // (changed on purpose, site87: no phone paging; the cards are a block sized to the screen) (changed on purpose, site89b: the list comes a page at a time from the server, its last day's table asking for the next as the reader nears its end)
   for (const h of ["Company", "Action", "Amount or ratio", "Record date", "Price now", "Yield of this payment", "Market value"]) assert.ok(corp.includes(`header: "${h}"`), h);
   assert.match(corp, /<CalendarFilters region=\{region\}/);
   assert.match(corp, /useRowQuotes\(region, symbols\)/);

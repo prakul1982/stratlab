@@ -181,10 +181,13 @@ def test_the_layer_chart_plots_only_medians_of_three_or_more_with_their_count():
     v = full_view()
     v["chain"]["rows"] = [{**r, "ebitda_n": n, "n": max(n, r.get("n") or 0)} for r, n in zip(v["chain"]["rows"], (1, 3))]
     v["chain"]["rows"][1]["ebitda"] = 12.0
-    s = next(x for x in deck.theme_plan(v)[0] if x.title == "The value chain by layer")
+    slides_ = deck.theme_plan(v)[0]
+    s = next(x for x in slides_ if x.title == "The value chain by layer")
     t = next(b for b in s.blocks if b["kind"] == "table")
-    assert t["rows"][0][t["head"].index("EBITDA margin")] == "– (1 of 2)"          # changed on purpose (R25): "N of M" beside the layer's count
-    charts = [b for b in s.blocks if b["kind"] == "hbars"]
+    # changed on purpose (R25): "N of M" beside the layer's count; deck89 (changed on purpose, owner 25 Nov: no placeholder cells): "–", and
+    # the page's note says once why ("fewer than 3 companies have the figure")
+    assert t["rows"][0][t["head"].index("EBITDA margin")] == "–" and deck.FEW_NOTE in deck.page_said(slides_, "The value chain by layer")
+    charts = [b for b in s.blocks if b["kind"] == "hbars" and str(b.get("title") or "").startswith("Median")]          # the medians' chart
     assert not charts or all(c.endswith(("(3)",)) or int(c.rsplit("(", 1)[1][:-1]) >= 3 for b in charts for c in b["cats"])
 
 
@@ -196,7 +199,7 @@ def test_operating_figures_of_one_or_two_companies_are_a_line_in_data_confidence
     v["business"] = {"layers": [{"layer": "Mining", "rows": [{**biz, "symbol": "S1", "name": "Solo Co"}]}], "subs": [], "held": []}
     slides = deck.theme_plan(v)[0]
     assert "Operating figures" not in [s.title for s in slides]
-    rows = table_of(slides, "Data confidence")["rows"]
+    rows = deck.table_with(deck.with_held(slides), deck.CONF_HEAD)["rows"]  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert ["Operating figures filed", "1 company filed operating figures between results: Solo Co.", "Too few to set side by side: no page of their own."] in rows
     v["business"]["layers"][0]["rows"] = [{**biz, "symbol": f"S{i}", "name": f"Co {i}"} for i in range(3)]
     assert "Operating figures" in [s.title for s in deck.theme_plan(v)[0]]

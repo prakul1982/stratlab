@@ -117,7 +117,7 @@ def _slides(region, sector, layers, fact, passages, today=TODAY):
 
 
 def _page(slides):
-    pages = [s for s in slides if s.title.startswith(deck.LAYER_PROFILE_TITLE)]
+    pages = [s for s in deck.with_held(slides) if s.title.startswith(deck.LAYER_PROFILE_TITLE)]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert pages, [s.title for s in slides]
     cols = {h: i for i, h in enumerate(deck.LAYER_PROFILE_HEAD)}
     rows = [[dict(zip(b["head"], r)).get(h, "–") for h in deck.LAYER_PROFILE_HEAD]        # a page's column of "–" only is left out (drop_empty)
@@ -157,7 +157,7 @@ def test_a_layer_whose_companies_state_none_of_its_measures_says_so_and_a_layer_
                   lambda i, s, n, ind: _in(i, s, n, ind), _synthetic_passages({"HT0": HOTEL_DOC[0]}))[1]
     assert ("Sector operating measures, as stated: Stated by under half, no layer figure: rooms in operation 1 of 4, room occupancy 1 of 4, "
             "average room rate (₹) 1 of 4, RevPAR (₹) 1 of 4; latest Sep 2026" in _page(one)[2])                                   # one layer: its lines as text, never a page for a table of one row
-    notes = [r[0] for s in slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
+    notes = [r[0] for s in deck.with_held(slides) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert {"Room occupancy", "Debt / EBITDA"} <= set(notes) and "Passenger load factor" not in notes     # each figure it states is defined
 
 
@@ -233,7 +233,9 @@ def test_the_rendered_deck_passes_deck_check_and_every_deck_rule(tmp_path):
     text = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", str(p), "-"], capture_output=True, check=True).stdout.decode()
     got = DC.check_text(text)
     assert got["counts"]["profile unsaid"] == 0, got["findings"]
-    assert "Operating profiles: Airlines and air charter operators, airlines: none of its 4 measures stated" in " ".join(text.split())
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): each layer on its own measures is a record kept with the deck, which says it
+    from tests.test_export import texts
+    assert "Operating profiles: Airlines and air charter operators, airlines: none of its 4 measures stated" in " ".join(texts(deck.with_held(slides)).split())
 
 
 # ---------- 5. the largest companies' passages first, a cap a company (audit RC12: the 10 largest carry the measures) ----------
@@ -295,7 +297,8 @@ def test_an_ebitda_margin_filed_in_whole_points_is_worked_out_to_one_decimal_fro
 def test_a_median_over_layers_that_earn_differently_says_it_is_pooled():
     v, slides = _travel()                                               # transport and consumer services
     growth = next(s for s in slides if s.title == "Growth and profitability")
-    assert "pooled across layers that earn in different ways (each layer on its own figures: p. " in growth.subtitle
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): each layer on its own measures is kept with the deck, on the theme's page
+    assert f"pooled across layers that earn in different ways (each layer on its own figures: {deck.RECORDS})" in growth.subtitle  # (changed on purpose, rel90: the figures' source lines, comparison basis and full checks are kept in StratLab's records for this deck, not on the theme's page, so the pointer says so)
     one = _slides("IN", "Hotels", [("Hotels and resorts", "HT", "Hotels & Resorts", 4, "consumer_services"),
                                    ("Resorts", "RS", "Hotels & Resorts", 3, "consumer_services")], lambda i, s, n, ind: _in(i, s, n, ind),
                   _synthetic_passages({}))[1]

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { SCOPE_OPTIONS } from "../lib/companyScope";
 import { useCompanyScope } from "../lib/useCompanyScope";
@@ -25,7 +25,10 @@ interface CalendarView {
   more: number; mine_count: number; alerts: boolean; kinds: ActionKind[]; ahead_known: boolean; ahead_note?: string | null; note: string;
   recent_days?: number; universe?: { companies: number | null; updated_at: string | null } | null;
   total: number; matching: number; unknown_size: number; filters: CalFilters; facets: Facets;
+  /** site89b (server paging): each list's whole count (its rows come a page at a time), and every ex-date of the rows that match */
+  ahead_total?: number; recent_total?: number; days?: string[];
 }
+type Part = "ahead" | "recent";
 
 const KEEP = "stratlab.corp.filters.v1";
 const NO_FILTERS: CalFilters = { ...NO_CAL, sort: "date" };
@@ -56,17 +59,45 @@ export function CorpActionsPage() {
   const setParam = (k: string, v: string) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); setParams(p, { replace: true }); };
   const setRegion = (r: Region) => { setRegionState(r); saveRegion(r); setParam("region", r); };
 
+  const listQs = () => {
+    const qs = new URLSearchParams({ region, scope, kind, q: scope === "all" ? q : "", size: filters.size.join(","), sector: filters.sector, index: filters.index,
+      fo: filters.fo ? "true" : "", on: filters.on, sort: sortName });
+    for (const [k, v] of [...qs]) if (v === "") qs.delete(k);
+    return qs;
+  };
+  // site89b (server paging): the first page of each list comes with the answer; the next page of a list is asked for as the reader nears
+  // its end (the DataTable's AUTO-LOAD), and a page for a list that has since changed (another filter, market or search) is dropped
+  const gen = useRef(0);
+  const [busy, setBusy] = useState<Part | null>(null);
+  // the lists the first answer didn't hold whole: each keeps its "Loaded N of M" line once every row is in
+  const [paged, setPaged] = useState<Record<Part, boolean>>({ ahead: false, recent: false });
   useEffect(() => {
     let live = true;
-    setError(null);
+    const ticket = ++gen.current;
+    setError(null); setBusy(null);
     const t = setTimeout(() => {
-      const qs = new URLSearchParams({ region, scope, kind, q: scope === "all" ? q : "", size: filters.size.join(","), sector: filters.sector, index: filters.index,
-        fo: filters.fo ? "true" : "", on: filters.on, sort: sortName });
-      for (const [k, v] of [...qs]) if (v === "") qs.delete(k);
-      api<CalendarView>(`/research/corp-actions?${qs}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
+      api<CalendarView>(`/research/corp-actions?${listQs()}`).then((x) => {
+        if (!live || ticket !== gen.current) return;
+        setData(x);
+        setPaged({ ahead: (x.ahead_total ?? 0) > x.ahead.length, recent: (x.recent_total ?? 0) > x.recent.length });
+      }).catch((e) => live && setError((e as Error).message));
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [region, scope, kind, q, tries, filters, sortName]);
+  }, [region, scope, kind, q, tries, filters, sortName]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const asking = useRef<string | null>(null);     // the page being read: the end of the rows can be reached twice before the page redraws
+  const loadPart = (part: Part) => {
+    if (!data || busy) return;
+    const ticket = gen.current, at = `${ticket}:${part}:${data[part].length}`;
+    if (asking.current === at) return;
+    asking.current = at;
+    const qs = listQs(); qs.set("part", part); qs.set("offset", String(data[part].length));
+    setBusy(part);
+    api<CalendarView>(`/research/corp-actions?${qs}`)
+      .then((x) => { if (ticket === gen.current) setData((cur) => (cur ? { ...cur, [part]: [...cur[part], ...x[part].filter((r) => !cur[part].some((c) => c.id === r.id))] } : cur)); })
+      .catch(() => { asking.current = null; })          // a page that couldn't be read is asked again at the next nearing of the end
+      .finally(() => { if (ticket === gen.current) setBusy(null); });
+  };
+  const totalOf = (part: Part) => (part === "ahead" ? data?.ahead_total : data?.recent_total) ?? data?.[part].length ?? 0;
 
   // the prices of the rows in view (the first LIVE_ROWS), read each minute while the market trades
   const inView = useMemo(() => [...(data?.ahead ?? []), ...(data?.recent ?? [])].slice(0, LIVE_ROWS), [data]);
@@ -91,7 +122,7 @@ export function CorpActionsPage() {
   const n = calCount(filters, "date") + (kind ? 1 : 0);
   const cur = region === "IN" ? "INR" : "USD";
   const showMine = scope === "all";
-  const dayNames = [...new Set([...(data?.ahead ?? []), ...(data?.recent ?? [])].map((r) => r.ex_date))].sort();
+  const dayNames = data?.days ?? [...new Set([...(data?.ahead ?? []), ...(data?.recent ?? [])].map((r) => r.ex_date))].sort();
 
   const columns: Column<ActionRow>[] = [
     { key: "co", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
@@ -120,16 +151,19 @@ export function CorpActionsPage() {
     { key: "cap", header: "Market value", numeric: true, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
   ];
 
-  const day = (rows: ActionRow[], d: string) => {
+  // the last day's table of a list carries the list's AUTO-LOAD: its next page is asked for as the reader nears the end of it
+  const day = (rows: ActionRow[], d: string, part: Part, last: boolean) => {
     const on = rows.filter((r) => r.ex_date === d);
+    const total = totalOf(part);
     return (
       <div key={d} className="inv-day" data-testid="actions-day">
-        <span className="k-eyebrow">Ex-date {exDay(d)}{d === data?.today ? " · today" : ""} · {on.length} {on.length === 1 ? "action" : "actions"}</span>
-        <DataTable csv={`corporate actions ${d}`} label={`Corporate actions going ex on ${exDay(d)}`} rows={on} rowKey={(r) => r.id} columns={columns} stack />
+        <span className="k-eyebrow">Ex-date {exDay(d)}{d === data?.today ? " · today" : ""} · {on.length} {on.length === 1 ? "action" : "actions"}{last && rows.length < total ? " so far" : ""}</span>
+        <DataTable csv={`corporate actions ${d}`} label={`Corporate actions going ex on ${exDay(d)}`} rows={on} rowKey={(r) => r.id} columns={columns} stack
+          more={last && paged[part] ? { total, loaded: rows.length, load: () => loadPart(part), busy: busy === part, noun: "actions" } : undefined} />
       </div>
     );
   };
-  const groups = (rows: ActionRow[]) => <div className="k-stack">{[...new Set(rows.map((r) => r.ex_date))].map((d) => day(rows, d))}</div>;
+  const groups = (rows: ActionRow[], part: Part) => <div className="k-stack">{[...new Set(rows.map((r) => r.ex_date))].map((d, i, days) => day(rows, d, part, i === days.length - 1))}</div>;
 
   return (
     <div className="k-page">
@@ -185,13 +219,13 @@ export function CorpActionsPage() {
           {/* always there, and when it has nothing it says why (RC1-006: the US list was empty with no word) */}
           <Card>
             <CardHead title="Coming up" />
-            {data.ahead.length === 0 ? <span className="k-small k-muted" data-testid="ahead-note">{n ? "Nothing ahead meets the filters." : data.ahead_note ?? "Nothing announced with an ex-date ahead."}</span> : groups(data.ahead)}
+            {data.ahead.length === 0 ? <span className="k-small k-muted" data-testid="ahead-note">{n ? "Nothing ahead meets the filters." : data.ahead_note ?? "Nothing announced with an ex-date ahead."}</span> : groups(data.ahead, "ahead")}
           </Card>
           {/* ex-dates gone by fold under one line, open only when there is nothing ahead to show */}
           {data.recent.length > 0 && (
             <Card label={lookBack}>
-              <Earlier label={lookBack} count={data.recent.length} open={!data.ahead_known && !data.ahead.length}>
-                {groups(data.recent)}
+              <Earlier label={lookBack} count={totalOf("recent")} open={!data.ahead_known && !data.ahead.length}>
+                {groups(data.recent, "recent")}
               </Earlier>
             </Card>
           )}
@@ -201,7 +235,6 @@ export function CorpActionsPage() {
           </p>
         </>
       )}
-      {data && data.more > 0 && <p className="k-note">And {data.more} more.{scope === "all" ? " Find a company by name to narrow the list." : ""}</p>}
       {data && <p className="k-note inv-text">The ex-date is the first day the shares trade without the entitlement; the record date (on each row when it's another day) is when the company reads its list of holders. {data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );

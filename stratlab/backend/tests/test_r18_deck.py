@@ -122,7 +122,8 @@ def test_a_lender_theme_shows_lenders_measures_and_never_a_column_that_is_empty_
         assert col in chain["head"], col
     assert v["chain"]["measure"] == "roe" and "edian return on equity is highest in" in v["chain"]["line"]          # m2: after the headline's own scope ("Among the 2 layers with ..."); r69e (LIVE13A-009, updated on purpose): now its first words
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    assert any(c["title"] == "Where the return sits" for c in cards)
+    # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences; where the return sits is its line
+    assert any("edian return on equity is highest in" in ln for c in cards for ln in c["lines"])
     assert "Fewer than two layers" not in texts(slides) and "EBITDA margin –" not in texts(slides)
     for s in slides:                                           # no table anywhere has a column that is "–" in every row
         for b in s.blocks:
@@ -179,7 +180,7 @@ def test_layers_are_one_scheme_the_maps_own_with_the_rest_in_the_appendix():
     assert not [s for s in slides if s.title.startswith(deck.SMALL_TITLE)]
     assert {"PVT6", "PVT7"} <= {c["symbol"] for x in v["layers"] if x["layer"] == "Deposit gathering" for c in x["companies"]}
     assert "Private Sector Bank" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # R19: the unplaced companies are a count and their names (up to five), and rows of the appendix's one table; no list page of their own
     # lane d1 (updated on purpose): the "Other" group of two has no page of its own, so its page's note isn't printed; its rows are on
     # "Smaller layers" (above)
@@ -217,13 +218,13 @@ def test_the_membership_rules_version_is_in_every_kept_reads_key():
 def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_contradicts_another():
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "Still being checked" not in t and "still being checked" not in t            # the AI's pending checks aren't a membership count
     # R20: one wording of the universe and the figures (R27: the share names whose market value it is of)
     assert "8 in the exchange's industries · 8 with figures (100% of the market value of all 8)" in t
     region, m, f = us_list_theme()
     v, slides = deck_of(region, m, f)
-    how = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"])["lines"]
+    how = deck.plain_section(slides, "How the companies got in")          # deck89 (changed on purpose, owner 25 Nov): the notes in "Method and coverage"
     assert how[0].startswith("No official industry is this theme's core on its own; its companies are the theme's own named list.")
     assert not any("The base is every listed company" in x for x in how)
     v["checks"]["one_off"] = [{"symbol": "SEC0", "name": "Secure 0 Inc", "net": 30.0, "ebitda": 25.0}]
@@ -261,7 +262,9 @@ def test_whole_figures_print_whole_everywhere_and_others_keep_one_decimal():
         # changed on purpose (lane t1, LIVE7A-014): a ".0" figure only beside a decimal of its unit (one precision a text, column or chart)
         assert not deck.precision_problems(slides), deck.precision_problems(slides)[:5]
         charts = [b for s in slides for b in s.blocks if b["kind"] in ("hbars", "columns", "lines")]
-        assert charts and all(b.get("fmt") in (None, "pctw", "pct0", "num") or b["fmt"].endswith(("1", "1t")) for b in charts)
+        # deck89 (changed on purpose, owner 25 Nov: market value and revenue charted): amounts print as the tables print them ("inr", "usd"), a
+        # part of a move in points ("pts")
+        assert charts and all(b.get("fmt") in (None, "pctw", "pct0", "num", "inr", "usd", "pts") or b["fmt"].endswith(("1", "1t")) for b in charts)
 
 
 # ---------- 7. one page a layer, a short core ----------
@@ -271,9 +274,12 @@ def test_each_layer_is_one_page_and_the_full_table_is_in_the_appendix_with_its_p
     c = core(slides)
     conv = [s for s in c if s.title.startswith("Layer 2 · Converters")]
     assert len(conv) == 1 and conv[0].title == "Layer 2 · Converters"
-    note = next(p for b in conv[0].blocks if b["kind"] == "text" for p in b["paras"] if p.startswith("The largest"))
+    # deck89 (changed on purpose, owner 25 Nov): the layer's table is set close, so its page may show every one of its companies; when it
+    # doesn't, it says where the rest are
+    shown = [r for b in conv[0].blocks if b["kind"] == "table" for r in plain(b["rows"]) if not str(r[0]).startswith(("Median", "Range", "Together"))]
+    note = next((p for b in conv[0].blocks if b["kind"] == "text" for p in b["paras"] if p.startswith("The largest")), None)
     full = [i for i, s in enumerate(slides, 1) if s.title.startswith("Every company's figures")]          # R19: the appendix's one table
-    assert full and note.endswith(f"appendix, p. {full[0]}.") and full[0] > len(c)
+    assert full and full[0] > len(c) and (len(shown) == 14 if note is None else note.endswith(f"appendix, p. {full[0]}."))
     rows = [r[0] for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
     assert len([r for r in rows if r.startswith("Converter")]) == 14
     assert not any(s.title.startswith("Every company's figures") for s in c)            # per-company tables are out of the core

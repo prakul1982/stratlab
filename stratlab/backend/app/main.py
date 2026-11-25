@@ -2961,15 +2961,17 @@ def corp_ready(region: str):
 
 @app.get("/research/corp-actions")
 def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", size: str = "", sector: str = "", index: str = "",
-                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, profile=Depends(current_profile)):
+                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, part: str = "",
+                      offset: int = Query(0, ge=0, le=20000), profile=Depends(current_profile)):
     """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company, narrowed by the kind
     of action, company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with futures and options)
-    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name)."""
+    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name). site89b: a page of each list
+    (corp_actions.PAGE rows); `part` (ahead or recent) with `offset` is the next page of that list, asked for as the reader scrolls."""
     r = research_routes.region_of(region)
     corp_ready(r)
-    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20],
+    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20], limit=corp_actions.PAGE,
                                                 size=[x for x in size.split(",") if x][:4], sector=sector[:80], index=index[:20], fo=fo, on=on[:10],
-                                                sort=sort[:10], desc=desc))
+                                                sort=sort[:10], desc=desc, part=part[:10], offset=offset))
 
 
 @app.get("/research/corp-actions/{region}/{symbol}/unadjusted")
@@ -5896,7 +5898,15 @@ def results_options_many(symbols: list[str], day: str | None) -> dict[str, dict 
 
 
 # the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
-results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many)
+def results_filed(symbol: str) -> list[str]:
+    """site89b: the days a US company filed its earnings releases (8-K, item 2.02) with the SEC, from its filing list (cached six hours):
+    its earlier results days, for the Results page's usual move."""
+    return [d["at"] for d in sec.documents(sec_feed.submissions(sec_feed.cik(symbol)), days=results_calendar.PAST_BACK_DAYS)
+            if d["kind"] == "earnings_release"]
+
+
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many,
+                       filed=results_filed)
 # a theme's companies outside the stored heatmap rows are read on demand, with the same short wait for a broker turn (LIVE6-005)
 heatmap.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0))
 

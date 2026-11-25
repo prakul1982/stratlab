@@ -1,5 +1,5 @@
 """The pages' side of concalls.py (the Calendar's "Earnings calls" tab) and groups.py (Invest's business groups)."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from . import concalls, groups, results, scan
 from .auth import current_profile
@@ -16,7 +16,7 @@ def _mine(uid: str, region: str) -> set[str]:
 
 @router.get("/research/earnings-calls")
 def earnings_calls(region: str = "IN", scope: str = "all", when: str = "upcoming", kind: str = "all", q: str = "",
-                   profile=Depends(current_profile)):
+                   offset: int = Query(0, ge=0, le=20000), profile=Depends(current_profile)):
     """Upcoming (or the last three weeks') earnings calls and meetings with analysts or investors, India from the companies'
     filings and the US from the results calendar, for every company or the person's own stocks. Stored; nothing is
     fetched from a source here. This week's calls, with their notice and webcast or dial-in link, on every plan; the full
@@ -31,7 +31,9 @@ def earnings_calls(region: str = "IN", scope: str = "all", when: str = "upcoming
         err(402, "upgrade_required", f"The full earnings-call calendar (calls held, transcripts, filters and your stocks) is on the "
                                      f"{PLANS[FEATURE_PLAN['earnings_calls']]['name']} plan.")
     mine = _mine(profile["id"], region)
-    return ok({**concalls.view(region, "mine" if scope == "mine" else "all", mine, when, kind, q[:60], full=full), "mine_count": len(mine),
+    # site89b: a page of PAGE rows from `offset`; the page asks for the next as the reader nears the end of the list
+    return ok({**concalls.view(region, "mine" if scope == "mine" else "all", mine, when, kind, q[:60], full=full, limit=concalls.PAGE, offset=offset),
+               "mine_count": len(mine),
                "plan_needed": None if full else PLANS[FEATURE_PLAN["earnings_calls"]]["name"]})
 
 

@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CsvButton, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, MultiPick, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
+  Card, CardHead, ChipSet, CsvButton, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, MultiPick, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
 import { limitLine, planIdOf } from "../lib/lockText";
@@ -334,16 +334,20 @@ export function ScreensPage() {
 
           <Card className={`screens-save${showFilters ? "" : " folded"}`}>
             <CardHead title={open ? `Screen: ${open.name}` : "Save this screen"} info="Saved screens keep your conditions. Turn on the weekly email to hear on Saturday mornings which companies newly meet them. Your plan sets how many you can keep." />
-            <FormGrid label="Save this screen" onSubmit={(e) => e.preventDefault()}>
-              <Field label="Name" maxLength={60} placeholder="Like: Low debt" value={name} onChange={(e) => setName(e.target.value)} />
-              <FieldGroup label="Email" quietLabel>
-                <CheckField label="Weekly email of new matches" checked={weekly} onChange={setWeekly} />
-              </FieldGroup>
-              <FormActions>
-                {open && <button type="button" className="btn" disabled={saving} onClick={() => save(false)}>Update “{open.name}”</button>}
-                <button type="button" className={`btn${open ? " quiet" : ""}`} disabled={saving || full} onClick={() => save(true)}>{open ? "Save as a new screen" : "Save screen"}</button>
-              </FormActions>
-            </FormGrid>
+            {/* FORMS SWEEP (site89b, the Search filings form's layout of site87): the name box, a tick box whose words wrapped beside it and the
+                button alone on a line under them. The name, the weekly email (level with the box, VR3-007) and Save on one line */}
+            <form className="k-sform" aria-label="Save this screen" onSubmit={(e) => e.preventDefault()}>
+              <div className={`k-sform-row k-sform-save${open ? " two" : ""}`}>
+                <Field label="Name" maxLength={60} placeholder="Like: Low debt" value={name} onChange={(e) => setName(e.target.value)} />
+                <FieldGroup label="Email" quietLabel>
+                  <CheckField label="Weekly email of new matches" checked={weekly} onChange={setWeekly} />
+                </FieldGroup>
+                <div className="k-sform-acts">
+                  {open && <button type="button" className="btn k-sform-go" disabled={saving} onClick={() => save(false)}>Update “{open.name}”</button>}
+                  <button type="button" className={`btn k-sform-go${open ? " quiet" : ""}`} disabled={saving || full} onClick={() => save(true)}>{open ? "Save as a new screen" : "Save screen"}</button>
+                </div>
+              </div>
+            </form>
             {saved && !full && <p className="k-small k-muted" data-testid="screens-left">{saved.count} of {saved.limit} saved.</p>}
             {/* the one lock wording (DP2-022, DP1-018): the plan and its count, what the next plan gives; the note adds the price */}
             {full && saved && (() => {

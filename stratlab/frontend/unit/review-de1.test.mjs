@@ -37,7 +37,9 @@ test("DE-004/DE-035: on a phone the scan's and the red flags' rows are cards tha
 
 test("DE-007/DE-008: the group picker spans the row; the alert switch confirms and warns when nothing reaches you", () => {
   const s = read("src/pages/ResearchScans.tsx");
-  assert.match(s, /<Field label="Group to scan" wide>/);
+  // (changed on purpose, site89b forms sweep: the group picker takes the top row's whole width between the market and Scan)
+  assert.match(s, /<div className="k-sform-row k-sform-top">\n\s+<div className="k-sform-market">.*\n\s+<Field label="Group to scan">/);
+  assert.match(read("src/styles.css"), /\.k-sform-top \{ grid-template-columns: auto minmax\(0, 1fr\) auto; \}/);
   assert.match(s, /Set up a phone, Telegram or a confirmed email in Settings for it to reach you/);
   assert.match(s, /data-testid="scan-alert-nowhere"/);
 });

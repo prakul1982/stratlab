@@ -138,7 +138,11 @@ def test_days_gone_by_stay_on_a_companys_list_of_earlier_results_days(w):
     assert R.add_past("IN", rows, TODAY) == 3                                 # today's is not a past one yet
     assert R.load_past("IN")["rows"] == {"TCS": ["2026-07-09", "2026-04-10"], "INFY": ["2026-10-15"]}
     assert R.add_past("IN", rows, TODAY) == 0                                 # again: nothing new
+    # (changed on purpose, site89b "Usual move": eight days of one January were eight "results days"; days within RESULTS_GAP are one
+    # results now, so the list is filled with a results day a quarter, and one January's days count once)
     R.add_past("IN", [meeting("TCS", date(2026, 1, d)) for d in range(1, 9)], TODAY)
+    assert R.load_past("IN")["rows"]["TCS"] == ["2026-07-09", "2026-04-10", "2026-01-08"]
+    R.add_past("IN", [meeting("TCS", d) for d in (date(2025, 10, 9), date(2025, 7, 10), date(2025, 4, 10), date(2025, 1, 9), date(2024, 10, 10))], TODAY)
     assert len(R.load_past("IN")["rows"]["TCS"]) == R.PAST_KEEP and R.load_past("IN")["rows"]["TCS"][0] == "2026-07-09"
 
 
@@ -181,27 +185,37 @@ def test_the_move_over_a_results_day_is_the_close_after_it_against_the_close_bef
 
 
 def test_moves_are_worked_out_from_daily_prices_once_and_kept(w):
-    R.add_past("IN", [meeting("TCS", date(2026, 7, 9)), meeting("TCS", date(2026, 4, 10)), meeting("INFY", date(2026, 7, 16))], TODAY)
+    # (changed on purpose, site89b "Usual move": a usual move needs MIN_USUAL earlier results days, and says what it stands on; INFY has
+    # two days here, and one day alone is no usual move)
+    R.add_past("IN", [meeting("TCS", date(2026, 7, 9)), meeting("TCS", date(2026, 4, 10)), meeting("INFY", date(2026, 7, 16)), meeting("INFY", date(2026, 4, 16)),
+                      meeting("ONEDAY", date(2026, 7, 16))], TODAY)
     asked = []
     prices = {"TCS": bars({"2026-04-09": 100, "2026-04-10": 100, "2026-04-13": 95, "2026-07-08": 100, "2026-07-09": 100, "2026-07-10": 104}),
-              "INFY": bars({"2026-07-15": 200, "2026-07-16": 210, "2026-07-17": 190})}
+              "INFY": bars({"2026-04-15": 200, "2026-04-16": 200, "2026-04-17": 202, "2026-07-15": 200, "2026-07-16": 210, "2026-07-17": 190}),
+              "ONEDAY": bars({"2026-07-15": 200, "2026-07-16": 210, "2026-07-17": 190})}
     R.setup(history=lambda region, s, days: asked.append((region, s, days)) or prices[s])
-    got = R.moves_for("IN", ["TCS", "INFY", "NOTHING"], TODAY)
-    assert got["TCS"]["moves"] == {"avg": 4.5, "n": 2, "last": [4.0, -5.0], "dates": ["2026-07-09", "2026-04-10"]} and got["TCS"]["since"] is None
-    assert got["INFY"]["moves"]["last"] == [-5.0] and got["NOTHING"] is None      # no earlier results day: no figure
+    got = R.moves_for("IN", ["TCS", "INFY", "NOTHING", "ONEDAY"], TODAY)
+    assert got["TCS"]["moves"] == {"avg": 4.5, "n": 2, "last": [4.0, -5.0], "dates": ["2026-07-09", "2026-04-10"], "basis": R._moves_of("IN", "TCS", R.load_moves("IN"))["basis"]}
+    assert got["TCS"]["since"] is None
+    assert got["INFY"]["moves"]["last"] == [-5.0, 1.0] and got["NOTHING"] is None      # no earlier results day: no figure
+    assert got["ONEDAY"] is None                                                         # one earlier results day: no usual move from it alone
+    asked[:] = [a for a in asked if a[1] != "ONEDAY"]
     assert [a[1] for a in asked] == ["TCS", "INFY"] and all(a[2] == R.HISTORY_DAYS for a in asked)
     R.moves_for("IN", ["TCS", "INFY"], TODAY)
     assert len(asked) == 2                                                          # kept: the prices are not read again
     # a new results day for the company is a new reading
-    R.add_past("IN", [meeting("TCS", date(2026, 10, 10))], TODAY)
-    prices["TCS"] = prices["TCS"] + bars({"2026-10-09": 100, "2026-10-12": 103})
+    # (changed on purpose, site89b: 10 Oct was 19 days before TCS's results on the calendar today, the same results under the new rule,
+    # which a usual move leaves out; a results day a quarter apart instead)
+    R.add_past("IN", [meeting("TCS", date(2026, 9, 10))], TODAY)
+    prices["TCS"] = prices["TCS"] + bars({"2026-09-09": 100, "2026-09-11": 103})
     assert R.moves_for("IN", ["TCS"], TODAY)["TCS"]["moves"]["last"][0] == 3.0 and len(asked) == 3
 
 
 def test_only_a_few_companies_prices_are_read_in_one_ask(w):
-    R.add_past("IN", [meeting(f"CO{i}", date(2026, 7, 9)) for i in range(1, 15)], TODAY)
+    # (changed on purpose, site89b: two earlier results days each, the least a usual move stands on)
+    R.add_past("IN", [meeting(f"CO{i}", d) for i in range(1, 15) for d in (date(2026, 7, 9), date(2026, 4, 9))], TODAY)
     asked = []
-    R.setup(history=lambda r, s, d: asked.append(s) or bars({"2026-07-08": 100, "2026-07-10": 101}))
+    R.setup(history=lambda r, s, d: asked.append(s) or bars({"2026-04-08": 100, "2026-04-10": 101, "2026-07-08": 100, "2026-07-10": 101}))
     got = R.moves_for("IN", [f"CO{i}" for i in range(1, 15)], TODAY)
     assert len(asked) == R.MOVES_PER_ASK and sum(1 for v in got.values() if v) == R.MOVES_PER_ASK
     R.moves_for("IN", [f"CO{i}" for i in range(1, 15)], TODAY)
@@ -227,14 +241,15 @@ def test_a_company_whose_prices_cannot_be_read_is_not_asked_again_that_day(w):
 def test_a_busy_read_is_answered_pending_and_never_kept_as_nothing(w):
     """Owner, 5 Nov: "Past results-day moves" sat on "Reading…": the page's read queued behind the broker's jobs, and a busy read was kept
     as no moves until the company's next results day. Now a busy read, and a company not reached in the time a call has, come back pending."""
-    R.add_past("IN", [meeting(s, date(2026, 7, 9)) for s in ("TCS", "INFY", "WIPRO")], TODAY)
+    # (changed on purpose, site89b: two earlier results days each, the least a usual move stands on; the latest is the first of "last")
+    R.add_past("IN", [meeting(s, d) for s in ("TCS", "INFY", "WIPRO") for d in (date(2026, 7, 9), date(2026, 4, 9))], TODAY)
     asked, busy = [], {"on": True}
 
     def read(region, s, days):
         asked.append(s)
         if busy["on"]:
             raise SourceError("the broker", "busy", busy=True)
-        return bars({"2026-07-08": 100, "2026-07-10": 102})
+        return bars({"2026-04-08": 100, "2026-04-10": 100, "2026-07-08": 100, "2026-07-10": 102})
 
     R.setup(history=read)
     pending: list[str] = []
@@ -242,11 +257,11 @@ def test_a_busy_read_is_answered_pending_and_never_kept_as_nothing(w):
     assert got == {"TCS": None, "INFY": None} and pending == ["TCS", "INFY"]
     busy["on"] = False
     pending = []
-    assert R.moves_for("IN", ["TCS"], TODAY, pending=pending)["TCS"]["moves"]["last"] == [2.0] and pending == []      # asked again, read
+    assert R.moves_for("IN", ["TCS"], TODAY, pending=pending)["TCS"]["moves"]["last"] == [2.0, 0.0] and pending == []      # asked again, read
     # out of time (one is always read): the rest of the call's companies are pending, not "nothing"
     pending = []
     got = R.moves_for("IN", ["INFY", "WIPRO"], TODAY, pending=pending, budget=0.0)
-    assert got["INFY"]["moves"]["last"] == [2.0] and got["WIPRO"] is None and pending == ["WIPRO"]
+    assert got["INFY"]["moves"]["last"] == [2.0, 0.0] and got["WIPRO"] is None and pending == ["WIPRO"]
     pending = []
     R.setup(options=lambda s, day: R.straddle_move(chain()))
     got = R.implied_for(["TCS", "INFY"], "2026-10-29", pending=pending, budget=0.0)
@@ -273,12 +288,15 @@ def test_since_the_results_is_the_latest_close_against_the_close_before_the_day(
 
 
 def test_moves_shown_on_the_row_and_sorted_by(w):
-    R.add_past("IN", [meeting("TCS", date(2026, 7, 9)), meeting("INFY", date(2026, 7, 16))], TODAY)
-    R.setup(history=lambda r, s, d: bars({"2026-07-08": 100, "2026-07-09": 100, "2026-07-15": 100, "2026-07-16": 100, "2026-07-10": 104, "2026-07-17": 92}))
+    # (changed on purpose, site89b: two earlier results days each, the least a usual move stands on, and the days it stands on said)
+    R.add_past("IN", [meeting("TCS", date(2026, 7, 9)), meeting("INFY", date(2026, 7, 16)), meeting("TCS", date(2026, 4, 9)), meeting("INFY", date(2026, 4, 16))], TODAY)
+    R.setup(history=lambda r, s, d: bars({"2026-04-08": 100, "2026-04-09": 100, "2026-04-10": 104, "2026-04-15": 100, "2026-04-16": 100, "2026-04-17": 92,
+                                          "2026-07-08": 100, "2026-07-09": 100, "2026-07-15": 100, "2026-07-16": 100, "2026-07-10": 104, "2026-07-17": 92}))
     R.moves_for("IN", ["TCS", "INFY"], TODAY)
     v = view(on="today", sort="move")
     rows = {r["symbol"]: r for wk in v["weeks"] for r in wk["rows"]}
-    assert rows["TCS"]["moves"] == {"avg": 4.0, "n": 1, "last": [4.0], "dates": ["2026-07-09"]}
+    assert {k: v for k, v in rows["TCS"]["moves"].items() if k != "basis"} == {"avg": 4.0, "n": 2, "last": [4.0, 4.0], "dates": ["2026-07-09", "2026-04-09"]}
+    assert rows["TCS"]["moves"]["basis"]
     assert symbols(v)[:2] == ["INFY", "TCS"]                                         # the larger usual move first (8%, then 4%)
     assert rows["ZOMATO"]["moves"] is None
 
