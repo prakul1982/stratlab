@@ -7666,7 +7666,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 and not (c.get("developer") and mkey in DEVELOPER_KEYS) and not (c.get("distress") and mkey in DISTRESS_KEYS)]
         chart = None
         # deck89 (owner, 25 Nov): a layer's chart is its companies' market value, the largest first (each one's margins are on its row)
-        capped = [c for c in cos if c.get("cap") and c["symbol"] not in unsure | unmodelled and calc_of(c)["in"]]          # a company left out of its figures isn't charted with them
+        capped = [c for c in cos if c["symbol"] not in unsure | unmodelled and cap_charted(c)]          # a company left out of its figures isn't charted with them
         if len(capped) >= 2:
             top = sorted(capped, key=lambda c: -c["cap"])[:8]
             chart = {"kind": "hbars", "title": "Market value by company", "cats": [c["name"] for c in top], "vals": [c["cap"] for c in top], "fmt": money_fmt(us)}
@@ -8292,6 +8292,15 @@ LAYER_ROWS_MIN = 5              # d1: a layer's page shows at least this many of
 SPARSE_LINES = 2                # r60b: notes of this many lines or fewer never make a page of their own (they go with the layer's next rows)
 
 
+def cap_charted(c: dict) -> bool:
+    """deck89: a company on a layer's "Market value by company" chart: one with a market value, in the layer's figures (calc_of), not
+    unverified and not read with low confidence (R27: a company whose way of earning is read only weakly, even one counted on its industry,
+    is listed on its row but never charted beside the layer's others)."""
+    from .intel.theme_data import calc_of
+    return bool(c.get("cap")) and c.get("status") != "unverified" and not c.get("model_out") and c.get("model_confidence") != "low" \
+        and calc_of(c)["in"]
+
+
 def _smaller_layers(slides: list, small: list, amt, eyebrow: str, mfmt: str = "inr") -> None:
     """Every layer with SMALL_MAX confirmed companies or fewer on one compact page (R28; d1: two as well as one): one row a company, in the
     value chain's order (never ranked): the layer (said on its first row), its company, what it does in its own words, and its key figures.
@@ -8363,7 +8372,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str, mfmt: str = "i
                   eyebrow=eyebrow)
         # deck89 (owner, 25 Nov: no page with a box at the top and nothing under it): their companies' market value under a short table
         tall = table_height(head, chunk, widths, CW)
-        capped = sorted((c for c in cos if c.get("cap")), key=lambda c: -c["cap"])[:8] if k == 0 else []
+        capped = sorted((c for c in cos if cap_charted(c)), key=lambda c: -c["cap"])[:8] if k == 0 else []
         below = len(capped) >= 2 and th - tall - 0.3 >= max(1.7, 0.3 * len(capped) + 0.45)
         s.add("table", (M, TOP, CW, tall if below else th), head=head, rows=chunk, widths=widths, numeric=numeric, tight=below)
         if below:
