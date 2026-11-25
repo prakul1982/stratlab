@@ -159,3 +159,50 @@ def test_a_split_in_the_daily_prices_is_no_results_day_move():
     assert R.reaction(_bars({"2026-08-10": 100, "2026-08-11": 100, "2026-08-12": 160}), date(2026, 8, 11)) == 60.0    # a big move stays
     store = {"rows": {"RBOT": {"moves": [["2026-08-11", 900.0], ["2026-05-12", 4.0], ["2026-02-10", -6.0]]}}}
     assert R._moves_of("US", "RBOT", store) == {**R._moves_of("US", "RBOT", store), "avg": 5.0, "n": 2, "dates": ["2026-05-12", "2026-02-10"]}
+
+
+# ---------- 4. the corporate actions and earnings calls lists come a page at a time ----------
+def _div(i: int, ex: date):
+    from app import corp_actions as C
+    return C.row("IN", f"CO{i:03d}", {"kind": "dividend", "label": "Dividend", "text": "Dividend ₹1 a share", "amount": 1.0}, ex)
+
+
+def test_the_corporate_actions_list_is_paged_on_the_server(w):
+    """Live: the corporate actions page loaded every row of both lists in one answer (and the earnings calls page 400 at once); the page
+    now reads a page of each list and the next as the reader scrolls."""
+    from datetime import timedelta
+    from app import corp_actions as C
+    from tests.fake_db import headers
+    today = C.local_today("IN")
+    ahead = [_div(i, today + timedelta(days=1 + i % 9)) for i in range(130)]
+    gone = [_div(500 + i, today - timedelta(days=1 + i % 5)) for i in range(70)]
+    C.save("IN", ahead + gone)
+    c, h = w["client"], headers("pro-token")
+    first = c.get("/research/corp-actions?region=IN&scope=all", headers=h).json()
+    assert len(first["ahead"]) == C.PAGE and len(first["recent"]) == C.PAGE
+    assert first["ahead_total"] >= 130 and first["recent_total"] >= 70
+    assert len(first["days"]) >= 14                                     # every ex-date for the day filter, not only those of the first page
+    seen = [r["id"] for r in first["ahead"]]
+    while len(seen) < first["ahead_total"]:
+        nxt = c.get(f"/research/corp-actions?region=IN&scope=all&part=ahead&offset={len(seen)}", headers=h).json()
+        assert nxt["recent"] == [] and nxt["ahead"], "each next page brings rows until the list is whole"
+        seen += [r["id"] for r in nxt["ahead"]]
+    assert len(seen) == len(set(seen)) == first["ahead_total"]          # every row once, in the list's own order
+    whole = C.view("IN", "u-pro", "all", limit=10_000)
+    assert seen == [r["id"] for r in whole["ahead"]]
+    more = c.get(f"/research/corp-actions?region=IN&scope=all&part=recent&offset={C.PAGE}", headers=h).json()
+    assert more["ahead"] == [] and len(more["recent"]) == first["recent_total"] - C.PAGE
+
+
+def test_the_earnings_calls_list_is_paged_on_the_server(w):
+    from datetime import timedelta
+    from app import concalls
+    from tests.fake_db import headers
+    today = R.local_today("US")
+    R.save("US", [R.row("US", f"C{i:03d}", today + timedelta(days=i % 10), "Quarterly results", src="market calendar") for i in range(130)])
+    c, h = w["client"], headers("pro-token")
+    first = c.get("/research/earnings-calls?region=US", headers=h).json()
+    assert len(first["rows"]) == concalls.PAGE and first["matching"] == 130 and first["more"] == 130 - concalls.PAGE
+    second = c.get(f"/research/earnings-calls?region=US&offset={concalls.PAGE}", headers=h).json()
+    assert len(second["rows"]) == concalls.PAGE and second["offset"] == concalls.PAGE
+    assert not {r["id"] for r in first["rows"]} & {r["id"] for r in second["rows"]}

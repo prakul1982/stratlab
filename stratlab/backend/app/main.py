@@ -2961,15 +2961,17 @@ def corp_ready(region: str):
 
 @app.get("/research/corp-actions")
 def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", size: str = "", sector: str = "", index: str = "",
-                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, profile=Depends(current_profile)):
+                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, part: str = "",
+                      offset: int = Query(0, ge=0, le=20000), profile=Depends(current_profile)):
     """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company, narrowed by the kind
     of action, company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with futures and options)
-    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name)."""
+    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name). site89b: a page of each list
+    (corp_actions.PAGE rows); `part` (ahead or recent) with `offset` is the next page of that list, asked for as the reader scrolls."""
     r = research_routes.region_of(region)
     corp_ready(r)
-    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20],
+    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20], limit=corp_actions.PAGE,
                                                 size=[x for x in size.split(",") if x][:4], sector=sector[:80], index=index[:20], fo=fo, on=on[:10],
-                                                sort=sort[:10], desc=desc))
+                                                sort=sort[:10], desc=desc, part=part[:10], offset=offset))
 
 
 @app.get("/research/corp-actions/{region}/{symbol}/unadjusted")

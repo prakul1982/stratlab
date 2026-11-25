@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { SCOPE_OPTIONS } from "../lib/companyScope";
@@ -23,7 +23,7 @@ export interface CallRow {
 interface CallsView {
   region: Region; scope: "all" | "mine"; when: "upcoming" | "past"; kind: string; today: string; from: string; to: string; updated_at: string | null;
   matching: number; rows: CallRow[]; more: number; counts: { call: number; meet: number; results: number }; note: string; pending: boolean;
-  full: boolean; plan_needed: string | null; mine_count: number;
+  full: boolean; plan_needed: string | null; mine_count: number; offset?: number;
 }
 
 const WHEN = [{ value: "upcoming", label: "Coming up" }, { value: "past", label: "Held" }];
@@ -75,17 +75,35 @@ export function EarningsCallsPage() {
   // a plan without the full calendar asks for this week's calls only: the filters would be refused (402), so it asks again without them
   const [teaser, setTeaser] = useState(false);
   const full = !teaser && (data?.full ?? true);
+  const listQs = () => {
+    const qs = new URLSearchParams(full ? { region, scope, when, kind, q: q.trim() } : { region });
+    for (const [k, v] of [...qs]) if (!v) qs.delete(k);
+    return qs;
+  };
+  // site89b (server paging): the server answers a page of the list; the next page is asked for as the reader nears the end of the rows
+  // (the DataTable's AUTO-LOAD), and a page for a list that has since changed is dropped
+  const gen = useRef(0);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     let live = true;
-    setError(null);
+    const ticket = ++gen.current;
+    setError(null); setBusy(false);
     const t = setTimeout(() => {
-      const qs = new URLSearchParams(full ? { region, scope, when, kind, q: q.trim() } : { region });
-      for (const [k, v] of [...qs]) if (!v) qs.delete(k);
-      api<CallsView>(`/research/earnings-calls?${qs}`).then((x) => { if (live) { setData(x); if (!x.full) setTeaser(true); } })
+      api<CallsView>(`/research/earnings-calls?${listQs()}`).then((x) => { if (live && ticket === gen.current) { setData(x); if (!x.full) setTeaser(true); } })
         .catch((e) => { if (!live) return; if (e instanceof ApiError && e.status === 402) setTeaser(true); else setError((e as Error).message); });
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [region, scope, when, kind, q, tries, full]);
+  }, [region, scope, when, kind, q, tries, full]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const loadMore = () => {
+    if (!data || busy) return;
+    const ticket = gen.current;
+    const qs = listQs(); qs.set("offset", String(data.rows.length));
+    setBusy(true);
+    api<CallsView>(`/research/earnings-calls?${qs}`)
+      .then((x) => { if (ticket === gen.current) setData((cur) => (cur ? { ...cur, rows: [...cur.rows, ...x.rows.filter((r) => !cur.rows.some((c) => c.id === r.id))], more: x.more } : cur)); })
+      .catch(() => undefined)
+      .finally(() => { if (ticket === gen.current) setBusy(false); });
+  };
 
   const tz = marketTz(region);
   const cols: Column<CallRow>[] = [
@@ -133,8 +151,8 @@ export function EarningsCallsPage() {
             <CardHead title={when === "past" ? "Held" : "Coming up"} actions={data.rows.length ? <CsvButton name="earnings calls" label={when === "past" ? "Earnings calls and meetings held" : "Earnings calls and meetings coming up"} columns={cols} rows={data.rows} /> : undefined} />
             <DataTable stack label={when === "past" ? "Earnings calls and meetings held" : "Earnings calls and meetings coming up"} columns={cols}
               rows={data.rows} rowKey={(r) => r.id}
+              more={data.matching > data.rows.length ? { total: data.matching, load: loadMore, busy, noun: region === "IN" ? "calls and meetings" : "results days" } : undefined}
               empty={data.scope === "mine" ? "None of your stocks has a call or meeting in these days." : q ? "No company by that name has a call in these days." : "Nothing in these days."} />
-            {data.more > 0 && <p className="k-small k-muted">The first {data.rows.length.toLocaleString("en-IN")} are shown; find a company or narrow the type to see the other {data.more.toLocaleString("en-IN")}.</p>}
           </Card>
         )}
     </div>
