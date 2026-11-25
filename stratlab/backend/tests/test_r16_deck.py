@@ -364,12 +364,12 @@ def test_the_deck_is_shorter_every_companys_own_words_in_the_appendix():
     slides = slides_of(full())
     titles = [s.title for s in slides]
     # changed on purpose (R19): every company's own words are on the theme's page; the appendix is one table of every confirmed company's figures
-    assert "Every company in this theme" not in titles and titles.index("How to read this deck") < titles.index("Every company's figures")
-    # changed on purpose (R25): the page on how the figures are built follows the notes, before the appendix
-    at = titles.index("How to read this deck") + 1
-    while titles[at].startswith(deck.NOTES_TITLE):
-        at += 1
-    assert at > titles.index("How to read this deck") + 1 and all(s.title.startswith("Every company's figures") for s in slides[at:])
+    # deck89 (changed on purpose, owner 25 Nov): the appendix opens with that table, then "Method and coverage" (the notes) and how the figures
+    # are built
+    assert "Every company in this theme" not in titles
+    at = titles.index("Every company's figures")
+    rest = [t for t in titles[at:] if not t.startswith("Every company's figures")]
+    assert rest[0].startswith(deck.METHOD_TITLE) and any(t.startswith(deck.NOTES_TITLE) for t in rest) and all(deck.is_appendix(s) for s in slides[at:])
 
 
 # ---------- part 5: layout ----------

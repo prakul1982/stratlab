@@ -229,7 +229,7 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     cover = {it[0]: it for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"]}
     # y57 (R57, PAY-9): with adjacent participants, the cover's count is said to be of the core members (updated on purpose)
     assert cover["Core with figures" if cov.get("adjacent") else "With figures"][1] == f"{cov['n']:,}" and cov["line"] in t
-    counts = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+    counts = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
     assert counts.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, cov))}.") and cov["line"] in counts
     q = (v.get("sections") or {}).get("quarter") or {}

@@ -223,7 +223,7 @@ def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_con
     assert "8 in the exchange's industries · 8 with figures (100% of the market value of all 8)" in t
     region, m, f = us_list_theme()
     v, slides = deck_of(region, m, f)
-    how = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"])["lines"]
+    how = deck.plain_section(slides, "How the companies got in")          # deck89 (changed on purpose, owner 25 Nov): the notes in "Method and coverage"
     assert how[0].startswith("No official industry is this theme's core on its own; its companies are the theme's own named list.")
     assert not any("The base is every listed company" in x for x in how)
     v["checks"]["one_off"] = [{"symbol": "SEC0", "name": "Secure 0 Inc", "net": 30.0, "ebitda": 25.0}]

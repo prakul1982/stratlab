@@ -182,13 +182,13 @@ def test_a_data_confidence_row_of_checked_figures_points_to_their_source_rows():
     v, slides = deck_of("IN", chem_map(), chem_facts())
     view = {**v, "comparisons": []}
     # before R48 the "Figure checks" row named its figures with no reference to their source rows
-    for s in slides:
-        if s.title == "Data confidence":
+    for s in slides:          # deck89 (changed on purpose, owner 25 Nov): the checks' table is in the appendix's "Method and coverage"
+        if s.title.startswith(deck.METHOD_TITLE):
             for b in s.blocks:
-                if b["kind"] == "table":
+                if b["kind"] == "table" and b["head"] == deck.CONF_HEAD:
                     b["rows"] = [r if isinstance(r, dict) or r[0] != "Net above EBITDA margin" else [r[0], r[1].split(" Each one's")[0], r[2]]
                                  for r in b["rows"]]
-    assert {"slide": "Data confidence", "text": "Net above EBITDA margin", "why": "checked figures named with no reference to their source rows",
+    assert {"slide": deck.METHOD_TITLE, "text": "Net above EBITDA margin", "why": "checked figures named with no reference to their source rows",
             "rule": "sourced"} in deck.provenance_flags(slides, view)
     held = deck.confidence_rows({**v, "checks": {**v["checks"], "held": [{"symbol": "X", "name": "X Ltd", "key": "roce", "value": -2.0,
                                                                           "checks": ["c"], "state": D.INVALID}]}}, deck.coverage(v), deck.date(2026, 11, 13))

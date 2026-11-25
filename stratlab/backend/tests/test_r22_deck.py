@@ -54,7 +54,7 @@ def test_a_foreign_filers_money_figures_are_converted_to_the_themes_currency_at_
     v, slides = deck_of(region, m, f)
     foundries = next(x for x in v["layers"] if x["layer"] == "Foundries")
     assert foundries["revenue"] == pytest.approx(3_800_000 * 0.032 + 1310 + 1320)                      # the layer's sum in dollars
-    cur = next(r for r in table_of(slides, "Data confidence")["rows"] if r[0] == "Currency")
+    cur = next(r for r in deck.table_with(slides, deck.CONF_HEAD)["rows"] if r[0] == "Currency")  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     assert cur[1] == "Island Foundry Co Ltd reports in TWD, converted at 1 USD = 31.25 TWD (rate of 06 Nov 2026)." and "Every money figure in US dollars" in cur[2]
     assert "$3,800,000" not in texts(slides) and "$3.80 tn" not in texts(slides)
 
@@ -64,7 +64,7 @@ def test_with_no_rate_a_foreign_filers_money_figures_are_left_out_and_said():
     row = D.company_row("US", "FDRY", f["FDRY"])
     assert row["revenue"] is None and row["profit"] is None and row["net"] == pytest.approx(44.7, abs=0.1) and row["fx"] == {"rate": None, "at": None}
     v, slides = deck_of(region, m, f)
-    cur = next(r for r in table_of(slides, "Data confidence")["rows"] if r[0] == "Currency")
+    cur = next(r for r in deck.table_with(slides, deck.CONF_HEAD)["rows"] if r[0] == "Currency")  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     assert "No rate for Island Foundry Co Ltd: their revenue and other money figures are left out." in cur[1]
     # a rate written in the page's note is read when the page keeps no fx record
     noted = {**f["FDRY"], "currency_note": "The company reports in New Taiwan Dollar (TWD) ... to dollars at today's rate (1 USD = 32.00 TWD)."}

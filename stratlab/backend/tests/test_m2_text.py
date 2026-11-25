@@ -78,7 +78,9 @@ def test_the_value_chains_footnote_and_chart_agree_with_the_headline():
             f"fewer than {D.HEADLINE_MIN} companies with the figure.") in foot
     assert f"A median is shown for {D.COMPARE_MIN} companies or more." in foot
     assert "at least 3 companies;" not in foot                                                    # the marks' floor is the headline's, said once
-    bars = [b for s in slides if s.title.startswith(("The value chain by layer", "Median EBITDA margin by layer")) for b in s.blocks if b["kind"] == "hbars"]
+    # deck89 (changed on purpose, owner 25 Nov): the value chain's page charts its revenue by layer too; the margins' chart is the one titled so
+    bars = [b for s in slides if s.title.startswith(("The value chain by layer", "Median EBITDA margin by layer")) for b in s.blocks if b["kind"] == "hbars"
+            and str(b.get("title") or "Median").startswith("Median")]
     assert bars
     for b in bars:
         assert b["cats"] == ["Integrated steel (5)", "Mini mills (6)", "Aluminium smelting (5, not ranked)", "Sponge iron makers (3, not ranked)"]

@@ -216,7 +216,7 @@ def _with_off(v: dict, n: int) -> dict:
 
 def _coverage_rows(slides) -> list:
     from app import deck
-    return [r for s in slides if s.title.startswith(("Data confidence", "Coverage")) for b in s.blocks
+    return [r for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks
             if b["kind"] == "table" and b.get("head") == deck.COVERAGE_HEAD for r in b["rows"]]
 
 
@@ -259,8 +259,9 @@ def test_a_coverage_table_taller_than_a_page_goes_on_over_the_next():
     name, v, _ = next(S.decks())
     v = _with_off(v, 60)
     slides = deck.theme_plan(v)[0]
-    pages = [s for s in slides if s.title.startswith("Coverage")]
-    assert [s.title for s in pages][:2] == ["Coverage", "Coverage, continued"]
+    # deck89 (changed on purpose, owner 25 Nov): the coverage table is in the appendix's "Method and coverage", run on over its pages
+    pages = [s for s in slides if s.title.startswith(deck.METHOD_TITLE) and any(b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for b in s.blocks)]
+    assert len(pages) >= 2
     for s in pages:
         for b in s.blocks:
             if b["kind"] == "table":

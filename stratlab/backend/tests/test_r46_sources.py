@@ -142,7 +142,7 @@ def realty_theme():
 
 
 def conf_rows(slides):
-    conf = next(s for s in slides if s.title == "Data confidence")
+    conf = deck.joined(slides)  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     return {r[0]: r for b in conf.blocks if b["kind"] == "table" for r in b["rows"]}
 
 
@@ -203,13 +203,22 @@ def test_a_short_questions_card_goes_under_the_chart_rather_than_alone_on_a_page
     slides = deck.theme_plan(v)[0]
     titles = [s.title for s in slides]
     assert "Questions the figures raise" not in titles                 # the live R45 Insurance deck's p.14: one question alone on a page
-    chart = next(s for s in slides if s.title == "Median ROE and Net margin by layer")
+    # deck89 (changed on purpose, owner 25 Nov: no page of one chart): the layers' medians are charted under the "Layers side by side" table
+    # when there is room, the card beside the chart (else under it, the chart made shorter, as before)
+    chart = next(s for s in slides if any(b["kind"] == "columns" for b in s.blocks) and any(b["kind"] == "cards" for b in s.blocks))
     cards = [it for b in chart.blocks if b["kind"] == "cards" for it in b["items"]]
     assert cards and cards[0]["title"] == "Questions the figures raise" and cards[0]["lines"] == [q]
     col = next(b for b in chart.blocks if b["kind"] == "columns")
     card = next(b for b in chart.blocks if b["kind"] == "cards")
-    assert col["box"][3] >= deck.CHART_MIN and col["box"][1] + col["box"][3] <= card["box"][1]          # the chart shorter, nothing overlaps
-    assert chart.subtitle.endswith("; the questions the figures raise under it")
-    # a card too tall for the chart to keep CHART_MIN still gets a page of its own
-    monkeypatch.setattr(deck, "economics_questions", lambda *a, **k: [q + f" ({i})" for i in range(5)])
-    assert "Questions the figures raise" in [s.title for s in deck.theme_plan(v)[0]]
+    beside = col["box"][0] + col["box"][2] <= card["box"][0]
+    assert col["box"][3] >= (1.7 if beside else deck.CHART_MIN) and (beside or col["box"][1] + col["box"][3] <= card["box"][1])          # nothing overlaps
+    assert chart.subtitle.endswith("; the questions the figures raise beside it" if beside else "; the questions the figures raise under it")
+    # a card too tall for the chart to keep CHART_MIN still gets a page of its own (deck89, changed on purpose: or, beside the chart, the
+    # questions that fit there and the rest in full among the appendix's notes; never one lost)
+    many = [q + f" ({i})" for i in range(5)]
+    monkeypatch.setattr(deck, "economics_questions", lambda *a, **k: many)
+    slides = deck.theme_plan(v)[0]
+    shown = [ln for s in slides if not deck.is_appendix(s) for b in s.blocks if b["kind"] == "cards" for it in b["items"]
+             if it.get("title") == "Questions the figures raise" for ln in it["lines"]]
+    noted = [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]
+    assert all(x in shown or any(x in n for n in noted) for x in many)

@@ -166,7 +166,7 @@ def chem_facts():
 
 
 def conf_rows(slides):
-    conf = next(s for s in slides if s.title == "Data confidence")
+    conf = deck.joined(slides)  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     return {r[0]: r for b in conf.blocks if b["kind"] == "table" for r in b["rows"]}
 
 

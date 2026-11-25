@@ -54,7 +54,7 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
     assert "confirmed" not in words and (" description-verified, " in words and " not checked" in words if c.get("tally")
                                          else "membership checked " in words or " · in the theme " in words)
     assert not c["each"] or "in each calculation: " in words
-    conf = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+    conf = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     find = next(ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]
                 if ln.startswith("Considered"))
     assert conf.startswith(f"Counts: {words}.") and find == f"{words}."
@@ -270,9 +270,8 @@ def test_the_gate_runs_on_every_deck_before_it_is_stored_and_every_item_passes_o
     assert g["passed"] == 10, [(x["id"], x["dropped"]) for x in g["items"] if not x["ok"]]
     skipped = {x["id"]: x["note"] for x in g["items"] if x["note"].startswith("Skipped")}
     assert set(skipped) <= {"classified", "applicable"}                                         # the later lanes' data, a pass with a note until then
-    reading = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
-                   if it["title"] == "Reading the figures")
-    assert deck.MARKS_LINE in reading["lines"]                                                  # missing, n/a, not comparable: three marks
+    reading = deck.plain_section(slides, "Reading the figures")          # deck89 (changed on purpose, owner 25 Nov): the notes in "Method and coverage"
+    assert deck.MARKS_LINE in reading                                                           # missing, n/a, not comparable: three marks
 
 
 def test_a_failing_item_drops_what_failed_and_the_result_lists_it():

@@ -214,7 +214,7 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
         assert _re.search(r"\(\d+ compan(y|ies) with figures and a market value\)|\d+ compan(y|ies) with figures and a market value", size.subtitle)
         # changed on purpose (R19): data confidence is one page, its counts one line under the checks
         assert [s.title for s in slides if s.title.startswith("Data confidence")] == ["Data confidence"]
-        line = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+        line = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
         # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
         assert line.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, deck.coverage(v)))}. {deck.coverage(v)['line']};") and "with a market value (the theme's total market value)" in line   # R20: one wording
         assert _re.search(r"in each calculation: EBITDA margin \d+, net margin \d+", line)       # R27: one list of each calculation's count

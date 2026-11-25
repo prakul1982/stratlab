@@ -58,36 +58,41 @@ def test_the_appendix_is_one_table_of_every_confirmed_company():
     for name, slides in themes():
         at = appendix_at(slides)
         assert at < len(slides), name
-        tail = slides[at:]
+        # deck89 (changed on purpose, owner 25 Nov: the story first, the audit in the appendix): the appendix opens with the one table of
+        # every company's figures, then "Method and coverage" (what the notes and the data-confidence pages said) and how the figures are built
+        tail = [x for x in slides[at:] if x.title.startswith("Every company's figures")]
         n = len(tail)
+        assert slides[at:at + n] == tail, name
         for k, s in enumerate(tail, 1):
             assert s.title == ("Every company's figures" + (f" ({k} of {n})" if n > 1 else "")), (name, s.title)
             assert [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"], (name, s.title)
             assert s.blocks[0]["head"] == tail[0].blocks[0]["head"]
-        # changed on purpose (R25): the page on how the figures are built sits between the notes and the appendix
-        # m57 (updated on purpose): the notes may take two pages (as test_r25_deck allows), both between "How to read this deck" and the appendix
-        k_ = 3 if slides[at - 2].title.startswith(deck.NOTES_TITLE) else 2
-        assert slides[at - 1].title.startswith(deck.NOTES_TITLE) and slides[at - k_].title == "How to read this deck", name
+        rest = [x.title for x in slides[at + n:]]
+        assert rest and rest[0].startswith(deck.METHOD_TITLE) and all(deck.is_appendix(x) for x in slides[at:]), name
+        assert not any(t.startswith(deck.NOTES_TITLE) for t in [x.title for x in slides[:at]]), name
     v, slides = deck_of(*maker_theme())
-    rows = [r[0] for s in slides[appendix_at(slides):] for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
+    rows = [r[0] for s in slides[appendix_at(slides):] if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
     assert len(rows) == len(set(rows)) == 4 and not any("not confirmed" in r for r in rows)          # one row each, confirmed only
-    notes = " ".join(p for s in slides if s.title == "How to read this deck" for b in s.blocks for it in b.get("items") or [] for p in it.get("lines") or [])
+    notes = " ".join(deck.plain_section(slides, "Who is in it"))          # deck89 (changed on purpose): the notes in "Method and coverage"
     assert "2 companies whose own words don't show the work, left out of every median and total: Maker 5 Ltd, Maker 6 Ltd." in notes
 
 
 def test_data_confidence_is_one_page_with_its_counts_and_worth_a_watch_only_with_rows():
+    # deck89 (changed on purpose, owner 25 Nov): the checks and their counts are one table and one line of the appendix's "Method and coverage"
     for name, slides in themes():
-        dc = [s for s in slides if s.title.startswith("Data confidence")]
-        assert len(dc) == 1 and any(p.startswith("Counts: ") for b in dc[0].blocks for p in b.get("paras") or []), name
+        assert not [s for s in slides if s.title.startswith("Data confidence")], name
+        dc = deck.joined(slides)
+        assert dc and deck.table_with(slides, deck.CONF_HEAD) and any(p.startswith("Counts: ") for b in dc.blocks for p in b.get("paras") or []), name
     v = full_view()
     v["checks"]["series"] = [{"symbol": f"X{i}", "name": f"X {i}"} for i in range(9)]
     v["checks"]["unverified"] = [{"symbol": f"U{i}", "name": f"U {i}"} for i in range(9)]
     slides = deck.theme_plan(v)[0]
-    assert len([s for s in slides if s.title.startswith("Data confidence")]) == 1
+    assert len([b for s in slides for b in s.blocks if b["kind"] == "table" and b["head"] == deck.CONF_HEAD]) >= 1
     _, packaging = deck_of(*theme_a())
     assert "Dated company updates" not in [s.title for s in packaging]                         # no company meets the rules (m2: the page's name)
-    cards = next(b for s in packaging if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    assert next(c for c in cards if c["title"] == "Dated company updates")["lines"] == ["No company meets the rules today."]
+    # deck89 (changed on purpose): said once among the appendix's notes, not as a card of the findings
+    notes = deck.table_with(packaging, deck.NOTES_HEAD)["rows"]
+    assert ["Dated company updates", "No company meets the rules today."] in notes
     v = full_view()
     v["sections"]["events"]["results_due"] = [{"symbol": f"R{i}", "name": f"Results Co {i}", "date": f"2026-11-{1 + i % 7:02d}", "purpose": "Results"} for i in range(30)]
     slides = deck.theme_plan(v, now=__import__("datetime").datetime(2026, 10, 31, tzinfo=__import__("datetime").timezone.utc))[0]
@@ -115,9 +120,9 @@ def test_sub_themes_are_one_compact_page_of_names():
     many = [{"symbol": f"C{i}", "name": f"Cell Co {i}", "cap": 1000 - i} for i in range(9)]
     v["subs"] = [{"name": "Cell making", "detail": "Cells.", "companies": many}, {"name": "Empty one", "detail": "Nothing.", "companies": []}]
     slides = deck.theme_plan(v)[0]
-    t = table_of(slides, "Sub-themes")
-    assert [r[0] for r in t["rows"]] == ["Cell making"] and t["rows"][0][3] == "Cell Co 0, Cell Co 1, Cell Co 2, Cell Co 3, Cell Co 4 and 4 more"
-    assert next(s for s in slides if s.title == "Sub-themes").subtitle.startswith("2 sub-themes, 1 with a listed company")
+    # deck89 (changed on purpose, owner 25 Nov: "Sub-themes" repeats the layers): no page; how many have a listed company, and where each is
+    assert "Sub-themes" not in [s.title for s in slides]
+    assert "The 1 sub-theme with a listed company, each with its companies: on the theme's page." in deck.plain_section(slides, "Not in this deck, and what the AI wrote")
 
 
 def test_page_counts_of_the_synthetic_themes():

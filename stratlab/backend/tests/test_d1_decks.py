@@ -269,9 +269,9 @@ def test_the_checks_table_never_prints_its_heading_alone():
         {"ticker": f"X{i}", "name": f"Another Business Company {i} Holdings", "industry": "Retail-Miscellaneous Retail"} for i in range(12)]}
     v["members"] = (v.get("members") or []) + [{"symbol": f"O{i}", "layer": "Other test companies", "rest": True} for i in range(30)]
     slides = deck.theme_plan(v)[0]
-    conf = next(s for s in slides if s.title == "Data confidence")
+    conf = deck.joined(slides)  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     rows = [r for b in conf.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
     assert len(rows) >= 3 and "Universe" in [r[0] for r in rows]
-    cov = next(s for s in slides if s.title == deck.COVERAGE_TITLE)
+    cov = deck.joined(slides)          # deck89 (changed on purpose): the coverage table in "Method and coverage"
     assert any(b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for b in cov.blocks)
     assert any(str(p).startswith("Counts:") for b in conf.blocks if b["kind"] == "text" for p in b.get("paras") or [])

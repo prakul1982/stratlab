@@ -52,7 +52,7 @@ def test_every_count_of_the_members_says_its_evidence_states_and_none_says_confi
                                     + (" · in each calculation: " + ", ".join(f"{a} {b}" for a, b in c["each"]) if c["each"] else ""))
     find = next(ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
                 for ln in it["lines"] if ln.startswith("Considered"))
-    conf = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+    conf = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     assert split in find and split in conf
     rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
     # h56 (R56, updated on purpose): the description-verified share first, then the membership check's count

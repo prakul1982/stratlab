@@ -239,7 +239,8 @@ def test_a_wide_value_chain_table_keeps_the_full_width_and_its_chart_follows_on_
     own = [s for s in slides if s.title.startswith("Median ") and s.title.endswith(" by layer") and any(b["kind"] == "hbars" for b in s.blocks)]
     for s in pages:
         t = next(b for b in s.blocks if b["kind"] == "table")
-        beside = [b for b in s.blocks if b["kind"] in ("hbars", "columns")]
+        # deck89 (changed on purpose): a chart may sit under a wide table, never beside it
+        beside = [b for b in s.blocks if b["kind"] in ("hbars", "columns") and b["box"][1] < t["box"][1] + t["box"][3] - 0.01]
         assert not (len(t["head"]) > 5 and beside), (name, t["head"])                            # no chart pressed beside a wide table
         assert len(t["head"]) <= 5 or abs(t["box"][2] - CW) < 1e-6
     if own:
@@ -252,28 +253,44 @@ def test_a_wide_value_chain_table_keeps_the_full_width_and_its_chart_follows_on_
             r = rows[cat.rsplit(" (", 1)[0]]
             assert (r.get(f"{key}_n") or 0) >= deck.MIN_BASE and r.get(key) is not None, cat
         assert any(b["kind"] == "text" and "every layer is in the table before this page" in b["paras"][0] for b in own[0].blocks)
+    # deck89 (moved on purpose): the layers' median chart is on the value chain's page now; each bar still a layer on a median of MIN_BASE
+    # companies or more
+    rows = {r["layer"]: r for r in v["chain"]["rows"]}
+    for b in [b for s in pages for b in s.blocks if b["kind"] == "hbars" and str(b.get("title") or "").startswith("Median ")]:
+        key = "roe" if "ROE" in b["title"] else "ebitda"
+        assert len(b["cats"]) >= 2 and len(b["cats"]) == len(b["vals"])
+        for cat in b["cats"]:
+            r = rows[cat.rsplit(" (", 1)[0]]
+            assert (r.get(f"{key}_n") or 0) >= deck.MIN_BASE and r.get(key) is not None, cat
     side = [s for s in slides if s.title.startswith("Layers side by side")]
     for s in side:
         t = next(b for b in s.blocks if b["kind"] == "table")
-        assert not (len(t["head"]) > 5 and any(b["kind"] == "columns" for b in s.blocks)), name
+        assert not (len(t["head"]) > 5 and any(b["kind"] == "columns" and b["box"][1] < t["box"][1] + t["box"][3] - 0.01 for b in s.blocks)), name
     cols = [s for s in slides if s.title.startswith("Median ") and any(b["kind"] == "columns" for b in s.blocks)]
     assert len(own) + len(cols) <= 1                                                             # one page charting the layers' medians, not two
     for s in cols:
         assert titles.index(s.title) == titles.index(side[-1].title) + 1 and abs(next(b for b in s.blocks if b["kind"] == "columns")["box"][2] - CW) < 1e-6
 
 
-def test_some_synthetic_deck_has_each_kind_of_chart_page_and_one_has_none():
-    own = [n for n, _, sl in ALL27 if any(s.title.startswith("Median ") and any(b["kind"] == "hbars" for b in s.blocks) for s in sl)]
-    cols = [n for n, _, sl in ALL27 if any(s.title.startswith("Median ") and any(b["kind"] == "columns" for b in s.blocks) for s in sl)]
-    none = [n for n, _, sl in ALL27 if not any(s.title.startswith("Median ") for s in sl)]
+# deck89 (changed on purpose, owner 25 Nov: no page of one chart, a chart on most pages): the layers' median margin is charted on the value
+# chain's own page (beside its revenue by layer) and their medians side by side under the "Layers side by side" table, never on a page alone
+def _median_chart(sl, kind):
+    return any(b["kind"] == kind and str(b.get("title") or "").startswith("Median ") for s in sl for b in s.blocks)
+
+
+def test_some_synthetic_deck_has_each_kind_of_median_chart_and_one_has_none():
+    own = [n for n, _, sl in ALL27 if _median_chart(sl, "hbars")]
+    cols = [n for n, _, sl in ALL27 if _median_chart(sl, "columns")]
+    none = [n for n, _, sl in ALL27 if not _median_chart(sl, "hbars") and not _median_chart(sl, "columns")]
     assert own and cols and none, (own, cols, none)
+    assert not any(s.title.startswith("Median ") for _, _, sl in ALL27 for s in sl)               # no page of one chart
 
 
-def test_fewer_than_two_layers_on_enough_companies_get_no_chart_page():
-    name, v, _ = next(x for x in ALL27 if any(s.title == "Median EBITDA margin by layer" for s in x[2]))
+def test_fewer_than_two_layers_on_enough_companies_get_no_median_chart():
+    name, v, _ = next(x for x in ALL27 if _median_chart(x[2], "hbars"))
     v2 = {**v, "chain": {**v["chain"], "rows": [{**r, "ebitda_n": 2 if i else r.get("ebitda_n")} for i, r in enumerate(v["chain"]["rows"])]}}
     slides = deck.theme_plan(v2)[0]
-    assert not any(s.title == "Median EBITDA margin by layer" for s in slides)
+    assert not any(b["kind"] == "hbars" and str(b.get("title") or "").startswith("Median EBITDA") for s in slides for b in s.blocks)
 
 
 # ---------- what the layout check found on the way ----------

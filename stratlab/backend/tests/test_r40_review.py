@@ -221,7 +221,7 @@ def test_the_coverage_says_how_many_companies_fit_none_of_the_map_s_layers_and_d
                      r"compared: 4 fit none of the map's layers", t)
     assert "Filed under Retail-Miscellaneous Retail but in another business: Propane Co." in t
     # c1 (R44, updated on purpose): with the "From other industries" row the coverage table may have a page of its own after the checks
-    rows = [r for s in slides if s.title in ("Data confidence", deck.COVERAGE_TITLE) for b in s.blocks
+    rows = [r for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks
             if b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for r in b["rows"]]
     assert ["In informative layers", "7 of 11 (64%)"] == rows[[r[0] for r in rows].index("In informative layers")][:2]       # R44 (updated on purpose)
     assert deck.coverage_table_flags(rows, v, deck.coverage(v)) == []

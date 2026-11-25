@@ -237,10 +237,13 @@ def test_4_a_layer_s_short_notes_go_with_its_next_companies_never_on_a_page_of_t
         if s.title.endswith("(notes)"):
             paras = [p for b in s.blocks if b["kind"] == "text" for p in b["paras"]]
             assert sum(len(deck.wrap(p, deck.BODY_MIN, deck.CW)) for p in paras) > getattr(deck, "SPARSE_LINES", 2), s.title
-    s = next(s for s in slides if s.title.startswith("Layer") and "Branded home, personal care and FMCG" in s.title and s.title.endswith("(continued)"))
-    assert "who is in the layer's calculations" in s.subtitle
-    assert [b["kind"] for b in s.blocks] == ["table", "text", "text"]          # its next companies, where the rest is, then the notes
-    assert any("Membership of its" in p for p in s.blocks[2]["paras"])
+    # deck89 (changed on purpose, owner 25 Nov: short footnotes): a layer's notes are said in full among the appendix's notes, its page keeps one
+    # line that says where; no "(notes)" page and no "(continued)" page that exists only to carry them
+    notes = deck.table_with(slides, deck.NOTES_HEAD)["rows"]
+    row = next(r for r in notes if not isinstance(r, dict) and "Branded home, personal care and FMCG" in r[0])
+    assert "Membership of its" in row[1]
+    page = next(s for s in slides if s.title.startswith("Layer") and "Branded home, personal care and FMCG" in s.title)
+    assert any("What the marks on its rows mean" in str(p) for b in page.blocks if b["kind"] == "text" for p in b["paras"])
 
 
 # ---------- 2 (on the input production served): FMCG's branded makers never ranked against agri-processing ----------

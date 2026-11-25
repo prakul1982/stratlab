@@ -207,7 +207,8 @@ def test_the_notes_page_explains_only_the_figures_the_deck_shows_with_period_sou
     pages = [s for s in slides if s.title.startswith(deck.NOTES_TITLE)]
     assert 1 <= len(pages) <= 2
     titles = [s.title for s in slides]
-    assert titles.index(pages[0].title) == titles.index("How to read this deck") + 1
+    # deck89 (changed on purpose, owner 25 Nov): in the appendix, after "Method and coverage" (what the notes page said)
+    assert titles.index(pages[0].title) == max(i for i, t in enumerate(titles) if t.startswith(deck.METHOD_TITLE)) + 1
     rows = [r for s in pages for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
     assert all(len(r) == 4 and all(str(c).strip() for c in r) for r in rows)
     names = [r[0] for r in rows]
