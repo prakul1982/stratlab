@@ -24,7 +24,9 @@ type Gate = { passed: number; of: number; items: GateItem[]; dropped: { rule: st
 type Deck = { id: string; label: string; region: string; at: string | null; size: number; hits: number; gate: Gate | null;
   /** why it is no longer the file people get ("older version", "earlier day"), null when it is (older servers don't send it) */
   stale?: string | null };
-type View = { stores: Store[]; themes: Theme[]; decks?: Deck[]; stored: Stored[]; saved: { kind: string; count: number }[] | null };
+type View = { stores: Store[]; themes: Theme[]; decks?: Deck[]; stored: Stored[]; saved: { kind: string; count: number }[] | null;
+  /** how many kept decks match in all (the list is the newest 60), and how many of every kept deck nobody is served any more (admin90) */
+  decks_total?: number; decks_old?: number };
 
 const REGION_WORD: Record<string, string> = { IN: "India", US: "US" };
 
@@ -33,13 +35,19 @@ const span = keptSpan;
 const byText = (by: Record<string, number>) => Object.entries(by).filter(([, n]) => n > 0).map(([p, n]) => `${p[0].toUpperCase()}${p.slice(1)} ${n}`).join(", ");
 
 export function LibrarySection() {
-  const { fail } = useApp();
+  const { fail, notify } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
   const [again, setAgain] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Theme | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const clearOld = async () => {
+    setBusy("old-decks");
+    try { const r = await api<{ removed: number }>("/admin/stored/remove-old-decks", { method: "POST" }); notify(`Removed ${r.removed} old deck${r.removed === 1 ? "" : "s"}.`); setAgain((n) => n + 1); }
+    catch (e) { fail(e); } finally { setBusy(null); setClearing(false); }
+  };
   useEffect(() => {
     let live = true;
     const t = setTimeout(() => {
@@ -54,7 +62,7 @@ export function LibrarySection() {
     const t = setTimeout(() => setAgain((n) => n + 1), 10_000);
     return () => clearTimeout(t);
   }, [view]);
-  const act = async (what: "refresh" | "remove", kind: string, id: string) => {
+  const act = async (what: "refresh" | "remove", kind: "theme" | "deck:theme", id: string) => {
     setBusy(id);
     try { await api(`/admin/stored/${what}`, { method: "POST", body: { kind, id } }); setAgain((n) => n + 1); }
     catch (e) { fail(e); }
@@ -111,6 +119,10 @@ export function LibrarySection() {
       <><ScrollList label="Dropped before it shipped" rows={3}><span className="k-stack k-tight">
         {d.gate.dropped.map((x, k) => <span key={k} className="k-note">{itemLabel(d.gate as Gate, x.rule)}{x.slide ? ` (${x.slide})` : ""}: {x.text}</span>)}
       </span></ScrollList>{d.gate.dropped_n > d.gate.dropped.length && <span className="k-note">{d.gate.dropped_n} in all; the first {d.gate.dropped.length} are kept with the run</span>}</>)) },
+    // admin90: a deck nobody gets any more (an earlier day's, older code) can be removed here; the current ones are what people download
+    { key: "x", header: "", action: true, cell: (d) => (d.stale
+      ? <button type="button" className="btn quiet sm" disabled={busy === d.id} onClick={() => { void act("remove", "deck:theme", d.id); }} aria-label={`Remove ${d.label}`}>Remove</button>
+      : <span className="k-note">Served now</span>) },
   ];
   const prefixCols: Column<Stored>[] = [
     { key: "l", header: "What", rowHeader: true, wrap: true, cell: (s) => s.label },
@@ -140,7 +152,9 @@ export function LibrarySection() {
             : <DataTable label="Themes in the library" rows={view.themes} rowKey={(t) => t.id} columns={themeCols} stack />}
       </Card>
       <Card label="Theme decks">
-        <CardHead title={`Theme decks${view?.decks ? ` (${view.decks.length})` : ""}`} info="Every kept theme deck with its publication check: figures sourced, headlines that reproduce, counts that reconcile, comparable peers, headline samples, clear marks and plain facts. A sentence or figure that fails is dropped before the deck is kept; this shows what was." />
+        <CardHead title={`Theme decks${view?.decks ? ` (${view.decks_total != null && view.decks_total > view.decks.length ? `newest ${view.decks.length} of ${view.decks_total}` : view.decks.length})` : ""}`}
+          info="Every kept theme deck with its publication check: figures sourced, headlines that reproduce, counts that reconcile, comparable peers, headline samples, clear marks and plain facts. A sentence or figure that fails is dropped before the deck is kept; this shows what was. A deck is kept for the day it was made, so each day's stays behind once the next is made: those, and decks made by older code, are never downloaded again and can be removed."
+          actions={view?.decks_old ? <button type="button" className="btn quiet sm" disabled={busy === "old-decks"} onClick={() => setClearing(true)} data-testid="remove-old-decks">Remove {view.decks_old} old deck{view.decks_old === 1 ? "" : "s"}</button> : undefined} />
         {!view ? <Skeleton label="Reading the decks" lines={3} />
           : !view.decks?.length ? <EmptyState title={q || region ? "No deck matches" : "No deck kept yet"}>A theme's deck is kept here once someone downloads it.</EmptyState>
             : <DataTable label="Theme decks and their publication check" rows={view.decks} rowKey={(d) => d.id} columns={deckCols} stack />}
@@ -157,6 +171,11 @@ export function LibrarySection() {
               { key: "k", header: "Kind", rowHeader: true, cell: (s: { kind: string; count: number }) => s.kind[0].toUpperCase() + s.kind.slice(1) },
               { key: "n", header: "Saved", numeric: true, cell: (s) => s.count.toLocaleString("en-IN") }]} />}
       </Card>
+      {clearing && view?.decks_old ? (
+        <ConfirmDialog title={`Remove ${view.decks_old} old deck${view.decks_old === 1 ? "" : "s"}?`} confirmLabel="Remove" busy={busy === "old-decks"} onClose={() => setClearing(false)} onConfirm={() => { void clearOld(); }}>
+          Only decks nobody is served any more go: an earlier day's, or one made by older code. Today's decks stay.
+        </ConfirmDialog>
+      ) : null}
       {removing && (
         <ConfirmDialog title={`Remove ${removing.label}?`} confirmLabel="Remove" onClose={() => setRemoving(null)}
           onConfirm={() => { const t = removing; setRemoving(null); void act("remove", "theme", t.id); }}>

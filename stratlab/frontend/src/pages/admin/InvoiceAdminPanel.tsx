@@ -75,8 +75,9 @@ export function InvoiceAdminPanel() {
               onKeyDown={(e) => { if (e.key === "Enter") load(asked.trim()); }} />
             {!!rows.length && <button type="button" className="btn quiet sm" onClick={csv}>Download CSV</button>}
           </>} />
-        <p className="k-note k-muted">{rows.length} invoice{rows.length === 1 ? "" : "s"} in this financial year. Type another year and press Enter.</p>
-        <DataTable label="Invoices" rows={rows} rowKey={(r) => r.number} columns={cols} empty="No invoices in this financial year yet." />
+        <p className="k-note k-muted">{rows.length ? `${rows.length} invoice${rows.length === 1 ? "" : "s"} in this financial year.` : "No invoices in this financial year yet."} Type another year and press Enter.</p>
+        {/* none yet: the line above says so, not a table of headers over nothing (admin90) */}
+        {rows.length > 0 && <DataTable label="Invoices" rows={rows} rowKey={(r) => r.number} columns={cols} />}
       </Card>
     </>
   );

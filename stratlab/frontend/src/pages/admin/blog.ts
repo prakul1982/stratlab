@@ -15,7 +15,10 @@ const RESULT: Record<string, string> = { new: "written", updated: "updated", sam
 /** The last research run in a line: when, what each post came to, and any problem (a post the data was too thin for is said, not hidden). */
 export const runLine = (r: BlogRun): string => {
   if (!r.at) return "The research posts have not been written yet.";
-  const done = (r.made ?? []).map((m) => `${m.post} ${RESULT[m.result] ?? m.result}`).join(", ");
+  // the same post and result once, with how many (admin90: twenty theme posts read "theme unchanged, theme unchanged, ..." over six lines)
+  const seen = new Map<string, number>();
+  for (const m of r.made ?? []) { const k = `${m.post} ${RESULT[m.result] ?? m.result}`; seen.set(k, (seen.get(k) ?? 0) + 1); }
+  const done = [...seen].map(([k, n]) => (n > 1 ? `${k} (${n} posts)` : k)).join(", ");
   const bad = r.problems?.length ? ` ${r.problems.length === 1 ? "A problem" : `${r.problems.length} problems`}: ${r.problems.join("; ")}` : "";
   return `Research last written ${ago(r.at)}${done ? `: ${done}.` : "."}${bad}`;
 };

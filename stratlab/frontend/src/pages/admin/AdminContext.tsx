@@ -54,7 +54,11 @@ export interface Overview {
     /** the invoices of the last 30 days, by currency (DJ-004) */
     revenue_30d?: { days: number; count: number; by_currency: Record<string, number> } | null;
     /** people who signed in or ran something in the last 7 days (DJ-004) */
-    active_7d?: number | null };
+    active_7d?: number | null;
+    /** profile rows that are no sign-in account's (a settings key's tail taken for a user id), left out of every count (admin90) */
+    stray_profiles?: number;
+    /** when these counts were read (the server keeps them 45 s; admin90) */
+    counted_at?: string };
 }
 
 export type AutofixIssue = { id: string; name: string; problem: string | null; since: string | null; to: string; tries: number; of: number; next: string | null;
