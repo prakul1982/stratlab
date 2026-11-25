@@ -1304,6 +1304,8 @@ def hbar_labels(cats: list, w: float, h: float) -> tuple[float, list[list[str]],
     size = BODY_MIN                 # deck89 (owner: text never under 11 pt): a name said shorter or on one more line, never smaller
     for extra in (0, 1):
         lines = (3 if slot >= 3 * _lh(size) else 2 if slot >= 0.3 else 1) + extra
+        if extra and lines * _lh(size) > slot + 0.02:          # one more line only where the bar's share of the height holds it
+            break
         lw = min(w * 0.45, max([_width(str(c), size) for c in cats] or [0.5]) + 0.15)
         short = _distinct([str(c) for c in cats], [short_label(str(c), size, lw - 0.12, lines) for c in cats])
         got = [wrap(t, size, lw - 0.12) for t in short]
@@ -7145,6 +7147,15 @@ def table_with(slides: list, head: list) -> dict | None:
     return {**tabs[0], "rows": [r for b in tabs for r in b.get("rows") or []]} if tabs else None
 
 
+def bars_fit(cats: list, w: float, h: float) -> bool:
+    """deck89: whether a bar chart of these names in a w x h box shows each name whole, in the lines its bar's share of the height holds."""
+    if not cats:
+        return False
+    lw, got, size = hbar_labels(cats, w, h - 0.36)
+    slot = max(h - 0.46, 0.2) / len(cats)
+    return not any(ls and ls[-1].endswith("…") and not str(c).endswith("…") for ls, c in zip(got, cats)) and max(len(ls) for ls in got) * _lh(size) <= slot + 0.02
+
+
 def money_fmt(us: bool) -> str:
     return "usd" if us else "inr"
 
@@ -7433,14 +7444,15 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 mv = dict(title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=bcats, vals=[r[key] for r in ranked], colors=bcols,
                           fmt="pctw" if whole and key == "ebitda" else "pct")
             if chart and k == 0:
-                if mv and th >= 2 * 1.9 + 0.3:
+                if mv and th >= 2 * 1.9 + 0.3 and bars_fit(rv["cats"], CW - tw - 0.35, (th - 0.3) / 2) and bars_fit(mv["cats"], CW - tw - 0.35, (th - 0.3) / 2):
                     s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, (th - 0.3) / 2), **rv)
                     s.add("hbars", (M + tw + 0.35, TOP + (th - 0.3) / 2 + 0.3, CW - tw - 0.35, (th - 0.3) / 2), **mv)
                 else:
                     s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), **rv)
             elif below:              # bars no fatter than they need; the margins beside the revenue when both have room
                 hh_ = min(th - tall - 0.3, 0.6 * len(charted) + 0.7)
-                if mv:
+                half = (CW - 0.4) / 2
+                if mv and bars_fit(rv["cats"], half, hh_) and bars_fit(mv["cats"], half, hh_):
                     s.add("hbars", (M, TOP + tall + 0.3, (CW - 0.4) / 2, hh_), **rv)
                     s.add("hbars", (M + (CW - 0.4) / 2 + 0.4, TOP + tall + 0.3, (CW - 0.4) / 2, hh_), **mv)
                 else:
