@@ -7263,6 +7263,10 @@ def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
         try:
             if s.user_id not in emails:
                 emails[s.user_id] = (db.find_profile(s.user_id) or {}).get("email")       # read only: never makes a profile (admin90)
+        except Exception as e:   # the address is extra: the session's own figures still show (admin90)
+            print("admin sessions: email not read:", s.id, e)
+            emails[s.user_id] = None
+        try:
             account = s.snapshot().get("account") or {}
         except Exception as e:   # one broken session mustn't hide the rest
             print("admin sessions:", s.id, e)
@@ -8142,7 +8146,7 @@ def admin_library(_=Depends(admin.admin_profile)):
         owner = e.get("owner")
         if owner and owner not in emails:
             try:
-                emails[owner] = (db.find_profile(owner) or {}).get("email")       # read only: a deleted author's id makes no profile (admin90)
+                emails[owner] = (db.get_profile(owner) or {}).get("email")
             except Exception:
                 emails[owner] = None
         reasons: dict[str, int] = {}
