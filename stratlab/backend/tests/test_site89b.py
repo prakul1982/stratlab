@@ -108,3 +108,45 @@ def test_a_stored_us_calendar_with_both_dates_is_served_once(w):
     db.set_setting(R.KEY + "IN", json.dumps({"at": "x", "v": R.CAL_VERSION, "rows": [
         R.row("IN", "TCS", date(2026, 11, 23), "Financial Results"), R.row("IN", "TCS", date(2026, 11, 26), "Financial Results")]}))
     assert len(R.load("IN")["rows"]) == 2
+
+
+# ---------- 2. the Results page's "Usual move": earlier results days only, one per results, with its basis ----------
+def _bars(days_closes: dict):
+    return [{"t": f"{d}T00:00:00-05:00", "c": c} for d, c in sorted(days_closes.items())]
+
+
+def test_a_usual_move_stands_on_earlier_results_days_once_each_and_says_so(w):
+    """Live, 25 Nov: Burlington's row for its 24 Nov results said "Usual move ±0.4%", the move of those same results under the company
+    data's date (23 Nov), and NVDA's "±3.3%" was its 17 Nov move alone: a US company kept only its latest results day. Now the row's own
+    results are left out, a US company's earlier results days come from its earnings releases on the SEC's filing list, two dates of one
+    results count once, and the answer carries the days it stands on."""
+    out = {"at": "2026-11-24", "title": "Earnings release (8-K)", "url": "https://www.sec.gov/x.htm", "numbers": []}
+    row = R.row("US", "BURL", date(2026, 11, 24), "Quarterly results (quarter ended Oct 2026)", when="before the open", src="market calendar", period="Oct 2026")
+    row.update(out=out, told=True)
+    R.save("US", [row])
+    R.add_past("US", [{"symbol": "BURL", "date": "2026-11-23"}], TODAY_US)          # as the live store had it: this results' wrong date only
+    closes = {"2026-11-20": 100, "2026-11-23": 99.6, "2026-11-24": 104, "2026-11-25": 104,
+              "2026-08-26": 100, "2026-08-27": 100, "2026-08-28": 110,          # 27 Aug: +10%
+              "2026-05-27": 100, "2026-05-28": 100, "2026-05-29": 96,           # 28 May: -4%
+              "2026-03-04": 100, "2026-03-05": 100, "2026-03-06": 106}          # 5 Mar: +6%
+    R.setup(history=lambda r, s, d: _bars(closes))
+    # no filing list: its only kept day is this results' own, so there is no usual move (it was "±0.4%")
+    got = R.moves_for("US", ["BURL"], TODAY_US)["BURL"]
+    assert got is None or got["moves"] is None
+    # the SEC's filing list: its earnings releases, one filed twice two days apart (an amended release) counting once
+    R.setup(history=lambda r, s, d: _bars(closes), filed=lambda s: ["2026-11-24", "2026-08-27", "2026-05-28", "2026-05-26", "2026-03-05"])
+    got = R.moves_for("US", ["BURL"], TODAY_US)["BURL"]["moves"]
+    assert got["dates"] == ["2026-08-27", "2026-05-28", "2026-03-05"] and got["n"] == 3      # 24 Nov (its own) and 23 Nov left out
+    assert got["last"] == [10.0, -4.0, 6.0] and got["avg"] == 6.7 and "close before the results day" in got["basis"]
+    # the page's own row says the same
+    v = R.view("US", "u-pro", "all", today=TODAY_US)
+    burl = next(r for wk in v["weeks"] for r in wk["rows"] if r["symbol"] == "BURL")
+    assert burl["moves"]["dates"] == got["dates"] and burl["mv_days"] == 3
+
+
+def test_two_dates_of_one_indian_results_count_once():
+    """SETCO's kept days on the live site: 24 Nov, 23 Oct, 31 Aug and 29 Aug (one results, its meeting moved), counted as four."""
+    assert R.one_per_results(["2026-11-24", "2026-10-23", "2026-08-31", "2026-08-29", "2026-05-30"]) == ["2026-11-24", "2026-10-23", "2026-08-31", "2026-05-30"]
+    store = {"rows": {"SETCO": {"moves": [["2026-11-24", -3.84], ["2026-10-23", -9.62], ["2026-08-31", -1.45], ["2026-08-29", -1.28], ["2026-05-30", 2.0]]}}}
+    m = R._moves_of("IN", "SETCO", store, ("2026-11-24",))
+    assert m["dates"] == ["2026-10-23", "2026-08-31", "2026-05-30"] and m["n"] == 3 and m["last"] == [-9.62, -1.45, 2.0]

@@ -5896,7 +5896,15 @@ def results_options_many(symbols: list[str], day: str | None) -> dict[str, dict 
 
 
 # the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
-results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many)
+def results_filed(symbol: str) -> list[str]:
+    """site89b: the days a US company filed its earnings releases (8-K, item 2.02) with the SEC, from its filing list (cached six hours):
+    its earlier results days, for the Results page's usual move."""
+    return [d["at"] for d in sec.documents(sec_feed.submissions(sec_feed.cik(symbol)), days=results_calendar.PAST_BACK_DAYS)
+            if d["kind"] == "earnings_release"]
+
+
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many,
+                       filed=results_filed)
 # a theme's companies outside the stored heatmap rows are read on demand, with the same short wait for a broker turn (LIVE6-005)
 heatmap.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0))
 
