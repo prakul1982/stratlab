@@ -264,6 +264,6 @@ def test_a_coverage_table_taller_than_a_page_goes_on_over_the_next():
     assert len(pages) >= 2
     for s in pages:
         for b in s.blocks:
-            if b["kind"] == "table":
+            if b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD:
                 assert deck.table_height(deck.COVERAGE_HEAD, b["rows"], b["widths"], deck.CW) <= deck.BOT - deck.TOP + 1e-6
     assert sum(1 for r in _coverage_rows(slides) if r[0] == "Screening") == 1

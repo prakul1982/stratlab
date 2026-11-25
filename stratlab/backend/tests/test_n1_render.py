@@ -207,8 +207,8 @@ def test_the_capital_per_revenue_figures_behind_not_ranked_are_on_the_value_chai
         assert f"{r['layer']} {r['intensity']:.2f}" in note
     hi, lo = max(r["intensity"] for r in rows), min(r["intensity"] for r in rows)
     assert f"{hi / lo:.1f} times" in note and hi / lo > 3
-    page = next(s for s in slides if s.title.startswith("The value chain by layer"))
-    assert any(note in p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
+    # deck89 (changed on purpose, owner 25 Nov: short footnotes): the page's footnote in full among the appendix's notes
+    assert note in deck.page_said(slides, "The value chain by layer")
     # ranked layers: no such note
     assert deck.intensity_note({"line": "Median EBITDA margin is highest in A", "rows": rows, "not_ranked": []}) == ""
 
@@ -230,20 +230,17 @@ def test_with_no_dated_update_the_findings_say_so_in_a_line_that_stays(monkeypat
     from tests.test_r18_deck import bank_theme
     region, m, f = bank_theme()[:3]
     v, slides = deck_of(region, m, f)                           # six cards: the updates card of its own
-    cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     assert not any(s.title == deck.UPDATES_TITLE for s in slides)
-    assert next(c for c in cards if c["title"] == deck.UPDATES_TITLE)["lines"] == ["No company meets the rules today."]
+    # deck89 (changed on purpose, owner 25 Nov): said once among the appendix's notes, where it never gives way
+    assert [deck.UPDATES_TITLE, "No company meets the rules today."] in deck.table_with(slides, deck.NOTES_HEAD)["rows"]
     # seven cards (a ranked return card too): the last two share one, and its "no dated update" line comes first, so it never gives way
     # (the live Private Banks deck's merged card had lost it)
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     v, slides = deck_of(region, m, f)
-    cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    card = cards[-1]
-    # q1 (changed on purpose; the live R34 Private Banks card kept only the updates line, its coverage line given way): no dated update is
-    # said in the title, the card's lines are the coverage summary
-    assert len(cards) == 6 and card["title"] == "How far the figures go; no dated company update today"
-    # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose)
-    assert card["lines"][0].startswith("Considered 8 · membership checked 8 of 8: 3 description-verified, 5 industry-supported, 0 not checked") and not any("rules today" in ln for ln in card["lines"])
+    # q1, l55: the coverage summary by evidence state (deck89, changed on purpose: in "Method and coverage", the findings' card holds no count)
+    counts = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if str(p).startswith("Counts:"))
+    assert counts.startswith("Counts: Considered 8 · membership checked 8 of 8: 3 description-verified, 5 industry-supported, 0 not checked")
+    assert [deck.UPDATES_TITLE, "No company meets the rules today."] in deck.table_with(slides, deck.NOTES_HEAD)["rows"]
 
 
 def test_one_company_listed_under_two_symbols_is_one_row_in_every_companys_figures():

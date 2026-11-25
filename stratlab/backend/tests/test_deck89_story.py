@@ -110,7 +110,7 @@ def test_nothing_true_is_lost():
     method = [s for s in slides if s.title.startswith(deck.METHOD_TITLE)]
     heads = [b["head"] for s in method for b in s.blocks if b["kind"] == "table"]
     assert deck.CONF_HEAD in heads and deck.COVERAGE_HEAD in heads
-    assert any(deck.MARKS_LINE in str(p) for s in method for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or [])
+    assert deck.MARKS_LINE in deck.plain_section(slides, "Reading the figures")
     gate = slides[0].gate
     assert gate["passed"] == gate["of"], gate["dropped"]
 

@@ -90,6 +90,7 @@ def test_the_chemicals_ranking_states_its_metric_company_sets_and_rule():
     assert any(r[0] == "Basic organic intermediates" and r[1] == "9.5% (8)" and "Basic Chem 7 Ltd" in r[-1] for r in rows)
     vc = next(s for s in slides if s.title == "The value chain by layer")
     page = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.COMPARE_TITLE))
+    # deck89 (owner 25 Nov: short footnotes): a sentence that points to a page stays on the page's short footnote
     assert f"Each compared layer's companies by name, the rules and the capital figures: p. {page}." in " ".join(p for bl in vc.blocks for p in bl.get("paras") or [])
     con = table(slides, "Contents")
     assert "each comparison's companies and rule" in next(r for r in con if r[0] == "Appendix")[1]
@@ -131,8 +132,9 @@ def test_every_ranking_the_deck_makes_has_its_basis_and_the_findings_point_to_it
     assert any(c.startswith("Median ROCE by layer") or c.startswith("Revenue growth") for c in claims)
     cards = next(s for s in slides if s.title == "Key findings")
     page = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.COMPARE_TITLE))
-    notes = [it.get("note") for b in cards.blocks if b["kind"] == "cards" for it in b["items"]]
-    assert any(f"p. {page}" in str(n) for n in notes)
+    # deck89 (changed on purpose, owner 25 Nov: no page references in the findings' tiles and lines): the page's footnote points to it once
+    notes = [p for b in cards.blocks if b["kind"] == "text" for p in b["paras"]]
+    assert any(f"Each ranking's layers, companies and rule: p. {page}" in str(n) for n in notes)
     assert next(x for x in slides[0].gate["items"] if x["id"] == "sourced")["ok"]       # each claim's layers have their rows (P2)
 
 

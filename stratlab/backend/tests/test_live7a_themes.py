@@ -200,7 +200,7 @@ def test_a_row_carries_its_kept_reason_before_the_whole_company_mark_and_a_mark_
     tbl = next(b for b in s.blocks if b["kind"] == "table")
     name = next(c_ for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2] if str(c_).startswith(c0["name"]))
     assert name.endswith("(insufficient evidence)")          # (updated on purpose, ex49: the mark is the reason's kind)
-    notes = " ".join(p for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or [])
+    notes = deck.page_said(slides, s.title)          # deck89 (changed on purpose, owner 25 Nov: short footnotes): with its notes in full in the appendix
     whole_rows = any(str(c_).endswith("(whole company)") for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2])
     assert "(insufficient evidence):" in notes and ("(whole company):" in notes) == whole_rows          # a mark's note only with a row that carries it
 

@@ -190,8 +190,10 @@ def test_the_dive_reads_the_operating_measures_of_the_companies_the_profile_fits
     hx0 = next(r for r in rows if r[0].startswith("Hospital HX 0"))
     assert hx0[1:] == ["8,522", "–", "73%", "Presentation, p. 15", "Sep 2026"]
     med = next(r for r in rows if r[0].startswith("Median"))
-    assert med[3] == "– (2 of 3)"                       # occupancy stated by 2 of the 3 chains: no median under 3 companies, the count said
-    note = " ".join(p for b in page[0].blocks if b["kind"] == "text" for p in b["paras"])
+    # occupancy stated by 2 of the 3 chains: no median under 3 companies (deck89, changed on purpose, owner 25 Nov: no placeholder cell, "–",
+    # and the page's note says once why); the companies' own figures on their rows
+    note = deck.page_said(slides, page[0].title)          # deck89 (changed on purpose): its note in full among the appendix's notes
+    assert med[3] == "–" and deck.FEW_NOTE in note
     assert "ARPOB (₹ a day): stated in none of these companies' documents the app holds" in note
     assert page[0].subtitle == "2 hospital operators whose own documents state these measures, each with its period and source; 1 more without"
     notes = [r for s in slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]

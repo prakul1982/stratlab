@@ -316,6 +316,15 @@ def test_every_synthetic_deck_with_a_line_chart_is_made_as_a_pdf():
         if any(b["kind"] == "lines" and len(deck.drawn_lines(b)["series"]) < len(b["series"]) for s in slides for b in s.blocks):
             assert deck._render(slides, "foot", name, pdf=True)[:5] == b"%PDF-", name
             done += 1
+    # deck89 (changed on purpose, owner 25 Nov): a layer's chart is its companies' market value now, so its margins by year (with a series of
+    # no points) are drawn only for a layer with no market value; such a page is added to a synthetic deck, which must still be made
+    if not done:
+        name, v, slides = ALL27[0]
+        extra = Slide("Layer 9 · Margins only", "x")
+        extra.add("lines", (M, TOP, 6.0, 3.0), title="Margins by year, the same 3 companies", cats=["Mar 2024", "Mar 2025", "Mar 2026"],
+                  series=[("EBITDA margin", [8.2, 7.6, 7.0], deck.BLUE), ("Net margin", [None, None, None], deck.ORANGE)], fmt="pct", labels=True)
+        assert deck._render(slides + [extra], "foot", name, pdf=True)[:5] == b"%PDF-", name
+        done += 1
     assert done >= 1
 
 

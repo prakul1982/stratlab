@@ -49,7 +49,13 @@ def test_every_company_is_a_member_row_with_its_layer_figures_and_how_it_is_in()
 
 
 def table_of(slides, title):
-    return next(b for s in slides if s.title.startswith(title) for b in s.blocks if b["kind"] == "table")
+    for s in slides:
+        if s.title.startswith(title):
+            return next(b for b in s.blocks if b["kind"] == "table")
+        if title in (getattr(s, "also", None) or []):          # e78: a short table under another page's title, after its own heading line
+            at = next(i for i, b in enumerate(s.blocks) if b["kind"] == "text" and str((b.get("paras") or [""])[0]).startswith(title))
+            return next(b for b in s.blocks[at:] if b["kind"] == "table")
+    raise StopIteration(title)
 
 
 def plain(rows):

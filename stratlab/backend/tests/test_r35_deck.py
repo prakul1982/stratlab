@@ -39,7 +39,9 @@ def test_every_slide_that_states_the_peer_pe_names_its_price_date():
     v, slides = deck_of(region, m, f, index_rows=lambda: market)
     pp = v["sections"]["valuation"]["peers"]["pe"]
     assert pp["as_of"] == "2026-10-06" and pp["premium"] is not None          # the peers' close, a day after the companies' own
-    said = [x for x in [s.subtitle or "" for s in slides] + card_lines(slides) if "their peers' median of" in x]
+    # deck89 (changed on purpose, owner 25 Nov): a findings line that gives way on its page is said in full among the appendix's notes
+    noted = [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]
+    said = [x for x in [s.subtitle or "" for s in slides] + card_lines(slides) + noted if "their peers' median of" in x]
     assert len(said) >= 3 and all(PRICED in x for x in said), said               # the findings, the questions and the valuation page
     assert PRICED in next(s.subtitle for s in slides if s.title == "Valuation")
     assert next(x for x in slides[0].gate["items"] if x["id"] == "reconcile")["ok"] and not slides[0].gate["dropped"]
@@ -52,7 +54,8 @@ def test_a_dive_kept_from_before_takes_the_decks_own_day_before_any_slide_is_wri
     v = copy.deepcopy(v)
     v["sections"]["valuation"]["peers"]["pe"].pop("as_of")                      # as a dive stored before R35 holds it
     slides = deck.theme_plan(v, now=NOW)[0]
-    said = [x for x in [s.subtitle or "" for s in slides] + card_lines(slides) if "their peers' median of" in x]
+    noted = [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]      # deck89 (changed on purpose)
+    said = [x for x in [s.subtitle or "" for s in slides] + card_lines(slides) + noted if "their peers' median of" in x]
     assert len(said) >= 3 and all(f"(prices at the {deck._day(v['as_of'])} close)" in x for x in said), said          # LIVE6-006: day-month (updated on purpose)
     # every reader of the peers goes through the one function that dates them
     src = open(deck.__file__).read()

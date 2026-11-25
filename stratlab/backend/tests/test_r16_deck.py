@@ -237,7 +237,8 @@ def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["With figures"] == str(cov["n"]) and "Their market value" in cover               # R20: the count, its share beneath
     # R19: no overview page; the findings say it (R27: as the four reconciled counts)
-    assert f"{deck.counts_words(deck.reconciled_counts(v, cov))}." in texts([s for s in slides if s.title == "Key findings"])
+    # deck89 (changed on purpose, owner 25 Nov: no engine wording on the story pages): said in the appendix's "Method and coverage"
+    assert f"{deck.counts_words(deck.reconciled_counts(v, cov))}." in texts([s for s in slides if s.title.startswith(deck.METHOD_TITLE)])
 
 
 # ---------- part 3: findings ----------
@@ -251,14 +252,19 @@ def test_the_findings_come_first_with_page_references_that_point_at_their_slides
     titles = [s.title for s in slides]
     assert titles.index("Key findings") < titles.index("The value chain by layer")
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    # changed on purpose (R18): with no layer comparison the figures support (fewer than two layers of two companies with a margin), no
-    # "Where the margin sits" card that says it can't be done
-    assert [c["title"] for c in cards] == ["Growth beside margin", "Price beside growth and returns", "What changed",
-                                           "How far the figures go", "Dated company updates"]
+    # deck89 (changed on purpose, owner 25 Nov: "key findings ... big-number tiles, one plain sentence each, no page refs"): big numbers, then
+    # one card of the findings in plain sentences (no "Where the margin sits" line with no layer comparison, R18); how far the figures go is
+    # the appendix's, and the page points there once
+    tiles = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "stats")["items"]
+    assert len(tiles) >= 3 and not any(re.search(r"\bp\. \d", str(t[2])) for t in tiles)
+    assert [c["title"] for c in cards] == ["What the figures show"]
+    lines = cards[0]["lines"]
+    assert any(x.startswith("Median company's revenue growth in the latest year") for x in lines)        # growth beside margin
+    assert any("P/E" in x for x in lines) and any("dated update" in x for x in lines)                    # price, and the dated updates
+    assert not any(x.startswith("Median EBITDA margin by layer") for x in lines)
     page = {re.sub(r" \(\d+ of \d+\)$", "", s.title): i for i, s in reversed(list(enumerate(slides, 1)))}
-    refs = {c["title"]: c["note"] for c in cards}                                     # the page reference, as the card's note: never cut
-    assert refs["Price beside growth and returns"] == f"p. {page['Valuation']}"
-    assert refs["How far the figures go"] == f"p. {page['Data confidence']}"
+    foot = " ".join(p for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    assert f"p. {page['Every company' + chr(39) + 's figures']}" in foot                               # the appendix's first page
     t = texts(slides)
     assert "⟦" not in t and "⟧" not in t
 

@@ -240,8 +240,8 @@ def test_4_a_layer_s_short_notes_go_with_its_next_companies_never_on_a_page_of_t
     # deck89 (changed on purpose, owner 25 Nov: short footnotes): a layer's notes are said in full among the appendix's notes, its page keeps one
     # line that says where; no "(notes)" page and no "(continued)" page that exists only to carry them
     notes = deck.table_with(slides, deck.NOTES_HEAD)["rows"]
-    row = next(r for r in notes if not isinstance(r, dict) and "Branded home, personal care and FMCG" in r[0])
-    assert "Membership of its" in row[1]
+    said = " ".join(r[1] for r in notes if not isinstance(r, dict) and "Branded home, personal care and FMCG" in r[0])
+    assert "Membership of its" in said
     page = next(s for s in slides if s.title.startswith("Layer") and "Branded home, personal care and FMCG" in s.title)
     assert any("What the marks on its rows mean" in str(p) for b in page.blocks if b["kind"] == "text" for p in b["paras"])
 

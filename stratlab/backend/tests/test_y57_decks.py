@@ -231,14 +231,15 @@ def test_a_crowded_layer_page_shows_five_rows_and_sends_its_notes_to_a_notes_pag
     for heavy in (False, True):
         slides = deck.theme_plan(_stress(heavy), now=NOW)[0]
         i = next(k for k, s in enumerate(slides) if s.title == "Layer 2 · Converters")
-        page, nxt = slides[i], slides[i + 1]
+        page = slides[i]
         assert _drawn(page) >= 5, (heavy, _drawn(page))
         # r60b (R60, updated on purpose: the owner's review of the live R59 decks, no page of one note and the footer): notes of
         # deck.SPARSE_LINES lines or fewer go with the layer's next companies on its "(continued)" page, longer ones keep a notes page
-        assert nxt.title in ("Layer 2 · Converters (notes)", "Layer 2 · Converters (continued)")
-        if nxt.title.endswith("(continued)"):
-            assert nxt.blocks[0]["kind"] == "table" and "who is in the layer's calculations" in nxt.subtitle
-        said = " ".join(p for b in nxt.blocks if b["kind"] == "text" for p in b["paras"])
+        # deck89 (changed on purpose, owner 25 Nov: short footnotes): the layer's notes are said in full among the appendix's notes, under its
+        # name, and the page keeps one line that says where; no "(notes)" page
+        assert not any(s.title == "Layer 2 · Converters (notes)" for s in slides)
+        said = " ".join(r[1] for r in deck.table_with(slides, deck.NOTES_HEAD)["rows"] if not isinstance(r, dict) and r[0].startswith("Layer 2 · Converters"))
+        said += " " + " ".join(p for s in slides if s.title.startswith("Layer 2 · Converters (continued)") for b in s.blocks if b["kind"] == "text" for p in b["paras"])
         assert "Membership of its 14 companies" in said
         assert ("In the layer's calculations (0 of 14)" in said) == heavy
         assert not any(p.startswith("Membership of its") for b in page.blocks if b["kind"] == "text" for p in b["paras"])
@@ -468,6 +469,8 @@ def test_a_company_under_insolvency_or_with_a_loss_over_revenue_on_negative_equi
     rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
     assert rows["In distress"][1] == f"1 company in distress: {deck.clean_name(hit['name'])} (under an insolvency or resolution process, by its own words)."
     said = " ".join(t for s in slides if s.title.startswith("Layer 2 · Converters") for b in s.blocks if b["kind"] == "text" for t in b["paras"])
+    # deck89 (changed on purpose, owner 25 Nov: short footnotes): and the layer's notes in full among the appendix's notes
+    said += " " + " ".join(r[1] for r in deck.table_with(slides, deck.NOTES_HEAD)["rows"] if not isinstance(r, dict) and r[0].startswith("Layer 2 · Converters"))
     page = next(s for s in slides if s.title == "Layer 2 · Converters")
     names = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
     if any("(in distress)" in n for n in names):

@@ -179,9 +179,11 @@ def test_the_page_is_named_dated_company_updates_everywhere_and_takes_no_side():
     assert rows["Bare Co"][4] == "Exchange filing"                                                 # no address held: the source named, not linked
     assert [r[2] for r in t["rows"]] == sorted((r[2] for r in t["rows"]), key=lambda d: datetime.strptime(d, "%d %b %Y" if d[:2].isdigit() else "%b %Y"),
                                                 reverse=True)
-    card = next(it for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
-                if "ated company updates" in it["title"])
-    assert any("dated updates at" in ln and "each with its date, status and source" in ln for ln in card["lines"])
+    # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences; the updates' line is one of them (or, where it
+    # gives way, said in full among the appendix's notes)
+    said = [ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]]
+    said += [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]
+    assert any("dated updates at" in ln and "each with its date, status and source" in ln for ln in said)
     assert any("the companies' dated updates" in str(r[1]) for r in table_of(slides, "Contents")["rows"])
     words = " ".join(texts([page]).lower().split())
     for word in ("worth", "warning", "red flag", "concerning", "worrying", "good news", "bad news", "positive", "negative", "trigger", "alert"):
@@ -304,7 +306,8 @@ def test_the_smaller_layers_page_never_ends_a_description_in_an_ellipsis():
         assert cells and not any(str(c).endswith("…") for c in cells)
     src = open(deck.__file__).read()
     # r63e (updated on purpose): the smaller layers' cell is layer_cell (whole_clause, and the item of its words that says its layer)
-    assert 'layer_cell(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' in src   # LIVE6-007 passes the name (updated on purpose)
+    # deck89 (changed on purpose, owner 25 Nov: "Sub-themes" repeats the layers): no sub-themes page, so no sub-theme's detail is cut there
+    assert 'layer_cell(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' not in src   # LIVE6-007 passes the name (updated on purpose)
     assert "got = whole_clause(text, limit)" in src[src.index("def layer_cell"):src.index("def _what")]
 
 

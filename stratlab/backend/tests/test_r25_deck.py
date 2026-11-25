@@ -72,8 +72,9 @@ def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it(mo
     v = full_view()
     blocks = [block("Mining", 6, 30.0, 5), block("Cells", 4, 12.0, 3)]
     v["chain"] = D.chain_table(blocks)
-    s = next(x for x in deck.theme_plan(v)[0] if x.title == "The value chain by layer")
-    foot = " ".join(p for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    slides_ = deck.theme_plan(v)[0]
+    s = next(x for x in slides_ if x.title == "The value chain by layer")
+    foot = deck.page_said(slides_, "The value chain by layer")          # deck89 (changed on purpose): its footnote in full among the appendix's notes
     # changed on purpose (m2): one floor for the marks and the headline, said once; the floor a median is shown on beside it
     assert "among the layers ranked: those with at least 3 companies with the figure; any other layer is shown, not ranked." in foot
     assert "A median is shown for 3 companies or more." in foot
@@ -81,9 +82,10 @@ def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it(mo
     t = next(b for b in s.blocks if b["kind"] == "table")
     assert set(t["colors"].values()) == {deck.UP, deck.DOWN}
     v["chain"] = D.chain_table([block("Mining", 6, 30.0, 5), block("Cells", 4, 12.0, 2)])        # Cells under the base: nothing marked
-    s = next(x for x in deck.theme_plan(v)[0] if x.title == "The value chain by layer")
+    slides_ = deck.theme_plan(v)[0]
+    s = next(x for x in slides_ if x.title == "The value chain by layer")
     assert not next(b for b in s.blocks if b["kind"] == "table")["colors"]
-    assert "A layer is ranked only on a median of at least 3 companies with the figure" in " ".join(p for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    assert "A layer is ranked only on a median of at least 3 companies with the figure" in deck.page_said(slides_, "The value chain by layer")
 
 
 @pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
@@ -119,7 +121,7 @@ def test_a_median_of_fewer_companies_than_its_group_reads_n_of_m_in_tables_chart
     t = next(b for b in s.blocks if b["kind"] == "table")
     row = next(r for r in t["rows"] if r[0] == "Mining")
     assert row[t["head"].index("Companies")] == "6" and row[t["head"].index("EBITDA margin")] == "30% (5 of 6)"
-    chart = next(b for b in s.blocks if b["kind"] == "hbars")
+    chart = next(b for b in s.blocks if b["kind"] == "hbars" and str(b.get("title") or "").startswith("Median"))          # deck89: the medians' chart, beside the revenue's
     assert chart["cats"] == ["Mining (5 of 6)", "Cells (3 of 4)"]
     assert "highest in Mining (30%, 5 of 6 companies) and lowest in Cells (12%, 3 of 4 companies)" in s.subtitle
     assert deck.sector_lines({"sector": {"families": {"insurer": {"n": 6, "medians": {"combined_ratio": {"n": 3, "median": 106.0}}}}}}) == \
@@ -243,8 +245,9 @@ def test_each_family_gets_its_own_figures_explained_and_no_other_familys():
 def test_the_contents_lists_the_notes_page_and_references_point_at_it():
     _, v, slides = EVERY[0]
     crow = plain(table_of(slides, "Contents")["rows"])
-    at = next(int(r[2]) for r in crow if r[0] == deck.NOTES_TITLE)
-    assert slides[at - 1].title.startswith(deck.NOTES_TITLE)
+    # deck89 (changed on purpose, owner 25 Nov): the page is in the appendix, which the contents' last row names ("how each figure is built")
+    assert crow[-1][0] == "Appendix" and "how each figure is built" in crow[-1][1]
+    at = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.NOTES_TITLE))
     assert "⟦" not in texts(slides) and f"p. {at}" in texts(slides)
 
 

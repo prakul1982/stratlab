@@ -55,9 +55,10 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
                                          else "membership checked " in words or " · in the theme " in words)
     assert not c["each"] or "in each calculation: " in words
     conf = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
-    find = next(ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]
-                if ln.startswith("Considered"))
-    assert conf.startswith(f"Counts: {words}.") and find == f"{words}."
+    # deck89 (changed on purpose, owner 25 Nov: no engine wording on the story pages): the counts are said once, in "Method and coverage"
+    assert conf.startswith(f"Counts: {words}.")
+    assert not any(str(ln).startswith("Considered") for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards"
+                   for it in b["items"] for ln in it["lines"])
     t = texts(slides)
     assert not deck._BARE_SHARE.search(t), deck._BARE_SHARE.findall(t)[:3]          # never "100% of value" without "of what"
     for m in re.finditer(r"(\d+)% of the (?:combined )?market value of (?:all (\d[\d,]*)|the (\d[\d,]*) of (\d[\d,]*) with one)", t):

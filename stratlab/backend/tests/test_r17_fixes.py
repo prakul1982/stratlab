@@ -179,15 +179,16 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
     chain = v["chain"]
     assert (chain["highest"], chain["lowest"]) == ("Film", "Converters") and chain["gap"] == 7.0
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    where = next(c for c in cards if c["title"] == "Where the margin sits")["lines"][0]
+    # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences; where the margin sits is its first line
+    where = next(ln for c in cards for ln in c["lines"] if ln.startswith("Median EBITDA margin is highest in"))
     # R18: whole figures print whole; R22: a highest or lowest median on 4 companies or fewer says its count
     # changed on purpose (m2): the headline says in its own sentence which layers it ranks
     assert where.startswith("Median EBITDA margin is highest in Film (19%, 4 companies) and lowest in Converters (12%), a gap of 7 points, among the ") \
         and where.endswith(" layers with at least 3 companies with the figure.")  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert "stands apart" not in texts(slides)
     _, sb = deck_of(*theme_b())                 # one layer: nothing claimed and (R18, changed on purpose) nothing said about it
-    assert "Fewer than two layers" not in texts(sb) and not any(c["title"] == "Where the margin sits" for s in sb if s.title == "Key findings"
-                                                               for b in s.blocks if b["kind"] == "cards" for c in b["items"])
+    assert "Fewer than two layers" not in texts(sb) and not any(ln.startswith("Median EBITDA margin is highest in") for s in sb if s.title == "Key findings"
+                                                               for b in s.blocks if b["kind"] == "cards" for c in b["items"] for ln in c["lines"])
 
 
 def test_long_tables_keep_their_first_page_in_the_core_and_the_rest_in_the_appendix_with_its_page():
@@ -196,7 +197,9 @@ def test_long_tables_keep_their_first_page_in_the_core_and_the_rest_in_the_appen
     app = next(i for i, s in enumerate(slides) if s.title.startswith("Every company's figures"))
     # changed on purpose (R18, then R19, the owner: "keep the important ones not everything"): the appendix is one table of every confirmed
     # company's figures; a long layer keeps its largest companies on its one page and points there; nothing is "continued"
-    assert all(t.startswith("Every company's figures") for t in titles[app:])
+    # deck89 (changed on purpose, owner 25 Nov): then "Method and coverage" and how the figures are built, the appendix's reference pages
+    assert all(t.startswith(("Every company's figures", deck.METHOD_TITLE, deck.NOTES_TITLE, deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.COMPARE_TITLE))
+               for t in titles[app:])
     assert not any("continued" in t or "all companies" in t for t in titles)
     conv = next(s for s in slides if s.title == "Layer 2 · Converters")
     assert any(p.endswith(f"every one: appendix, p. {app + 1}.") for b in conv.blocks for p in b.get("paras") or [])
@@ -213,7 +216,8 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
         size = next(s for s in slides if s.title == "Size and shape")
         assert _re.search(r"\(\d+ compan(y|ies) with figures and a market value\)|\d+ compan(y|ies) with figures and a market value", size.subtitle)
         # changed on purpose (R19): data confidence is one page, its counts one line under the checks
-        assert [s.title for s in slides if s.title.startswith("Data confidence")] == ["Data confidence"]
+        # deck89 (changed on purpose, owner 25 Nov): no data-confidence page; its checks and counts are in "Method and coverage"
+        assert not [s for s in slides if s.title.startswith("Data confidence")] and deck.table_with(slides, deck.CONF_HEAD)
         line = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
         # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
         assert line.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, deck.coverage(v)))}. {deck.coverage(v)['line']};") and "with a market value (the theme's total market value)" in line   # R20: one wording
