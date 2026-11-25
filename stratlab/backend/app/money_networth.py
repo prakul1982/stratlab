@@ -1122,7 +1122,9 @@ class Job:
             return 0
         n, failed = 0, 0
         # users with typed entries, and those whose net worth is only imported holdings or mutual funds
-        users = dict.fromkeys(k[len(p):] for p in (KEY, "holdings:", "mf:") for k, _ in db.all_settings_with_prefix(p))
+        # a user's own key only: "holdings:files:<uid>" (the imported files) is under "holdings:" too, and its tail "files:<uid>" read as a
+        # user made a stray profile row for each on Railway, counted as a user in Admin (admin90; admin.is_stray). A user's id has no colon.
+        users = dict.fromkeys(u for p in (KEY, "holdings:", "mf:") for k, _ in db.all_settings_with_prefix(p) if (u := k[len(p):]) and ":" not in u)
         for uid in sorted(users):
             if run.seen(uid):
                 continue

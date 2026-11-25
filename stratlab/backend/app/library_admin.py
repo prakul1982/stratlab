@@ -111,12 +111,30 @@ def _decks(q: str = "", region: str = "") -> list[dict]:
     return rows
 
 
+def old_decks() -> list[str]:
+    """The kept theme decks nobody is served any more (deck_served: an earlier day's, or made by older code), by id: a deck is kept for
+    the India day it was made on, so each day's leaves one behind for good (computed.py removes nothing on its own)."""
+    return [hk for hk, e in computed.index("deck:theme")["entries"].items() if deck_served(e.get("meta") or {}, computed._iso(e.get("at")))]
+
+
 @router.get("")
 def library_view(q: str = "", region: str = "", _=Depends(admin.admin_profile)):
     stored = [{"prefix": p, "label": label, **_prefix_stats(p)} for p, label in STORED]
     reg = region if region in ("IN", "US") else ""
+    decks = computed.entries("deck:theme", q[:80], reg, limit=100_000)
     return {"stores": computed.stats(), "themes": _themes(q[:80], reg), "decks": _decks(q[:80], reg), "stored": stored,
-            "saved": saved_counts()}
+            "saved": saved_counts(),
+            # admin90: the list shows the newest DECKS_SHOWN; how many match in all, and how many of every kept deck nobody gets any more
+            "decks_total": len(decks), "decks_old": len(old_decks())}
+
+
+@router.post("/remove-old-decks")
+def library_remove_old_decks(_=Depends(admin.admin_profile)):
+    """Admin's "Remove old decks" (admin90): every kept theme deck that is no longer the file people get (old_decks) is removed; the
+    decks people are served now stay. Bounded by what is kept; pressed by the owner, no job of its own."""
+    ids = old_decks()
+    removed = sum(1 for hk in ids if computed.remove("deck:theme", hk))
+    return {"removed": removed, "of": len(ids)}
 
 
 @router.get("/entries")

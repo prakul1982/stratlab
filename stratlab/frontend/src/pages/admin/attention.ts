@@ -128,6 +128,12 @@ export function quotaLine(q: NonNullable<Overview["server"]["admin_alerts"]>["qu
 }
 
 /** Invoiced revenue by currency in one line: "₹6,990 · $16" (DJ-004). */
+/** A sum of money as the owner reads every rupee figure (admin90, owner rule: rupees with their dollar figure): "₹6,990 (about $79)" for
+ * rupees at `rate` rupees a dollar; any other currency, and ₹0, as it is. */
+export function withUsd(v: number, currency: string, fmt: (v: number, c: string) => string, rate: number): string {
+  return currency === "INR" && v > 0 ? `${fmt(v, currency)} (about $${Math.max(1, Math.round(v / rate)).toLocaleString("en-US")})` : fmt(v, currency);
+}
+
 export function revenueText(by: Record<string, number>, fmt: (v: number, c: string) => string = (v, c) => `${c} ${v.toLocaleString("en-IN")}`): string {
   const rows = Object.entries(by).sort(([a], [b]) => (a === "INR" ? -1 : b === "INR" ? 1 : a.localeCompare(b)));
   return rows.length ? rows.map(([c, v]) => fmt(v, c)).join(" · ") : fmt(0, "INR");

@@ -96,7 +96,8 @@ def test_reports_hide_an_entry_until_the_owner_of_the_site_reviews_it(api, store
 
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "boss@x")
     main.app.dependency_overrides[main.current_profile] = lambda: {"id": "boss", "_plan": "pro", "email": "boss@x", "_email_verified": True}
-    monkeypatch.setattr(db, "get_profile", lambda uid, email=None: {"id": uid, "email": "author@x"})
+    # (changed on purpose, admin90: the queue reads the author's profile without making one, so the stub is find_profile's)
+    monkeypatch.setattr(db, "find_profile", lambda uid: {"id": uid, "email": "author@x"})
     queue = api.get("/admin/library").json()["entries"]
     assert queue[0]["reports"] == 3 and queue[0]["reasons"] == {"spam": 3} and queue[0]["hidden"] and queue[0]["email"] == "author@x"
     assert api.post(f"/admin/library/{e['id']}", json={"action": "restore"}).json() == {"ok": True}

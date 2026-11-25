@@ -26,6 +26,8 @@ export function untilWords(iso: string, now: Date = new Date()): string {
 export const monthShort = (now: Date = new Date()): string => fmtDate(now, { year: false, tz: "Asia/Kolkata" }).replace(/^\d+\s*/, "");
 
 export const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
+/** A plan's place when the users are sorted by plan: Pro above Basic above Free. */
+export const PLAN_RANK: Record<Plan, number> = { free: 0, basic: 1, pro: 2 };
 
 /** How a paid plan came and how long it runs: "Razorpay", "Razorpay · renews 5 Nov 2026", "Razorpay · ends 5 Nov 2026" (cancelled), "Given · until 6 Nov 2026",
  * "Given · no end date". Empty for Free. */

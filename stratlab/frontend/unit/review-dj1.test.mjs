@@ -39,7 +39,9 @@ test("DJ-009, DJ-010, DJ-012: Last active sorts, the counts' month is in the hea
   const { monthShort } = await import("../src/pages/admin/users.ts");
   assert.equal(monthShort(new Date("2026-10-25T06:00:00Z")), "Oct");
   const src = read("src/pages/admin/UsersSection.tsx");
-  assert.match(src, /\{ key: "active", header: "Last active", sortable: true/);
+  // (changed on purpose, admin90: the owner's rule is a sort on every table header, so the table sorts every column itself, Last active by its time)
+  assert.match(src, /\{ key: "active", header: "Last active", sortValue: \(u\) => \(u\.last_active \? Date\.parse\(u\.last_active\) : null\)/);
+  assert.doesNotMatch(src, /sortable: (true|false)/);
   assert.match(src, /header: `Experiments \(\$\{mon\}\)`/);
   assert.match(src, /header: `AI builds \(\$\{mon\}\)`/);
   assert.match(src, /api<AccountsView>\(`\/admin\/accounts/);

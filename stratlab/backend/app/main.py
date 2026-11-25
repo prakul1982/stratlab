@@ -7121,7 +7121,10 @@ def overview_stats(fresh: bool = False, include_test: bool = False) -> dict:
         return run
     st = admin.stats(month_start_iso(), include_test=include_test,
                      extra={"plan_interest": plan_interest.count, "revenue_30d": safe(revenue_since),
-                            "active_7d": safe(lambda: admin.active_users(7, include_test))})
+                            "active_7d": safe(lambda: admin.active_users(7, include_test)),
+                            "stray_profiles": lambda: len(admin.stray_rows())})
+    # when these counts were read (admin90: they are kept OVERVIEW_FOR seconds, and Overview showed no time beside them)
+    st["counted_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with _overview_lock:
         if gen == _overview_gen:            # nothing was forgotten while these were read: keep them
             _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st, test=include_test)
@@ -7179,6 +7182,20 @@ def admin_review_invite_reward(user_id: str, decision: str, who=Depends(admin.ad
         err(404, "not_found", "That reward isn't waiting for review.")
     log.info("admin %s: invite reward for %s, %s -> %s", who.get("email"), user_id, decision, status)
     return {"status": status, **invite_rewards.admin_view()}
+
+
+@app.post("/admin/stray-profiles/remove")
+def admin_remove_stray_profiles(who=Depends(admin.admin_profile)):
+    """Delete the stray profile rows (admin.is_stray: a settings key's tail taken for a user id, never a sign-in account), which
+    Overview already leaves out of every count. At most 1000 a press; nothing else is touched."""
+    not_viewing(who)
+    try:
+        n = admin.remove_stray_profiles()
+    except Exception as e:
+        err(502, "remove_failed", f"The stray rows couldn't be removed: {str(e)[:160]}")
+    forget_overview()
+    log.warning("admin %s removed %d stray profile rows", who.get("email"), n)
+    return {"removed": n}
 
 
 @app.post("/admin/users/{user_id}/plan")
@@ -7255,7 +7272,11 @@ def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
         owners[s.id] = s.user_id
         try:
             if s.user_id not in emails:
-                emails[s.user_id] = (db.get_profile(s.user_id) or {}).get("email")
+                emails[s.user_id] = (db.find_profile(s.user_id) or {}).get("email")       # read only: never makes a profile (admin90)
+        except Exception as e:   # the address is extra: the session's own figures still show (admin90)
+            print("admin sessions: email not read:", s.id, e)
+            emails[s.user_id] = None
+        try:
             account = s.snapshot().get("account") or {}
         except Exception as e:   # one broken session mustn't hide the rest
             print("admin sessions:", s.id, e)
@@ -7271,7 +7292,7 @@ def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
             inst = r.get("instrument") or {}
             try:
                 if r.get("user_id") not in emails:
-                    emails[r.get("user_id")] = (db.get_profile(r.get("user_id")) or {}).get("email")
+                    emails[r.get("user_id")] = (db.find_profile(r.get("user_id")) or {}).get("email")
             except Exception as e:
                 print("admin sessions:", r.get("id"), e)
             market = inst.get("market")
@@ -8135,7 +8156,7 @@ def admin_library(_=Depends(admin.admin_profile)):
         owner = e.get("owner")
         if owner and owner not in emails:
             try:
-                emails[owner] = (db.get_profile(owner) or {}).get("email")
+                emails[owner] = (db.find_profile(owner) or {}).get("email")       # read only: a deleted author is shown, no row made (admin90)
             except Exception:
                 emails[owner] = None
         reasons: dict[str, int] = {}

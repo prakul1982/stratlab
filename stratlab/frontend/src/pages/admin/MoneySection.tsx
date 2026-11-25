@@ -4,7 +4,8 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
 import { Card, CardHead, DataTable, Disclosure, ErrorState, Notice, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
-import { invoiceWarning } from "./attention";
+import { invoiceWarning, withUsd } from "./attention";
+import { usePricing } from "../../lib/currency";
 import { InvoiceAdminPanel } from "./InvoiceAdminPanel";
 import { PricesPanel } from "./PricesPanel";
 import { subsSummary } from "./subs";
@@ -25,11 +26,11 @@ type Failed = { id: string; amount: number; currency: string; created_at: string
 export type Activity = { mode: string; enabled: boolean; last_webhook: { at: string; event: string } | null; currency_plans: string[];
   subscriptions: Sub[]; refunds: Refund[]; failed: Failed[]; errors: Record<string, string>; revenue_by_month?: { month: string; by_currency: Record<string, number> }[] };
 
-const SUBS: Column<Sub>[] = [
+const subsCols = (rate: number): Column<Sub>[] => [
   { key: "user", header: "User", rowHeader: true, wrap: true, cell: (x) => (
     <span className="k-stack tight"><span className="adm-break">{x.user ?? "Unknown user"}</span><span className="adm-mono k-muted">{x.id}</span></span>) },
   { key: "plan", header: "Plan", cell: (x) => (x.plan ? x.plan[0].toUpperCase() + x.plan.slice(1) : x.plan_id ?? "–") },
-  { key: "amt", header: "Amount", numeric: true, cell: (x) => (x.amount != null ? `${money(x.amount, x.currency ?? "INR")} ${x.period === "year" ? "a year" : "a month"}` : "–") },
+  { key: "amt", header: "Amount", numeric: true, sortValue: (x) => x.amount ?? null, cell: (x) => (x.amount != null ? `${withUsd(x.amount, x.currency ?? "INR", (v, c) => money(v, c), rate)} ${x.period === "year" ? "a year" : "a month"}` : "–") },
   { key: "st", header: "Status", cell: (x) => x.status },
   { key: "made", header: "Started", cell: (x) => dateOnly(x.created_at) },
   { key: "end", header: "Paid to", cell: (x) => dateOnly(x.current_end) },
@@ -64,6 +65,7 @@ export function MoneySection() {
   const [check, setCheck] = useState<BillingCheck | null>(null);
   const [busy, setBusy] = useState(false);
   const [act, setAct] = useState<Activity | null>(null);
+  const { rate } = usePricing();          // rupees a dollar, for the dollar figure beside each rupee sum (admin90)
   const [actFailed, setActFailed] = useState(false);
   useEffect(() => { api<Activity>("/admin/billing/activity").then(setAct).catch((e) => { setActFailed(true); fail(e); }); }, [fail]);
   const run = async () => {
@@ -101,16 +103,16 @@ export function MoneySection() {
           : act.errors.all ? <p className="k-small k-muted">{act.errors.all}</p> : (
           <div className="k-stack">
             {!!act.revenue_by_month?.length && (
-              <p className="k-small" data-testid="revenue-months"><b>Revenue by month:</b> {act.revenue_by_month.map((m) => `${m.month}: ${Object.entries(m.by_currency).map(([c, v]) => money(v, c)).join(" + ")}`).join(" · ")}</p>
+              <p className="k-small" data-testid="revenue-months"><b>Revenue by month:</b> {act.revenue_by_month.map((m) => `${m.month}: ${Object.entries(m.by_currency).map(([c, v]) => withUsd(v, c, (x, cur) => money(x, cur), rate)).join(" + ")}`).join(" · ")}</p>
             )}
             <h3 className="adm-sub">Subscriptions ({act.subscriptions.length})</h3>
             {act.errors.subscriptions ? <p className="k-small k-down">{act.errors.subscriptions}</p> : (
               <>
                 <p className="k-small" data-testid="subs-summary">{subsSummary(act)}</p>
-                <DataTable label="Subscriptions" rows={act.subscriptions.filter((x) => x.status !== "created")} rowKey={(x) => x.id} columns={SUBS} empty="No subscription has been paid yet." stack />
+                <DataTable label="Subscriptions" rows={act.subscriptions.filter((x) => x.status !== "created")} rowKey={(x) => x.id} columns={subsCols(rate)} empty="No subscription has been paid yet." stack />
                 {act.subscriptions.some((x) => x.status === "created") && (
                   <Disclosure summary={`Show the ${act.subscriptions.filter((x) => x.status === "created").length} unpaid checkouts`} testId="subs-unpaid">
-                    <DataTable label="Unpaid checkouts" rows={act.subscriptions.filter((x) => x.status === "created")} rowKey={(x) => x.id} columns={SUBS} stack />
+                    <DataTable label="Unpaid checkouts" rows={act.subscriptions.filter((x) => x.status === "created")} rowKey={(x) => x.id} columns={subsCols(rate)} stack />
                   </Disclosure>
                 )}
               </>
