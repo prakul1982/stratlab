@@ -135,7 +135,7 @@ def test_essex_10k_opening_passes_over_its_reit_tax_status_to_its_apartment_comm
         "BUSINESS STRATEGIES", "x " * 900])
     got = sec.business_opening(text)
     assert "apartment communities" in got and "taxable REIT" not in got and "elected to be treated" not in got
-    assert sec.BUSINESS_KEY[1] == 5          # (updated on purpose, e85: 5, a sentence of an operating company held as an LLC passed over)
+    assert sec.BUSINESS_KEY[1] == 6          # (changed on purpose, e89: 6, a contents page's "ITEM 1A:" and a report out of the form's order read; e85: 5, a sentence of an operating company held as an LLC passed over)
     stored = ("Essex Property Trust, Inc. is an S&P 500 company that operates as a self-managed REIT. Essex has elected to be treated as a REIT "
               "for federal income tax purposes commencing with the year ended December 31, 1994.")
     assert sec.reit_tax_said(stored)

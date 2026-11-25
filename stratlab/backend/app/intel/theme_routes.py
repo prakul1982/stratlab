@@ -172,7 +172,10 @@ def reader_due(got: dict, region: str = "") -> bool:
 # reader (QUOTE_V), is read once more, its annual report first (evidence_reader), the largest of a theme first (describe_top, the re-check's
 # describe_quoted, describe_missing), within the SEC reads a minute already set (FILING_READS_PER_MINUTE); a read still owed keeps the words
 # it has, and one whose report gives no such line keeps them too, marked so it is not asked again until EVIDENCE_DAYS
-QUOTE_V = 1
+# e89 (Semiconductors 77 description-verified live, about 90 expected: Intel, Skyworks, MACOM and Arm read once under QUOTE_V 1 by a reader
+# that found no opening or read their cautionary note, marked so and never asked again; McDonald's the same in Restaurants): 2, every US
+# record with no line a page may quote is read once more by the reader that finds them (sec.BUSINESS_KEY 6)
+QUOTE_V = 2
 QUOTE_READS = 120                 # companies of one theme read so at its re-check, largest first (two minutes of the SEC reads a minute)
 QUOTE_BUDGET = 150.0              # ...within this many seconds (the re-check runs in the background: no page waits on it)
 

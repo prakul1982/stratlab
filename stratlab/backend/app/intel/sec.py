@@ -2320,9 +2320,11 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
 # ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
 BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
 BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
-BUSINESS_KEY = ("business", 5)         # e85: 5, before a sentence of an operating company held as an LLC ("managing member of the OP") was passed over (_OP_LLC); lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read; e78: 4, before a sentence of a REIT's tax status was passed over (REIT_TAX)
+BUSINESS_KEY = ("business", 6)         # e89: 6, before a contents page's "ITEM 1A:" (Skyworks, MACOM), a report out of the form's order (Intel, McDonald's) and "The Company is ..." / "The Company franchises ..." (Arm, McDonald's) were read; e85: 5, before a sentence of an operating company held as an LLC ("managing member of the OP") was passed over (_OP_LLC); lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read; e78: 4, before a sentence of a REIT's tax status was passed over (REIT_TAX)
 BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
-    (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
+    # e89 (Skyworks' and MACOM's 10-K contents pages print "ITEM 1A: RISK FACTORS.", a colon after the letter, so the contents page's Item 1
+    # ran on past it and their cautionary notes were read as the opening): Item 1 ends at Item 1A however the number is followed
+    (r"(?:^|\n)\s*" + SECTIONS["business"][0], r"\n\s*item\s*1a\b"),
     # lane n2 (the outside review of the live R33 decks: TSMC's and UMC's 20-F gave nothing, or a line on process technology): a 20-F's
     # whole Item 4, "Information on the Company", whose history part often says first what the company is (UMC: "We are one of the
     # world's largest independent semiconductor foundries") and whose business overview follows it...
@@ -2331,6 +2333,11 @@ BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it en
     # lettered part or at Item 4A/5
     (r"(?:^|\n)\s*(?:item\s*4\.?\s*)?(?:b\.?\s*)?business\s+overview\b(?:\s+of\s+the\s+company)?[ \t]*(?=\n)",
      r"\n\s*(?:(?:item\s*4\.?\s*)?c\.?\s*organi[sz]ational\s+structure|item\s*4\s*a\b|item\s*5\b)"),
+    # e89 (Intel's and McDonald's 10-Ks, set out of the form's order with a cross-reference index at the back: no "Item 1. Business"
+    # heading before the part, so nothing was read and both stayed on an encyclopedia's words): the report's own business heading
+    # ("Overview", "Business Summary", "Description of the Business", "Business Overview") on a line of its own, its prose up to Item 1A
+    (r"(?:^|\n)[ \t]*(?:overview|business\s+summary|description\s+of\s+(?:the\s+)?business|business\s+overview)[ \t]*(?=\n)",
+     r"\n\s*(?:item\s*1a\b|risk\s+factors[ \t]*\n)"),
 )
 _BLOCK_END = re.compile(r"(?i)</(?:p|div|tr|td|th|li|h[1-6]|table|ul|ol)\s*>|<br\s*/?>")
 # a line about the report itself, not the business
@@ -2350,10 +2357,15 @@ _REPORT_TALK = re.compile(r"forward[- ]looking|unless the context|unless otherwi
 # a sentence that says what the company is or does: the opening starts at the first one (a report can open with cautions and definitions)
 _SAYS_WORK = re.compile(
     r"\b[Ww]e are (?:a|an|the|one of|primarily|principally|engaged)\b|"          # e85: "We" opening a sentence too (PayPal's "We operate ...")
-    r"(?:\b(?:company|corporation|group)|\)) (?:is|are) (?:a|an|the|one of|primarily|principally|engaged)\b|"
-    r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That)\b)[A-Z][\w&.,’' -]{1,60}? (?:is|are) (?:a|an|one of|the)\b|"
+    # e89 (Skyworks' "Skyworks Solutions, Inc., together with its consolidated subsidiaries (“Skyworks” or the “Company”), is a U.S.-based
+    # global leader ...", a comma after the defined name; McDonald's "The Company franchises and owns and operates McDonald’s restaurants")
+    # (Arm's 20-F: "The Company is a global leader in the semiconductor industry." before "In today’s technology-driven world,
+    # semiconductors are the enablers of ...", a sentence of its industry, never of itself)
+    r"(?:\b(?:[Cc]ompany|[Cc]orporation|[Gg]roup)|\)),? (?:is|are) (?:a|an|the|one of|primarily|principally|engaged)\b|"
+    r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That|In|As|For|Since|If)\b)[A-Z][\w&.,’' -]{1,60}? (?:is|are) (?:a|an|one of|the)\b|"
     r"\b[Ww]e (?:\w+ly )?(?:design|develop|manufactur|produce|provide|offer|sell|operate|supply|make|deliver|own|serve)|"
-    r"(?:\b(?:company|corporation)|\)),? (?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers)\b|"
+    r"(?:\b(?:[Cc]ompany|[Cc]orporation)|\)),? (?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers|"
+    r"franchises|owns)\b|"
     # e85 (Shopify's 10-K opening, read again: "Shopify provides essential internet infrastructure for commerce.", passed over for the
     # cautionary note before it): the company's own name doing its work
     r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That|We|In|As|For|Since|If)\b)[A-Z][\w&.’'-]{1,40}(?: [A-Z][\w&.’'-]{1,40}){0,3} "

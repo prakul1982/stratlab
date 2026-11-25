@@ -143,7 +143,7 @@ def test_a_reit_held_as_an_llc_is_read_past_how_it_is_held():
             + "Item 1A. Risk Factors\n")
     op = sec.business_opening(body)
     assert op.startswith("Welltower Inc. is a real estate investment trust that owns rental housing") and "Welltower OP" not in op
-    assert sec.BUSINESS_KEY[1] == 5          # (updated on purpose: every opening read again by the reader that passes these over)
+    assert sec.BUSINESS_KEY[1] == 6          # (changed on purpose, e89: every opening read again by the reader that finds Item 1 after "ITEM 1A:" and out of the form's order; e85: 5, every opening read again by the reader that passes these over)
 
 
 def test_a_cautionary_note_and_where_a_company_is_registered_are_not_its_opening():
