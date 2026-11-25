@@ -3751,9 +3751,13 @@ def index_page(region: str | None, q: str = "") -> str:
     q = (q or "").strip()[:40]
     regions = [region] if region else ["IN", "US"]
     # a market's own page says its market: "Company pages" with "India and the US" under it, above a list of India only, said two things (VR4-002)
-    where = {"IN": "India (NSE and BSE)", "US": "the US"}.get(region or "", "India (NSE and BSE) and the US")
     heading = {"IN": "Companies listed in India", "US": "Companies listed in the US"}.get(region or "", "Company pages")
-    body = [f'<h1>{heading}</h1><p class="muted">Every company listed in {where}: its last close, '
+    # site89b (honest coverage counts): "Every company listed in India (NSE and BSE)" while listed companies such as Bodhtree Consulting
+    # and Starcom Information Technology, on the IT services theme's list, had no page (404): the number of companies that have a page
+    n = {r: len(companies(r)) for r in regions}
+    where = (f"{n['IN']:,} companies listed in India (NSE and BSE)" if region == "IN" else f"{n['US']:,} companies listed in the US" if region == "US"
+             else f"{n['IN']:,} companies listed in India (NSE and BSE) and {n['US']:,} in the US")
+    body = [f'<h1>{heading}</h1><p class="muted">{where}, each with a page: its last close, '
             "reported results, margins, debt and recent filings. Facts, not advice.</p>", _find_form(region, q)]
     crumbs = ld = ""
     if region and not q:
@@ -3787,7 +3791,7 @@ def index_page(region: str | None, q: str = "") -> str:
             body.append(az_nav(r))                    # SEO-1: every company a click or two from here
     canonical = site + (f"/stocks/{region.lower()}" if region else "/stocks")
     return _page(_head({"IN": page_title("Company pages: India"), "US": page_title("Company pages: US")}.get(region or "", page_title("Company pages: India and US")),
-                       f"Find any company listed in {where.replace(' (NSE and BSE)', '').replace('India and the US', 'India or the US')}: price, results, "
+                       f"Find a company among the {where.replace(' (NSE and BSE)', '')}: price, results, "
                        "margins, debt and filings, from reported data.", canonical, ld, robots="noindex,follow" if q else "index,follow"),
                  None, "".join(body))
 
