@@ -2757,6 +2757,19 @@ EVIDENCE_KEY = ("Description-verified: own description shows the theme's work; i
 EVIDENCE_KEY_LIST = " List-supported: kept on the theme's own named list only."
 
 
+def map_how(t: dict | None) -> str:
+    """deck89 (an independent review of the method page, 25 Nov): how the companies of a theme with no core official industry got in, with
+    how many were checked against their own words and how many kept on their official industry; never "every company was checked"."""
+    head = "No official industry is this theme's core, so its companies are the ones the map names"
+    if not t:
+        return head + "."
+    parts = [f"{t.get('description_verified') or 0:,} checked against their own words", f"{t.get('industry_code_supported') or 0:,} kept on their official industry"]
+    parts += [f"{t['list_supported']:,} on the theme's own list"] if t.get("list_supported") else []
+    parts += [f"{t['not_confirmed']:,} whose own words describe other work"] if t.get("not_confirmed") else []
+    parts += [f"{t['membership_unverified']:,} not checked yet"] if t.get("membership_unverified") else []
+    return f"{head}: {', '.join(parts[:-1])} and {parts[-1]}."
+
+
 def evidence_tally(v: dict, total: int) -> dict | None:
     """e54 (R54, the owner's review of the live R53 decks: "100 confirmed from their own descriptions" beside "18 with figures lack own-words
     descriptions, kept on official-industry labels"): the theme's companies by what their place rests on, every count of one population that
@@ -7545,7 +7558,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                    + (" and the ones the map names." if added else "."))
     else:
         how.append("The theme's official industries are still being picked; until then the companies are the ones the map names." if p.get("industries_by") == "pending"
-                   else "No official industry is this theme's core, so every company here is one the map names, checked against its own description.")
+                   else map_how(evidence_tally(v, total)))
     if any(x.get("by_industry") for x in shown):
         how.append("Its layers are the companies' own official industries.")
     elif own_layers:

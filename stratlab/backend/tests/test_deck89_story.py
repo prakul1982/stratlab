@@ -217,3 +217,15 @@ def test_layer_pages_have_a_one_line_intro_and_fill_the_page():
         lay = deck.table_layout(tab, tab["box"][2], tab["box"][3])
         assert sum(lay["heights"]) >= 0.9 * tab["box"][3] and tab["box"][1] + tab["box"][3] >= deck.BOT - 0.6, s.title
 
+
+
+def test_the_method_page_never_says_every_company_was_checked():
+    # an independent review (25 Nov): "every company here is one the map names, checked against its own description" beside 10 kept on
+    # their official industry; the line now says how many were checked against their own words and how many kept on their industry
+    for name in ("alco", "fixture"):
+        v, slides = built(name)
+        how = " ".join(deck.plain_section(slides, "How the companies got in"))
+        assert "every company" not in how.lower(), (name, how)
+        t = deck.evidence_tally(v, len(v.get("members") or []))
+        if t:
+            assert f"{t['description_verified']:,} checked against their own words" in how and f"{t['industry_code_supported']:,} kept on their official industry" in how
