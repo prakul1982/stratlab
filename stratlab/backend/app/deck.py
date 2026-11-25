@@ -3127,13 +3127,13 @@ def _refs(slides: list) -> None:
         if not hit and m.group(1).startswith(NOTES_TITLE):
             hit = next((p for t, p in first.items() if t.startswith(METHOD_TITLE)), None)
         if not hit and any(t.startswith(m.group(1)) for t in kept):
-            return THEME_PAGE
+            return RECORDS
         if not hit:
             gone.append(m.group(1))
         return f"p. {hit}" if hit else ""
 
     def fix(x):          # (round 2: "appendix, on the theme's page" says it once: the record is on the theme's page)
-        return REF.sub(page, x).replace(" ()", "").replace("()", "").replace(f"appendix, {THEME_PAGE}", THEME_PAGE).rstrip() if isinstance(x, str) else x
+        return REF.sub(page, x).replace(" ()", "").replace("()", "").replace(f"appendix, {THEME_PAGE}", THEME_PAGE).replace(f"appendix, {RECORDS}", RECORDS).rstrip() if isinstance(x, str) else x
     for s in with_held(slides):            # deck89 round 2: the records kept with the deck point to the printed pages too
         s.subtitle = fix(s.subtitle)
         for b in s.blocks:
@@ -6356,7 +6356,7 @@ def provenance_flags(slides: list, v: dict) -> list[dict]:
     for r in conf:
         said = _cell_text(r[1])
         if _cell_text(r[0]) in ("Verified figures", "Net above EBITDA margin", "Net margin not reconciled", "Figure checks") and \
-                f"⟦{SOURCES_TITLE}⟧" not in said and not (at and re.search(rf"\b{re.escape(at)}\b", said)) and f": {THEME_PAGE}" not in said:
+                f"⟦{SOURCES_TITLE}⟧" not in said and not (at and re.search(rf"\b{re.escape(at)}\b", said)) and f": {THEME_PAGE}" not in said and f": {RECORDS}" not in said:
             out.append({"slide": RECORDS_TITLE, "text": _cell_text(r[0]), "why": "checked figures named with no reference to their source rows", "rule": "sourced"})
     # deck89 round 2: each figure verified from its filed statement lines carries the mark on its row of the companies' table, and a not
     # reconciled net margin its †, wherever the table shows that company and figure
@@ -6872,7 +6872,11 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
 METHOD_TITLE = "Method and sources"          # deck89 round 2 (coordinator, 25 Nov, the owner's R19 "just keep the important ones"): the one page of method
 RECORDS_TITLE = "Method and coverage"        # the full records (every check, the coverage, the notes to the pages), kept with the deck, not printed
 THEME_PAGE = "on the theme's page in StratLab"
-POINTER_LINE = "The full checks, every figure's source lines and the comparison basis are on the theme's page in StratLab."
+# rel90: the theme's page shows each company, its layer and how its place was checked; the figures' statement lines, the comparison basis and
+# the full checks are not on it, so a pointer to those says where they truly are: kept with the deck's record (held), never "on the page"
+RECORDS = "in StratLab's records for this deck"
+POINTER_LINE = ("Each company's place and how it was checked are on the theme's page in StratLab; the full checks, every figure's source lines and "
+                "the comparison basis are kept in StratLab's records for this deck.")
 VERIFIED_MARK = "*"                          # a figure checked against the company's filed statement lines, on its row of the companies' table
 VERIFIED_NOTE = "verified from its filed statement lines"
 FIG_LABEL = {"net": "Net", "ebitda": "EBITDA", "roce": "ROCE", "roe": "ROE", "pb": "P/B"}       # a checked figure's column in that table
@@ -8464,7 +8468,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     fig_pages = sum(1 for x in slides if x.title.startswith("Every company's figures"))
     apx = [x for x in (f"Every member company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
                        "how the companies got in, what each figure is, the period and where the figures come from",
-                       f"the full checks and every figure's source lines are {THEME_PAGE}") if x]
+                       f"the full checks and every figure's source lines are {RECORDS}") if x]
     first_apx = next((i for i, x in enumerate(slides) if is_appendix(x)), None)
     if first_apx is not None:
         crow.append(["Appendix", "; ".join(apx)[:1].upper() + "; ".join(apx)[1:] + ".", str(first_apx + 1)])

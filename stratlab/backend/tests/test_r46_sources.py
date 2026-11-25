@@ -159,7 +159,7 @@ def test_the_deck_keeps_the_reconciled_developers_and_shows_each_figures_source_
                          "over revenue ₹1,000 crore, Mar 2026: 25%; above EBITDA by ₹130 crore: other income ₹50 crore and items after tax ₹152 crore; "
                          "annual results, consolidated); Estate Credit Ltd, net margin 24% (")
     assert "a tax credit ₹120 crore" in vf and "items before tax ₹170 crore" in vf
-    assert vf.endswith(f"Each one's document, stored page and lines: {deck.THEME_PAGE}.")          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    assert vf.endswith(f"Each one's document, stored page and lines: {deck.RECORDS}.")          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)  # (changed on purpose, rel90: the figures' source lines, comparison basis and full checks are kept in StratLab's records for this deck, not on the theme's page, so the pointer says so)
     nb = rows["Net above EBITDA margin"][1]
     assert nb.startswith("Net margin above the EBITDA margin at 1 company, that the year's stored lines don't cover: Estate Old Ltd (25% net, 12% EBITDA).")
     # (updated on purpose, ex49: each company named with the lines it still needs)
@@ -185,7 +185,7 @@ def test_the_deck_keeps_the_reconciled_developers_and_shows_each_figures_source_
     assert note.startswith("Each company's year as its stored page holds it (/stocks/in/SYMBOL), in the filing's unit.")
     contents = next(s for s in slides if s.title == "Contents")
     apx = next(r for b in contents.blocks if b["kind"] == "table" for r in b["rows"] if r[0] == "Appendix")
-    assert f"every figure's source lines are {deck.THEME_PAGE}" in apx[1]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    assert f"every figure's source lines are {deck.RECORDS}" in apx[1]  # (changed on purpose, rel90: kept in StratLab's records for this deck, not on the theme's page)          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     got = deck_check.check_pages(["\n".join(x for x in texts(slides).split("\n") if x != "None")])      # (texts lists a card's empty fields as None)
     assert not deck_check.failed(got, strict=True), got["findings"][:3]
     assert not deck.CAUSE_WORDS.search(texts(slides))

@@ -124,7 +124,7 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
                       + "; insufficient evidence: Vague 0, Vague 1; not confirmed in the theme: Stranger 0")         # (updated on purpose, ex49)
     lay = deck.table_layout(table, table["box"][2], table["box"][3])
     assert len(lay["rows"]) == 1                                                               # the row is on its page whole
-    assert f"are {deck.THEME_PAGE}" in texts([s for s in slides if s.title == "Contents"])          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the contents say the full records are there
+    assert f"are {deck.RECORDS}" in texts([s for s in slides if s.title == "Contents"])          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the contents say the full records are there  # (changed on purpose, rel90: the figures' source lines, comparison basis and full checks are kept in StratLab's records for this deck, not on the theme's page, so the pointer says so)
     assert slides[0].gate["passed"] == slides[0].gate["of"], slides[0].gate
     # the appendix is its tables: every company's figures, then the roll (the every-rule check, changed on purpose for R35)
     assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.METHOD_TITLE, deck.NOTES_TITLE, deck.COMPARE_TITLE,

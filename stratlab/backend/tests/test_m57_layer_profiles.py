@@ -298,7 +298,7 @@ def test_a_median_over_layers_that_earn_differently_says_it_is_pooled():
     v, slides = _travel()                                               # transport and consumer services
     growth = next(s for s in slides if s.title == "Growth and profitability")
     # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): each layer on its own measures is kept with the deck, on the theme's page
-    assert f"pooled across layers that earn in different ways (each layer on its own figures: {deck.THEME_PAGE})" in growth.subtitle
+    assert f"pooled across layers that earn in different ways (each layer on its own figures: {deck.RECORDS})" in growth.subtitle  # (changed on purpose, rel90: the figures' source lines, comparison basis and full checks are kept in StratLab's records for this deck, not on the theme's page, so the pointer says so)
     one = _slides("IN", "Hotels", [("Hotels and resorts", "HT", "Hotels & Resorts", 4, "consumer_services"),
                                    ("Resorts", "RS", "Hotels & Resorts", 3, "consumer_services")], lambda i, s, n, ind: _in(i, s, n, ind),
                   _synthetic_passages({}))[1]
