@@ -216,6 +216,7 @@ def _with_off(v: dict, n: int) -> dict:
 
 def _coverage_rows(slides) -> list:
     from app import deck
+    # deck89 (changed on purpose, owner 25 Nov): the data-confidence and coverage pages are the appendix's "Method and coverage"
     return [r for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks
             if b["kind"] == "table" and b.get("head") == deck.COVERAGE_HEAD for r in b["rows"]]
 
