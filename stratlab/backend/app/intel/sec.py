@@ -2526,6 +2526,11 @@ def business_opening(text: str, limit: int = 700) -> str:
             continue
         picks = _prose(body, limit)
         first = next((i for i, x in enumerate(picks) if _SAYS_WORK.search(x)), None)
+        if (start, end) == BUSINESS_PARTS[-1] and (first is None or first > 2):
+            # e89: the report's own business heading is read only when it opens on what the company is or does (a heading of that name
+            # in a contents page, a cross-reference index or a committee's report is no opening: BP's, Shell's, BHP's, GSK's 20-F)
+            first = None
+            continue
         if first is not None:
             break
         # lane n2: a part with no sentence that says what the company is or does (UMC's "Business Overview" opens on its fabs' quality)

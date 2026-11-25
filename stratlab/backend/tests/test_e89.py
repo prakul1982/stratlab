@@ -294,3 +294,14 @@ def test_newmonts_opening_is_its_own_sentence_and_old_reads_of_annual_reports_ar
                     "produce bullion that meets the required market standard of 99.95% gold.", "industry": ""}
     assert TR.quote_due(old, "US", "Newmont Corp")
     assert not TR.quote_due({**old, "bv": sec.BUSINESS_KEY[1], "qv": 1}, "US", "Newmont Corp")      # guard: read by today's reader
+
+
+def test_guard_a_business_heading_that_opens_on_no_sentence_of_the_company_gives_no_opening():
+    """Guard (e89): the report's own business heading ("Overview") is read only when its first sentences say what the company is or does: a
+    heading of that name before a committee's report or an index (BP's, Shell's, BHP's, GSK's 20-F) gives no opening, as before."""
+    from app.intel import sec
+    filler = " ".join(["The Committee reviewed the remuneration framework against the strategy and the market practice of its peers this year."] * 4)
+    text = ("Overview\n" + filler + "\n" + filler + "\nThe Committee is driven by the need to ensure our Policy is aligned to support strategic "
+            "delivery and that incumbents are rewarded. We operate a policy that is simple and transparent for every director of the board.\n"
+            + filler + "\nRisk factors\n")
+    assert sec.business_opening(text) == ""
