@@ -2279,6 +2279,7 @@ def shown_label(cos: list, k: int) -> str:
 ROLL_TITLE = "Who is in each layer's calculations"
 # e89: the theme's companies under its size and quality floor (theme_data.dust_of), a page of the appendix's roll of who is in the calculations
 DUST_TITLE = ROLL_TITLE + ": too small or too stale to compare"
+DEMERGED_TITLE = ROLL_TITLE + ": its business demerged since its year"          # e89: theme_data's "moved_on"
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
@@ -7286,9 +7287,15 @@ def _method_page(printed: list, cards: list, built: list, v: dict, asof: str, ey
         read.append(f"{VERIFIED_MARK} on a figure in the companies' table: {VERIFIED_NOTE}.")
     period = (f"Each company's latest full year and quarter as it reported them, from its results stored on its StratLab page "
               f"(/stocks/{mk}/SYMBOL); market value is price times shares" + (f", prices to {asof}." if asof else "."))
-    small_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol")]          # lane e89's floor, when the view has it
-    small_line = (f"{_n(len(small_), 'company', 'companies')} of the theme too small or too stale to compare, in no layer's table, median or total: "
-                  + names5([{"name": clean_name(x.get("name") or x["symbol"])} for x in small_]) + f"; each one's reason {THEME_PAGE}.") if small_ else ""
+    small_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol") and x.get("kind") != "demerged"]          # lane e89's floor
+    moved_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol") and x.get("kind") == "demerged"]
+    # (e89: each one's reason is a record kept with the deck, never on the theme's page: RECORDS)
+    small_line = " ".join(x for x in (
+        (f"{_n(len(small_), 'company', 'companies')} of the theme too small or too stale to compare, in no layer's table, median or total: "
+         + names5([{"name": clean_name(x.get("name") or x["symbol"])} for x in small_]) + f"; each one's reason {RECORDS}.") if small_ else "",
+        (f"{_n(len(moved_), 'company', 'companies')} whose business of the theme was demerged since its year into another listed company, in no "
+         "layer's table, median or total: " + names5([{"name": clean_name(x.get("name") or x["symbol"])} for x in moved_]) + f"; why {RECORDS}.")
+        if moved_ else "") if x)
     t_ = evidence_tally(v, len(v.get("members") or []))
     who_ = list(lines.get("Who is in it") or [])
     if t_ and who_:          # the membership counts by evidence state, after who is in it
@@ -8305,17 +8312,21 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
 
     # e89 (the owner's Alcoholic beverages deck: Tahmar, Winsome, Silver Oak, Cupid and Kati Patang rows of n.m. in layer tables): the
     # companies under the theme's size and quality floor (theme_data.dust_of), in no layer's table, median or total, each listed once here
-    small_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol")]
-    if small_:
-        shead, swidths = ["Company", "Layer", "Why it is not compared"], [2.6, 2.6, 7.1]
-        srows = [[clean_name(x.get("name") or x["symbol"]), x.get("layer") or "", str(x.get("why") or "")] for x in small_]
-        for k, chunk in enumerate(spages := table_pages(shead, srows, swidths, CW, BOT - TOP)):
-            s = Slide(DUST_TITLE + (f" ({k + 1} of {len(spages)})" if len(spages) > 1 else ""),
-                      f"{_n(len(small_), 'company', 'companies')} of the theme too small or too stale to compare: listed here once, in no "
-                      "layer's table, median or total", eyebrow=eb("Appendix"))
-            s.add("table", (M, TOP, CW, min(BOT - TOP, table_height(shead, chunk, swidths, CW))), head=shead, rows=chunk, widths=swidths,
-                  numeric=[False, False, False], tight=True)
-            later_slides.append(s)
+    small_all = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol")]
+    # e89: a company whose business of the theme was demerged since its year into another listed company, said once on its own page
+    for small_, title_, lead_ in ((([x for x in small_all if x.get("kind") != "demerged"]), DUST_TITLE, "too small or too stale to compare"),
+                                  ([x for x in small_all if x.get("kind") == "demerged"], DEMERGED_TITLE,
+                                   "whose business of the theme was demerged since its year into another listed company")):
+        if small_:
+            shead, swidths = ["Company", "Layer", "Why it is not compared"], [2.6, 2.6, 7.1]
+            srows = [[clean_name(x.get("name") or x["symbol"]), x.get("layer") or "", str(x.get("why") or "")] for x in small_]
+            for k, chunk in enumerate(spages := table_pages(shead, srows, swidths, CW, BOT - TOP)):
+                s = Slide(title_ + (f" ({k + 1} of {len(spages)})" if len(spages) > 1 else ""),
+                          f"{_n(len(small_), 'company', 'companies')} of the theme {lead_}: listed here once, in no "
+                          "layer's table, median or total", eyebrow=eb("Appendix"))
+                s.add("table", (M, TOP, CW, min(BOT - TOP, table_height(shead, chunk, swidths, CW))), head=shead, rows=chunk, widths=swidths,
+                      numeric=[False, False, False], tight=True)
+                later_slides.append(s)
 
     roll_end = len(later_slides)
     _figure_sources(later_slides, v, eb("Appendix"))       # R46: every checked figure's source record, after the figures it is of

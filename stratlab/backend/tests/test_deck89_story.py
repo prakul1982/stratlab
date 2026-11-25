@@ -108,7 +108,15 @@ def test_nothing_true_is_lost():
     # every company with figures has its row in the appendix
     lead = {r[0] for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]
             if not isinstance(r, dict)}
-    assert {r[1] for r in ROWS} <= {x.removesuffix(" (whole company)") for x in lead}
+    # (changed on purpose, e89: a company under the theme's size and quality floor, or whose business was demerged since its year, is in no
+    # figure, so it has no row of figures; it is named on the method page and its reason kept with the deck, so nothing true is lost)
+    apart = {x["name"] for x in v.get("too_small") or []}
+    assert apart and {r[1] for r in ROWS} - apart <= {x.removesuffix(" (whole company)") for x in lead}
+    said = " ".join(deck.plain_section(slides, "Too small or too stale to compare"))
+    kept = {r[0] for s in deck.with_held(slides) if s.title.startswith((deck.DUST_TITLE, deck.DEMERGED_TITLE)) for b in s.blocks
+            if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)}
+    assert all(deck.clean_name(n) in kept for n in apart), (apart, kept)
+    assert all(deck.clean_name(n) in said for n in apart if len(apart) <= 5), said
     # the checks, their counts and the coverage table are kept with the deck (round 2: not printed); the key to the marks is printed
     heads = [b["head"] for s in deck.held(slides) for b in s.blocks if b["kind"] == "table"]
     assert deck.CONF_HEAD in heads and deck.COVERAGE_HEAD in heads and deck.SOURCES_HEAD in heads

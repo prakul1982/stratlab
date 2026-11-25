@@ -2548,7 +2548,22 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
-def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
+def apart_symbols(dive: dict | None) -> set:
+    """e89: the companies a dive keeps out of every figure (theme_data's floor and a business demerged since its year: its "too_small"),
+    which no price count, return median or other figure of the theme counts either."""
+    return {str(x.get("symbol")) for x in (dive or {}).get("too_small") or [] if isinstance(x, dict) and x.get("symbol")}
+
+
+def kept_apart(r: str, theme: str, m: dict) -> set:
+    """e89: apart_symbols of the theme's kept dive, read only (never worked out here); none when no dive is kept."""
+    try:
+        got = computed.get(theme_library.DIVE, dive_key(r, theme, m), count=False)
+        return apart_symbols(((got or {}).get("value") or {}).get("dive"))
+    except Exception:
+        return set()
+
+
+def deck_extras(r: str, theme: str, m: dict, profile: dict, apart=()) -> dict:
     """The parts of the theme's page that it reads on its own, as the page last read them: the latest headlines and the new listings from
     their caches, the prices of the companies already read (no candles fetched for the deck), and the business updates on the plans that
     have them. A part not read yet is None, and the deck says so once."""
@@ -2561,7 +2576,7 @@ def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
     out["listings"] = listed["items"] if listed and listed.get("checked") else None
     names = _map_names(fm)
     placed = sorted({c["ticker"]: names.get(c["ticker"]) for grp in (fm.get("value_chain") or []) + (fm.get("sub_themes") or [])
-                     for c in grp.get("companies") or []}.items())
+                     for c in grp.get("companies") or [] if c["ticker"] not in set(apart)}.items())         # e89: the floor's apart
     daily = daily_rows(r) if placed else ({}, None, {})
     if placed and (any(PRICE_CACHE.get(f"{r}:{sym}") for sym, _ in placed) or any(sym in daily[0] for sym, _ in placed)):
         try:          # LIVE7A-002: the page's figures, its stored daily rows for the companies whose candles aren't read
@@ -2708,7 +2723,7 @@ def deck_file(R, r: str, theme: str, m: dict, profile: dict, format: str, biz: b
             except ValueError:
                 body = None
         if body is None:
-            view = deck_view(r, m, dive, deck_extras(r, theme, m, profile))
+            view = deck_view(r, m, dive, deck_extras(r, theme, m, profile, apart=apart_symbols(dive)))
             body, gate = deck.build_theme_gated(view, pdf=format == "pdf")
             # R27: the publication gate's result (pass or fail per item, what was dropped) is kept with the deck, for Admin -> Library;
             # R29: a deck still waiting for filed figures isn't kept in the shared store (it is made again once they are in)
@@ -3143,9 +3158,12 @@ def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budg
 def theme_dive_prices(q: str, region: str = "IN", profile=Depends(current_profile)):
     R = _routes()
     r, theme, m, _ = R.theme_map(profile, region, q)
-    m = theme_base.for_figures(checked(r, theme, m))[0]
+    m_ = checked(r, theme, m)
+    apart = kept_apart(r, theme, with_descriptions(r, m_))     # e89: no price count of a company kept out of every figure (floor, demerged)
+    m = theme_base.for_figures(m_)[0]
     names = _map_names(m)
-    placed = {c["ticker"]: names.get(c["ticker"]) for grp in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in grp.get("companies") or []}
+    placed = {c["ticker"]: names.get(c["ticker"]) for grp in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in grp.get("companies") or []
+              if c["ticker"] not in apart}
     members = sorted(placed.items())
     if not members:
         return R.ok({"companies": [], "pending": 0, "line": None, "returns": None, "median": {}, "benchmark": ""})
