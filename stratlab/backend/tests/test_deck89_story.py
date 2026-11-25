@@ -2,7 +2,10 @@
 everything out and get fixing everything"; R19: "just keep the important ones not everything"; 5 Nov: "make it better ... good looking").
 The theme deck reads like research: the story first (findings as big numbers, the value chain, each layer, growth, valuation, price,
 tailwinds and risks), a chart on most pages, plain words, short footnotes, no placeholder cells and no near-empty page; the checks, the
-coverage, the marks and the long method notes in the appendix's "Method and coverage", so nothing true is lost."""
+coverage, the marks and the long method notes in the appendix's "Method and coverage", so nothing true is lost.
+Round 2 (coordinator, 25 Nov, applying R19): the file's appendix is every company's figures and ONE "Method and sources" page; the full
+records (checks, coverage, notes, how each figure is built, figure sources, comparison basis) are kept with the deck for the gate and are on
+the theme's page."""
 import functools
 import io
 import re
@@ -45,9 +48,9 @@ def test_no_engine_wording_on_the_story_pages():
         for s in body(slides) + [slides[0]]:
             t = texts([s])
             assert not deck.AUDIT_WORDS.search(t), (name, s.title, deck.AUDIT_WORDS.findall(t))
-        # the full counts live in the appendix's "Method and coverage"
+        # the membership counts on the one method page; the full counts in the records kept with the deck (round 2)
         method = texts([s for s in slides if s.title.startswith(deck.METHOD_TITLE)])
-        assert "description-verified" in method and "Counts:" in method
+        assert "description-verified" in method and "Counts:" in texts(deck.held(slides))
 
 
 def test_most_story_pages_have_a_chart_and_none_is_mostly_empty():
@@ -91,7 +94,7 @@ def test_key_findings_are_big_numbers_with_one_plain_sentence_and_no_page_refere
 
 def test_footnotes_are_short_and_said_in_full_in_the_appendix():
     _, slides = built("alco")
-    notes = [r for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks if b["kind"] == "table" and b["head"] == deck.NOTES_HEAD
+    notes = [r for s in deck.held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks if b["kind"] == "table" and b["head"] == deck.NOTES_HEAD
              for r in b["rows"] if not isinstance(r, dict)]
     for s in body(slides):
         foot = deck._footnote(s)
@@ -106,11 +109,11 @@ def test_nothing_true_is_lost():
     lead = {r[0] for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]
             if not isinstance(r, dict)}
     assert {r[1] for r in ROWS} <= {x.removesuffix(" (whole company)") for x in lead}
-    # the checks, their counts and the coverage table are in the appendix, with the key to the marks
-    method = [s for s in slides if s.title.startswith(deck.METHOD_TITLE)]
-    heads = [b["head"] for s in method for b in s.blocks if b["kind"] == "table"]
-    assert deck.CONF_HEAD in heads and deck.COVERAGE_HEAD in heads
+    # the checks, their counts and the coverage table are kept with the deck (round 2: not printed); the key to the marks is printed
+    heads = [b["head"] for s in deck.held(slides) for b in s.blocks if b["kind"] == "table"]
+    assert deck.CONF_HEAD in heads and deck.COVERAGE_HEAD in heads and deck.SOURCES_HEAD in heads
     assert deck.MARKS_LINE in deck.plain_section(slides, "Reading the figures")
+    assert deck.POINTER_LINE in texts(slides)
     gate = slides[0].gate
     assert gate["passed"] == gate["of"], gate["dropped"]
 
@@ -118,7 +121,7 @@ def test_nothing_true_is_lost():
 def test_the_alcobev_deck_is_shorter_and_its_story_short():
     _, slides = built("alco")
     assert len(body(slides)) <= 18, [s.title for s in body(slides)]
-    assert len(slides) <= 32
+    assert len(slides) <= 23          # round 2: was 32 with the full records printed
 
 
 def test_rises_are_green_and_falls_red():
@@ -146,3 +149,77 @@ def test_pdf_and_powerpoint_keep_the_same_pages_and_the_powerpoint_reopens():
     prs = Presentation(io.BytesIO(pp))
     again = Presentation(io.BytesIO(pp))
     assert len(PdfReader(io.BytesIO(pdf)).pages) == len(prs.slides) == len(again.slides) == len(built("alco")[1])
+
+
+def test_the_appendix_is_the_companies_figures_and_one_method_page():
+    for name in ("alco", "fixture"):
+        _, slides = built(name)
+        apx = [s.title for s in slides if deck.is_appendix(s)]
+        assert len(apx) <= 5 and apx[-1] == deck.METHOD_TITLE, (name, apx)
+        assert all(t.startswith("Every company's figures") for t in apx[:-1]), (name, apx)
+        kept = {re.sub(r" \(\d+ of \d+\)$", "", s.title) for s in deck.held(slides)}
+        assert deck.RECORDS_TITLE in kept and deck.NOTES_TITLE in kept, (name, kept)
+        # every reference resolves: a page kept off the deck is pointed to on the theme's page, never a "p. " of nothing
+        assert not getattr(slides[0], "unresolved", None) and "⟦" not in texts(slides)
+
+
+def test_a_verified_figure_carries_its_mark_and_the_gate_checks_it():
+    v = alco_view()
+    top = max(ROWS, key=lambda r: r[3])
+    v["checks"]["states"] = list(v["checks"]["states"]) + [{"symbol": top[0], "name": top[1], "key": "roce", "value": top[8],
+                                                            "state": "verified_extreme", "checks": ["sign"], "why": "", "lines": [], "source": None}]
+    slides, _ = deck.theme_plan(v)
+    page = next(s for s in slides if s.title.startswith("Every company's figures"))
+    tab = next(b for b in page.blocks if b["kind"] == "table")
+    row = tab["rows"][tab["syms"].index(top[0])]
+    j = tab["head"].index("ROCE")
+    assert row[j].endswith(deck.VERIFIED_MARK)
+    assert any(deck.VERIFIED_NOTE in t for t in deck.slide_texts(page))
+    assert slides[0].gate["passed"] == slides[0].gate["of"], slides[0].gate["dropped"]
+    row[j] = row[j].removesuffix(deck.VERIFIED_MARK)          # the mark taken off: the gate's source item fails on it
+    assert any(f["why"] == "a checked figure printed without its mark" for f in deck.provenance_flags(slides, v))
+
+
+def test_the_gate_reads_the_records_kept_with_the_deck():
+    v, slides = built("alco")
+    kept = deck.held(slides)
+    rows = [r for s in kept if s.title.startswith(deck.COMPARE_TITLE) for b in s.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
+    assert rows
+    v = {**v, "comparisons": [{"metric": "EBITDA margin", "groups": [{"layer": deck._cell_text(r[0])} for r in rows]}]}      # the layers it compared
+    assert not deck.provenance_flags(slides, v)
+    try:              # a comparison's rows or a figure's source row gone from the records fails the source item, as when they were printed
+        slides[0].held = [s for s in kept if not s.title.startswith(deck.COMPARE_TITLE)]
+        assert any(f["slide"] == deck.COMPARE_TITLE for f in deck.provenance_flags(slides, v))
+        slides[0].held = [s for s in kept if not s.title.startswith(deck.SOURCES_TITLE)]
+        assert any(f["slide"] == deck.SOURCES_TITLE for f in deck.provenance_flags(slides, v))
+    finally:
+        slides[0].held = kept
+    # and a deck that keeps them off its pages says where they are
+    tab = next(s for s in slides if s.title == deck.METHOD_TITLE).blocks[0]
+    saved = [list(r) for r in tab["rows"]]
+    try:
+        tab["rows"] = [[r[0], r[1].replace(deck.POINTER_LINE, "")] for r in saved]
+        assert any(f["why"].startswith("the checks and sources kept off the deck") for f in deck.provenance_flags(slides, v))
+    finally:
+        tab["rows"] = saved
+
+
+def test_layer_pages_have_a_one_line_intro_and_fill_the_page():
+    _, slides = built("alco")
+    for s in slides:
+        if not s.title.startswith("Layer "):
+            continue
+        intro = [b for b in s.blocks if b["kind"] == "text" and b["box"][1] < 2.3]
+        assert intro and all(len(deck.wrap(p, 12, deck.CW)) == 1 for b in intro for p in b["paras"]), s.title
+        tab = next(b for b in s.blocks if b["kind"] == "table")
+        lay = deck.table_layout(tab, tab["box"][2], tab["box"][3])
+        assert sum(lay["heights"]) >= 0.9 * tab["box"][3] and tab["box"][1] + tab["box"][3] >= deck.BOT - 0.6, s.title
+
+
+def test_a_story_page_with_a_table_first_has_a_short_headline():
+    for name in ("alco", "fixture"):
+        _, slides = built(name)
+        for s in body(slides):
+            lead = [b for b in sorted(s.blocks, key=lambda b: (b["box"][1], b["box"][0])) if not (b["kind"] == "text" and b["box"][3] <= 0.35)]
+            if s.subtitle and lead and lead[0]["kind"] == "table":
+                assert len(deck.wrap(s.subtitle, 14, deck.CW)) <= 2, (name, s.title, s.subtitle)
