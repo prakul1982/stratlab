@@ -136,3 +136,23 @@ def test_old_decks_are_counted_and_removed_and_the_current_ones_stay(store, monk
     assert got == {"removed": 1, "of": 1}
     assert [e["label"] for e in computed.index("deck:theme")["entries"].values()] == ["Today (PDF)"]
     assert library_admin.old_decks() == []
+
+
+# ---------- at the root: a profile is only ever made for a sign-in account's id ----------
+def test_get_profile_never_makes_a_row_for_an_id_that_is_not_a_users(w):
+    for bad in ("files:u-pro", "hist:u-pro", "u pro", "", "x" * 65):
+        assert db.get_profile(bad) is None, bad
+        assert db.find_profile(bad) is None, bad
+    assert admin.stray_rows() == []
+    made = db.get_profile("u-brand-new", "new@example.com")            # a real sign-in id is still made, as on a first sign-in
+    assert made["id"] == "u-brand-new" and made["plan"] == "free"
+    assert db.user_id_ok("6f1c2a9e-1d2b-4c3d-9e8f-0a1b2c3d4e5f") and not db.user_id_ok("files:6f1c2a9e-1d2b-4c3d-9e8f-0a1b2c3d4e5f")
+
+
+def test_the_reported_strategies_queue_shows_a_deleted_author_without_making_a_row(w, monkeypatch):
+    from app import library
+    monkeypatch.setattr(library, "all_entries", lambda: [{"id": "e1", "name": "Gone", "owner": "u-deleted", "reports": {"r1": {"reason": "spam"}},
+                                                          "published_at": "2026-11-01"}])
+    rows = w["client"].get("/admin/library", headers=A).json()["entries"]
+    assert [(r["name"], r["email"]) for r in rows] == [("Gone", None)]
+    assert db.find_profile("u-deleted") is None

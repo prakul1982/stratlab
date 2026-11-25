@@ -1,6 +1,7 @@
 """Supabase access with the service-role key (bypasses RLS, server only)."""
 import contextvars
 import json
+import re
 import logging
 import threading
 import time
@@ -186,10 +187,24 @@ def now_iso() -> str:
 
 
 # ---------- profiles ----------
-def get_profile(user_id: str, email: str | None = None) -> dict:
+# A sign-in account's id: the sign-in service's uuid (letters, digits and hyphens; the test world's "u-pro" fits too), never a colon.
+# A profile is only ever made for one (admin90): jobs that took a settings key's tail for a user id ("holdings:files:<uid>" read as
+# "files:<uid>") made a profile for it on Railway, whose id column takes any text, and Admin counted it as a user.
+USER_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def user_id_ok(user_id) -> bool:
+    return isinstance(user_id, str) and USER_ID.fullmatch(user_id) is not None
+
+
+def get_profile(user_id: str, email: str | None = None) -> dict | None:
+    """A user's profile, made (as Free) when missing, but only for a sign-in account's id (user_id_ok): anything else is read, never
+    made, and gives None when there is none."""
     r = sb().table("profiles").select("*").eq("id", user_id).limit(1).execute()
     if r.data:
         return r.data[0]
+    if not user_id_ok(user_id):
+        return None
     # insert only when absent: a row another request made meanwhile (a payment, a plan change) is never overwritten
     sb().table("profiles").upsert({"id": user_id, "email": email, "plan": "free"}, ignore_duplicates=True).execute()
     return sb().table("profiles").select("*").eq("id", user_id).limit(1).execute().data[0]

@@ -8146,7 +8146,7 @@ def admin_library(_=Depends(admin.admin_profile)):
         owner = e.get("owner")
         if owner and owner not in emails:
             try:
-                emails[owner] = (db.get_profile(owner) or {}).get("email")
+                emails[owner] = (db.find_profile(owner) or {}).get("email")       # read only: a deleted author is shown, no row made (admin90)
             except Exception:
                 emails[owner] = None
         reasons: dict[str, int] = {}
