@@ -2431,7 +2431,7 @@ def roll_line(ins: list, outs: list) -> tuple[str, bool]:
             if len(wrap(line.replace(f"⟦{ROLL_TITLE}⟧", "p. 00"), BODY_MIN, CW)) <= ROLL_LINES:
                 break
         return line, cut
-    for short, limit in [(False, n) for n in (ROLL_FULL, ROLL_NAMES, ROLL_NAMES // 2)] + [(True, ROLL_NAMES // 2)]:
+    for short, limit in [(False, n) for n in (ROLL_FULL, ROLL_NAMES, ROLL_NAMES // 2)] + [(True, ROLL_NAMES // 2), (True, max(1, ROLL_NAMES // 3))]:
         in_, out_, cut = roll_words(ins, outs, limit, short)
         line = roll_said(len(ins), total, len(outs), in_, out_, cut)
         if len(wrap(line.replace(f"⟦{ROLL_TITLE}⟧", "p. 00"), BODY_MIN, CW)) <= ROLL_LINES:
@@ -7067,13 +7067,15 @@ def _method_pages(audit: list, cards: list, notes: list, eyebrow: str) -> list:
     def _ch(head, rows, widths):          # a reference table set close, at 11 pt
         return sum(table_layout({"head": head, "rows": rows, "widths": widths, "tight": True, "small": True}, CW, 99)["heights"])
 
-    def table(head, rows, widths, title=None):
-        """Whole rows packed onto the pages in turn (a row taller than a page cut into pieces first), the heading repeated on each."""
+    def table(head, rows, widths, title=None, pre=()):
+        """Whole rows packed onto the pages in turn (a row taller than a page cut into pieces first), the heading repeated on each; `pre`:
+        paragraphs said just before the table's first rows, on their page (never a page of their own)."""
         nonlocal y
         rows = split_tall(head, list(rows), widths, CW, BOT - TOP - 0.45)
         lead = title
+        pre_h = sum(note_h(p_) + 0.12 for p_ in pre)
         while rows:
-            top = y + (0.34 if lead else 0)
+            top = y + (0.34 if lead else 0) + pre_h
             k = 0
             while k < len(rows) and top + _ch(head, rows[:k + 1], widths) <= BOT:
                 k += 1
@@ -7082,6 +7084,11 @@ def _method_pages(audit: list, cards: list, notes: list, eyebrow: str) -> list:
                     page()
                     continue
                 k = 1
+            for p_ in pre:
+                ph_ = note_h(p_)
+                pages[-1].add("text", (M, y, CW, ph_), paras=[p_], size=BODY_MIN, floor=BODY_MIN, color=INK2)
+                y += ph_ + 0.12
+            pre, pre_h = (), 0.0
             if lead:
                 pages[-1].add("text", (M, y, CW, 0.28), paras=[lead], size=12, floor=12, bold=True, color=INK2)
                 lead = None
@@ -7099,13 +7106,15 @@ def _method_pages(audit: list, cards: list, notes: list, eyebrow: str) -> list:
             if b["kind"] == "table" and b.get("head") == PLAIN_HEAD:
                 b["lines"] = {c["title"]: [str(t) for t in c["lines"]] for c in cards}
     table(CONF_HEAD, conf_rows, [1.8, 6.6, 3.7], "Each check on the figures, what it found and what the deck does")
-    for c in counts:
-        h = note_h(c)
-        if y + h > BOT:
-            page()
-        pages[-1].add("text", (M, y, CW, h), paras=[c], size=BODY_MIN, floor=BODY_MIN, color=INK2)
-        y += h + 0.22
-    table(COVERAGE_HEAD, cov_rows, [1.8, 1.4, 8.9], "Coverage: how many companies, how much market value and which figures")
+    if cov_rows:
+        table(COVERAGE_HEAD, cov_rows, [1.8, 1.4, 8.9], "Coverage: how many companies, how much market value and which figures", pre=counts)
+    else:          # the counts with the checks' last rows when there is no coverage table
+        for c in counts:
+            h = note_h(c)
+            if y + h > BOT:
+                page()
+            pages[-1].add("text", (M, y, CW, h), paras=[c], size=BODY_MIN, floor=BODY_MIN, color=INK2)
+            y += h + 0.22
     # each page's notes, a sentence said once: the same mark's meaning under five layers is one sentence, under the first
     said, rows_ = set(), []
     for t, n in notes:
@@ -7657,7 +7666,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 and not (c.get("developer") and mkey in DEVELOPER_KEYS) and not (c.get("distress") and mkey in DISTRESS_KEYS)]
         chart = None
         # deck89 (owner, 25 Nov): a layer's chart is its companies' market value, the largest first (each one's margins are on its row)
-        capped = [c for c in cos if c.get("cap") and c["symbol"] not in unsure]
+        capped = [c for c in cos if c.get("cap") and c["symbol"] not in unsure | unmodelled]          # a company left out of its figures isn't charted with them
         if len(capped) >= 2:
             top = sorted(capped, key=lambda c: -c["cap"])[:8]
             chart = {"kind": "hbars", "title": "Market value by company", "cats": [c["name"] for c in top], "vals": [c["cap"] for c in top], "fmt": money_fmt(us)}
@@ -7755,7 +7764,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         k_fit = fits(tw)
         if chart and k_fit < len(body) and fits(CW) > k_fit:      # the companies before the chart: a table that shows more of them goes full width
             chart, tw, k_fit = None, CW, fits(CW)
-        if r_out and k_fit < len(body):
+        # deck89: a page that shows every company still names who is in its figures when a row left out of them carries no mark that says so
+        left_tags = {"not confirmed", "not checked yet", ABROAD_TAG, *ROLL_TAG.values()}
+        untagged_out = any(tags.get(c["symbol"]) not in left_tags for c in cos if not calc_of(c)["in"])
+        if r_out and (k_fit < len(body) or untagged_out):
             # R35 (GPT reviews of R31.5-R31.9, live IT: "13 companies (4 in the layer's calculations)", three rows shown, nobody named): the
             # page doesn't show every company, so a line of its own names who is in and why each other is not. A page that shows them all
             # says it on their rows ("(insufficient evidence)", "(different model)", "(not confirmed)") and keeps its room for them.

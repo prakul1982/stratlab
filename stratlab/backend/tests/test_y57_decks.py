@@ -238,8 +238,7 @@ def test_a_crowded_layer_page_shows_five_rows_and_sends_its_notes_to_a_notes_pag
         # deck89 (changed on purpose, owner 25 Nov: short footnotes): the layer's notes are said in full among the appendix's notes, under its
         # name, and the page keeps one line that says where; no "(notes)" page
         assert not any(s.title == "Layer 2 · Converters (notes)" for s in slides)
-        said = " ".join(r[1] for r in deck.table_with(slides, deck.NOTES_HEAD)["rows"] if not isinstance(r, dict) and r[0].startswith("Layer 2 · Converters"))
-        said += " " + " ".join(p for s in slides if s.title.startswith("Layer 2 · Converters (continued)") for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+        said = deck.page_said(slides, "Layer 2 · Converters")
         assert "Membership of its 14 companies" in said
         # deck89 (changed on purpose): a page that shows all 14 says who is out on their rows, one that can't says it in its roll line
         rows_ = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict) and not str(r[0]).startswith(("Median", "Range", "Together"))]

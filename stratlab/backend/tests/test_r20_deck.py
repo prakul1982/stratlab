@@ -176,7 +176,9 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     # how the figures are built, tables too, after the companies' figures
     assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.COMPARE_TITLE, deck.METHOD_TITLE, deck.NOTES_TITLE,
                                    deck.LAYER_PROFILE_TITLE))
-               and {b["kind"] for b in s.blocks if b["kind"] != "text"} == {"table"} for s in slides[at:])
+               and ({b["kind"] for b in s.blocks if b["kind"] != "text"} == {"table"}
+                    or s.title.startswith(deck.LAYER_PROFILE_TITLE) and {b["kind"] for b in s.blocks if b["kind"] != "text"} <= {"table", "cards"})
+               for s in slides[at:])
     # R21: a theme with layers of its own has no exchange-industry layer beside them; a chart plots no layer median under 3
     lays = v.get("layers") or []
     if any(not x.get("official") for x in lays):

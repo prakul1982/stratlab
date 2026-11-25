@@ -103,7 +103,7 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     # more room), the count of the rest, and the appendix page that names every one
     # (updated on purpose, ex49: each reason is its kind with what exactly, the company's way of earning for a different revenue model)
     # deck89 (changed on purpose, owner 25 Nov): the layer's table is set close, so its page has the room to name two or three of each group
-    k = 3 if f"{run} 2," in roll_note else 2
+    k = 3 if f"{run} 2 " in roll_note or f"{run} 2," in roll_note else 2
     assert roll_note == ("In the layer's calculations (20 of 30): " + ", ".join(f"{run} {i}" for i in range(k)) + f" and {20 - k} more. "
                          "Left out (10): different revenue model: " + ", ".join(f"{tag} {i}" for i in range(k))     # each kind alone here, in full in the appendix
                          + f" and {7 - k} more; "       # lane m1: the reason first (updated on purpose)

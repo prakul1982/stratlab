@@ -7,6 +7,7 @@ import copy
 
 import pytest
 
+from app import deck
 from app.intel import ai as A
 from app.intel import theme_base as B
 from app.intel import theme_check as C
