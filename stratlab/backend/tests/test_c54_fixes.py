@@ -168,7 +168,8 @@ def deck(key: str, **kw):
             f[c["ticker"]] = co(c["ticker"], c.get("name") or c["ticker"], sales, base + (i % 3) - 1, sales * (base - 4) / 100)
     v, slides = deck_of(d["region"], {**out, "sector": d["theme"], "sub_themes": out.get("sub_themes") or []}, f, theme=d["theme"],
                         about=d["evidence"].get)
-    return v, "\f".join(texts([s]) for s in slides)
+    from app import deck as deck_
+    return v, "\f".join(texts([s]) for s in deck_.with_held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
 
 
 def test_the_vehicle_financiers_are_adjacent_in_the_automotive_theme_on_the_live_r53_inputs():

@@ -212,11 +212,11 @@ def test_a_bank_theme_shows_its_filed_figures_in_the_layer_tables_findings_econo
     assert plain(sector["rows"])[0][-1] == "Sep 2026" and plain(sector["rows"])[-1][0] == "Median (companies)"
     assert "From the quarterly results filed with the exchange (banking format)" in t
     # changed on purpose (R25): how each filed figure is worked out is on the one page of how the figures are built, with its period, source and limits
-    notes = table_of(slides, deck.NOTES_TITLE)
+    notes = table_of(deck.with_held(slides), deck.NOTES_TITLE)          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert notes["head"] == ["Figure", "What it measures, how it is worked out", "Period and source", "Limitation"]
-    how = {r[0]: r[1] for x in slides if x.title.startswith(deck.NOTES_TITLE) for b in x.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    how = {r[0]: r[1] for x in deck.with_held(slides) if x.title.startswith(deck.NOTES_TITLE) for b in x.blocks if b["kind"] == "table" for r in plain(b["rows"])}
     assert how["Credit cost"].startswith("Provisions other than tax for the year to date, annualised") and "CET1 ratio" in how
-    assert "NIM and CASA aren't elements of the banking results format" in t
+    assert "NIM and CASA aren't elements of the banking results format" in texts(deck.with_held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # one number per metric: the filed gross NPA replaces the page tables' own, in the layer tables too
     row = next(c for x in v["layers"] for c in x["companies"] if c["symbol"] == "PVT0")
     assert row["gnpa"] == row["gnpa_f"] == pieces["PVT0"]["metrics"]["gnpa_f"]["v"] != f["PVT0"]["lender"]["gnpa"]
@@ -267,7 +267,7 @@ def test_an_insurer_theme_shows_solvency_and_the_general_insurers_ratios_never_a
     gen = next(s for s in slides if "General insurance" in s.title and s.title.startswith("Layer"))
     head = next(b for b in gen.blocks if b["kind"] == "table")["head"]
     assert "Solvency" in head and "Combined ratio" in head and "Gross NPA" not in head
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "Median combined ratio" in t and "VNB, APE and embedded value aren't elements of the insurance results formats" in t
     assert "CET1" not in t and "SBC" not in t and "RPO" not in t
     every_rule("insurers with filed figures", v, slides)

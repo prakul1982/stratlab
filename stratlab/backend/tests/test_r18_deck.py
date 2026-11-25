@@ -180,7 +180,7 @@ def test_layers_are_one_scheme_the_maps_own_with_the_rest_in_the_appendix():
     assert not [s for s in slides if s.title.startswith(deck.SMALL_TITLE)]
     assert {"PVT6", "PVT7"} <= {c["symbol"] for x in v["layers"] if x["layer"] == "Deposit gathering" for c in x["companies"]}
     assert "Private Sector Bank" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # R19: the unplaced companies are a count and their names (up to five), and rows of the appendix's one table; no list page of their own
     # lane d1 (updated on purpose): the "Other" group of two has no page of its own, so its page's note isn't printed; its rows are on
     # "Smaller layers" (above)
@@ -218,7 +218,7 @@ def test_the_membership_rules_version_is_in_every_kept_reads_key():
 def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_contradicts_another():
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "Still being checked" not in t and "still being checked" not in t            # the AI's pending checks aren't a membership count
     # R20: one wording of the universe and the figures (R27: the share names whose market value it is of)
     assert "8 in the exchange's industries · 8 with figures (100% of the market value of all 8)" in t

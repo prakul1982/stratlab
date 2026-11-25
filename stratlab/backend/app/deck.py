@@ -2427,7 +2427,7 @@ def roll_line(ins: list, outs: list) -> tuple[str, bool]:
         for limit in (ROLL_FULL, ROLL_NAMES, ROLL_NAMES // 2):
             cut = len(every) > limit
             names_ = ", ".join(every[:limit]) + (f" and {len(every) - limit} more" if cut else "")
-            line = lead + f"{'It is' if total == 1 else 'They are'}: {names_}." + (f" Every one: appendix, ⟦{ROLL_TITLE}⟧." if cut else "")
+            line = lead + f"{'It is' if total == 1 else 'They are'}: {names_}." + (f" Every one: {THEME_PAGE}." if cut else "")
             if len(wrap(line.replace(f"⟦{ROLL_TITLE}⟧", "p. 00"), BODY_MIN, CW)) <= ROLL_LINES:
                 break
         return line, cut
@@ -2441,7 +2441,7 @@ def roll_line(ins: list, outs: list) -> tuple[str, bool]:
 
 def roll_said(n_in: int, total: int, n_out: int, in_: str, out_: str, cut: bool) -> str:
     return (f"In the layer's calculations ({n_in} of {total}): {in_ or 'none'}. Left out ({n_out}): {out_}."
-            + (f" Every one: appendix, ⟦{ROLL_TITLE}⟧." if cut else ""))
+            + (f" Every one: {THEME_PAGE}." if cut else ""))
 
 
 # x57 (R57, the audit of the 24 live R56 decks, RC4: "Fiserv Inc (on its words): ... its own words say the layer's name and no other way of
@@ -3115,9 +3115,9 @@ def _refs(slides: list) -> None:
             gone.append(m.group(1))
         return f"p. {hit}" if hit else ""
 
-    def fix(x):
-        return REF.sub(page, x).replace(" ()", "").replace("()", "").rstrip() if isinstance(x, str) else x
-    for s in slides:
+    def fix(x):          # (round 2: "appendix, on the theme's page" says it once: the record is on the theme's page)
+        return REF.sub(page, x).replace(" ()", "").replace("()", "").replace(f"appendix, {THEME_PAGE}", THEME_PAGE).rstrip() if isinstance(x, str) else x
+    for s in with_held(slides):            # deck89 round 2: the records kept with the deck point to the printed pages too
         s.subtitle = fix(s.subtitle)
         for b in s.blocks:
             if b.get("paras"):
@@ -6339,8 +6339,8 @@ def provenance_flags(slides: list, v: dict) -> list[dict]:
     for r in conf:
         said = _cell_text(r[1])
         if _cell_text(r[0]) in ("Verified figures", "Net above EBITDA margin", "Net margin not reconciled", "Figure checks") and \
-                f"⟦{SOURCES_TITLE}⟧" not in said and not (at and re.search(rf"\b{re.escape(at)}\b", said)):
-            out.append({"slide": METHOD_TITLE, "text": _cell_text(r[0]), "why": "checked figures named with no reference to their source rows", "rule": "sourced"})
+                f"⟦{SOURCES_TITLE}⟧" not in said and not (at and re.search(rf"\b{re.escape(at)}\b", said)) and f": {THEME_PAGE}" not in said:
+            out.append({"slide": RECORDS_TITLE, "text": _cell_text(r[0]), "why": "checked figures named with no reference to their source rows", "rule": "sourced"})
     # deck89 round 2: each figure verified from its filed statement lines carries the mark on its row of the companies' table, and a not
     # reconciled net margin its †, wherever the table shows that company and figure
     for s_ in printed:
@@ -6701,6 +6701,7 @@ def layout_gate(slides: list) -> dict:
     if twins:
         slides[0].tidied = list(getattr(slides[0], "tidied", None) or []) + twins
     failed += complete_flags(slides)          # n1: and nothing the pages declare is missing from them
+    failed += complete_flags(held(slides))    # deck89 round 2: nor from the records kept with the deck, as when they were printed
     for d in refit:
         log.info("deck layout: re-fitted on %r (%s): %s", d["slide"], d["why"], d["text"][:200])
     for d in failed:
@@ -7172,26 +7173,6 @@ def tab_h(head: list, rows: list, widths: list, w: float) -> float:
     return sum(table_layout({"head": head, "rows": rows, "widths": widths, "tight": True, "compact": True, "strong": strong}, w, 99)["heights"])
 
 
-def short_heads(slides: list, notes: list) -> None:
-    """deck89 round 2 (coordinator, 25 Nov: "cut words further where a page carries a paragraph above a table, one line intro max"): a story
-    page whose first block is a table keeps a one-line headline, its last whole clauses said in full among the notes; never a cut word."""
-    for s in slides:
-        if s.kind != "content" or not s.subtitle or s.title == "Contents" or is_appendix(s) or not s.blocks:
-            continue
-        lead = [b for b in sorted(s.blocks, key=lambda b: (b["box"][1], b["box"][0])) if not (b["kind"] == "text" and b["box"][3] <= 0.35)]   # a table's label apart
-        if not lead or lead[0]["kind"] != "table":
-            continue
-        full, sub = s.subtitle, s.subtitle
-        while len(wrap(sub, 14, CW)) > 1:
-            nxt = _shorter(sub)
-            if not nxt or len(nxt) < 24:
-                break
-            sub = nxt
-        if sub != full:              # as few lines as whole clauses allow
-            s.subtitle = sub
-            notes.append([s.title, full])
-
-
 def tab_whole(head: list, rows: list, widths: list, w: float) -> bool:
     """deck89 round 2: whether a compact table at this width shows every cell whole (no name said shorter or cut)."""
     strong = list(range(max(0, len(rows) - 3), len(rows)))
@@ -7282,8 +7263,8 @@ def _method_page(printed: list, cards: list, built: list, v: dict, asof: str, ey
     if any(b["kind"] == "table" and VERIFIED_MARK in " ".join(_cell_text(x) for r in b.get("rows") or [] if not isinstance(r, dict) for x in r)
            for x in printed if x.title.startswith("Every company's figures") for b in x.blocks):
         read.append(f"{VERIFIED_MARK} on a figure in the companies' table: {VERIFIED_NOTE}.")
-    period = (f"Each company's latest full year and latest quarter as it reported them, from its results stored on its StratLab page "
-              f"(/stocks/{mk}/SYMBOL); market value is price times shares in issue" + (f", prices to {asof}." if asof else "."))
+    period = (f"Each company's latest full year and quarter as it reported them, from its results stored on its StratLab page "
+              f"(/stocks/{mk}/SYMBOL); market value is price times shares" + (f", prices to {asof}." if asof else "."))
     small_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol")]          # lane e89's floor, when the view has it
     small_line = (f"{_n(len(small_), 'company', 'companies')} of the theme too small or too stale to compare, in no layer's table, median or total: "
                   + names5([{"name": clean_name(x.get("name") or x["symbol"])} for x in small_]) + f"; each one's reason {THEME_PAGE}.") if small_ else ""
@@ -7296,14 +7277,15 @@ def _method_page(printed: list, cards: list, built: list, v: dict, asof: str, ey
     closing = left.pop() if left and THEME_DISCLAIMER in left[-1] else ""
     left = left + [POINTER_LINE] + ([closing] if closing else [])
     rows = [["How the companies got in", lines.get("How the companies got in") or []], ["Who is in it", lines.get("Who is in it") or []],
-            ["Period, prices and sources", [period]], ["Reading the figures", read]] + \
+            ["Reading the figures", read]] + \
         ([["Too small or too stale to compare", [small_line]]] if small_line else []) + [["Not in this deck, and what the AI wrote", left]]
     rows = [r for r in rows if r[1]]
     keep_ = {MARKS_LINE, POINTER_LINE, closing, period, small_line}
-    late_ = {marks_, f"{VERIFIED_MARK} on a figure in the companies' table: {VERIFIED_NOTE}."} | {x for x in left if x.startswith("What the AI wrote")}
+    late_ = {marks_, f"{VERIFIED_MARK} on a figure in the companies' table: {VERIFIED_NOTE}."} | {x for x in left if x.startswith("What the AI wrote")} | \
+        {x for x in who_ if not x.startswith(EVIDENCE_KEY[:24])}          # who is in it, and who is left out and why, before the key to the states
     figs = []
     for b in (b for x in built for b in x.blocks if b["kind"] == "table"):
-        figs += [[_cell_text(r[0]), _first_sentence(_cell_text(r[1]))] for r in b.get("rows") or [] if not isinstance(r, dict)]
+        figs += [[_cell_text(r[0]), _first_sentence(_cell_text(r[1]).split("; ")[0])] for r in b.get("rows") or [] if not isinstance(r, dict)]   # one line each
     wl, wr = (7.6, 4.5) if figs else (12.1, 0)
     lw, rw = CW * wl / (wl + wr + (0.3 if figs else 0)), CW * wr / (wl + wr + (0.3 if figs else 0))
 
@@ -7313,29 +7295,67 @@ def _method_page(printed: list, cards: list, built: list, v: dict, asof: str, ey
     def cells(rows_):
         return [[t, " ".join(ls)] for t, ls in rows_]
     room = BOT - TOP
-    while h_of(PLAIN_HEAD, cells(rows), [1.6, 5.7], lw) > room:          # the longest topic says its last sentence fewer, never a kept one
-        guard = next((g for g in (keep_ | late_, keep_) if any(x not in g for _, ls in rows for x in ls[1:])
-                      or any(ls and ls[-1] not in g and _shorter(ls[-1]) for _, ls in rows)), None)
-        if guard is None:
+    theme_ = {x for _, ls in rows for x in ls if "theme's page" in x} - keep_ - late_          # what else is on the theme's page
+
+    def shorten(guard, w):          # the longest topic says its last sentence fewer (or a shorter last clause), never one in `guard`
+        while h_of(PLAIN_HEAD, cells(rows), [1.35, 5.95], w) > room:
+            cand = [i for i, (_, ls) in enumerate(rows) if any(x not in guard for x in ls[1:]) or (ls and ls[-1] not in guard and _shorter(ls[-1]))]
+            if not cand:
+                return False
+            i = max(cand, key=lambda i: len(" ".join(rows[i][1])))
+            ls = rows[i][1]
+            j = max(k for k, x in enumerate(ls) if x not in guard and (k or _shorter(x)))
+            rows[i][1] = ls[:j] + ls[j + 1:] if j else [_shorter(ls[0])] + ls[1:]
+        return True
+    apart = False               # the figures' lines on a page of their own, only when the plain words can't keep what matters beside them
+    import copy as _copy
+    given, fw = _copy.deepcopy(rows), [1.4, 3.3]
+    key_ = {x for _, ls in rows for x in ls if x.startswith(EVIDENCE_KEY[:24])}          # the key to the membership states, the first of them to go
+    # what goes first, tier by tier: any other sentence; then what else is on the theme's page; then the key to the states; never who is
+    # in it, the marks, the period and sources, the pointer to the full records or the disclaimer
+    pw, fhead = [1.35, 5.95], ["Figure", "What it is"]
+    head4, w4 = fhead + fhead, [1.25, 4.8, 1.25, 4.8]          # under: the figures two a row, under the plain words at the page's width
+    figs4 = [figs[i] + (figs[i + 1] if i + 1 < len(figs) else ["", ""]) for i in range(0, len(figs), 2)]
+    under = False
+    done = False
+    for guard_ in (keep_ | late_ | key_ | theme_, keep_ | late_ | key_, keep_ | late_):
+        for wl_ in ((7.6, 8.2, 8.8, 9.3) if figs else (12.1,)):          # the widest figures' column that leaves the plain words what matters
+            rows[:] = _copy.deepcopy(given)
+            lw = CW * wl_ / (12.1 + (0.3 if figs else 0))
+            rw = CW - lw - 0.3
+            fw = [1.4, 3.3] if wl_ < 8 else [1.2, 2.6] if wl_ < 9 else [1.05, 2.1]
+            if shorten(guard_, lw) and (not figs or h_of(fhead, figs, fw, rw) <= room):
+                done = True
+                break
+        if done:
             break
-        cand = [i for i, (_, ls) in enumerate(rows) if any(x not in guard for x in ls[1:]) or (ls and ls[-1] not in guard and _shorter(ls[-1]))]
-        i = max(cand, key=lambda i: len(" ".join(rows[i][1])))
-        ls = rows[i][1]
-        j = max(k for k, x in enumerate(ls) if x not in guard and (k or _shorter(x)))
-        if j:
-            rows[i][1] = ls[:j] + ls[j + 1:]
-        else:
-            rows[i][1] = [_shorter(ls[0])] + ls[1:]
-    pages = [Slide(METHOD_TITLE, "How the companies got in, what each figure is and where it comes from, and how to read the figures", eyebrow=eyebrow)]
-    ph = min(room, h_of(PLAIN_HEAD, cells(rows), [1.6, 5.7], lw))
-    pages[0].add("table", (M, TOP, lw if figs else CW, ph), head=PLAIN_HEAD, rows=cells(rows), widths=[1.6, 5.7], numeric=[False, False], tight=True, small=True)
+        if figs:                # else the plain words at the page's width and the figures under them, before anything that matters is dropped
+            rows[:] = _copy.deepcopy(given)
+            lw = CW
+            fh4 = h_of(head4, figs4, w4, CW)
+            room_, room = room, room - fh4 - 0.25
+            ok_ = room > 1.0 and shorten(guard_, lw)
+            room = room_
+            if ok_:
+                done = under = True
+                break
+    if not done:
+        apart, lw = bool(figs), CW
+        rows[:] = _copy.deepcopy(given)
+        if not shorten(keep_ | late_, lw):
+            shorten(keep_, lw)
+    pages = [Slide(METHOD_TITLE, period, eyebrow=eyebrow)]          # the page's headline: the period, prices and where the figures come from
+    ph = h_of(PLAIN_HEAD, cells(rows), pw, lw)
+    pages[0].add("table", (M, TOP, lw, min(room, ph)), head=PLAIN_HEAD, rows=cells(rows), widths=pw, numeric=[False, False], tight=True, small=True)
     pages[0].blocks[-1]["lines"] = {t: list(ls) for t, ls in rows}
     if figs:
-        fhead = ["Figure", "What it is"]
-        fh = h_of(fhead, figs, [1.4, 3.3], rw)
-        if fh <= room:
-            pages[0].add("table", (M + lw + 0.3, TOP, rw, fh), head=fhead, rows=figs, widths=[1.4, 3.3], numeric=[False, False], tight=True, small=True)
-        else:            # a long list of figures runs on its own page, never cut
+        fh = h_of(fhead, figs, fw, rw)
+        if under:
+            pages[0].add("table", (M, TOP + ph + 0.25, CW, h_of(head4, figs4, w4, CW)), head=head4, rows=figs4, widths=w4, numeric=[False] * 4,
+                         tight=True, small=True)
+        elif not apart and fh <= room:
+            pages[0].add("table", (M + lw + 0.3, TOP, rw, fh), head=fhead, rows=figs, widths=fw, numeric=[False, False], tight=True, small=True)
+        else:            # a long list of figures, or plain words that need the page's width, runs on its own page, never cut
             for k, chunk in enumerate(table_pages(fhead, figs, [1.5, 5.0], CW, room)):
                 s_ = Slide(METHOD_TITLE, "What each figure this deck shows is, one line each", eyebrow=eyebrow)
                 s_.add("table", (M, TOP, CW, min(room, h_of(fhead, chunk, [1.5, 5.0], CW))), head=fhead, rows=chunk, widths=[1.5, 5.0],
@@ -8373,7 +8393,6 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         x.eyebrow = eb("Appendix")
     placeholder_cells(body + apx_ + audit)
     short_footnotes(body, page_notes)
-    short_heads(body, page_notes)
     page_notes += v.get("_notes") or []
     heads_ = {str(x.subtitle or "").rstrip(".") for x in body}
     for x in body:
@@ -8429,6 +8448,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 b["head"], b["rows"], b["widths"], b["numeric"] = drop_empty(b["head"], b["rows"], b["widths"], b.get("numeric"), keep=tuple(range(len(b["head"]) - 1)))
     signed_colors(slides)             # deck89: rises green, falls red, on the tables as they will print
     whole_deck(slides)
+    whole_deck(held(slides))          # deck89 round 2: the records kept with the deck through the same formatter
     settle_tables(slides)             # deck89: and every row of a table above a chart on its page
     lay = layout_gate(slides)
     # R48: a page reference that found no page (a provenance or comparison reference that would print as nothing) fails the source item

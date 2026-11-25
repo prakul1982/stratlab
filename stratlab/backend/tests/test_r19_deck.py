@@ -81,17 +81,17 @@ def test_data_confidence_is_one_page_with_its_counts_and_worth_a_watch_only_with
     # deck89 (changed on purpose, owner 25 Nov): the checks and their counts are one table and one line of the appendix's "Method and coverage"
     for name, slides in themes():
         assert not [s for s in slides if s.title.startswith("Data confidence")], name
-        dc = deck.joined(slides)
-        assert dc and deck.table_with(slides, deck.CONF_HEAD) and any(p.startswith("Counts: ") for b in dc.blocks for p in b.get("paras") or []), name
+        dc = deck.joined(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+        assert dc and deck.table_with(deck.with_held(slides), deck.CONF_HEAD) and any(p.startswith("Counts: ") for b in dc.blocks for p in b.get("paras") or []), name  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     v = full_view()
     v["checks"]["series"] = [{"symbol": f"X{i}", "name": f"X {i}"} for i in range(9)]
     v["checks"]["unverified"] = [{"symbol": f"U{i}", "name": f"U {i}"} for i in range(9)]
     slides = deck.theme_plan(v)[0]
-    assert len([b for s in slides for b in s.blocks if b["kind"] == "table" and b["head"] == deck.CONF_HEAD]) >= 1
+    assert len([b for s in deck.with_held(slides) for b in s.blocks if b["kind"] == "table" and b["head"] == deck.CONF_HEAD]) >= 1  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     _, packaging = deck_of(*theme_a())
     assert "Dated company updates" not in [s.title for s in packaging]                         # no company meets the rules (m2: the page's name)
     # deck89 (changed on purpose): said once among the appendix's notes, not as a card of the findings
-    notes = deck.table_with(packaging, deck.NOTES_HEAD)["rows"]
+    notes = deck.table_with(deck.with_held(packaging), deck.NOTES_HEAD)["rows"]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert ["Dated company updates", "No company meets the rules today."] in notes
     v = full_view()
     v["sections"]["events"]["results_due"] = [{"symbol": f"R{i}", "name": f"Results Co {i}", "date": f"2026-11-{1 + i % 7:02d}", "purpose": "Results"} for i in range(30)]

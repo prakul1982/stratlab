@@ -40,7 +40,7 @@ def test_every_slide_that_states_the_peer_pe_names_its_price_date():
     pp = v["sections"]["valuation"]["peers"]["pe"]
     assert pp["as_of"] == "2026-10-06" and pp["premium"] is not None          # the peers' close, a day after the companies' own
     # deck89 (changed on purpose, owner 25 Nov): a findings line that gives way on its page is said in full among the appendix's notes
-    noted = [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]
+    noted = [r[1] for r in (deck.table_with(deck.with_held(slides), deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     said = [x for x in [s.subtitle or "" for s in slides] + card_lines(slides) + noted if "their peers' median of" in x]
     assert len(said) >= 3 and all(PRICED in x for x in said), said               # the findings, the questions and the valuation page
     assert PRICED in next(s.subtitle for s in slides if s.title == "Valuation")
@@ -54,7 +54,7 @@ def test_a_dive_kept_from_before_takes_the_decks_own_day_before_any_slide_is_wri
     v = copy.deepcopy(v)
     v["sections"]["valuation"]["peers"]["pe"].pop("as_of")                      # as a dive stored before R35 holds it
     slides = deck.theme_plan(v, now=NOW)[0]
-    noted = [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]      # deck89 (changed on purpose)
+    noted = [r[1] for r in (deck.table_with(deck.with_held(slides), deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]      # deck89 (changed on purpose) · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     said = [x for x in [s.subtitle or "" for s in slides] + card_lines(slides) + noted if "their peers' median of" in x]
     assert len(said) >= 3 and all(f"(prices at the {deck._day(v['as_of'])} close)" in x for x in said), said          # LIVE6-006: day-month (updated on purpose)
     # every reader of the peers goes through the one function that dates them
@@ -95,7 +95,7 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     v, slides = deck_of(region, m, f)
     page = next(s for s in slides if s.title.endswith("· Large outsourcing"))
     assert page.subtitle.startswith("30 companies (20 in the layer's calculations)")
-    at = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.ROLL_TITLE))
+    assert any(s.title.startswith(deck.ROLL_TITLE) for s in deck.held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the full roll kept with the deck
     run, tag = "Runwell Managed Services", "Tagalong Software"
     note = paras(slides, page.title)
     roll_note = next(p for p in note if p.startswith("In the layer's calculations"))
@@ -107,15 +107,15 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     assert roll_note == ("In the layer's calculations (20 of 30): " + ", ".join(f"{run} {i}" for i in range(k)) + f" and {20 - k} more. "
                          "Left out (10): different revenue model: " + ", ".join(f"{tag} {i}" for i in range(k))     # each kind alone here, in full in the appendix
                          + f" and {7 - k} more; "       # lane m1: the reason first (updated on purpose)
-                         f"insufficient evidence: Vague 0, Vague 1; not confirmed in the theme: Stranger 0. Every one: appendix, p. {at}.")
+                         f"insufficient evidence: Vague 0, Vague 1; not confirmed in the theme: Stranger 0. Every one: {deck.THEME_PAGE}.")   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert len(deck.wrap(roll_note, deck.BODY_MIN, deck.CW)) <= deck.ROLL_LINES
     assert not any(p.startswith("(not confirmed)") for p in note)             # no "(not confirmed)" row on the page: the roll's line says it
     text = next(b for b in page.blocks if b["kind"] == "text" and roll_note in b["paras"])
     assert sum(deck.note_h(p) for p in text["paras"]) <= text["box"][3] + 1e-6 and text["box"][1] + text["box"][3] <= deck.BOT + 1e-6    # in its room
     # the layer with every company in its calculations has no such line, and no row in the appendix
     assert not [p for p in paras(slides, "Layer 2") if "In the layer's calculations" in p]
-    roll = slides[at - 1]
-    assert roll.eyebrow.endswith("· Appendix") and at > next(i for i, s in enumerate(slides, 1) if s.title.startswith("Every company's figures"))
+    roll = next(s for s in deck.held(slides) if s.title.startswith(deck.ROLL_TITLE))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    assert roll.eyebrow.endswith("· Appendix")
     table = next(b for b in roll.blocks if b["kind"] == "table")
     assert table["head"] == ["Layer", "In its calculations", "Left out, and why"] and [r[0] for r in table["rows"]] == ["Large outsourcing"]
     row = table["rows"][0]
@@ -124,7 +124,7 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
                       + "; insufficient evidence: Vague 0, Vague 1; not confirmed in the theme: Stranger 0")         # (updated on purpose, ex49)
     lay = deck.table_layout(table, table["box"][2], table["box"][3])
     assert len(lay["rows"]) == 1                                                               # the row is on its page whole
-    assert "who is in each layer's calculations" in texts([s for s in slides if s.title == "Contents"])
+    assert f"are {deck.THEME_PAGE}" in texts([s for s in slides if s.title == "Contents"])          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the contents say the full records are there
     assert slides[0].gate["passed"] == slides[0].gate["of"], slides[0].gate
     # the appendix is its tables: every company's figures, then the roll (the every-rule check, changed on purpose for R35)
     assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.METHOD_TITLE, deck.NOTES_TITLE, deck.COMPARE_TITLE,
@@ -164,7 +164,7 @@ def test_a_page_that_shows_every_company_says_it_on_their_rows_and_keeps_its_roo
     cells = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
     # (updated on purpose, ex49: the mark is the reason's kind, its note says what evidence is missing)
     assert cells[:4] == ["Loanco 0 Ltd", "Loanco 1 Ltd", "Loanco 2 Ltd", "Vaguefin Ltd (insufficient evidence)"]            # every company, the one left out marked
-    note = deck.page_said(slides, page.title)          # deck89 (changed on purpose, owner 25 Nov): with its notes in full in the appendix
+    note = deck.page_said(deck.with_held(slides), page.title)          # deck89 (changed on purpose, owner 25 Nov): with its notes in full in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # gl52 (R52, updated on purpose): a low-confidence read is no fact, so it is never printed as what the company was read as
     assert "(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly (low confidence)." in note and "read as" not in note
     assert "In the layer's calculations" not in note

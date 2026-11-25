@@ -238,7 +238,7 @@ def test_a_crowded_layer_page_shows_five_rows_and_sends_its_notes_to_a_notes_pag
         # deck89 (changed on purpose, owner 25 Nov: short footnotes): the layer's notes are said in full among the appendix's notes, under its
         # name, and the page keeps one line that says where; no "(notes)" page
         assert not any(s.title == "Layer 2 · Converters (notes)" for s in slides)
-        said = deck.page_said(slides, "Layer 2 · Converters")
+        said = deck.page_said(deck.with_held(slides), "Layer 2 · Converters")  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
         assert "Membership of its 14 companies" in said
         # deck89 (changed on purpose): a page that shows all 14 says who is out on their rows, one that can't says it in its roll line
         rows_ = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict) and not str(r[0]).startswith(("Median", "Range", "Together"))]
@@ -468,11 +468,11 @@ def test_a_company_under_insolvency_or_with_a_loss_over_revenue_on_negative_equi
     from app.intel import theme_routes as T
     v = T.deck_view(region, m, dive)
     slides = deck.theme_plan(v, now=NOW)[0]
-    rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
+    rows = {r[0]: r for s in deck.with_held(slides) for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert rows["In distress"][1] == f"1 company in distress: {deck.clean_name(hit['name'])} (under an insolvency or resolution process, by its own words)."
     said = " ".join(t for s in slides if s.title.startswith("Layer 2 · Converters") for b in s.blocks if b["kind"] == "text" for t in b["paras"])
     # deck89 (changed on purpose, owner 25 Nov: short footnotes): and the layer's notes in full among the appendix's notes
-    said += " " + " ".join(r[1] for r in deck.table_with(slides, deck.NOTES_HEAD)["rows"] if not isinstance(r, dict) and r[0].startswith("Layer 2 · Converters"))
+    said += " " + " ".join(r[1] for r in deck.table_with(deck.with_held(slides), deck.NOTES_HEAD)["rows"] if not isinstance(r, dict) and r[0].startswith("Layer 2 · Converters"))   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     page = next(s for s in slides if s.title == "Layer 2 · Converters")
     names = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
     if any("(in distress)" in n for n in names):

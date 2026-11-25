@@ -127,7 +127,7 @@ def test_a_layer_whose_companies_are_all_not_confirmed_gets_no_slide_and_the_lay
     assert not any("Machinery" in t for t in titles if t.startswith("Layer"))
     assert any(t.startswith("Layer 1 · Film") for t in titles) and any(t.startswith("Layer 2 · Converters") for t in titles)
     assert not any(t.startswith("Layer 3") for t in titles)
-    assert "No slide for Machinery: none of its companies is in the theme (each one's own words describe other work)." in texts(slides)  # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose)
+    assert "No slide for Machinery: none of its companies is in the theme (each one's own words describe other work)." in texts(deck.with_held(slides))  # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose) · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     _, b = deck_of(*theme_b())
     # changed on purpose (R18): one layer is nothing to set side by side, so no layer slide and no value chain
     assert not [t.title for t in b if t.title.startswith("Layer")] and "The value chain by layer" not in [t.title for t in b]
@@ -144,7 +144,7 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     assert v["membership"] == {"placed": 20, "confirmed": 18, "not_confirmed": 2}
     assert v["membership_evidence"] == {"description_verified": 3, "industry_code_supported": 15, "list_supported": 0, "not_confirmed": 2,
                                         "membership_unverified": 0}
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert ("20 in the exchange's industry list; description-verified 3 of 20 (15%); membership checked 20 of 20: 3 description-verified, "
             "15 industry-supported, 2 own words describe other work, 0 not checked") in t       # h56 (R56): the description-verified share first (updated on purpose)       # p2 and data confidence; l55 (R55): by state names (updated on purpose)
     cover = dict((it[0], it[2] if len(it) > 2 else None) for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"])
@@ -152,7 +152,7 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     # US, most companies with no stored figures: the counts are of every company checked, with figures or not
     vb, sb = deck_of(*theme_b())
     assert vb["membership"]["placed"] == 10 and ("10 in the exchange's industry list; description-verified 10 of 10 (100%); membership checked 10 of 10: 10 description-verified, "
-                                                 "0 industry-supported, 0 not checked") in texts(sb)          # l55 (R55): by state names (updated on purpose)
+                                                 "0 industry-supported, 0 not checked") in texts(deck.with_held(sb))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed); l55 (R55): by state names (updated on purpose)
 
 
 def test_whole_points_print_whole_and_a_layers_half_stays():
@@ -219,8 +219,8 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
         assert _re.search(r"\(\d+ compan(y|ies) with figures and a market value\)|\d+ compan(y|ies) with figures and a market value", size.subtitle)
         # changed on purpose (R19): data confidence is one page, its counts one line under the checks
         # deck89 (changed on purpose, owner 25 Nov): no data-confidence page; its checks and counts are in "Method and coverage"
-        assert not [s for s in slides if s.title.startswith("Data confidence")] and deck.table_with(slides, deck.CONF_HEAD)
-        line = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
+        assert not [s for s in slides if s.title.startswith("Data confidence")] and deck.table_with(deck.with_held(slides), deck.CONF_HEAD)  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+        line = next(p for s in deck.with_held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
         # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
         assert line.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, deck.coverage(v)))}. {deck.coverage(v)['line']};") and "with a market value (the theme's total market value)" in line   # R20: one wording
         assert _re.search(r"in each calculation: EBITDA margin \d+, net margin \d+", line)       # R27: one list of each calculation's count

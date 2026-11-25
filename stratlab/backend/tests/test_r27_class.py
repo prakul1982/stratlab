@@ -58,7 +58,7 @@ def test_each_sector_splits_comparable_businesses_apart_and_every_deck_rule_hold
     m = {**t["map"], "value_chain": vc}
     view, slides = deck_of(t["region"], m, t["facts"])
     every_rule(name, view, slides)
-    tx = texts(slides)
+    tx = texts(deck.with_held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "In common: they earn mainly from" in tx
     assert "Hotels, travel and consumer services" not in tx
     # the theme data carries each company's model for the quality gate
@@ -79,7 +79,7 @@ def test_a_layer_names_how_many_of_its_companies_also_earn_another_way():
     assert oem["model"]["line"] == "They earn mainly from making and selling finished products of their own. 2 of the 4 also earn from interest on loans they make."
     assert layer_of(vc, "CMP0") is not oem and layer_of(vc, "CMP0")["model"]["id"] == "components"
     view, slides = deck_of(t["region"], {**t["map"], "value_chain": vc}, t["facts"])
-    assert "In common: they earn mainly from making and selling finished products of their own. 2 of the 4 also earn from interest on loans" in texts(slides)
+    assert "In common: they earn mainly from making and selling finished products of their own. 2 of the 4 also earn from interest on loans" in texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # a tag of the layer's own family isn't news: pharma brands that also make for others are named, contract makers stay apart
     t, vc = split(dict(structures())["pharma (IN)"])
     brands = layer_of(vc, "FRM0")
@@ -201,14 +201,14 @@ def test_unknown_and_low_confidence_companies_are_listed_but_left_out_of_the_lay
     # the page now shows at least 5 rows and room for them all, so LOW0's row and note are on it)
     shown_out = [x for x in cells if x.endswith("(insufficient evidence)")]          # (updated on purpose, ex49: the mark is the reason's kind)
     assert "Lendwell 0 Ltd" in cells and all(cells.index(x) > cells.index("Lendwell 0 Ltd") for x in shown_out)
-    assert bool(shown_out) == ("(insufficient evidence):" in deck.page_said(slides, page.title))          # deck89 (changed on purpose): its notes in the appendix
+    assert bool(shown_out) == ("(insufficient evidence):" in deck.page_said(deck.with_held(slides), page.title))          # deck89 (changed on purpose): its notes in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert D.model_fields({"companies": [{"ticker": "X", "model": "lending", "model_tags": [], "model_confidence": "low", "model_out": True}]}, "X") == \
         {"model": "lending", "model_tags": [], "model_confidence": "low", "model_out": True}
     assert D.model_fields({"companies": [{"ticker": "X"}]}, "X") == {}
     for b in page.blocks:
         if b["kind"] == "hbars":
             assert not any("Vaguebank" in c or "Quietfin" in c for c in b["cats"])
-    assert "left out of this layer's figures and rankings" in texts(slides)
+    assert "left out of this layer's figures and rankings" in texts(deck.with_held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     every_rule("banks with unsure models (IN)", view, slides)
 
 
@@ -225,8 +225,8 @@ def test_a_left_out_company_shown_on_the_layer_page_is_marked_with_its_note():
     cells = [str(r[0] if not isinstance(r[0], dict) else r[0].get("text")) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
     # (updated on purpose, ex49: the mark is the reason's kind, its note says what evidence is missing)
     assert "Vaguefin Ltd (insufficient evidence)" in cells and cells.index("Vaguefin Ltd (insufficient evidence)") == 3          # after the three counted
-    assert "(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly" in deck.page_said(slides, page.title)          # deck89 (changed on purpose)
-    assert "1 of 4 is listed but left out of this layer's figures and rankings, as its evidence shows how it earns only weakly." in texts(slides)
+    assert "(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly" in deck.page_said(deck.with_held(slides), page.title)          # deck89 (changed on purpose) · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    assert "1 of 4 is listed but left out of this layer's figures and rankings, as its evidence shows how it earns only weakly." in texts(deck.with_held(slides))   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     every_rule("lenders, one left out (IN)", view, slides)
 
 

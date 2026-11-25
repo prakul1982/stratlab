@@ -190,7 +190,7 @@ def test_the_deck_states_each_layers_revenue_model_in_one_line():
     region, m, f, models = it_mixed()
     m = {**m, "value_chain": B.by_model(m["value_chain"], models, "IT services")}
     v, slides = deck_of(region, m, f)
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "In common: they earn mainly from selling and installing hardware that others make." in t
     assert "In common: they earn mainly from fees for projects and time worked for clients." in t
     for s in slides:
@@ -198,7 +198,7 @@ def test_the_deck_states_each_layers_revenue_model_in_one_line():
             # l55 (R55, updated on purpose): the layer's membership-evidence note can take the room the card needs, and the page then says
             # the card's words as a paragraph above its table (d1's fallback): the line is on the page either way
             # deck89 (changed on purpose, owner 25 Nov): what its companies have in common is said among the appendix's notes, under its page
-            assert "In common: " in deck.page_said(slides, s.title), s.title
+            assert "In common: " in deck.page_said(deck.with_held(slides), s.title), s.title          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     every_rule("IT services, split by model (IN)", v, slides)
 
 
@@ -269,7 +269,7 @@ def test_on_every_synthetic_theme_an_outlier_moves_out_and_every_rule_still_hold
     # lane d1 (updated on purpose): a one-layer map whose outlier now stays in its layer (R43) has one layer to show, so no value chain
     # pages (R18) and no "In common" line to check
     if own and any(s.title.startswith("Layer ") for s in slides):
-        assert "In common: they earn mainly from" in texts(slides)
+        assert "In common: they earn mainly from" in texts(deck.with_held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
 
 
 # ---------- a layer named by a stand-in ("placeholder" in the live R24 Insurance map) is nameless ----------

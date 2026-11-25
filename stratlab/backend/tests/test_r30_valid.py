@@ -144,7 +144,7 @@ def test_a_held_figure_leaves_medians_and_is_named_on_the_data_confidence_page()
     assert [x["key"] for x in held if x["symbol"] == sym] == ["roce", "roe"]
     lay = v["layers"][0]
     assert lay["stats"]["net"]["n"] == len(lay["companies"]) - 1 and sym in lay["one_off"]
-    conf = deck.joined(slides)  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
+    conf = deck.joined(deck.with_held(slides))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     row = next(r for b in conf.blocks if b["kind"] == "table" for r in b["rows"] if r[0] == "Figure checks")
     assert "ROCE −1.7%" in row[1] and D.CHECKS["neg_capital"] in row[1] and deck.ANOMALY_WHY in row[2]
     assert not any(w in row[1] + row[2] for w in ("because", "due to", "one-off gain"))
@@ -155,7 +155,7 @@ def test_every_synthetic_deck_has_the_coverage_table_and_it_reconciles():
     for name, v, slides in S.decks():
         # R44 (updated on purpose): the checks' longer rows (verified figures, the coverage of informative layers) can need the room, and the
         # coverage then has a page of its own (d1); the table is checked wherever it is
-        tab = deck.table_with(slides, deck.COVERAGE_HEAD)          # deck89 (changed on purpose): the table's rows over every page it runs on
+        tab = deck.table_with(deck.with_held(slides), deck.COVERAGE_HEAD)          # deck89 (changed on purpose): the table's rows over every page it runs on · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
         kinds = [r[0] for r in tab["rows"]]
         # tx2 (R46, updated on purpose): the screening populations first (considered = screened out + members), then the companies by count
         assert kinds[:2] == ["Screening", "Companies, by count"] and "Each figure" in kinds and "Each layer" in kinds, name

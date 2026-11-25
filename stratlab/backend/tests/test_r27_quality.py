@@ -54,7 +54,8 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
     assert "confirmed" not in words and (" description-verified, " in words and " not checked" in words if c.get("tally")
                                          else "membership checked " in words or " · in the theme " in words)
     assert not c["each"] or "in each calculation: " in words
-    conf = next(p for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
+    conf = next(p for s in deck.held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     # deck89 (changed on purpose, owner 25 Nov: no engine wording on the story pages): the counts are said once, in "Method and coverage"
     assert conf.startswith(f"Counts: {words}.")
     assert not any(str(ln).startswith("Considered") for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards"
@@ -130,7 +131,7 @@ def test_a_net_margin_above_the_ebitda_margin_is_flagged_as_an_anomaly_never_exp
     v = full_view()
     v["checks"] = {**(v.get("checks") or {}), "one_off": [{"symbol": "X", "name": "X Ltd", "net": 24.6, "ebitda": 6.0}], "net_with": 9.9, "net_without": 7.7}
     slides = deck.theme_plan(v)[0]
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # changed on purpose (m2): a flag with no day is not a dated update; it is on the data-confidence page, still with no cause named
     assert "X Ltd (24.6% net, 6% EBITDA)" in t and "with them; the filing would show why." in t
     assert not any(x["name"] == "X Ltd" for x in deck.watch_list(v, __import__("datetime").date(2026, 11, 7)))
@@ -351,7 +352,7 @@ def test_how_the_valuation_is_worked_out_lives_on_the_notes_page_with_one_pointe
     val = next(s for s in slides if s.title == "Valuation")
     lines = [ln for b in val.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]]
     assert sum(1 for ln in lines if "How each is worked out" in ln) == 1 and not any(ln.startswith(("P/E: the price", "Comparable peers:")) for ln in lines)
-    notes = {r[0]: r for s in slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    notes = {r[0]: r for s in deck.held(slides) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "Comparable peers" in notes and "P/E" in notes and "own sector" in notes["Comparable peers"][3]
 
 

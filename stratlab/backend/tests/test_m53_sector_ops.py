@@ -196,7 +196,7 @@ def test_the_dive_reads_the_operating_measures_of_the_companies_the_profile_fits
     assert med[3] == "–" and deck.FEW_NOTE in note
     assert "ARPOB (₹ a day): stated in none of these companies' documents the app holds" in note
     assert page[0].subtitle == "2 hospital operators whose own documents state these measures, each with its period and source; 1 more without"
-    notes = [r for s in slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
+    notes = [r for s in deck.with_held(slides) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert ["Bed occupancy", R.BY_ID["occupancy"].definition, R.BY_ID["occupancy"].source] in [r[:3] for r in notes]
 
 

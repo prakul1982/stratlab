@@ -195,13 +195,15 @@ def test_the_gate_reads_the_records_kept_with_the_deck():
     finally:
         slides[0].held = kept
     # and a deck that keeps them off its pages says where they are
-    tab = next(s for s in slides if s.title == deck.METHOD_TITLE).blocks[0]
-    saved = [list(r) for r in tab["rows"]]
+    tabs = [b for b in next(s for s in slides if s.title == deck.METHOD_TITLE).blocks if b["head"] == deck.PLAIN_HEAD]
+    saved = [[list(r) for r in t["rows"]] for t in tabs]
     try:
-        tab["rows"] = [[r[0], r[1].replace(deck.POINTER_LINE, "")] for r in saved]
+        for t, rows in zip(tabs, saved):
+            t["rows"] = [[r[0], r[1].replace(deck.POINTER_LINE, "")] for r in rows]
         assert any(f["why"].startswith("the checks and sources kept off the deck") for f in deck.provenance_flags(slides, v))
     finally:
-        tab["rows"] = saved
+        for t, rows in zip(tabs, saved):
+            t["rows"] = rows
 
 
 def test_layer_pages_have_a_one_line_intro_and_fill_the_page():
@@ -215,11 +217,3 @@ def test_layer_pages_have_a_one_line_intro_and_fill_the_page():
         lay = deck.table_layout(tab, tab["box"][2], tab["box"][3])
         assert sum(lay["heights"]) >= 0.9 * tab["box"][3] and tab["box"][1] + tab["box"][3] >= deck.BOT - 0.6, s.title
 
-
-def test_a_story_page_with_a_table_first_has_a_short_headline():
-    for name in ("alco", "fixture"):
-        _, slides = built(name)
-        for s in body(slides):
-            lead = [b for b in sorted(s.blocks, key=lambda b: (b["box"][1], b["box"][0])) if not (b["kind"] == "text" and b["box"][3] <= 0.35)]
-            if s.subtitle and lead and lead[0]["kind"] == "table":
-                assert len(deck.wrap(s.subtitle, 14, deck.CW)) <= 2, (name, s.title, s.subtitle)

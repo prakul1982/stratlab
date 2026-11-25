@@ -199,7 +199,7 @@ def test_operating_figures_of_one_or_two_companies_are_a_line_in_data_confidence
     v["business"] = {"layers": [{"layer": "Mining", "rows": [{**biz, "symbol": "S1", "name": "Solo Co"}]}], "subs": [], "held": []}
     slides = deck.theme_plan(v)[0]
     assert "Operating figures" not in [s.title for s in slides]
-    rows = deck.table_with(slides, deck.CONF_HEAD)["rows"]  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
+    rows = deck.table_with(deck.with_held(slides), deck.CONF_HEAD)["rows"]  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert ["Operating figures filed", "1 company filed operating figures between results: Solo Co.", "Too few to set side by side: no page of their own."] in rows
     v["business"]["layers"][0]["rows"] = [{**biz, "symbol": f"S{i}", "name": f"Co {i}"} for i in range(3)]
     assert "Operating figures" in [s.title for s in deck.theme_plan(v)[0]]

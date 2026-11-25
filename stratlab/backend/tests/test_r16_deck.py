@@ -40,7 +40,7 @@ def test_a_net_margin_above_the_ebitda_margin_is_a_one_off_left_out_of_the_net_m
     assert [x["symbol"] for x in ch["one_off"]] == ["GAIN"] and ch["net_with"] != ch["net_without"]
     v = view()
     v["checks"] = {**v.get("checks", {}), "one_off": ch["one_off"], "net_with": 9.9, "net_without": 7.7}
-    t = texts(slides_of(v))
+    t = texts(deck.with_held(slides_of(v)))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # changed on purpose (R27): the anomaly is flagged, no cause guessed ("a one-off gain"); the filing would show why
     assert "Net above EBITDA margin" in t and "the median net margin is 7.7% without them, 9.9% with them" in t
     assert "one-off" not in t.lower() and "the filing would show why" in t
@@ -150,7 +150,8 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     # changed on purpose (R27, P2): how each is worked out lives on the notes page; the valuation page points there once
     assert "A loss-maker has no P/E: 2 companies left out of the P/E median." in t and "How each is worked out, and who the comparable peers are: p. " in t
     # m57 (updated on purpose: the data check of the live R56 decks, the words now say what is computed, the price over EPS first)
-    assert "Price over earnings per share of the last four quarters; else market value over their net profit" in t and "P/E: the price over the last four" not in t
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): how the figures are built in full is kept with the deck; the method page says the first clause, one line a figure
+    assert "Price over earnings per share of the last four quarters; else market value over their net profit" in texts(deck.with_held(slides)) and "P/E: the price over the last four" not in t
     # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values beside
     # it (lane d1, updated on purpose: a layer of 2 is rows of "Smaller layers", its "– (2)" in the value chain's table)
     # changed on purpose (R25): a count beside the layer's own reads "N of M" ("– (1 of 2)"), the layer's full count alone ("– (2)")
@@ -240,7 +241,7 @@ def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for
     assert cover["With figures"] == str(cov["n"]) and "Their market value" in cover               # R20: the count, its share beneath
     # R19: no overview page; the findings say it (R27: as the four reconciled counts)
     # deck89 (changed on purpose, owner 25 Nov: no engine wording on the story pages): said in the appendix's "Method and coverage"
-    assert f"{deck.counts_words(deck.reconciled_counts(v, cov))}." in texts([s for s in slides if s.title.startswith(deck.METHOD_TITLE)])
+    assert f"{deck.counts_words(deck.reconciled_counts(v, cov))}." in texts([s for s in deck.held(slides) if s.title.startswith(deck.RECORDS_TITLE)])   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
 
 
 # ---------- part 3: findings ----------
@@ -377,7 +378,8 @@ def test_the_deck_is_shorter_every_companys_own_words_in_the_appendix():
     assert "Every company in this theme" not in titles
     at = titles.index("Every company's figures")
     rest = [t for t in titles[at:] if not t.startswith("Every company's figures")]
-    assert rest[0].startswith(deck.METHOD_TITLE) and any(t.startswith(deck.NOTES_TITLE) for t in rest) and all(deck.is_appendix(s) for s in slides[at:])
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): then the one method page; how the figures are built is kept with the deck
+    assert rest == [deck.METHOD_TITLE] and any(s.title.startswith(deck.NOTES_TITLE) for s in deck.held(slides)) and all(deck.is_appendix(s) for s in slides[at:])
 
 
 # ---------- part 5: layout ----------

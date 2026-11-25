@@ -63,7 +63,7 @@ def test_a_ranking_headline_says_which_layers_it_ranks_and_why_a_layer_beyond_it
                               {"layer": "Sponge iron makers", "why": f"fewer than {D.HEADLINE_MIN} companies with the figure"}]
     # every sentence that names a highest, lowest, fastest or slowest layer says the floor in that same sentence: cover, contents,
     # findings, the value chain's pages, the questions
-    ranked = [x for t in said(slides) for x in re.split(r"(?<=[.!?])\s+(?=[A-Z])", t) if re.search(r"\b(?:highest|lowest|fastest|slowest)\b", x)]
+    ranked = [x for t in said(deck.with_held(slides)) for x in re.split(r"(?<=[.!?])\s+(?=[A-Z])", t) if re.search(r"\b(?:highest|lowest|fastest|slowest)\b", x)]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert len(ranked) >= 6 and all(FLOOR in x for x in ranked), [x for x in ranked if FLOOR not in x]
     assert slides[0].gate["passed"] == slides[0].gate["of"] and not slides[0].gate["dropped"]
     every_rule("steel, a layer above and one below the ranking", v, slides)
@@ -72,7 +72,7 @@ def test_a_ranking_headline_says_which_layers_it_ranks_and_why_a_layer_beyond_it
 def test_the_value_chains_footnote_and_chart_agree_with_the_headline():
     v, slides = steel()
     page = next(s for s in slides if s.title == "The value chain by layer")
-    foot = deck.page_said(slides, "The value chain by layer")          # deck89 (changed on purpose, owner 25 Nov): its footnote in full in the appendix
+    foot = deck.page_said(deck.with_held(slides), "The value chain by layer")          # deck89 (changed on purpose, owner 25 Nov): its footnote in full in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert (f"among the layers ranked: those with {FLOOR} and one kind of business. "
             "Shown, not ranked: Aluminium smelting, a different commodity; Sponge iron makers, "
             f"fewer than {D.HEADLINE_MIN} companies with the figure.") in foot

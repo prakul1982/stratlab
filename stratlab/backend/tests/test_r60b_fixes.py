@@ -101,7 +101,7 @@ def test_1_the_deck_says_each_bank_s_revenue_basis_and_the_fte_adjustment_its_ow
         elif i > 1:
             x["revenue_basis"] = hban
     v, slides = deck_of("US", m, f)
-    row = next(r for r in notes_rows(slides) if r[0] == "Revenue")
+    row = next(r for r in notes_rows(deck.with_held(slides)) if r[0] == "Revenue")  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "net interest income plus noninterest income, as filed (US GAAP): " in row[1] and "every one not named below" in row[1]
     assert "total revenue net of interest expense, as filed (US GAAP): Private Lender 0 Ltd" in row[1]
     assert "not stored on its page yet" in row[1] and "Private Lender 1 Ltd" in row[1]
@@ -109,7 +109,7 @@ def test_1_the_deck_says_each_bank_s_revenue_basis_and_the_fte_adjustment_its_ow
     # India: a bank's revenue is its interest earned, other income apart; no word of FTE
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
-    row = next(r for r in notes_rows(slides) if r[0] == "Revenue")
+    row = next(r for r in notes_rows(deck.with_held(slides)) if r[0] == "Revenue")  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "A bank's, lender's or insurer's, by the lines it is made of: interest earned" in row[1] and "FTE" not in row[3]
 
 
@@ -239,7 +239,7 @@ def test_4_a_layer_s_short_notes_go_with_its_next_companies_never_on_a_page_of_t
             assert sum(len(deck.wrap(p, deck.BODY_MIN, deck.CW)) for p in paras) > getattr(deck, "SPARSE_LINES", 2), s.title
     # deck89 (changed on purpose, owner 25 Nov: short footnotes): a layer's notes are said in full among the appendix's notes, its page keeps one
     # line that says where; no "(notes)" page and no "(continued)" page that exists only to carry them
-    notes = deck.table_with(slides, deck.NOTES_HEAD)["rows"]
+    notes = deck.table_with(deck.with_held(slides), deck.NOTES_HEAD)["rows"]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     said = " ".join(r[1] for r in notes if not isinstance(r, dict) and "Branded home, personal care and FMCG" in r[0])
     assert "Membership of its" in said
     page = next(s for s in slides if s.title.startswith("Layer") and "Branded home, personal care and FMCG" in s.title)

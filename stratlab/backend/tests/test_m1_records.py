@@ -184,7 +184,7 @@ def test_a_layer_with_companies_left_out_states_one_pair_on_every_page():
     chain = next(b for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "table")
     row = next(r for r in chain["rows"] if r[0] == "Retail and commercial lenders")
     assert row[chain["head"].index("Companies")] == "6 of 7"
-    notes = deck.page_said(slides, "The value chain by layer")          # deck89 (changed on purpose): with its footnote in full in the appendix
+    notes = deck.page_said(deck.with_held(slides), "The value chain by layer")          # deck89 (changed on purpose): with its footnote in full in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert deck.COMPANIES_NOTE in notes                                           # the two scopes are named where they differ
     layer = next(x for x in v["layers"] if x["layer"] == "Retail and commercial lenders")
     assert D.layer_counts(layer) == {"listed": 7, "n": 6, "out": {"way of earning not shown": 1}} and layer["n"] == 6
@@ -264,7 +264,7 @@ def _reasons_carried(v, slides) -> int:
         page = next((s for s in slides if deck._LAYER_PAGE.match(s.title or "") and s.title.endswith("· " + layer["layer"])), None)
         if page is None:               # a layer with no page of its own (one confirmed company, or the companies the map doesn't place)
             continue
-        named = _left_out_named(slides, page.title)
+        named = _left_out_named(deck.with_held(slides), page.title)  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
         rows = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
         for nm, (full, why) in out.items():
             on_row = any(r == f"{full} ({deck.ROLL_TAG[deck.label_kind(why)]})" for r in rows)
@@ -315,7 +315,7 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
     page = next(s for s in slides if any(str(r[0]).startswith(name) for b in s.blocks if b["kind"] == "table" for r in b["rows"])
                 and deck._LAYER_PAGE.match(s.title or ""))
     cell = next(str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if str(r[0]).startswith(name))
-    notes = deck.page_said(slides, page.title)          # deck89 (changed on purpose, owner 25 Nov): the layer's notes in full in the appendix
+    notes = deck.page_said(deck.with_held(slides), page.title)          # deck89 (changed on purpose, owner 25 Nov): the layer's notes in full in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert cell.endswith("(no figures)") and "(no figures): no revenue or other figure is stored" in notes or "no figure stored: " in notes      # (updated on purpose, ex49)
     assert deck.layer_count_flags(slides) == []
 

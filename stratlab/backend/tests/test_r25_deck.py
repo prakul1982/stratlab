@@ -74,7 +74,7 @@ def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it(mo
     v["chain"] = D.chain_table(blocks)
     slides_ = deck.theme_plan(v)[0]
     s = next(x for x in slides_ if x.title == "The value chain by layer")
-    foot = deck.page_said(slides_, "The value chain by layer")          # deck89 (changed on purpose): its footnote in full among the appendix's notes
+    foot = deck.page_said(deck.with_held(slides_), "The value chain by layer")          # deck89 (changed on purpose): its footnote in full among the appendix's notes; deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # changed on purpose (m2): one floor for the marks and the headline, said once; the floor a median is shown on beside it
     assert "among the layers ranked: those with at least 3 companies with the figure; any other layer is shown, not ranked." in foot
     assert "A median is shown for 3 companies or more." in foot
@@ -85,7 +85,7 @@ def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it(mo
     slides_ = deck.theme_plan(v)[0]
     s = next(x for x in slides_ if x.title == "The value chain by layer")
     assert not next(b for b in s.blocks if b["kind"] == "table")["colors"]
-    assert "A layer is ranked only on a median of at least 3 companies with the figure" in deck.page_said(slides_, "The value chain by layer")
+    assert "A layer is ranked only on a median of at least 3 companies with the figure" in deck.page_said(deck.with_held(slides_), "The value chain by layer")   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
 
 
 @pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
@@ -206,16 +206,17 @@ def test_a_gap_said_beside_two_figures_is_the_difference_of_the_figures_as_print
 # ---------- 4. one page on how the figures shown are built ----------
 @pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
 def test_the_notes_page_explains_only_the_figures_the_deck_shows_with_period_source_and_limits(name, v, slides):
-    pages = [s for s in slides if s.title.startswith(deck.NOTES_TITLE)]
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the notes page is kept with the deck; the printed method page names each of its figures, one line each, in its order
+    pages = [s for s in deck.held(slides) if s.title.startswith(deck.NOTES_TITLE)]
     assert 1 <= len(pages) <= 2
-    titles = [s.title for s in slides]
-    # deck89 (changed on purpose, owner 25 Nov): in the appendix, after "Method and coverage" (what the notes page said)
-    assert titles.index(pages[0].title) == max(i for i, t in enumerate(titles) if t.startswith(deck.METHOD_TITLE)) + 1
     rows = [r for s in pages for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
+    said = [x for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks if b["kind"] == "table" and b["head"][:2] == ["Figure", "What it is"]
+            for r in plain(b["rows"]) for x in r[::2] if x]          # (one figure a row beside the plain words, or two a row under them)
+    assert said == [r[0] for r in rows], (name, said)
     assert all(len(r) == 4 and all(str(c).strip() for c in r) for r in rows)
     names = [r[0] for r in rows]
     assert len(names) == len(set(names))                                                      # one row a figure (a filed figure replaces the page's own)
-    rest = [s for s in slides if not s.title.startswith(deck.NOTES_TITLE)]
+    rest = [s for s in deck.with_held(slides) if not s.title.startswith((deck.NOTES_TITLE, deck.METHOD_TITLE))]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     heads = {h for s in rest for b in s.blocks if b["kind"] == "table" for h in b["head"]}
     for nm in names:                                                                          # nothing the deck doesn't show
         assert nm in heads or any(nm in str(b.get("title") or "") or any(nm in str(r[0]) for r in plain(b.get("rows") or []) if r)
@@ -228,7 +229,8 @@ def test_the_notes_page_explains_only_the_figures_the_deck_shows_with_period_sou
 
 
 def test_each_family_gets_its_own_figures_explained_and_no_other_familys():
-    got = {name: {r[0]: r for s in sl if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the notes page read among the records kept with the deck
+    got = {name: {r[0]: r for s in deck.held(sl) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
            for name, (_, sl) in families()}
     bank, ins, us = got["banks with filed figures"], got["insurers with filed figures"], got["US software with filed figures"]
     assert {"Gross NPA", "CET1 ratio", "Credit cost", "ROA", "ROE"} <= set(bank) and "EBITDA margin" not in bank and "Solvency ratio" not in bank
@@ -238,7 +240,7 @@ def test_each_family_gets_its_own_figures_explained_and_no_other_familys():
     assert {"SBC / revenue", "FCF margin", "RPO growth", "EBITDA margin"} <= set(us) and "SEC" in us["FCF margin"][2]
     assert "CET1 ratio" not in us and "Gross NPA" not in us and "Solvency ratio" not in us
     _, plain_slides = ALL[0][1]
-    pk = {r[0] for s in plain_slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    pk = {r[0] for s in deck.held(plain_slides) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
     assert {"Revenue", "EBITDA margin", "Net margin"} <= pk and not pk & {"Gross NPA", "CET1 ratio", "SBC / revenue", "NII / assets"}
 
 
@@ -246,8 +248,9 @@ def test_the_contents_lists_the_notes_page_and_references_point_at_it():
     _, v, slides = EVERY[0]
     crow = plain(table_of(slides, "Contents")["rows"])
     # deck89 (changed on purpose, owner 25 Nov): the page is in the appendix, which the contents' last row names ("how each figure is built")
-    assert crow[-1][0] == "Appendix" and "how each figure is built" in crow[-1][1]
-    at = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.NOTES_TITLE))
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the printed method page says what each figure is, a line each; a reference to how a figure is built points to it
+    assert crow[-1][0] == "Appendix" and "what each figure is" in crow[-1][1]
+    at = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.METHOD_TITLE))
     assert "⟦" not in texts(slides) and f"p. {at}" in texts(slides)
 
 

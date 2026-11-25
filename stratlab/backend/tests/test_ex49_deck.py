@@ -148,7 +148,7 @@ def test_a_layer_page_names_both_models_of_a_company_left_out_for_its_revenue_mo
     v, slides = deck_of("IN", m, f)
     page = next(s for s in slides if s.title.endswith("· " + lay["layer"]))
     rows = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
-    notes = deck.page_said(slides, page.title)          # deck89 (changed on purpose, owner 25 Nov): the layer's notes in full in the appendix
+    notes = deck.page_said(deck.with_held(slides), page.title)          # deck89 (changed on purpose, owner 25 Nov): the layer's notes in full in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "Custom Chem 0 Ltd (different model)" in rows
     assert ("(different model): Custom Chem 0 Ltd: the way of earning of “Platforms and marketplaces” (commissions, listing fees or advertising "
             "on platforms they run), not the layer's, that of “Retail”") in notes
@@ -174,7 +174,7 @@ def test_the_comparison_basis_labels_the_proxy_and_says_which_input_is_missing()
     it = next(r for r in b["rules"] if r["rule"] == "capital intensity")
     assert it["proxy"] and D.CAPITAL_PROXY in it["text"] and "never comparability on its own" in it["text"]
     assert ["Custom synthesis manufacturers", "Custom Chem 0 Ltd", ["debt", "book equity"]] in it["missing"]      # its equity read from its debt too
-    _, rules_, _ = basis_pages(slides)[0]
+    _, rules_, _ = basis_pages(deck.with_held(slides))[0]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     line = next(x for x in rules_ if x.startswith("Capital intensity, a proxy for capital needs"))
     assert "passing it alone never makes layers comparable" in line and "inputs missing: Custom Chem 0 Ltd (debt and book equity)" in line
 
@@ -282,7 +282,7 @@ def test_a_page_rebuilt_with_the_lines_is_read_and_the_dive_worked_out_again_wit
 def test_each_comparison_is_one_page_with_its_rules_in_larger_type_and_one_table():
     m, f = chem()
     v, slides = deck_of("IN", m, f)
-    pages = [s for s in slides if s.title.startswith(deck.COMPARE_TITLE)]
+    pages = [s for s in deck.with_held(slides) if s.title.startswith(deck.COMPARE_TITLE)]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     recs = v["comparisons"] if "comparisons" in v else None
     claims = [s.subtitle for s in pages]
     assert len(pages) == len(set(claims)) == 2                               # before: one table of claims, rules and layers over 5 pages

@@ -201,7 +201,7 @@ def _us_deck():
     for s in syms[:4] + ["AMX"]:
         f[s] = {**f[s], "annual_form": "20-F", "annual_filed": "2026-03-01"}
     v, slides = deck_of("US", m, f)
-    return v, "\f".join(texts([s]) for s in slides)
+    return v, "\f".join(texts([s]) for s in deck.with_held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
 
 
 def test_fix20_the_us_deck_says_its_layer_based_abroad_and_its_names_without_artefacts():

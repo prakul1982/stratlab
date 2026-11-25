@@ -214,7 +214,7 @@ def test_the_coverage_says_how_many_companies_fit_none_of_the_map_s_layers_and_d
     # says those that fit none apart from those not checked yet
     assert deck.rest_count(v) == (4, 11, "Other test companies", 0)
     slides = deck.theme_plan(v)[0]
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # R44 (updated on purpose): the companies placed counted once, in the row's "In informative layers 7 of 11 (64%)"
     # l55 (R55, updated on purpose): with the evidence states kept, the informative layers' companies are said by state before the "Other" group
     assert re.search(r"in a layer the map names(?: \(by membership evidence: [^()]*\))?; the other 4 in “Other test companies”, listed, never "
@@ -222,7 +222,7 @@ def test_the_coverage_says_how_many_companies_fit_none_of_the_map_s_layers_and_d
     assert "Filed under Retail-Miscellaneous Retail but in another business: Propane Co." in t
     # c1 (R44, updated on purpose): with the "From other industries" row the coverage table may have a page of its own after the checks
     # deck89 (changed on purpose, owner 25 Nov): the data-confidence and coverage pages are the appendix's "Method and coverage"
-    rows = [r for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks
+    rows = [r for s in deck.with_held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
             if b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for r in b["rows"]]
     assert ["In informative layers", "7 of 11 (64%)"] == rows[[r[0] for r in rows].index("In informative layers")][:2]       # R44 (updated on purpose)
     assert deck.coverage_table_flags(rows, v, deck.coverage(v)) == []

@@ -217,7 +217,7 @@ def _with_off(v: dict, n: int) -> dict:
 def _coverage_rows(slides) -> list:
     from app import deck
     # deck89 (changed on purpose, owner 25 Nov): the data-confidence and coverage pages are the appendix's "Method and coverage"
-    return [r for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks
+    return [r for s in deck.with_held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
             if b["kind"] == "table" and b.get("head") == deck.COVERAGE_HEAD for r in b["rows"]]
 
 
@@ -242,7 +242,7 @@ def test_every_deck_states_its_screening_populations_and_they_reconcile():
                                      f"{c['members']} members"), name
             off = next(r for r in rows if r[0] == "Screened out: another business")
             assert off[1] == "3" and off[2].startswith("Candidates screened out, not members of the theme"), name
-            line = next(x for s in slides for b in s.blocks if b["kind"] == "text" for x in b.get("paras") or [] if str(x).startswith("Counts:"))
+            line = next(x for s in deck.with_held(slides) for b in s.blocks if b["kind"] == "text" for x in b.get("paras") or [] if str(x).startswith("Counts:"))   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
             assert f"Considered {c['considered']} (3 screened out as another business, {c['members']} members)" in line, name
         else:
             assert scr[2].startswith(f"{c['considered']} considered, none screened out as another business: {c['members']} members"), name
@@ -261,7 +261,7 @@ def test_a_coverage_table_taller_than_a_page_goes_on_over_the_next():
     v = _with_off(v, 60)
     slides = deck.theme_plan(v)[0]
     # deck89 (changed on purpose, owner 25 Nov): the coverage table is in the appendix's "Method and coverage", run on over its pages
-    pages = [s for s in slides if s.title.startswith(deck.METHOD_TITLE) and any(b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for b in s.blocks)]
+    pages = [s for s in deck.with_held(slides) if s.title.startswith(deck.RECORDS_TITLE) and any(b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for b in s.blocks)]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert len(pages) >= 2
     for s in pages:
         for b in s.blocks:

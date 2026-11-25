@@ -36,7 +36,7 @@ def payments_deck(theme: str):
             f[c["ticker"]] = co(c["ticker"], c.get("name") or c["ticker"], sales, 6.0 + 3.3 * (li % 7), sales * 0.05)
     m = {**out, "sector": d["theme"], "sub_themes": out.get("sub_themes") or []}
     v, slides = deck_of(d["region"], m, f, theme=theme, about=d["evidence"].get)
-    return v, "\f".join(texts([s]) for s in slides)
+    return v, "\f".join(texts([s]) for s in deck.with_held(slides))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
 
 
 # ---------- P0-1 the core vs adjacent population ----------

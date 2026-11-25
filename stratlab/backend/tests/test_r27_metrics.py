@@ -100,7 +100,7 @@ def test_semiconductors_show_makers_own_figures_and_rpo_only_for_the_design_lice
     card = {"lines": [ln for ln in deck.findings_lines(slides) if ln.startswith("Median of the") or "capex / revenue" in ln]}
     assert "RPO" not in " ".join(card["lines"]) and "deferred" not in " ".join(card["lines"]) and "capex / revenue" in " ".join(card["lines"])
     assert "Median RPO growth" not in t                                                # no question built on a figure that doesn't headline
-    assert R.LEGEND in sector_note(slides, "US companies")
+    assert R.LEGEND in sector_note(deck.with_held(slides), "US companies")  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # with no licensor filing RPO the column goes: no column of "n/a" and "–" only
     v2, slides2 = F.deck_of(*F.semis_us(ip_rpo=False)[:3], **F.semis_us(ip_rpo=False)[3])
     assert "RPO growth" not in sector_table(slides2, "US companies")[0]
@@ -159,11 +159,11 @@ def test_banks_nii_over_assets_comes_from_the_filings_already_read_replaces_the_
     b4 = next(r for r in plain(t["rows"]) if r[0] == "Bank 4 Ltd")
     assert b4[t["head"].index("NII / assets")] == "n.c."
     assert v["layers"][1]["stats"]["nii_assets"]["n"] == 3 and v["layers"][0]["stats"]["nii_assets"]["n"] == 4
-    assert "n.c.: not comparable" in deck.page_said(slides, lay.title)          # deck89 (changed on purpose): the layer's notes in the appendix
+    assert "n.c.: not comparable" in deck.page_said(deck.with_held(slides), lay.title)          # deck89 (changed on purpose): the layer's notes in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     txt = texts(slides)
     assert "NII / assets" in txt and not re.search(r"\bNIM\b(?! and CASA)(?!\))", txt.replace("Not the bank's own net interest margin (NIM)", "")
                                                     .replace("not the bank's own NIM", ""))
-    notes = {r[0]: r for s in slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    notes = {r[0]: r for s in deck.with_held(slides) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "NIM" in notes["NII / assets"][3]                                           # its limitation says it is not the NIM
 
 
@@ -263,7 +263,7 @@ def test_a_software_companys_unusual_rpo_growth_is_listed_with_its_base_and_kept
     v, slides = deck18(region, m, f, metrics=lambda s, fam: pieces.get(s))
     us = v["sections"]["sector"]["families"]["us"]
     assert [(x["symbol"], x["v"]) for x in us["extreme"]] == [(soft[0], 551.6)] and "rpo_growth" in us["headline"]
-    assert "rpo growth +551.6%, from $120 m to $782 m" in sector_note(slides, "US companies").replace("RPO", "rpo")
+    assert "rpo growth +551.6%, from $120 m to $782 m" in sector_note(deck.with_held(slides), "US companies").replace("RPO", "rpo")  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     for s in soft[1:3]:                     # three of the software companies' RPO growth unusual: a third of its values, so no headline
         pieces[s]["metrics"]["rpo_growth"] = {**pieces[s]["metrics"]["rpo_growth"], "v": 300.0, "base": [100.0, 400.0]}
     v2, slides2 = deck18(region, m, f, metrics=lambda s, fam: pieces.get(s))
