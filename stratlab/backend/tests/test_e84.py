@@ -321,4 +321,4 @@ def test_a_dated_headline_row_is_no_financial_margin_and_consumer_lenders_are_sa
 def test_versions():
     from app import blog_research, deck
     assert B.RULES == 79 and TR.PLACE_CARRY[79] == 78 and TR.EARLIER_MAX == 34
-    assert D.DIVE_TEXT == 51 and deck.THEME_DECK_VERSION == 91 and blog_research.GEN == 12          # e85 (LIVE21A, the R84 decks): deck 91, dive text 51 (updated on purpose)
+    assert D.DIVE_TEXT == 51 and deck.THEME_DECK_VERSION == 92 and blog_research.GEN == 12          # deck89 (changed on purpose, owner 25 Nov: the theme deck remade as research): deck 92; e85 (LIVE21A, the R84 decks): deck 91, dive text 51 (updated on purpose)

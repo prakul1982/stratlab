@@ -370,7 +370,7 @@ def test_e83_versions():
     from app.intel import sector_metrics, theme_base, theme_data, theme_routes
     # e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose)
     assert theme_base.RULES == 79 and theme_routes.PLACE_CARRY[79] == 78 and theme_routes.PLACE_CARRY[78] == 77 and theme_routes.EARLIER_MAX == 34
-    assert theme_data.DIVE_TEXT == 51 and deck.THEME_DECK_VERSION == 91 and blog_research.GEN == 12          # e85 (LIVE21A, the R84 decks): deck 91, dive text 51 (updated on purpose)
+    assert theme_data.DIVE_TEXT == 51 and deck.THEME_DECK_VERSION == 92 and blog_research.GEN == 12          # deck89 (changed on purpose, owner 25 Nov: the theme deck remade as research): deck 92; e85 (LIVE21A, the R84 decks): deck 91, dive text 51 (updated on purpose)
     assert sector_metrics.VERSION == 3 and sector_metrics.REIT_V == 3                    # never sector_metrics.VERSION
 
 
