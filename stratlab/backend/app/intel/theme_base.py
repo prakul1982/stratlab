@@ -6597,8 +6597,9 @@ _WORK = re.compile(r"\b(?:provid\w*|produc(?:es|ers?|ing|ts?|tion)|manufactur\w*
                    r"cater(?:s|ing)? to|"
                    # e89 (the live REITs dive: Host Hotels' "We are the largest publicly traded lodging REIT, with a geographically diverse
                    # portfolio of luxury and upper-upscale hotels" read as no work, so no line of its own words: industry-supported and once
-                   # in "Other" though a hotel REITs layer exists): what a property owner says it owns is its work
-                   r"owns|owning|portfolios? of|reits?)\b", re.I)
+                   # in "Other" though a hotel REITs layer exists): what a property owner says it owns is its work (never a subsidiary it owns,
+                   # nor "REIT" alone: a REIT's tax status says nothing of its work)
+                   r"owns(?! (?:all |a (?:majority|controlling) )?(?:[\w-]+ ){0,5}subsidiar)|owning|portfolios? of)\b", re.I)
 _FILING_TITLE = re.compile(r"^(?:annual|quarterly|current|interim|half[- ]yearly)\s+report\b|^(?:form\s+)?(?:10-[kq]|20-f|40-f|8-k|6-k|def\s*14a)\b|"
                            r"^(?:press release|investor presentation|board meeting|outcome of board meeting|shareholding pattern|financial results)\b", re.I)
 _LEGAL_WORDS = re.compile(r"\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|nv|sa|ag|the|holdings?|group)\b\.?", re.I)
