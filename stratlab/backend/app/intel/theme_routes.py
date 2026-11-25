@@ -193,7 +193,10 @@ def quote_due(got: dict, region: str = "", name: str = "") -> bool:
     about = str((got or {}).get("about") or "")
     if region != "US" or not about or about.startswith("From its own filings:") or got.get("owed") or got.get("qv") == QUOTE_V:
         return False
-    return not quotable_work(about, name)
+    # e89 (Newmont's stored words, its 10-K read as "Doré is an alloy ... Doré is sent to refiners ...", a line of its product, not of
+    # itself: description-verified with no line of its own a deck quotes): words read from its annual report by an earlier reader
+    # (sec.BUSINESS_KEY) are read once more by today's, which finds its opening
+    return not quotable_work(about, name) or bool(got.get("filed") and got.get("bv") != sec_business_v())
 
 
 def thin_about(got: dict, region: str = "", name: str = "") -> bool:

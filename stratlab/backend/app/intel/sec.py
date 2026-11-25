@@ -2362,6 +2362,7 @@ _SAYS_WORK = re.compile(
     # (Arm's 20-F: "The Company is a global leader in the semiconductor industry." before "In today’s technology-driven world,
     # semiconductors are the enablers of ...", a sentence of its industry, never of itself)
     r"(?:\b(?:[Cc]ompany|[Cc]orporation|[Gg]roup)|\)),? (?:is|are) (?:a|an|the|one of|primarily|principally|engaged)\b|"
+    r"\b(?:incorporated|formed|founded|organi[sz]ed|established)\b[^.;]{0,80}? and (?:is|are) (?:primarily |principally |now )?(?:a|an|the|one of)\b|"
     r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That|In|As|For|Since|If)\b)[A-Z][\w&.,’' -]{1,60}? (?:is|are) (?:a|an|one of|the)\b|"
     r"\b[Ww]e (?:\w+ly )?(?:design|develop|manufactur|produce|provide|offer|sell|operate|supply|make|deliver|own|serve)|"
     r"(?:\b(?:[Cc]ompany|[Cc]orporation)|\)),? (?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers|"
@@ -2385,6 +2386,10 @@ def report_lines(raw: str) -> str:
     return "\n".join(x for x in lines if x)
 
 
+_FORMED_AND = re.compile(r"\b(?:was|were) (?:originally |first )?(?:incorporated|formed|founded|organi[sz]ed|established)\b[^.;]{0,80}? and "
+                         r"(?=(?:is|are) (?:primarily |principally |now )?(?:a|an|the|one of)\b)", re.I)
+
+
 def _prose(body: str, limit: int) -> list[str]:
     """The whole sentences of a part of a report, in order: sub-headings, page numbers, table cells and sentences about the report itself
     left out; about 4 x `limit` characters of them at most."""
@@ -2399,7 +2404,11 @@ def _prose(body: str, limit: int) -> list[str]:
             continue
         for x in _SENTENCE_END.split(line):
             x = x.strip()
-            if len(x.split()) >= 6 and x.endswith((".", "!", "?")) and not _REPORT_TALK.search(x) and not _STRUCTURE.search(x):
+            # e89 (Newmont's 10-K: "Newmont Corporation was incorporated in 1921 and is primarily a gold producer with significant
+            # operations ...", passed over as a sentence of when it was formed, so its opening was "Doré is an alloy ..."): a sentence of
+            # when the company was formed that goes on to say what it is stands, judged on that part
+            talk = _REPORT_TALK.search(_FORMED_AND.sub(" ", x)) if _FORMED_AND.search(x) else _REPORT_TALK.search(x)
+            if len(x.split()) >= 6 and x.endswith((".", "!", "?")) and not talk and not _STRUCTURE.search(x):
                 picks.append(x)
         if sum(len(x) for x in picks) > 4 * limit:
             break
@@ -2506,6 +2515,8 @@ def business_opening(text: str, limit: int = 700) -> str:
         body = ""
         for m in re.finditer(start, text, re.I):
             rest = text[m.end(): m.end() + 20000]
+            # e89 (Newmont's "ITEM 1. BUSINESS (dollars in millions, except per share ... amounts)"): the heading's own note is no prose
+            rest = re.sub(r"^[ \t]*\([^()\n]{0,200}\)", "", rest)
             e = re.search(end, rest, re.I)
             rest = rest[: e.start()] if e else rest
             if len(rest) > 1500:

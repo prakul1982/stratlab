@@ -3924,9 +3924,36 @@ LAYER_FIT_SHARE = 0.5            # p57 (R56 audit RC2): a layer of which fewer o
 def desc_fit(v: dict, words: str, theme_words: set) -> list[str]:
     """p57: the words of what a layer's description says its companies make or do (says_of_layer's reading: the customers it names and
     what it says they are not left out) that a company's own words say."""
-    lay = whole_stems(_CONTRAST.sub(" ", _CUSTOMERS.sub(" ", str(v.get("description") or "")))) - theme_words - _FIT_STOP
+    d_text = _CONTRAST.sub(" ", _CUSTOMERS.sub(" ", str(v.get("description") or "")))
+    lay = whole_stems(d_text) - theme_words - _FIT_STOP
     mine = whole_stems(own_text(words)) - theme_words - _FIT_STOP
-    return sorted(b for b in lay if len(b) >= 4 and any(_near(a, b) for a in mine))
+    # e89 (the live Gold miners re-check: Peabody's "a leading producer of metallurgical and thermal coal" moved into "Mid-sized gold,
+    # silver and mineral miners" on "metal", the five letters "metallurgical" shares with the description's "metals"): a stem is said only
+    # by a word that is the description's word (its plural or a longer form of six letters or more), never another word it opens
+    d_words, m_words = _stem_words(d_text), _stem_words(own_text(words))
+    return sorted(b for b in lay if len(b) >= 4 and any(_near(a, b) and _same_words(d_words.get(b, ()), m_words.get(a, ())) for a in mine))
+
+
+def _stem_words(text) -> dict:
+    """e89: {stem: the words of a text with that stem} (whole_stems' reading of the words)."""
+    out: dict = {}
+    for w in re.findall(r"[a-z0-9]+", _short_joined(text).replace("-", " ")):
+        if len(w) >= 3:
+            out.setdefault(_stem(w), set()).add(w)
+    return out
+
+
+def _same_words(a, b) -> bool:
+    """e89: whether any word of `a` and any of `b` are one word: the same, one the plural of the other, or one of six letters or more opening
+    the other ("pharma" of "pharmaceutical"); never one of five that only opens the other ("metal" of "metallurgical")."""
+    for x in a:
+        for y in b:
+            if x == y or x.rstrip("s") == y.rstrip("s"):
+                return True
+            short, long_ = (x, y) if len(x) <= len(y) else (y, x)
+            if len(short.rstrip("s")) >= 6 and long_.startswith(short.rstrip("s")):
+                return True
+    return not a or not b              # (a stem with no word read: as before)
 
 
 CONTRADICTED_SHARE = 0.25       # p57: a layer's name is contradicted when fewer than this share of its companies with words say its own words

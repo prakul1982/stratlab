@@ -260,3 +260,37 @@ def test_a_liquor_makers_one_stored_year_on_an_unchecked_excise_basis_is_labelle
     # guards: a liquor maker with its series stored, and a company of another industry with one year, are on the store's basis
     assert D.basis_apart("IN", {"industry": ["Breweries & Distilleries"], "revenue": 6037.0, "years": [{"sales": 4843}, {"sales": 6037}]}) == ""
     assert D.basis_apart("IN", {"industry": ["Chemicals"], "revenue": 900.0, "years": [{"sales": 900}]}) == ""
+
+
+# ---------- 6c. Gold miners: Peabody moved on a coal sentence; Newmont verified with no line of its own ----------
+def test_a_coal_producer_is_not_moved_into_a_gold_and_silver_layer_on_metallurgical():
+    """Fails on R88: Peabody's "Peabody is a leading producer of metallurgical and thermal coal." (and Core Natural Resources' coals)
+    moved it into "Mid-sized gold, silver and mineral miners": "metallurgical" shares its first five letters with the description's
+    "metals". Guards: a word the description says whole ("steel" of "steel-making inputs") still says it, and gold and silver words do."""
+    desc = ("These companies mine and sell ore and primary metals such as gold, silver, steel-making inputs and rare earths from a small "
+            "number of operating mines. They earn from selling what they produce at market prices, so results depend on each mine's grade "
+            "and cost; this layer sets itself apart by mixing mid-sized gold and silver producers with a few other mineral miners and developers.")
+    dest = {"layer": "Mid-sized gold, silver and mineral miners", "description": desc, "companies": []}
+    tw = B.kind_stems("Gold miners")
+    assert B.desc_fit(dest, "Peabody is a leading producer of metallurgical and thermal coal.", tw) == []
+    assert B.desc_fit(dest, "We are a world-class producer and exporter of high-quality, low-cost coals, including metallurgical and thermal "
+                            "coals.", tw) == []
+    assert B.desc_fit(dest, "we reliably supply metallurgical coal products to the steel industry", tw) == ["steel"]
+    assert "silve" in B.desc_fit(dest, "We mine silver at three operating mines in Nevada.", tw)
+
+
+def test_newmonts_opening_is_its_own_sentence_and_old_reads_of_annual_reports_are_read_again():
+    """Fails on R88: Newmont's 10-K opens "Newmont Corporation was incorporated in 1921 and is primarily a gold producer ...", passed over
+    as a sentence of when it was formed (and the heading's "(dollars in millions ...)" read as prose), so its stored words were "Doré is an
+    alloy ... Doré is sent to refiners ...": description-verified with no line of its own a deck quotes. Its record, read from its annual
+    report by the earlier reader, is read once more."""
+    from datetime import datetime, timezone
+    from app.intel import sec
+    from app.intel import theme_routes as TR
+    got = sec.business_opening(_openings()["NEM"])
+    assert got.startswith("Newmont Corporation was incorporated in 1921 and is primarily a gold producer")
+    old = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "op": TR.OWN_PART_V, "v": TR.ABOUT_V, "bv": 5, "qv": 1, "filed": True,
+           "about": "Doré is an alloy consisting primarily of gold but also containing silver and other metals. Doré is sent to refiners to "
+                    "produce bullion that meets the required market standard of 99.95% gold.", "industry": ""}
+    assert TR.quote_due(old, "US", "Newmont Corp")
+    assert not TR.quote_due({**old, "bv": sec.BUSINESS_KEY[1], "qv": 1}, "US", "Newmont Corp")      # guard: read by today's reader
