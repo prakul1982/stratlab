@@ -406,3 +406,54 @@ def test_the_floor_keeps_every_official_industry_member_in_the_theme_and_its_cou
         {"layer": "Grain distilling and extra neutral alcohol", "companies": grain}]}
     c = P.counts(p, {**dive, "tally": tally})
     assert c["all"] == 4 and c["listed"] == 4 and c["unlisted"] == []
+
+
+# ---------- review item 1: a company whose business of the theme moved into a listed successor leaves the theme's layers ----------
+def test_a_company_whose_theme_business_was_demerged_into_a_listed_successor_leaves_the_layers_said_once():
+    """Fails on R88: India Glycols (its spirits and biofuels business demerged on 2 Sep 2026 into IGL Spirits, listed after it; its own
+    revenue since 66.8% below the year before) stayed in "Spirits brand owning and bottling" on its whole year to Mar 2026. Now it is in no
+    layer's table or figure, listed once with why; IGL Spirits, the successor, carries the theme (its revenue basis marked)."""
+    from tests.test_theme1 import facts
+    ig = facts("INDIAGLYCO", "India Glycols Ltd", [2651, 3294, 3768, 4211], [11.5, 12.6, 13.6, 15.4], [141, 173, 231, 293], cap=1980,
+               industry=("Fast Moving Consumer Goods", "Beverages", "Breweries & Distilleries"),
+               latest_yoy={"basis": "quarter", "of": "Sep 2026 vs Sep 2025", "sales": -66.8, "profit": -63.1})
+    igl = facts("IGLSPIRITS", "IGL Spirits Ltd", [8416] * 4, [5.8] * 4, [244] * 4, cap=5341, range_since="2026-09-20",
+                industry=("Fast Moving Consumer Goods", "Beverages", "Breweries & Distilleries"))
+    igl["years"] = igl["years"][-1:]
+    corp = {"INDIAGLYCO": [{"kind": "demerger", "ex_date": "2026-09-02"}]}
+    dive = _alco_dive({"INDIAGLYCO": ig, "IGLSPIRITS": igl}, corp=corp, spirits=("INDIAGLYCO", "IGLSPIRITS"))
+    sp = next(b for b in dive["layers"] if b["layer"].startswith("Spirits brand"))
+    assert "INDIAGLYCO" not in {c["symbol"] for c in sp["companies"]} and "IGLSPIRITS" in {c["symbol"] for c in sp["companies"]}
+    gone = {x["symbol"]: x for x in dive["too_small"]}["INDIAGLYCO"]
+    assert gone["kind"] == "demerged" and gone["why"].startswith("its business of the theme was demerged on 2 Sep 2026 into IGL Spirits Ltd, "
+                                                                 "listed on 20 Sep 2026, which carries the theme; its own revenue since is 66.8%")
+    assert "INDIAGLYCO" in dive["evidence"]          # still a company of the theme's official industry (its membership as it is)
+
+
+# ---------- review item 2: a measure of price history only for a company with that much of its own trading ----------
+def test_a_new_listing_is_in_no_52_week_or_150_day_count():
+    """Fails on R88: IGL Spirits, listed on 4 Nov 2026, was counted in "within 5% of the 52-week high" and "near the 52-week low" (n 30)
+    on under three weeks of its own prices; 60 closes stood for a year in the price endpoint's 52-week measures."""
+    from datetime import date, timedelta
+    from app.intel import theme_prices as TP
+    rows = [{"symbol": "OLD", "price": 100, "high52": 101, "low52": 60, "stage": 2, "st_up": True, "price_at": "2026-11-23"},
+            {"symbol": "IGL", "price": 797, "high52": 967, "low52": 782, "stage": 2, "st_up": True, "price_at": "2026-11-23",
+             "range_since": "2026-11-04"}]
+    got = D.stored_price_section(rows)
+    assert got["near_high"]["n"] == got["near_low"]["n"] == got["stage2"]["n"] == got["supertrend_up"]["n"] == 1
+    start = date(2026, 8, 1)
+    bars = [{"t": (start + timedelta(days=i)).isoformat(), "c": 100 + i * 0.1} for i in range(100)]
+    red = TP.reduce_bars(bars)
+    assert red["near_high"] is None and red["near_low"] is None and red["ret"]["1Y"] is None
+
+
+# ---------- review item 3: the revenue basis said beside IGL Spirits' figure on the theme page and the deck row ----------
+def test_a_revenue_on_an_unchecked_basis_is_said_so_on_the_theme_page_and_the_deck_row():
+    """Fails on R88: IGL Spirits' ₹8,416 crore (its listing note: ₹2,801 crore combined net revenue for FY2026) was printed on the public
+    theme page as any other revenue; the page now marks it "revenue basis not confirmed", as the deck's row does."""
+    from app import deck
+    from app import public_themes as P
+    dive = {"layers": [{"layer": "Other", "companies": [{"symbol": "IGLSPIRITS", "basis_apart": "its revenue ... only stored year"},
+                                                       {"symbol": "MONIKA"}]}]}
+    assert P.basis_apart_of(dive) == {"IGLSPIRITS"} and P.BASIS_NOTE == "revenue basis not confirmed"
+    assert deck.ROLL_TAG[D.BASIS_KIND] == "basis not confirmed" and D.BASIS_KIND == P.BASIS_NOTE

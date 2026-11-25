@@ -77,8 +77,10 @@ def reduce_bars(bars: list[dict]) -> dict | None:
     return {"last": last, "date": last_d.isoformat(), "ret": {k: change(pairs, n) for k, n in PERIODS},
             "above200": (last > sum(closes[-200:]) / 200) if len(closes) >= 200 else None,
             "above50": (last > sum(closes[-50:]) / 50) if len(closes) >= 50 else None,
-            "near_high": last >= hi * (1 - NEAR_HIGH) if len(year) >= 60 else None,
-            "near_low": last <= lo * (1 + NEAR_LOW) if len(year) >= 60 else None,
+            # e89: near the 52-week high or low only on a year of its own closes (a share listed within the year, IGL Spirits after
+            # under three weeks, has no 52-week range: never 60 closes standing for one)
+            "near_high": last >= hi * (1 - NEAR_HIGH) if len(year) >= 60 and pairs[0][0] <= months_back(last_d, 12) else None,
+            "near_low": last <= lo * (1 + NEAR_LOW) if len(year) >= 60 and pairs[0][0] <= months_back(last_d, 12) else None,
             "weeks": keys, "closes": [sig(weekly[k]) for k in keys]}
 
 

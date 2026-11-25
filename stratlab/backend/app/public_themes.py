@@ -466,6 +466,15 @@ def stored_counts(region: str, name: str, p: dict) -> dict | None:
     return got if isinstance(got, dict) and isinstance(got.get("listed"), int) else None
 
 
+BASIS_NOTE = "revenue basis not confirmed"          # e89: theme_data.basis_apart, the deck's mark the same
+
+
+def basis_apart_of(dive: dict) -> set:
+    """e89: the symbols whose stored revenue is on a basis that can't be checked (theme_data.basis_apart: IGL Spirits' one stored year beside
+    its layer's revenue net of excise duty), as the stored dive marks them."""
+    return {c.get("symbol") for b in (dive or {}).get("layers") or [] for c in b.get("companies") or [] if c.get("basis_apart") and c.get("symbol")}
+
+
 def _revenues(region: str, name: str, p: dict, dive: dict | None = None) -> dict:
     """{symbol: (revenue, year, unit)} from the theme's stored dive, only where the figure is the company's own reported revenue in
     the market's reporting unit (a figure turned from another currency is left out: that conversion is StratLab's)."""
@@ -536,6 +545,7 @@ def view(entry: dict, p: dict) -> dict:
     # e80 (LIVE16A-007: "Empire State Realty Trust, Inc. ESRT $1.5B" and "Empire State Realty OP, L.P. ESBA $1.4B" both listed): a company the
     # dive found listed under two symbols (theme_data.same_company) is listed once, under the symbol the dive keeps
     twice = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+    apart_basis = basis_apart_of(dive)        # e89: revenue on a basis that can't be checked (excise duty), said beside it
     layers = []
     for v in public_layers(p, dive):          # e81: the companies every surface counts (counts)
         rows = []
@@ -556,6 +566,7 @@ def view(entry: dict, p: dict) -> dict:
                          "cap": money(region, caps.get(sym)), "cap_v": caps.get(sym) if isinstance(caps.get(sym), (int, float)) else None,
                          "revenue": money(region, rev[0], rev[2]) if rev else None,
                          "year": str(rev[1] or "")[:20] if rev else None, "evidence": state if state in EVIDENCE_PUBLIC else None,
+                         **({"revenue_note": BASIS_NOTE} if rev and sym in apart_basis else {}),
                          **({"ffo": money(region, ffos[sym], "$ million") + " (reported)"} if sym in ffos and region == "US" else {})})
         # l55 (R55): each layer's companies by what their place rests on, as the page's count does for the whole theme
         # LIVE9A-011: a layer's companies largest first by market value (those without one last, by name)
@@ -717,7 +728,9 @@ def render(v: dict) -> str:
             name = f'<a href="{e(c["page"])}">{e(c["name"])}</a>' if c["page"] else e(c["name"])
             # LIVE11A-017: the value and its period in one box, so a phone's stacked row keeps them together at the right (the value sat
             # mid-row, its period at the edge, while Ticker and Market value were right-aligned)
-            rev = ("<span>" + e(c["revenue"]) + (f' <span class="muted small">{e(c["year"])}</span>' if c.get("year") else "") + "</span>") if c["revenue"] else "–"
+            rev = ("<span>" + e(c["revenue"]) + (f' <span class="muted small">{e(c["year"])}</span>' if c.get("year") else "")
+                   # e89: a revenue on a basis that can't be checked (excise duty) is said so beside it, never read as comparable
+                   + (f' <span class="muted small">({e(c["revenue_note"])})</span>' if c.get("revenue_note") else "") + "</span>") if c["revenue"] else "–"
             ev = ""
             if state:                  # e54: never said confirmed by its own words when it isn't
                 ev = f'<td class="l">{e(EVIDENCE_PUBLIC[c["evidence"]]) if c.get("evidence") and c["evidence"] != "description_verified" else "" if c.get("evidence") else "–"}</td>'

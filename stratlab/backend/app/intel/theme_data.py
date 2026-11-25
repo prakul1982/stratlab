@@ -421,6 +421,7 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "profit_5y": r1(num((f.get("growth") or {}).get("profit_cagr_5y"))) if not old else None,
         "stage": base.get("stage"), "from_high": base.get("from_high"), "price": num(f.get("price")), "price_at": base.get("price_at"),
         "high52": num(f.get("high52")), "low52": num(f.get("low52")), "st_up": f.get("st_up"),
+        **({"range_since": f["range_since"]} if f.get("range_since") else {}),          # e89: listed within the year (stock_pages.price_facts)
         "red_flags": base.get("red_flags"), "basis": f.get("basis"), "industry": f.get("industry") or [],
         "years": [{"year": y["year"], "sales": money(num(y.get("sales"))), "profit": money(num(y.get("profit"))), "opm": None if lender else year_margin(y),
                    "other_income": money(num(y.get("other_income"))),
@@ -2959,6 +2960,23 @@ def quarter_section(rows: list[dict], filed: list[dict] | None = None) -> dict:
             "sales": stat(r["quarter"]["sales"] for r in cur), "profit": stat(r["quarter"]["profit"] for r in cur)}
 
 
+def _dmy(iso) -> str:
+    """e89: an ISO day as a page says it ("2 Sep 2026"); the text as it is when it can't be read."""
+    try:
+        d = date.fromisoformat(str(iso)[:10])
+        return f"{d.day} {d.strftime('%b %Y')}"
+    except (TypeError, ValueError):
+        return str(iso or "")
+
+
+def _days_between(a, b) -> int:
+    """e89: days from ISO day `a` to ISO day `b` (a large number when either can't be read: nothing is left out on a guess)."""
+    try:
+        return (date.fromisoformat(str(b)[:10]) - date.fromisoformat(str(a)[:10])).days
+    except (TypeError, ValueError):
+        return 10 ** 6
+
+
 def stored_price_section(rows: list[dict]) -> dict:
     """Breadth inside the theme from each company's stored page: the share in Stage 2, with the Supertrend up, and within 5% of the
     52-week high or 10% above the 52-week low."""
@@ -2966,9 +2984,13 @@ def stored_price_section(rows: list[dict]) -> dict:
         pool = [r for r in pool]
         n = len(pool)
         return {"n": n, "count": sum(1 for r in pool if pred(r)), "share": round(sum(1 for r in pool if pred(r)) / n * 100) if n else None}
-    staged = [r for r in rows if r.get("stage") is not None]
-    trend = [r for r in rows if r.get("st_up") is not None]
-    ranged = [r for r in rows if r.get("price") and r.get("high52") and r.get("low52")]
+    # e89: a stage or trend line needs 150 days of its own closes: a share listed later than that (its "range_since") is in neither count
+    young = lambda r: bool(r.get("range_since")) and _days_between(r["range_since"], r.get("price_at")) < 220      # noqa: E731
+    staged = [r for r in rows if r.get("stage") is not None and not young(r)]
+    trend = [r for r in rows if r.get("st_up") is not None and not young(r)]
+    # e89 (the owner's Alcoholic beverages deck, an outside review: IGL Spirits, listed on 4 Nov 2026, counted in "near the 52-week high and
+    # low" on under three weeks of prices): a 52-week measure only for a company with a year of its own trading (no "range_since")
+    ranged = [r for r in rows if r.get("price") and r.get("high52") and r.get("low52") and not r.get("range_since")]
     return {"stage2": share(lambda r: r["stage"] == 2, staged), "supertrend_up": share(lambda r: bool(r["st_up"]), trend),
             "near_high": share(lambda r: r["price"] >= r["high52"] * 0.95, ranged),
             "near_low": share(lambda r: r["price"] <= r["low52"] * 1.10, ranged)}
@@ -4603,11 +4625,29 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 r[k] = None
         if split_since(r):                 # e89: a business demerged since its latest year: that year's figures are the whole company's
             wide.add(r["symbol"])
+    # e89 (an outside review of the owner's Alcoholic beverages deck: India Glycols' spirits and biofuels business demerged into IGL Spirits,
+    # listed on 4 Nov 2026; India Glycols is now chemicals): a company whose business of the theme moved, after its latest year, into another
+    # listed company of the theme leaves the theme's layers, its tables and figures, with that reason said once (as the floor's companies
+    # are: out["too_small"]); its successor carries the theme. Found from stored facts, never a name: the demerger after its year with its
+    # revenue since down SERIES_JUMP% or more (split_since), and a company of the theme of the same official industry first listed on or
+    # after the demerger (its page's "range_since")
+    for r in rows.values():
+        if not split_since(r):
+            continue
+        dem = str(r.get("demerger") or "")
+        mine = {str(x).strip().lower() for x in r.get("industry") or []}
+        succ = [x for x in rows.values() if x is not r and str(x.get("range_since") or "") >= dem and x.get("status") != "unverified"
+                and mine & {str(y).strip().lower() for y in x.get("industry") or []}]
+        if succ:
+            s_ = min(succ, key=lambda x: str(x.get("range_since")))
+            r["moved_on"] = (f"its business of the theme was demerged on {_dmy(dem)} into {s_['name']}, listed on {_dmy(s_['range_since'])}, "
+                             f"which carries the theme; its own revenue since is {abs(num((r.get('quarter') or {}).get('sales')) or 0):g}% "
+                             f"below the year before ({(r.get('quarter') or {}).get('of') or 'its latest quarter'})")
 
     # e89: one size and quality floor for every theme (dust_of): a company under it is in no layer's table, median or total
     period = theme_period(rows.values())
     for r in rows.values():
-        r["dust"] = dust_of(region, r, period)
+        r["dust"] = r.get("moved_on") or dust_of(region, r, period)          # e89: a business moved on since its year, as the floor's
         r["basis_apart"] = "" if r["dust"] else basis_apart(region, r)
 
     blocks, histories = [], {}
@@ -4799,7 +4839,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     out["duplicates"] = dup_rows
     # e89: the companies under the theme's size and quality floor (dust_of), each once, with why: the appendix lists them, no table does
     out["too_small"] = [{"symbol": r["symbol"], "name": r["name"], "layer": _HALF_NAME.sub("", first.get(r["symbol"]) or ""),
-                         "revenue": r.get("revenue"), "cap": r.get("cap"), "year": r.get("year"), "unit": r.get("unit"), "why": r["dust"]}
+                         "revenue": r.get("revenue"), "cap": r.get("cap"), "year": r.get("year"), "unit": r.get("unit"), "why": r["dust"],
+                         **({"kind": "demerged"} if r.get("moved_on") else {})}
                         for r in listed if r.get("dust") and first.get(r["symbol"])]
     out["too_small_period"] = period
     # d53: the adjacent participants, by kind, shown and in no theme figure; the kind the theme's core members are of
