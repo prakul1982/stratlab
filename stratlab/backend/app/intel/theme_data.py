@@ -3446,6 +3446,12 @@ WORK_KINDS = (
     (r"^(?:textil|fabric|yarn|apparel|garment|spinn)", r"\b(?:textiles?|yarns?|fabrics?|fib(?:re|er)s?|jute|cotton|silk|wool(?:len)?|knit\w*|"
      r"weav\w*|spinn\w*|hosiery|socks|innerwear|inner ?wears?|lingerie|garments?|apparel|denims?|elastics|interlinings?|(?<!card )clothing|"
      r"cloth|threads?|towels?|terry|bed ?linen|made-ups|ethnic wear|embroider\w*)\b"),
+    # e89 (the owner's Alcoholic beverages deck: Radico Khaitan, "one of the most recognised IMFL (Indian Made Foreign Liquor) brands in
+    # India", Silver Oak's "processing country liquor" and Winsome Breweries' "manufacturing and selling of beers" kept on their official
+    # industry only: "liquor", "IMFL" and "beers" said no word of the theme's names): the drinks an alcoholic beverage maker makes or sells
+    (r"^(?:alcohol|beverag|spirit|liquor|distil|brew|beer|wine)", r"\b(?:liquors?|imfl|imil|country liquor|spirits?|whisk(?:e)?y|whiskies|"
+     r"vodkas?|rum|gin|brand(?:y|ies)|beers?|lagers?|wines?|winer(?:y|ies)|brew(?:s|ed|ing|er|ers|ery|eries)|"
+     r"distill?(?:s|ed|ing|er|ers|ery|eries|ation)|extra neutral alcohol|alcoholic beverages?|alco-?bev\w*)\b"),
 )
 
 

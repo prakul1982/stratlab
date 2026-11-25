@@ -116,7 +116,7 @@ def own_filings(region: str, sym: str) -> str:
 # r68e (R68): the version of the reader that takes another company's opening sentences off a stored description (theme_base.own_part,
 # names_other), kept beside every description read since; a stored record left with no description by an earlier version of it is read once
 # more (thin_about), and a record whose description a read emptied keeps the words it had ("was_about") until a read gives words again
-OWN_PART_V = 2
+OWN_PART_V = 3                # e89: 3, a record a read emptied of an Indian company's own profile page under its earlier name is read once more
 OWN_PART_SINCE = "2026-11-17"           # the first day R66's version of it ran live (the live R65 decks were made on 17 Nov, R66's on 18 Nov)
 ABOUT_WORDS, ABOUT_V = 30, 5          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
 # lane n2 (the outside review of the live R33 decks: UMC's article, "a Taiwanese company based in Hsinchu ... founded as Taiwan's first
@@ -374,6 +374,8 @@ def own_got(region: str, sym: str, got: dict, name: str = "") -> tuple[dict, boo
         # r68e: a record a read emptied keeps the words it had: read again by today's reader, they are its words when it finds them its own
         was = theme_base.own_part(str((got or {}).get("was_about") or ""), nm)
         return ({**got, "about": was, "restored": True}, False) if was else (got, False)
+    if region == "IN" and (got or {}).get("page"):
+        return got, False                                  # e89: its own profile page under an earlier name (evidence_reader)
     own = theme_base.own_part(about, nm)
     if own == about:
         return got, False
@@ -421,11 +423,13 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                     hit = got
         if hit is None:
             about, industry, no_page, owed, filed_first, wiki = "", "", False, False, False, ""
+            page_ = ""
             if region == "IN":
                 p = india_profile(R.hub.screener, sym)
                 no_page = p is None
                 p = p or {}
                 about, industry = p.get("about") or "", " > ".join(p.get("industry_path") or [])
+                page_ = " ".join(about.split())
             elif region == "US":
                 about, owed = filed_business(region, sym, until=pace["until"])          # e57: its own annual report first
                 filed_first = True
@@ -451,7 +455,16 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
             read_ = about
-            about = theme_base.own_part(about, names.get(sym) or _index_name(region, sym))          # r66e: never another company's words
+            nm_ = names.get(sym) or _index_name(region, sym)
+            about = theme_base.own_part(about, nm_)          # r66e: never another company's words
+            # e89 (Kalpataru Projects International, Gujarat Energy, Accelya: no description of their own, their profile pages opening on
+            # their earlier names, read as another company's): an Indian company's own profile page, read by its symbol, under an earlier
+            # name of the company is its own words; only an encyclopedia's words after it are read for another company's
+            page_kept = False
+            if region == "IN" and page_ and not about.startswith(page_[:80]) and theme_base.earlier_name(page_, nm_):
+                rest_ = " ".join(read_.split())[len(page_):].strip()
+                about = " ".join(x for x in (page_, theme_base.own_part(rest_, nm_) if rest_ else "") if x)
+                page_kept = True
             # r68e (P0, the owner's review of the live R66 decks: "no loss of verified evidence"): a read that leaves no words of its own
             # never takes away the words the record had: they are kept ("was_about", with what the new read opened on) and read again
             # by each later reader (own_got)
@@ -459,6 +472,7 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
             keep_ = ({"was_about": old_[:3000], "was_at": (prior or {}).get("was_at") or (prior or {}).get("at")} if not about and old_ else {})
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
                    "op": OWN_PART_V, **keep_, **({"other": opening_of(read_)} if read_ and not about else {}),
+                   **({"page": True} if page_kept else {}),          # e89: its own profile page under an earlier name, kept whole
                    # e80 (LIVE16A-002): the encyclopedia's extract run into the words, kept apart too: its sentences are never quoted
                    **({"wiki": wiki[:3000]} if wiki and about else {}),
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),

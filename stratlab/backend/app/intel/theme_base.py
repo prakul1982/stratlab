@@ -6567,7 +6567,11 @@ _WORK = re.compile(r"\b(?:provid\w*|produc(?:es|ers?|ing|ts?|tion)|manufactur\w*
                    r"payments?|transactions?|process(?:es|ing)|facilitat\w*|"
                    # r62 (the live R60 Homebuilders deck: Toll Brothers' "We cater to luxury first-time, move-up ... buyers", the sentence
                    # that says its layer, read as no work, so a strategy sentence was printed for "Luxury and custom homebuilding")
-                   r"cater(?:s|ing)? to)\b", re.I)
+                   r"cater(?:s|ing)? to|"
+                   # e89 (the live REITs dive: Host Hotels' "We are the largest publicly traded lodging REIT, with a geographically diverse
+                   # portfolio of luxury and upper-upscale hotels" read as no work, so no line of its own words: industry-supported and once
+                   # in "Other" though a hotel REITs layer exists): what a property owner says it owns is its work
+                   r"owns|owning|portfolios? of|reits?)\b", re.I)
 _FILING_TITLE = re.compile(r"^(?:annual|quarterly|current|interim|half[- ]yearly)\s+report\b|^(?:form\s+)?(?:10-[kq]|20-f|40-f|8-k|6-k|def\s*14a)\b|"
                            r"^(?:press release|investor presentation|board meeting|outcome of board meeting|shareholding pattern|financial results)\b", re.I)
 _LEGAL_WORDS = re.compile(r"\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|nv|sa|ag|the|holdings?|group)\b\.?", re.I)
@@ -6702,6 +6706,17 @@ def names_other(sentence: str, name: str) -> bool:
         if not any(_co_same_word(w, o) or w[:4] == o[:4] for o in own) and w not in flat:
             return True
     return False
+
+
+def earlier_name(text: str, name: str) -> bool:
+    """e89 (the live Capital goods, Oil and gas and IT services dives: Kalpataru Projects International, Gujarat Energy and Accelya Solutions
+    India with no description of their own, their profile pages opening "Kalpataru Power Transmission Ltd is a global EPC player ...",
+    "Gujarat Gas Limited (GGL) is ...", "Accelya Kale Solutions Is a Software solutions provider ..."): whether a company's own profile page,
+    read by its symbol, opens on the company under an earlier name: a subject sharing the first word of its name that is not a fuller form of
+    it (fuller_name, kept by own_part already). Such words are the company's own (names_other reads them as another company's)."""
+    first = re.split(_NOT_END + r"(?<=[.;!?])\s+(?=[A-Z“\"(])", " ".join(str(text or "").split()), maxsplit=1)[0]
+    subj, own = _subject(first), _co_name_words(name)
+    return len(subj) >= 2 and bool(own) and _co_same_word(subj[0], own[0]) and not fuller_name(subj, own)
 
 
 def names_self(sentence: str, name: str) -> bool:

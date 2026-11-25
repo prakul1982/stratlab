@@ -149,3 +149,73 @@ def test_the_deck_lists_the_floors_companies_once_in_its_appendix():
     others = [r for s in slides if not s.title.startswith(deck.DUST_TITLE) for b in s.blocks if b["kind"] == "table"
               for r in b["rows"] if not isinstance(r, dict) and any("Tahmar" in str(x) for x in r)]
     assert not others
+
+
+# ---------- 4. Indian flagships with no stored words of their own: a profile page under the company's earlier name ----------
+KPIL = ("Kalpataru Power Transmission Ltd is a global EPC player with diversified interest in power transmission and distribution, oil and gas "
+        "pipeline, railways and biomass based power generation.")
+
+
+def test_an_indian_profile_page_under_the_companys_earlier_name_is_kept_as_its_own_words(monkeypatch):
+    """Fails on R88: Kalpataru Projects International (₹22,648 crore, Capital goods) had no description of its own: its profile page, read by
+    its symbol, opens on its earlier name "Kalpataru Power Transmission Ltd", which own_part took for another company's (Gujarat Energy's
+    "Gujarat Gas Limited (GGL) is ...", Accelya's "Accelya Kale Solutions Is ..." the same)."""
+    import json
+    import types
+    from app.intel import theme_routes as TR
+    key, kept = "theme:evidence:IN:KPIL", {}
+    monkeypatch.setattr(TR.db, "get_setting", lambda k: kept.get(k))
+    monkeypatch.setattr(TR.db, "set_setting", lambda k, v: kept.__setitem__(k, v))
+    hub = types.SimpleNamespace(wiki=types.SimpleNamespace(company=lambda name: None), screener=None)
+    monkeypatch.setattr(TR, "_routes", lambda: types.SimpleNamespace(hub=hub, public_facts=None, index_rows=lambda r: []))
+    monkeypatch.setattr(TR, "own_filings", lambda region, sym: "")
+    monkeypatch.setattr(TR, "india_profile", lambda screener, sym, code_of=None: {"about": KPIL, "industry_path": ["Civil Construction"]})
+    TR.EVIDENCE_CACHE.pop(key)
+    got = TR.evidence_reader("IN", {"KPIL": "Kalpataru Projects International Ltd"})(["KPIL"])[0]
+    assert got["KPIL"]["about"].startswith("Kalpataru Power Transmission Ltd is a global EPC player")
+    stored = json.loads(kept[key])
+    assert stored["about"].startswith("Kalpataru Power Transmission") and stored["page"] and stored["op"] == TR.OWN_PART_V == 3
+    assert TR.own_got("IN", "KPIL", stored, "Kalpataru Projects International Ltd")[0]["about"] == stored["about"]
+    assert B.earlier_name("Gujarat Gas Limited (GGL) is a government company u/s 2(45) of Companies Act 2013.", "Gujarat Energy Ltd")
+    # guards: another company's encyclopedia article (no profile page of its own) is still cut; a fuller name is own_part's own case
+    assert B.own_part("Toyo Tire Corporation is a Japanese tire maker.", "TOYO Co., Ltd") == ""
+    assert not B.earlier_name("Jindal Steel & Power Limited is an Indian steel maker.", "Jindal Steel Limited")
+    TR.EVIDENCE_CACHE.pop(key)
+
+
+def test_a_flagship_spirits_makers_words_verify_it_by_the_drinks_it_makes():
+    """Fails on R88: Radico Khaitan ("one of the most recognised IMFL (Indian Made Foreign Liquor) brands in India"), Silver Oak ("processing
+    country liquor") and Winsome Breweries ("manufacturing and selling of beers") were "industry-supported (official industry only)": the
+    theme's names say "spirits", "beer", "alcohol", never "liquor", "IMFL" or "beers" (the live map; its industries picked by the AI)."""
+    checked = {"sector": "Alcoholic beverages", "placements": {"industries_by": "ai", "industries": ["Breweries & Distilleries"]},
+               "value_chain": [{"layer": n, "companies": []} for n in ("Glass bottle and packaging manufacturing",
+                                                                       "Grain distilling and extra neutral alcohol",
+                                                                       "Spirits brand owning and bottling (larger)", "Beer brewing and sale",
+                                                                       "Wine making and sales")]
+               + [{"layer": "Other alcoholic beverage companies", "official": True, "basis": "rest", "companies": []}]}
+    wt = D.work_test(checked, "Alcoholic beverages")
+    for name, line in (("Radico Khaitan Limited", "Incorporated in the year 1943, Radico Khaitan is one of the most recognised IMFL (Indian Made "
+                                                  "Foreign Liquor) brands in India"),
+                       ("Silver Oak (India) Ltd", "Silver Oak India Ltd is engaged in the business of processing country liquor"),
+                       ("Winsome Breweries Ltd", "Winsome Breweries Ltd is in the business of manufacturing and selling of beers")):
+        c = {"ticker": "X", "name": name, "what": line, "base": True, "verified": False, "basis": "industry"}
+        assert D.work_checked("description_verified", c, line, wt) == "description_verified", name
+    # guard: a word of another trade still verifies none (a chemicals maker's words)
+    c = {"ticker": "Y", "name": "Chem Ltd", "what": "Chem Ltd manufactures specialty chemicals and natural gums", "base": True, "verified": False}
+    assert D.work_checked("description_verified", c, c["what"], wt) == "industry_code_supported"
+
+
+# ---------- 6b. Host Hotels: a lodging REIT's own words say its work ----------
+def test_a_lodging_reits_own_words_are_a_line_of_its_work():
+    """Fails on R88: Host Hotels' 10-K opening, "We are the largest publicly traded lodging REIT, with a geographically diverse portfolio of
+    luxury and upper-upscale hotels", was no line of its own words (no word of work), so it was industry-supported with "no description in
+    its own words", placed by the AI alone and once in "Other" though a hotel REITs layer exists."""
+    from app.intel import theme_routes as TR
+    hst = ("We are the largest publicly traded lodging REIT, with a geographically diverse portfolio of luxury and upper-upscale hotels. As of "
+           "February 20, 2026, our consolidated lodging portfolio consists of 76 primarily luxury and upper-upscale hotels containing "
+           "approximately 41,700 rooms.")
+    assert TR.quotable_work(hst, "Host Hotels & Resorts, Inc.")
+    assert B.own_line(hst, "Host Hotels & Resorts, Inc.").startswith("We are the largest publicly traded lodging REIT")
+    c = {"ticker": "HST", "name": "Host Hotels & Resorts, Inc.", "what": "", "base": True, "verified": False, "basis": "industry"}
+    words = D._stems("Real estate investment trusts Hotel and leisure property owners hotels resorts lodging")
+    assert D.evidence_state(c, words, B.quotable(hst, "US")) == "description_verified"
