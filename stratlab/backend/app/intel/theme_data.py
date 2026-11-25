@@ -4559,6 +4559,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             r["series_break"] = True
             for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
                 r[k] = None
+        if split_since(r):                 # e89: a business demerged since its latest year: that year's figures are the whole company's
+            wide.add(r["symbol"])
 
     # e89: one size and quality floor for every theme (dust_of): a company under it is in no layer's table, median or total
     period = theme_period(rows.values())
@@ -4855,6 +4857,27 @@ def series_break(r: dict) -> bool:
 
 
 DEMERGER_YEARS = 3            # a demerger this recent splits the years a growth figure is worked out from
+
+
+def _month_end(label) -> str:
+    """e89: the last day of a "Mar 2026" / "Sep 2026 vs Sep 2025" label's first month, ISO; "" when it can't be read."""
+    import calendar
+    n = year_months(str(label or "").split(" vs ")[0])
+    if n is None:
+        return ""
+    y, mo = divmod(n - 1, 12)
+    return f"{y:04d}-{mo + 1:02d}-{calendar.monthrange(y, mo + 1)[1]:02d}"
+
+
+def split_since(r: dict) -> bool:
+    """e89 (the owner's Alcoholic beverages deck: India Glycols, mostly chemicals, in "Spirits brand owning and bottling (larger)" on its
+    whole year to Mar 2026, its spirits business demerged on 2 Sep 2026 and its Sep 2026 quarter's revenue 66.8% below the year before):
+    whether a company demerged a business after its latest full year ended and its revenue since (its latest quarter, ended after the
+    demerger) fell by SERIES_JUMP% or more on the year before: that year's figures are of the company before the split, the whole company's,
+    never one layer's (the "(whole company)" rule: out of its layer's median where the layer has companies of its own)."""
+    dem, end, q = str(r.get("demerger") or ""), _month_end(r.get("year")), r.get("quarter") or {}
+    qend, fall = _month_end(q.get("of")), num(q.get("sales"))
+    return bool(dem and end and qend and end < dem <= qend and fall is not None and fall <= -SERIES_JUMP)
 
 
 def demerger_on(src, symbol: str) -> str | None:

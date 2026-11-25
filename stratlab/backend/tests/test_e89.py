@@ -83,7 +83,7 @@ def test_a_record_read_by_the_old_reader_with_no_line_to_quote_is_read_once_more
 
 
 # ---------- 2. Shells and dust: one size and quality floor for every theme's layer tables and medians ----------
-def _alco_dive(extra: dict | None = None):
+def _alco_dive(extra: dict | None = None, corp: dict | None = None, spirits: tuple = ()):
     """A dive of three spirits makers and Tahmar Enterprises as the live store holds it (₹2.3 crore of revenue in its year to Mar 2026, no
     market value, −361.7% EBITDA margin), its figures as the live dive printed them."""
     from tests.test_theme1 import TODAY, facts
@@ -95,12 +95,13 @@ def _alco_dive(extra: dict | None = None):
                             [0.0, 0.05, -2.61, -5.6], cap=None),
          **(extra or {})}
     grain = [{"ticker": s, "name": F[s]["name"], "what": "manufactures extra neutral alcohol and liquor", "verified": True}
-             for s in ("GLOBUSSPR", "ASALCBR", "TAHMARENT") + tuple(x for x in (extra or {}))]
+             for s in ("GLOBUSSPR", "ASALCBR", "TAHMARENT") + tuple(x for x in (extra or {}) if x not in spirits)]
     checked = {"sector": "Alcoholic beverages", "sub_themes": [], "placements": {"checked": True, "pending": 0},
                "value_chain": [{"layer": "Spirits brand owning and bottling", "description": "", "companies": [
-                                   {"ticker": "UNITDSPR", "name": "United Spirits Limited", "what": "makes and sells whisky", "verified": True}]},
+                                   {"ticker": s, "name": F[s]["name"], "what": "makes and sells whisky", "verified": True}
+                                   for s in ("UNITDSPR",) + spirits]},
                                {"layer": "Grain distilling and extra neutral alcohol", "description": "", "companies": grain}]}
-    return D.build("IN", "Alcoholic beverages", checked, D.Sources(TODAY, facts=F.get))
+    return D.build("IN", "Alcoholic beverages", checked, D.Sources(TODAY, facts=F.get, corp_history=lambda s: (corp or {}).get(s) or []))
 
 
 def test_a_shell_is_in_no_layers_table_or_median_and_listed_once_with_why():
@@ -219,3 +220,21 @@ def test_a_lodging_reits_own_words_are_a_line_of_its_work():
     c = {"ticker": "HST", "name": "Host Hotels & Resorts, Inc.", "what": "", "base": True, "verified": False, "basis": "industry"}
     words = D._stems("Real estate investment trusts Hotel and leisure property owners hotels resorts lodging")
     assert D.evidence_state(c, words, B.quotable(hst, "US")) == "description_verified"
+
+
+# ---------- 5. Size split sanity: a company that demerged the theme's business since its latest year is the whole company ----------
+def test_a_company_whose_spirits_business_was_demerged_since_its_year_sets_no_layer_median():
+    """Fails on R88: India Glycols (mostly chemicals) stood in "Spirits brand owning and bottling (larger)" on its whole year to Mar 2026,
+    its spirits business demerged on 2 Sep 2026 (its Sep 2026 quarter's revenue 66.8% below the year before), its figures in the layer's
+    median: the "(whole company)" rule did not cover it (no segments stored, filed under Breweries & Distilleries)."""
+    from tests.test_theme1 import facts
+    ig = facts("INDIAGLYCO", "India Glycols Ltd", [2651, 3294, 3768, 4211], [11.5, 12.6, 13.6, 15.4], [141, 173, 231, 293], cap=1980,
+               latest_yoy={"basis": "quarter", "of": "Sep 2026 vs Sep 2025", "sales": -66.8, "profit": -63.1})
+    corp = {"INDIAGLYCO": [{"kind": "demerger", "ex_date": "2026-09-02", "text": "Demerger of the potable spirits business"}]}
+    dive = _alco_dive({"INDIAGLYCO": ig}, corp=corp, spirits=("INDIAGLYCO",))
+    assert "INDIAGLYCO" in dive["company_wide"]
+    sp = next(b for b in dive["layers"] if b["layer"].startswith("Spirits brand"))
+    assert sp["stats"]["ebitda"]["n"] == 1 and sp["stats"]["ebitda"]["median"] == 19          # United Spirits' alone
+    # guard: a demerger with revenue since that did not fall (Vedanta's, +57.5%) leaves the figures as they are
+    assert not D.split_since({"demerger": "2026-04-30", "year": "Mar 2026", "quarter": {"of": "Sep 2026 vs Sep 2025", "sales": 57.5}})
+    assert not D.split_since({"demerger": "2025-12-29", "year": "Dec 2025", "quarter": {"of": "Sep 2026 vs Sep 2025", "sales": -70.0}})
