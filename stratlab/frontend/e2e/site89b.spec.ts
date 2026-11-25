@@ -22,6 +22,14 @@ async function signIn(page: Page) {
   await page.route(`${API}/me`, async (r) => { const res = await r.fetch(); await r.fulfill({ response: res, json: { ...(await res.json()), established: true } }); });
 }
 
+/** Whether every line of a row of chips is filled edge to edge (each line's last chip ends at the row's right edge, ±2px), each chip's
+ *  words on one line (ui-lint R4). */
+const filled = (group: ReturnType<Page["getByRole"]>) => group.evaluate((g) => {
+  const chips = [...g.querySelectorAll<HTMLElement>("button.k-chip")], right = g.getBoundingClientRect().right;
+  const lines = new Map<number, number>();
+  for (const c of chips) { const r = c.getBoundingClientRect(); lines.set(Math.round(r.top), Math.max(lines.get(Math.round(r.top)) ?? 0, r.right)); }
+  return { lines: lines.size, ragged: [...lines.values()].filter((x) => Math.abs(x - right) > 2).length, tall: chips.filter((c) => c.getBoundingClientRect().height > 44).length };
+});
 const box = (page: Page, sel: string) => page.locator(sel).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }; });
 
 test("FORMS: Chart rules has the market, the group and Scan on one line inside its form, their boxes level", async ({ page }, info) => {
@@ -40,15 +48,15 @@ test("FORMS: Chart rules has the market, the group and Scan on one line inside i
     expect(go.top, "on a phone Scan is under the group's box").toBeGreaterThan(select.bottom - 1);
     const card = await box(page, "form.k-sform");
     expect(go.w, "a full-width Scan on a phone").toBeGreaterThan(card.right - card.left - 4);
-    // the chart rules two to a row: the first two chips share a line
-    const chips = form.getByRole("group", { name: "Scan rule sets" }).getByRole("button");
-    const a = await chips.nth(0).boundingBox(), b = await chips.nth(1).boundingBox();
-    expect(Math.abs(a!.y - b!.y), "two chart rules to a row").toBeLessThanOrEqual(2);
+    // the chart rules fill each line edge to edge, each on one line
+    const f = await filled(form.getByRole("group", { name: "Scan rule sets" }));
+    expect(f.lines).toBeGreaterThan(1);
+    expect(f, "every line of chart rules filled, none on two lines").toMatchObject({ ragged: 0, tall: 0 });
   }
   await expect(form.getByText("Chart rule", { exact: true })).toBeVisible();
 });
 
-test("FORMS: Business updates' choices are in one card, each under its label", async ({ page }, info) => {
+test("FORMS: Business updates' choices are in one card, each under its label, the kinds filling each line on a phone", async ({ page }, info) => {
   await signIn(page);
   await page.goto("/invest/business-updates");
   const card = page.getByTestId("biz-pick");
@@ -57,10 +65,7 @@ test("FORMS: Business updates' choices are in one card, each under its label", a
   await expect(card.getByRole("group", { name: "Sector" })).toBeVisible();
   await expect(card.getByRole("group", { name: "Range of the small charts" }).or(card.getByRole("radiogroup", { name: "Range of the small charts" })).first()).toBeVisible();
   if (info.project.name !== "desktop") {
-    const chips = card.getByRole("group", { name: "Sector" }).getByRole("button");
-    const a = await chips.nth(0).boundingBox(), b = await chips.nth(1).boundingBox();
-    expect(Math.abs(a!.y - b!.y), "two kinds to a row on a phone").toBeLessThanOrEqual(2);
-    expect(Math.abs(a!.width - b!.width), "equal cells").toBeLessThanOrEqual(2);
+    expect(await filled(card.getByRole("group", { name: "Sector" })), "every line of kinds filled, none on two lines").toMatchObject({ ragged: 0, tall: 0 });
   }
 });
 
@@ -78,11 +83,8 @@ test("FORMS: Figures' save form has the name, the weekly email and Save screen o
   expect(Math.abs(tick!.y + tick!.height - (name!.y + name!.height)), "the weekly email level with the name's box (VR3-007)").toBeLessThanOrEqual(2);
   expect(tick!.x, "between the name and Save screen").toBeGreaterThan(name!.x + name!.width - 1);
   expect(go!.x).toBeGreaterThan(tick!.x + tick!.width - 1);
-  // the size chips two to a row of equal cells in the filter column
-  const sizes = page.getByRole("group", { name: "Company size", exact: true }).getByRole("button");
-  const a = await sizes.nth(0).boundingBox(), b = await sizes.nth(1).boundingBox();
-  expect(Math.abs(a!.y - b!.y)).toBeLessThanOrEqual(2);
-  expect(Math.abs(a!.width - b!.width)).toBeLessThanOrEqual(2);
+  // the size chips fill each line of the filter column, each on one line
+  expect(await filled(page.getByRole("group", { name: "Company size", exact: true }))).toMatchObject({ ragged: 0, tall: 0 });
 });
 
 test("PAGING: the earnings calls list asks the server for its next page as the reader scrolls, and says how far it has come", async ({ page }) => {

@@ -250,7 +250,7 @@ export function ScanPage() {
         <CardHead title="Scan a group" />
         {/* FORMS SWEEP (site89b, the Search filings form's layout of site87): the market toggle floated above the card and Scan sat small and
             alone at the bottom left under a full-width box. One form: its top row is the market, the group and Scan, their boxes on one line;
-            then the chart rule, its rules, and the alert; on a phone one column, the rules two to a row */}
+            then the chart rule, its rules, and the alert; on a phone one column, the rules filling each line */}
         <form className="k-sform" aria-label="Scan a group" onSubmit={runScan}>
           <div className="k-sform-row k-sform-top">
             <div className="k-sform-market"><span className="k-sform-lab" aria-hidden="true">Market</span><RegionSwitch region={region} setRegion={setRegion} /></div>

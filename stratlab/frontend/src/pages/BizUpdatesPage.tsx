@@ -137,8 +137,8 @@ export function BizUpdatesPage() {
             </Card>
           ))}
           {/* FORMS SWEEP (site89b, the Search filings form's layout of site87): the kind of update and the charts' range floated on the page with
-              no label, seven pills in a ragged row (a column of seven on a phone). One card: each choice under its label, the kinds two to a
-              row on a phone */}
+              no label, seven pills in a ragged row (a column of seven on a phone). One card: each choice under its label, the kinds filling
+              each line on a phone */}
           <Card label="What to show" testId="biz-pick">
             <div className="k-sform">
               <FieldGroup label="Kind of update">

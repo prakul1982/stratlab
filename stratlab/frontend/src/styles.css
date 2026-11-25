@@ -3557,8 +3557,8 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 
 /* FORMS SWEEP (site89b): the Search filings form's layout (site87, docsearch.css .ds-*) for the other filter and scan forms (Chart rules,
    Business updates, Figures). Labels above their boxes; a top row of the market, the main box and the action, their boxes on one line;
-   then even rows of equal columns, one box each; two columns on a tablet, one on a phone, where a row of choice chips is a grid two to
-   a row, each chip's words centred and wrapping inside it instead of a ragged column of pills */
+   then even rows of equal columns, one box each; two columns on a tablet, one on a phone, where a row of choice chips fills each line
+   edge to edge, each chip's words centred on one line (ui-lint R4), instead of a ragged column of pills */
 .k-sform { display: flex; flex-direction: column; gap: var(--s4); }
 .k-sform-row { display: grid; gap: var(--s3) var(--s4); align-items: end; min-width: 0; }
 .k-sform-top { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -3574,10 +3574,9 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .k-sform-save.two { grid-template-columns: minmax(0, 1fr) auto; }      /* an open screen's two buttons go under the name and the email, side by side */
 .k-sform-save.two > .k-sform-acts { grid-column: 1 / -1; }
 .k-sform-acts { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: end; }
-/* Figures' filters (site89b): the size and stage chips two to a row of equal cells in the narrow filter column, their words centred and
-   wrapping inside each, not one pill a line of different widths */
-.screens-filters .k-chipset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.screens-filters .k-chipset > .k-chip { width: 100%; height: auto; min-height: 36px; padding: 6px 10px; border-radius: 12px; white-space: normal; line-height: 1.25; text-align: center; }
+/* Figures' filters (site89b): the size and stage chips fill each line of the narrow filter column edge to edge, words centred on one
+   line (ui-lint R4), not pills of different widths in a ragged column */
+.screens-filters .k-chipset > .k-chip { flex: 1 1 auto; text-align: center; }
 @media (max-width: 900px) {
   .k-sform-top { grid-template-columns: minmax(0, 1fr) auto; }
   .k-sform-top > .k-sform-market { grid-column: 1 / -1; }
@@ -3587,8 +3586,6 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
   .k-sform-go, .k-sform-acts { width: 100%; }
   .k-sform-acts > .btn { flex: 1 1 100%; }
   .k-sform-market .k-seg, .k-sform-row > .k-field > .k-seg { width: 100%; }
-  .k-sform .k-chiprow.wrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-  .k-sform .k-chiprow.wrap .k-chip { width: 100%; height: auto; min-height: 40px; padding: 6px 10px; border-radius: 12px; white-space: normal; line-height: 1.25; text-align: center; }
-  .k-sform .k-chipset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .k-sform .k-chipset > .k-chip { width: 100%; height: auto; min-height: 40px; padding: 6px 10px; border-radius: 12px; white-space: normal; line-height: 1.25; text-align: center; }
+  .k-sform .k-chiprow.wrap { gap: 6px; }
+  .k-sform .k-chiprow.wrap .k-chip, .k-sform .k-chipset > .k-chip { flex: 1 1 auto; min-height: 40px; justify-content: center; text-align: center; }
 }
