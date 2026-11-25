@@ -152,5 +152,7 @@ test("USUAL MOVE: the figure says how many earlier results days it stands on, an
   await page.goto("/research/results?region=IN&scope=all");
   const n = page.getByTestId("res-mv-n").first();
   await expect(n).toHaveText("3 results days", { timeout: 30_000 });
-  await expect(page.locator("b[title^='Average size of the move over 3 earlier results days (Thu 27 Aug, Thu 28 May, Thu 5 Mar)']").first()).toBeVisible();
+  // the dates in the browser's own short form: some builds write "Thu, 27 Aug" (CI), others "Thu 27 Aug"; the days and their count are what's checked
+  await expect(page.locator("b[title^='Average size of the move over 3 earlier results days (']").first())
+    .toHaveAttribute("title", /^Average size of the move over 3 earlier results days \(Thu,? 27 Aug, Thu,? 28 May, Thu,? 5 Mar\): close before the results day/);
 });
