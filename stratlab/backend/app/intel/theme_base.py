@@ -1122,6 +1122,12 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         out_vc = fold_scope_layers(out_vc, f"{theme} {m.get('sector') or ''}", theme)
     if placements is not None and placements.get("dropped") and published is not None:
         out_vc, placements = layer_answer_removals(out_vc, placements, words_of, theme, facts_for)
+    # e89 (the coordinator's follow-up to the owner's Alcoholic beverages deck: "Other" is never a home for a company of another industry):
+    # one the map named from another industry is placed in the layer its own words say, or it is out of the theme
+    if placements is not None:
+        out_vc, placements, outsider_rows = outsiders_of_other(out_vc, placements, words_of, theme)
+        if outsider_rows:
+            placements = {**placements, "outsiders": outsider_rows}
     if placements is not None and placements.get("dropped"):
         # p57 (lane g57: 60 companies in 20 themes carried a business-membership removal while still in the theme, Sarepta in "Other"):
         # a company the check left out of a map group that is still in the theme was moved, never removed: its answer is a layer decision
@@ -4764,6 +4770,69 @@ def layer_work_stems(stems: set, vc: list[dict], theme: str) -> set:
     return set()
 
 
+def outsiders_of_other(vc: list[dict], placements: dict, words_of, theme: str) -> tuple[list[dict], dict, list[dict]]:
+    """e89 (the coordinator's follow-up to the owner's Alcoholic beverages deck: Payments' "Other" holding JPMorgan and WISeQey, Biotech's
+    West Pharmaceutical, each named by the map from another industry): the theme's "Other" group holds the companies of its official
+    industries and of its own list that fit no layer, never one the map named from another industry (or one kept on its words against a
+    layer's answer). Such a company goes to the layer whose name its own words say most of (two or more of what the name says is made or
+    done, half or more of them: the test of layer_work_stems and says_most_of), else it leaves the theme as another business, its words quoted ("scope"; with no words of its own stored, said so). A company of
+    the theme's own list is moved the same way when its words say a layer, else it stays. (the layers, the placements, the moves made)."""
+    rest = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
+    if rest is None or not rest.get("companies"):
+        return vc, placements, []
+    from .theme_changes import first_sentence
+    inds = {key(i) for i in (placements or {}).get("industries") or []}
+    tw = kind_stems(theme)
+    layers = [v for v in vc if not v.get("official") and v.get("layer") and not v.get("folded")]
+    keep, rows, gone = [], [], []
+    for c in rest.get("companies") or []:
+        basis = c.get("basis")
+        own_ind = basis == "industry" or (c.get("industry") and key(c.get("industry")) in inds)
+        if own_ind or not c.get("ticker"):
+            keep.append(c)
+            continue
+        try:
+            w = own_text((words_of(c["ticker"]) if words_of else "") or c.get("what") or "")
+        except Exception:
+            w = own_text(c.get("what") or "")
+        best, said_n = None, 0
+        # (the customers it names are not what it does: a sentence of them is left out, "Our customers include leading ... generic ...")
+        mine = whole_stems(" ".join(x for x in re.split(r"(?<=[.;!?])\s+", _fit_text(w)) if not re.search(r"\b(?:customers|clients)\b", x, re.I)))
+        for v in layers:
+            for n in _names(v):
+                rest_w = whole_stems(n) - tw          # what the layer's name says is made or done (no word of how any company earns)
+                n_said = sum(1 for b in rest_w if any(_near(a, b) for a in mine))
+                if rest_w and n_said >= min(2, len(rest_w)) and 2 * n_said >= len(rest_w) and n_said > said_n:
+                    best, said_n = v, n_said
+        if best is not None:
+            shown = _HALF_RX.sub("", best["layer"])
+            quote = theme_clause(w, c.get("name") or "", _stems(_short_joined(shown)) - tw) or first_sentence(w)
+            why = f"its own words say what “{shown}” is: “{quote}”" if quote else f"its own words say what “{shown}” is"
+            best["companies"] = list(best.get("companies") or []) + [{**c, "moved": True, "placed": "words",
+                                                                       "refit": {"from": _HALF_RX.sub("", rest["layer"]), "to": shown, "why": why}}]
+            rows.append({"ticker": c["ticker"], "name": c.get("name"), "from": _HALF_RX.sub("", rest["layer"]), "to": shown, "why": why})
+            continue
+        if basis == "list":            # the theme's own list: its "Other" holds it as an official industry's company
+            keep.append(c)
+            continue
+        q = first_sentence(w)
+        ind = str(c.get("industry") or "").split(">")[-1].strip()
+        scope = (f"another business: from another industry ({ind}), its own words say “{q}”, no layer's work" if q and ind else
+                 f"another business: its own words say “{q}”, no layer's work" if q else
+                 f"from another industry ({ind}), no description of its own to place it in a layer" if ind else
+                 "from another industry, no description of its own to place it in a layer")
+        gone.append({"ticker": c["ticker"], "name": c.get("name") or c["ticker"], "groups": [], "said": "scope", "scope": scope,
+                     "outsider": True})
+    if not rows and not gone:
+        return vc, placements, []
+    rest["companies"] = keep
+    placements = {**placements, "dropped": list(placements.get("dropped") or []) + gone}
+    for k_ in ("placed", "total"):
+        if gone and isinstance(placements.get(k_), int):
+            placements[k_] = max(0, placements[k_] - len(gone))
+    return vc, placements, rows
+
+
 def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str, facts_for=None) -> tuple[list[dict], dict]:
     """r572 (R57.2, the release gate's "layer-only removal" on the live R57.1 inputs: Abbott and Johnson & Johnson out of Medical devices,
     Spotify and Sirius XM out of Media, JPMorgan out of Payments, each on the map check's "no" for one or two of its groups): a company the
@@ -5049,6 +5118,11 @@ def lends_into(layer: str, c: dict, text: str) -> bool:
     return bool(LENDS_SAYS.search(t)) or (c.get("model") == "lending" and c.get("model_confidence") in ("high", "medium") and not OWNS_SAYS.search(t))
 
 
+_METALS = re.compile(r"\b(gold|silver|copper|zinc|nickel|platinum|palladium|lithium|uranium|iron ore|aluminium|aluminum|precious metals?|"
+                     r"base metals?|industrial metals?)\b", re.I)
+COAL_SAYS = re.compile(r"\b(?:(?:metallurgical|met|coking|thermal|steelmaking|steel-making|seaborne)\s+)?coals?\b", re.I)
+
+
 def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
     """e81: (why the company is a kind the layer can never hold, the kind of layer it belongs in: "lending" or ""), ("", "") when none."""
     name = _HALF_RX.sub("", str(layer or ""))
@@ -5081,6 +5155,16 @@ def kind_bar(layer: str, c: dict, words, theme: str) -> tuple[str, str]:
             return f"filed under {ind}, a services company; “{name}” names integrated companies", "services"
         if isinstance(cap, (int, float)) and 0 < cap < MAJOR_MIN:
             return f"its market value ({cap:,.0f} million) is far below any integrated major's; “{name}” names large integrated companies", "services"
+    # e89 (the coordinator's follow-up: Gold miners' "Mid-sized gold, silver and mineral miners" holding Warrior Met Coal and Alpha
+    # Metallurgical, met-coal miners, on its description's "steel-making inputs"): a layer named for gold, silver or other metals never
+    # holds a coal miner, one whose own words say it mines or sells coal and name no metal or ore
+    metals = _METALS.findall(name)
+    if metals and not COAL_SAYS.search(name):
+        own_ = re.sub(re.escape(nm), " ", text, flags=re.I) if nm else text
+        m = COAL_SAYS.search(own_)
+        if m and not _METALS.search(own_) and not re.search(r"\b(?:metals?|alumina|ores?)\b", own_, re.I):     # (a metals maker that also mines coal stays)
+            return (f"its own words say it mines coal (“{m.group(0)}”), none of what “{name}” names "
+                    f"({', '.join(dict.fromkeys(x.lower() for x in metals))})"), "coal"
     if property_scope_layer(name, theme):
         if not PROPERTY_SAYS.search(principal_words(text) if text.strip() else ""):
             # (e82, LIVE18A-008: a reason quotes the sentence that says its business, never a name alone, a forward-looking statement or an
@@ -5148,6 +5232,9 @@ def kind_bars(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[di
             to = None
             if kind == "lending":
                 to = next((w for w in vc if w is not v and not w.get("official") and LENDING_LAYER.search(_HALF_RX.sub("", w.get("layer") or ""))), None)
+            elif kind == "coal":            # e89: a layer of coal or steel-making inputs when the theme has one, else "Other"
+                to = next((w for w in vc if w is not v and not w.get("official")
+                           and re.search(r"\bcoal\b|\bsteel[- ]?making\b|\bmetallurgical\b", _HALF_RX.sub("", w.get("layer") or ""), re.I)), None)
             elif kind == "services":
                 homes = [w for w in vc if w is not v and not w.get("official") and re.search(r"\bservices?\b", _HALF_RX.sub("", w.get("layer") or ""), re.I)]
                 small = [w for w in homes if str(w.get("layer") or "").endswith("(smaller)")]

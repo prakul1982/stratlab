@@ -305,3 +305,95 @@ def test_guard_a_business_heading_that_opens_on_no_sentence_of_the_company_gives
             "delivery and that incumbents are rewarded. We operate a policy that is simple and transparent for every director of the board.\n"
             + filler + "\nRisk factors\n")
     assert sec.business_opening(text) == ""
+
+
+# ---------- follow-up 1: "Other" never holds a company the map named from another industry ----------
+JPM_10K = ("JPMorganChase had $4.4 trillion in assets and $362.4 billion in stockholders’ equity as of December 31, 2025. The Firm is a leader "
+           "in investment banking, financial services for consumers and small businesses, commercial banking, financial transaction processing "
+           "and asset management.")
+FIS_10K = ("FIS is a financial technology company providing solutions to financial institutions, businesses and developers. We unlock "
+           "financial technology to the world across the money lifecycle underpinning the world's financial systems.")
+WST_10K = ("We are a leading global manufacturer in the design and production of technologically advanced, high-quality, integrated containment "
+           "and delivery systems for injectable drugs and healthcare products. Our customers include leading biologic, generic, "
+           "pharmaceutical, diagnostic, and medical device companies in the world.")
+
+
+def _payments_vc() -> list[dict]:
+    """The live Payments and fintech map's layers (its industries none: a theme of its own list) and its "Other" group as the live read
+    holds it."""
+    lay = lambda n: {"layer": n, "companies": [{"ticker": n[:3].upper(), "name": n, "basis": "list"}]}       # noqa: E731
+    return [lay("Card networks"), lay("Card issuers and consumer lenders"), lay("Merchant acquiring and processing"),
+            lay("Payment platforms and crypto exchanges"), lay("Digital banks"), lay("Cross-border and B2B payments"),
+            lay("Software products and subscriptions"),
+            {"layer": "Other payments and fintech companies", "official": True, "basis": "rest", "companies": [
+                {"ticker": "FIS", "name": "Fidelity National Information Services", "basis": "list", "industry": "Services-Business Services, Nec"},
+                {"ticker": "WQEY", "name": "WISeQey Corp.", "basis": "added", "industry": "Services-Computer Processing & Data Preparation"},
+                {"ticker": "JPM", "name": "JPMorgan Chase & Co", "basis": "added", "industry": "National Commercial Banks"},
+                {"ticker": "NEWP", "name": "New Pay Inc", "basis": "added", "industry": "Services-Business Services, Nec"}]}]
+
+
+def test_a_company_the_map_named_from_another_industry_is_placed_by_its_words_or_out_never_in_other():
+    """Fails on R88: JPMorgan (a universal bank), WISeQey (no words of its own) and West Pharmaceutical (drug packaging, in Biotech) sat in
+    their themes' "Other" groups, named by the map from other industries. Now each goes to the layer its own words say, or out with why;
+    a company of the theme's own list (FIS: its 10-K names no Payments layer's work, its merchant business sold in 2024) stays."""
+    words = {"JPM": JPM_10K, "FIS": FIS_10K, "WQEY": "",
+             "NEWP": "New Pay Inc provides merchant acquiring and payment processing for small merchants across the United States."}
+    vc, pl, rows = B.outsiders_of_other(_payments_vc(), {"industries": []}, words.get, "Payments and fintech")
+    where = {c["ticker"]: v["layer"] for v in vc for c in v["companies"]}
+    assert where["FIS"] == "Other payments and fintech companies"
+    assert where["NEWP"] == "Merchant acquiring and processing" and [r["ticker"] for r in rows] == ["NEWP"]
+    out = {x["ticker"]: x for x in pl["dropped"]}
+    assert set(out) == {"JPM", "WQEY"} and "JPM" not in where and "WQEY" not in where
+    assert out["JPM"]["scope"].startswith("another business: from another industry (National Commercial Banks), its own words say “JPMorganChase")
+    assert out["WQEY"]["scope"].endswith("no description of its own to place it in a layer")
+    bio = [{"layer": n, "companies": [{"ticker": "X" + n[:2], "name": n, "basis": "industry"}]}
+           for n in ("Research tools and diagnostics suppliers", "Bioprocessing, animal health and mixed healthcare products",
+                     "Branded and generic drug portfolio makers")] + \
+        [{"layer": "Other biotech companies", "official": True, "basis": "rest", "companies": [
+            {"ticker": "WST", "name": "West Pharmaceutical Services Inc", "basis": "added", "industry": "Surgical & Medical Instruments & Apparatus"},
+            {"ticker": "OWN", "name": "Own Bio Inc", "basis": "industry", "industry": "Biological Products"}]}]
+    vc, pl, _ = B.outsiders_of_other(bio, {"industries": ["Biological Products"]}, {"WST": WST_10K}.get, "Biotech")
+    assert [x["ticker"] for x in pl["dropped"]] == ["WST"]
+    assert [c["ticker"] for c in vc[-1]["companies"]] == ["OWN"]          # guard: a company of the theme's official industries stays
+
+
+# ---------- follow-up 2: a layer named for gold and silver never holds a coal miner ----------
+def test_met_coal_miners_leave_a_gold_and_silver_layer_for_other_when_no_coal_layer_exists():
+    """Fails on R88: Gold miners' "Mid-sized gold, silver and mineral miners" held Warrior Met Coal ("dedicated entirely to mining
+    non-thermal steelmaking coal") and Alpha Metallurgical ("metallurgical coal products to the steel industry") on its description's
+    "steel-making inputs". The theme has no coal or steel-input layer: both go to "Other" (their industries are the theme's). Guards: a
+    gold miner stays; an aluminium maker that also mines coal stays in a metals layer; a coal layer, when there is one, takes them."""
+    words = {"HCC": "Warrior Met Coal is dedicated entirely to mining non-thermal steelmaking coal used as a critical component of steel production.",
+             "AMR": "We are a Tennessee-based mining company; we reliably supply metallurgical coal products to the steel industry.",
+             "GG": "Gold Group mines gold and silver at three operating mines in Nevada.",
+             "ALU": "Aluminum Corp produces alumina and primary aluminum, and mines coal for its smelters."}
+    vc = [{"layer": "Mid-sized gold, silver and mineral miners", "companies": [{"ticker": t, "name": t} for t in ("HCC", "AMR", "GG")]},
+          {"layer": "Base and industrial metals miners", "companies": [{"ticker": "ALU", "name": "Aluminum Corp"}, {"ticker": "B2", "name": "B2"}]},
+          {"layer": "Other gold miner companies", "official": True, "basis": "rest", "companies": []}]
+    out, rows = B.kind_bars(vc, words.get, "Gold miners")
+    where = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
+    assert where["HCC"] == where["AMR"] == "Other gold miner companies" and where["GG"].startswith("Mid-sized")
+    assert where["ALU"] == "Base and industrial metals miners"
+    assert sorted(r["ticker"] for r in rows) == ["AMR", "HCC"] and "mines coal" in rows[0]["why"]
+    coal = [{"layer": "Mid-sized gold, silver and mineral miners", "companies": [{"ticker": "HCC", "name": "HCC"}, {"ticker": "GG", "name": "GG"}]},
+            {"layer": "Metallurgical coal producers", "companies": [{"ticker": "C1", "name": "C1"}]},
+            {"layer": "Other gold miner companies", "official": True, "basis": "rest", "companies": []}]
+    out, _ = B.kind_bars(coal, words.get, "Gold miners")
+    assert {c["ticker"]: v["layer"] for v in out for c in v["companies"]}["HCC"] == "Metallurgical coal producers"
+
+
+# ---------- follow-up 3: the floor drops no member of the theme, and the page and the app count the same ----------
+def test_the_floor_keeps_every_official_industry_member_in_the_theme_and_its_counts():
+    """Guard (e89): Tahmar Enterprises, under the floor, is out of every table and median but still a member: in the dive's evidence and
+    membership, in the tally the app and the deck say, and listed and counted on the public page as before."""
+    from app import public_themes as P
+    dive = _alco_dive()
+    assert "TAHMARENT" in dive["evidence"] and dive["membership"]["placed"] == 4 and dive["status"]["TAHMARENT"]
+    tally = D.checked_tally(dive["membership_evidence"], {}, 4)
+    assert tally["checked"] == 4 and tally["total"] == 4
+    grain = [{"ticker": s, "name": s, "basis": "industry", "what": "manufactures extra neutral alcohol and liquor"} for s in ("GLOBUSSPR", "ASALCBR", "TAHMARENT")]
+    p = {"sector": "Alcoholic beverages", "value_chain": [
+        {"layer": "Spirits brand owning and bottling", "companies": [{"ticker": "UNITDSPR", "name": "United Spirits", "basis": "industry"}]},
+        {"layer": "Grain distilling and extra neutral alcohol", "companies": grain}]}
+    c = P.counts(p, {**dive, "tally": tally})
+    assert c["all"] == 4 and c["listed"] == 4 and c["unlisted"] == []
