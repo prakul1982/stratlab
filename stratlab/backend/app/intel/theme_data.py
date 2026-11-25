@@ -1293,18 +1293,76 @@ def refit_of(layer: dict, sym: str) -> dict:
 # ---------- one record of who is in a layer's calculations (lane m1: the outside review of the live R32 decks, "15 equipment companies" in
 # the value-chain table beside "14 of 17" on the layer's page and in the appendix) ----------
 # why a listed company is left out of its layer's calculations, in the order the pages say them
-CALC_WHY = ("other business", "way of earning not shown", "not confirmed", "no revenue figure")
+CALC_WHY = ("other business", "way of earning not shown", "not confirmed", "no revenue figure", "too small or too stale")
 
 
 # ex49 (R48, the outside review of the live Release 48 decks: lululemon left out of "Apparel and consumer brand owners" as "another business";
 # "distinguish a real difference in revenue model from insufficient evidence or partial comparability; never use them interchangeably"):
 # each left-out company's one reason category, in the order the pages say them, and what exactly it is (calc_record "kind", "label", "detail")
-CALC_KINDS = ("different revenue model", "another business", "insufficient evidence", "not confirmed in the theme", "no figure stored")
+# e89: DUST_KIND, a company under the theme's size and quality floor (dust_of), listed once in the appendix, in no layer's table or figure
+DUST_KIND = "too small or too stale to compare"
+CALC_KINDS = ("different revenue model", "another business", "insufficient evidence", "not confirmed in the theme", "no figure stored", DUST_KIND)
 WHY_KIND = {"other business": "different revenue model", "way of earning not shown": "insufficient evidence", "not confirmed": "not confirmed in the theme",
-            "no revenue figure": "no figure stored"}         # a kept key (CALC_WHY) -> its kind, for a record kept before ex49
+            "no revenue figure": "no figure stored", "too small or too stale": DUST_KIND}    # a kept key (CALC_WHY) -> its kind, for a record kept before ex49
 KIND_SAID = {"different revenue model": "it earns another way than the layer's companies", "another business": "its own words describe another business",
              "insufficient evidence": "its evidence doesn't show clearly how it earns", "not confirmed in the theme": "its own words don't show this work",
-             "no figure stored": "no figure of it is stored"}
+             "no figure stored": "no figure of it is stored", DUST_KIND: "it is too small or its latest figures too old to compare"}
+
+# e89 (the owner's Alcoholic beverages deck, 25 Nov: Tahmar Enterprises, ₹2 crore of revenue and no market value, at −361% EBITDA margin in
+# "Grain distilling" and its median; Winsome Breweries ₹1 crore, Silver Oak and Cupid Breweries with no revenue in their latest year, Kati
+# Patang ₹9 crore, each a row of n.m. in a layer's table): one size and quality floor for every theme's layer tables and medians. A company
+# with figures is under it when its revenue (none counts as under) and its market value are both under the market's floor, when it has no
+# market value and revenue under DUST_NO_CAP times the revenue floor, or when its latest full year ends STALE_MONTHS or more before the
+# theme's own year (the year most of its companies' figures are of). It stays a member of the theme, with its evidence; its figures are in no
+# table, median or total, and the appendix lists it once with why (out["too_small"]). Chosen against the live dives of 25 Nov 2026 (the
+# lane's report lists who each theme's floor takes out): ₹15 crore and ₹250 crore, $2 million and $30 million
+DUST_REVENUE = {"IN": 15.0, "US": 2.0}           # ₹ crore, $ million (a row's money figures are in the theme's currency: company_row)
+DUST_CAP = {"IN": 250.0, "US": 30.0}             # ₹ crore, $ million
+DUST_NO_CAP = 10
+STALE_MONTHS = 12
+_MONTHS = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+
+
+def year_months(year) -> int | None:
+    """e89: a row's year ("Mar 2026", "Mar 2025 (S)") as a count of months, None when it can't be read."""
+    m = re.match(r"\s*([A-Z][a-z]{2})[a-z]*\.?\s+(\d{4})", str(year or ""))
+    return int(m.group(2)) * 12 + _MONTHS[m.group(1)] if m and m.group(1) in _MONTHS else None
+
+
+def theme_period(rows) -> str:
+    """e89: the theme's own year: the year most of its confirmed companies' figures are of (the latest of those tied); "" with none."""
+    got = Counter(str(r.get("year")) for r in rows if r.get("year") and year_months(r.get("year")) is not None
+                  and r.get("status") != "unverified" and has_figures(r))
+    if not got:
+        return ""
+    top = max(got.values())
+    return max((y for y, n in got.items() if n == top), key=lambda y: year_months(y) or 0)
+
+
+def _money(region: str, v: float) -> str:
+    return f"₹{v:,.0f} crore" if region == "IN" else f"${v:,.1f} million".replace(".0 million", " million")
+
+
+def dust_of(region: str, r: dict, period: str = "") -> str:
+    """e89: why a company with figures is under the theme's size and quality floor (DUST_REVENUE, DUST_CAP, STALE_MONTHS), in words; "" when it
+    is not (or has no figures: it is listed as such)."""
+    if r.get("status") == "unverified" or not has_figures(r):
+        return ""
+    now, mine = year_months(period), year_months(r.get("year"))
+    if now is not None and mine is not None and now - mine >= STALE_MONTHS:
+        return f"its latest full year is {r['year']}, a year or more before the theme's {period}"
+    reg = "IN" if region == "IN" else "US"
+    rev, cap = r.get("revenue"), r.get("cap")
+    rf, cf = DUST_REVENUE[reg], DUST_CAP[reg]
+    rev_said = f"revenue of {_money(reg, rev)}" if rev is not None and rev > 0 else "no revenue"
+    if cap is None:
+        if rev is None or rev < rf * DUST_NO_CAP:
+            return f"{rev_said} in {r.get('year') or 'its latest year'} and no market value"
+        return ""
+    if (rev is None or rev < rf) and cap < cf:
+        return (f"{rev_said} in {r.get('year') or 'its latest year'} and a market value of {_money(reg, cap)}, both under the theme's floor "
+                f"({_money(reg, rf)} of revenue, {_money(reg, cf)} of market value)")
+    return ""
 EVIDENCE_GAP = {"no_words": ("not checked yet: no description of its own is stored", "not checked yet, no description of its own"),      # gl50
                 "no_model": ("its own words don't state how it earns", "its words don't state how it earns"),
                 "weak": ("its evidence shows how it earns only weakly (low confidence)", "how it earns read only weakly"),
@@ -1366,6 +1424,8 @@ def out_reason(r: dict) -> dict:
                     "detail": f"the way of earning of “{_model_title(mid)}” ({_model_what(mid)}), not the layer's companies'"}
         return {"kind": "different revenue model", "label": "different revenue model",
                 "detail": "it earns another way than the layer's companies"}
+    if r.get("dust") and not r.get("model_out"):
+        return {"kind": DUST_KIND, "label": DUST_KIND, "detail": r["dust"]}
     if r.get("model_out"):
         full, short = EVIDENCE_GAP.get(why) or ("its evidence doesn't show clearly how it earns", "")
         # gl52 (R52, the rotating review of Release 51: Labcorp, Quest and Fiserv "read as managed and outsourced it services, low
@@ -1384,6 +1444,8 @@ def calc_record(r: dict) -> dict:
         why = "not confirmed"
     elif r.get("model_out"):
         why = "other business" if r["model_out"] == "other" else "way of earning not shown"
+    elif r.get("dust"):              # e89: under the theme's size and quality floor (dust_of)
+        why = "too small or too stale"
     elif r.get("revenue") is None and not any(r.get(k) is not None for k in STAT_KEYS + tuple(sector_metrics.KEYS)):
         why = "no revenue figure"
     else:
@@ -4492,6 +4554,11 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
                 r[k] = None
 
+    # e89: one size and quality floor for every theme (dust_of): a company under it is in no layer's table, median or total
+    period = theme_period(rows.values())
+    for r in rows.values():
+        r["dust"] = dust_of(region, r, period)
+
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
     from .theme_base import layer_line, own_words as _own, quotable, unsplit_unshown, whole_words
@@ -4509,8 +4576,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 _q[sym] = None
         return _q[sym]
     for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"
-                                                                and r.get("figures") != "not_available"}):          # c54: a listed row with no figure shows none
-        mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
+                                                                and r.get("figures") != "not_available" and not r.get("dust")}):          # c54: a listed row with no figure shows none
+        # e89: a company under the theme's size and quality floor is in no layer's table (out["too_small"] lists it once, with why)
+        mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows and not rows[c["ticker"]].get("dust")]
         if v.get("sub_only") and not mine:          # d1: the "Other" group made for sub-theme-only companies none of which has figures
             continue
         what = {c["ticker"]: carried_line(c, v, qabout, src.about) for c in v.get("companies") or []}
@@ -4594,7 +4662,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 r["comparison"] = comparison_said({**calc_of(r), **({k: True for k in ("own_goods", "by_words", "read_low", "read_agrees", "no_read", "by_map", "no_words") if r.get(k)}),
                                                    **{k: r[k] for k in ("also_earns", "segments_n") if r.get(k)}}, b)
     chain = chain_table(blocks)
-    counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]
+    counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified" and not r.get("dust")]       # e89: the floor's apart
     pool = [r for r in counted if not r["company_wide"]] or counted
     allm = stat(r["ebitda"] for r in {r["symbol"]: r for r in pool}.values())
     for b in blocks:
@@ -4606,7 +4674,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         cos = []
         for c in sub_picked(s, checked.get("value_chain") or [], src.about):
             r = rows.get(c["ticker"])
-            if r:
+            if r and not r.get("dust"):          # e89: the floor's companies in no table
                 # e81 (LIVE17A-002): a sub-theme's line of its stored words only while the words a page may quote hold it (carried_line)
                 w_ = carried_line(c, {"official": bool(c.get("base"))}, qabout, src.about)
                 cos.append({"symbol": r["symbol"], "name": r["name"], "what": own_words(w_, r["name"] or "", r["symbol"]) or None, "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"], "ebitda_dp": r.get("ebitda_dp"),
@@ -4618,7 +4686,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     listed = one_row_each(sorted(rows.values(), key=lambda r: -(r.get("cap") or 0)))     # R36: one company under two symbols, once
     syms = [r["symbol"] for r in listed]
     # every total and median: the confirmed companies with their key figures (R22: one population, so no count is larger than the one stated)
-    members = [r for r in listed if r.get("status") != "unverified" and has_figures(r) and not r.get("adjacent")]
+    members = [r for r in listed if r.get("status") != "unverified" and has_figures(r) and not r.get("adjacent") and not r.get("dust")]
     adjacent = [r for r in listed if r.get("status") != "unverified" and r.get("adjacent")]
     own = [r for r in members if r["symbol"] not in wide] or members
     val = valuation_section(members, market)
@@ -4666,7 +4734,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             "margins": margin_history([r for r in own if not consolidated_in(r, own)]), "valuation": val,
             "balance": balance_section(own), "price": stored_price_section(members), "market": market_med,
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
-            "management": management_section(syms, names, rows, src), "leaders": leaders(listed)},
+            "management": management_section(syms, names, rows, src), "leaders": leaders([r for r in listed if not r.get("dust")])},
         "growth_basis_n": len(own_set),
         # the theme's companies by how sure the theme is of each (R17-012), every placed company, with figures or not; "with_figures" is of the
         # confirmed ones only (R28: an unconfirmed company is listed but never in the figures, so "with figures 15" beside "confirmed 14" was wrong)
@@ -4678,6 +4746,11 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         "without_figures": [{"symbol": r["symbol"], "name": r["name"]} for r in listed if not has_figures(r) and r.get("status") != "unverified"],
     }
     out["duplicates"] = dup_rows
+    # e89: the companies under the theme's size and quality floor (dust_of), each once, with why: the appendix lists them, no table does
+    out["too_small"] = [{"symbol": r["symbol"], "name": r["name"], "layer": _HALF_NAME.sub("", first.get(r["symbol"]) or ""),
+                         "revenue": r.get("revenue"), "cap": r.get("cap"), "year": r.get("year"), "unit": r.get("unit"), "why": r["dust"]}
+                        for r in listed if r.get("dust") and first.get(r["symbol"])]
+    out["too_small_period"] = period
     # d53: the adjacent participants, by kind, shown and in no theme figure; the kind the theme's core members are of
     out["core_kind"] = tkind
     out["population_rule"] = POPULATION          # r68e: the core-and-adjacent rules' version this split is of (theme_changes.population_change)
@@ -4707,7 +4780,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                                                 {s: p["parent"] for s, p in parents.items()}, layer_of)
     out["metrics_pending"] = sorted(pending)
     out["metrics_families"] = pending_fam           # R29: each one's family, so a kept dive can queue a read the worker dropped again
-    out["checks"] = data_checks(listed, blocks, out)
+    out["checks"] = data_checks([r for r in listed if not r.get("dust")], blocks, out)          # e89: the floor's companies are in no figure
     try:                          # q1: a layer whose count in its calculations fell against the run before, with who left and why
         out["checks"]["cohort"] = cohort_drops(src.cohort_history(slug(theme_q), cohort_point(blocks, src.today)), blocks)
     except Exception as e:

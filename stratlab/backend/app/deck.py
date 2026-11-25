@@ -2257,15 +2257,16 @@ def shown_label(cos: list, k: int) -> str:
 
 
 ROLL_TITLE = "Who is in each layer's calculations"
+DUST_TITLE = "Too small or too stale to compare"      # e89: the theme's companies under its size and quality floor (theme_data.dust_of)
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
 from .intel.theme_data import CALC_KINDS as ROLL_WHY, f1, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
 # ex49 (R48): the mark on a left-out company's own row is its reason's kind (theme_data.out_reason), each with its note under the table
 ROLL_TAG = {"different revenue model": "different model", "another business": "another business", "insufficient evidence": "insufficient evidence",
-            "not confirmed in the theme": "not confirmed", "no figure stored": "no figures"}
+            "not confirmed in the theme": "not confirmed", "no figure stored": "no figures", "too small or too stale to compare": "too small or stale"}
 KIND_OF = {"other business": "different revenue model", "way of earning not shown": "insufficient evidence", "not confirmed": "not confirmed in the theme",
-           "no revenue figure": "no figure stored"}       # a record's kept key (theme_data.CALC_WHY) -> its kind, for a record with none
+           "no revenue figure": "no figure stored", "too small or too stale": "too small or too stale to compare"}       # a record's kept key (theme_data.CALC_WHY) -> its kind, for a record with none
 
 
 def why_kind(rec: dict) -> str:
@@ -7534,6 +7535,20 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("table", (M, TOP, CW, min(rth, table_height(rhead, chunk, rwidths, CW))), head=rhead, rows=chunk, widths=rwidths,
                   numeric=[False, False, False], tight=True)
             s.add("text", (M, BOT - rnh, CW, rnh), paras=[rnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            later_slides.append(s)
+
+    # e89 (the owner's Alcoholic beverages deck: Tahmar, Winsome, Silver Oak, Cupid and Kati Patang rows of n.m. in layer tables): the
+    # companies under the theme's size and quality floor (theme_data.dust_of), in no layer's table, median or total, each listed once here
+    small_ = [x for x in v.get("too_small") or [] if isinstance(x, dict) and x.get("symbol")]
+    if small_:
+        shead, swidths = ["Company", "Layer", "Why it is not compared"], [2.6, 2.6, 7.1]
+        srows = [[clean_name(x.get("name") or x["symbol"]), x.get("layer") or "", str(x.get("why") or "")] for x in small_]
+        for k, chunk in enumerate(spages := table_pages(shead, srows, swidths, CW, BOT - TOP)):
+            s = Slide(DUST_TITLE + (f" ({k + 1} of {len(spages)})" if len(spages) > 1 else ""),
+                      f"{_n(len(small_), 'company', 'companies')} of the theme too small or too stale to compare: listed here once, in no "
+                      "layer's table, median or total", eyebrow=eb("Appendix"))
+            s.add("table", (M, TOP, CW, min(BOT - TOP, table_height(shead, chunk, swidths, CW))), head=shead, rows=chunk, widths=swidths,
+                  numeric=[False, False, False], tight=True)
             later_slides.append(s)
 
     roll_end = len(later_slides)

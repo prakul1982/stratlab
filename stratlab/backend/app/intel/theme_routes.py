@@ -2522,6 +2522,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             # r68e (R68): the core-and-adjacent rules' version and each company that joined or left the core members, with why
             "population_rule": dive.get("population_rule"), "population_change": dive.get("population_change"),
             "distress": dive.get("distress") or [],          # y57 (R57): companies in distress, out of every median and range, with why
+            "too_small": dive.get("too_small") or [],        # e89: the companies under the theme's size and quality floor, with why
             # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
             "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
             "membership_check": dive.get("membership_check") or {},
