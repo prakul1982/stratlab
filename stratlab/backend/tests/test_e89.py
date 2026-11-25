@@ -44,3 +44,39 @@ def test_guard_words_that_say_a_layers_work_or_the_theme_still_keep_a_company():
     other = {c["ticker"]: c for c in vc[-1]["companies"]}
     assert set(other) == {"G", "A", "E"} and not got.get("dropped")
     assert "Container Glass bottles" in other["G"]["theme"]["why"] and "alcoholic beverages" in other["A"]["theme"]["why"]
+
+
+# ---------- 6a. Semiconductors' missing own words: the annual-report reader finds Item 1 where it missed it ----------
+def _openings() -> dict:
+    import json
+    import pathlib
+    return json.loads((pathlib.Path(__file__).parent / "fixtures" / "sec_openings_e89.json").read_text())
+
+
+def test_the_annual_report_reader_finds_the_opening_of_item_1_in_five_flagship_reports():
+    """Fails on R88: Skyworks' and MACOM's contents pages print "ITEM 1A: RISK FACTORS." (a colon), so the contents page's Item 1 ran on and
+    their cautionary notes were read as what they do; Intel's and McDonald's 10-Ks, set out of the form's order, gave nothing; Arm's 20-F
+    gave "In today’s technology-driven world, semiconductors are ...". The texts are the reports' own lines (sec.report_lines) around the
+    parts read, from their latest annual reports on the SEC's site (read 25 Nov 2026)."""
+    from app.intel import sec
+    got = {k: sec.business_opening(v) for k, v in _openings().items()}
+    assert got["SWKS"].startswith("Skyworks Solutions, Inc., together with its consolidated subsidiaries")
+    assert got["MTSI"].startswith("We design, develop and manufacture differentiated radio frequency")
+    assert got["INTC"].startswith("We are a global designer and manufacturer of semiconductor products.")
+    assert got["MCD"].startswith("The Company franchises and owns and operates McDonald’s restaurants")
+    assert got["ARM"].startswith("The Company is a global leader in the semiconductor industry.")
+    for k, v in got.items():
+        assert B.has_own_line(B.quotable(v, "US") or ""), k          # each a line a page may quote about its work
+
+
+def test_a_record_read_by_the_old_reader_with_no_line_to_quote_is_read_once_more():
+    """Fails on R88: Intel's record, read under QUOTE_V 1 by a reader that found no opening, was marked read (qv 1) and never asked again, so
+    it stayed "industry-supported (official industry only)"; the reads kept a month (sec.BUSINESS_KEY) are the new reader's too."""
+    from datetime import datetime, timezone
+    from app.intel import sec
+    from app.intel import theme_routes as TR
+    old = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "op": TR.OWN_PART_V, "v": TR.ABOUT_V, "bv": 5, "qv": 1,
+           "about": "Intel Corporation is an American multinational technology company headquartered in Santa Clara, California.", "industry": ""}
+    assert TR.quote_due(old, "US", "Intel Corp") and TR.thin_about(old, "US", "Intel Corp")
+    assert not TR.quote_due({**old, "qv": TR.QUOTE_V}, "US", "Intel Corp")          # guard: read once by this reader, not again
+    assert sec.BUSINESS_KEY[1] == 6 and TR.QUOTE_V == 2          # (changed on purpose, e89)
