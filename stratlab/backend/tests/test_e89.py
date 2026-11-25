@@ -474,3 +474,42 @@ def test_every_count_of_companies_with_figures_leaves_out_the_floors_companies()
     assert "TAHMARENT" not in q and len(q) <= dive["members"]
     assert dive["sections"]["price"]["near_low"]["n"] <= dive["members"]
     assert TR.apart_symbols(dive) == {"TAHMARENT"} and TR.apart_symbols(None) == set()
+
+
+# ---------- R90 leftovers: the live shapes ----------
+def test_the_demerger_rule_fires_on_the_live_shape_a_successor_with_its_first_year_and_no_listing_day():
+    """Fails on R90 (the live dive of 25 Nov: India Glycols still a row of "Spirits brand owning and bottling (larger)"): IGL Spirits' stored
+    page keeps no "range_since"; its one stored year, Mar 2026, is India Glycols' latest. Its successor is found by that."""
+    from tests.test_theme1 import facts
+    ind = ("Fast Moving Consumer Goods", "Beverages", "Breweries & Distilleries")
+    ig = facts("INDIAGLYCO", "India Glycols Ltd", [2651, 3294, 3768, 4211], [11.5, 12.6, 13.6, 15.4], [141, 173, 231, 293], cap=1851,
+               industry=ind, latest_yoy={"basis": "quarter", "of": "Sep 2026 vs Sep 2025", "sales": -66.8, "profit": -63.1})
+    igl = facts("IGLSPIRITS", "IGL Spirits Ltd", [8416] * 4, [5.8] * 4, [244] * 4, cap=5068, industry=ind,
+                latest_yoy={"basis": "quarter", "of": "Sep 2026 vs Sep 2025", "sales": 10.3, "profit": 5.2})
+    igl["years"] = igl["years"][-1:]
+    dive = _alco_dive({"INDIAGLYCO": ig, "IGLSPIRITS": igl}, corp={"INDIAGLYCO": [{"kind": "demerger", "ex_date": "2026-09-02"}]},
+                      spirits=("INDIAGLYCO", "IGLSPIRITS"))
+    gone = {x["symbol"]: x for x in dive["too_small"]}
+    assert gone["INDIAGLYCO"]["kind"] == "demerged" and "into IGL Spirits Ltd, its first stored year Mar 2026" in gone["INDIAGLYCO"]["why"]
+    assert "INDIAGLYCO" not in {c["symbol"] for b in dive["layers"] for c in b["companies"]}
+    # guard: with no successor in the theme, the demerging company stays, its figures the whole company's
+    alone = _alco_dive({"INDIAGLYCO": ig}, corp={"INDIAGLYCO": [{"kind": "demerger", "ex_date": "2026-09-02"}]}, spirits=("INDIAGLYCO",))
+    assert "INDIAGLYCO" in alone["company_wide"] and not alone["too_small"][1:]
+
+
+def test_every_row_printing_an_unchecked_basis_revenue_carries_the_mark():
+    """Fails on R90 (the live deck: IGL Spirits' "₹8,416 cr" and its margins unmarked in "Every company's figures", its smaller-layers row
+    marked): every row that prints its revenue carries "(basis not confirmed)", the note says P/E and P/B do not rest on revenue."""
+    from app import deck
+    from app.intel import theme_routes as TR
+    from tests.test_r18_deck import NOW
+    from tests.test_theme1 import facts
+    igl = facts("IGLSPIRITS", "IGL Spirits Ltd", [8416] * 4, [5.8] * 4, [244] * 4, cap=5068,
+                industry=("Fast Moving Consumer Goods", "Beverages", "Breweries & Distilleries"))
+    igl["years"] = igl["years"][-1:]
+    dive = _alco_dive({"IGLSPIRITS": igl})
+    slides = deck.with_held(deck.theme_plan(TR.deck_view("IN", {"sector": "Alcoholic beverages", "value_chain": [], "placements": {}}, dive),
+                                            now=NOW)[0])
+    rows = [r for s in slides for b in s.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)
+            and str(r[0]).startswith("IGL Spirits") and any("8,416" in str(x) for x in r)]          # (a row of the company's figures)
+    assert rows and all("basis not confirmed" in str(r[0]) for r in rows), rows
