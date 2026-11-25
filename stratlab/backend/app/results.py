@@ -1193,7 +1193,7 @@ def _moves_of(region: str, symbol: str, store: dict, own=()) -> dict | None:
     got = (store.get("rows") or {}).get(symbol)
     if not got or not got.get("moves"):
         return None
-    kept = {m[0]: m[1] for m in got["moves"] if isinstance(m, list) and len(m) == 2 and isinstance(m[1], (int, float)) and isinstance(m[0], str)}
+    kept = {m[0]: m[1] for m in got["moves"] if isinstance(m, list) and len(m) == 2 and plausible_move(m[1]) and isinstance(m[0], str)}
     days = [d for d in one_per_results(kept) if not _near(d, own)][:PAST_KEEP]
     if len(days) < MIN_USUAL:
         return None
@@ -1412,9 +1412,15 @@ def reaction(bars: list[dict], day: date) -> float | None:
     after = [c for d, c in seen if d > day.isoformat()]
     on = [c for d, c in seen if d == day.isoformat()]
     end = after[0] if after else (on[0] if on else None)
-    if not before or end is None or before[-1] <= 0:
+    if not before or end is None or before[-1] <= 0 or not plausible_move((end / before[-1] - 1) * 100):
         return None
     return round((end / before[-1] - 1) * 100, 2)
+
+
+def plausible_move(pct) -> bool:
+    """site89b: a change over a results day of half or less, or double or more, is a change of the price's basis (a split or a reverse split
+    in the daily prices: Vicarious Surgical's "usual move" read ±900.0% from a 1-for-10 reverse split), not what the results did."""
+    return isinstance(pct, (int, float)) and -50 < pct < 100
 
 
 SINCE_DAYS = 7                       # a results day this recent has "since the results" beside it

@@ -150,3 +150,12 @@ def test_two_dates_of_one_indian_results_count_once():
     store = {"rows": {"SETCO": {"moves": [["2026-11-24", -3.84], ["2026-10-23", -9.62], ["2026-08-31", -1.45], ["2026-08-29", -1.28], ["2026-05-30", 2.0]]}}}
     m = R._moves_of("IN", "SETCO", store, ("2026-11-24",))
     assert m["dates"] == ["2026-10-23", "2026-08-31", "2026-05-30"] and m["n"] == 3 and m["last"] == [-9.62, -1.45, 2.0]
+
+
+def test_a_split_in_the_daily_prices_is_no_results_day_move():
+    """Live: Vicarious Surgical's usual move read "±900.0%", a 1-for-10 reverse split in its daily prices across a results day."""
+    assert R.reaction(_bars({"2026-08-10": 0.1, "2026-08-11": 0.1, "2026-08-12": 1.0}), date(2026, 8, 11)) is None
+    assert R.reaction(_bars({"2026-08-10": 100, "2026-08-11": 100, "2026-08-12": 50}), date(2026, 8, 11)) is None     # a 2-for-1 split
+    assert R.reaction(_bars({"2026-08-10": 100, "2026-08-11": 100, "2026-08-12": 160}), date(2026, 8, 11)) == 60.0    # a big move stays
+    store = {"rows": {"RBOT": {"moves": [["2026-08-11", 900.0], ["2026-05-12", 4.0], ["2026-02-10", -6.0]]}}}
+    assert R._moves_of("US", "RBOT", store) == {**R._moves_of("US", "RBOT", store), "avg": 5.0, "n": 2, "dates": ["2026-05-12", "2026-02-10"]}
