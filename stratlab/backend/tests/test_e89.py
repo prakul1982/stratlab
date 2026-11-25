@@ -238,3 +238,25 @@ def test_a_company_whose_spirits_business_was_demerged_since_its_year_sets_no_la
     # guard: a demerger with revenue since that did not fall (Vedanta's, +57.5%) leaves the figures as they are
     assert not D.split_since({"demerger": "2026-04-30", "year": "Mar 2026", "quarter": {"of": "Sep 2026 vs Sep 2025", "sales": 57.5}})
     assert not D.split_since({"demerger": "2025-12-29", "year": "Dec 2025", "quarter": {"of": "Sep 2026 vs Sep 2025", "sales": -70.0}})
+
+
+# ---------- 3. Revenue basis: one basis (net of excise duty) for the alcohol layers, labelled where it can't be checked ----------
+def test_a_liquor_makers_one_stored_year_on_an_unchecked_excise_basis_is_labelled_and_in_no_median():
+    """Fails on R88: IGL Spirits' ₹8,416 crore (its only stored year, Mar 2026; India Glycols, the whole company its spirits business was
+    demerged from, ₹4,211 crore) stood beside its layer's revenue net of excise duty, in the totals and the margin medians."""
+    from tests.test_theme1 import facts
+    igl = facts("IGLSPIRITS", "IGL Spirits Ltd", [8416, 8416, 8416, 8416], [5.8] * 4, [244] * 4, cap=5341,
+                industry=("Fast Moving Consumer Goods", "Beverages", "Breweries & Distilleries"))
+    igl["years"] = igl["years"][-1:]
+    usl = facts("UNITDSPR", "United Spirits Limited", [10000, 11000, 11900, 12467], [16, 17, 18, 19], [1100, 1200, 1500, 1700], cap=107487,
+                industry=("Fast Moving Consumer Goods", "Beverages", "Breweries & Distilleries"))
+    dive = _alco_dive({"IGLSPIRITS": igl, "UNITDSPR": usl}, spirits=("IGLSPIRITS",))
+    sp = next(b for b in dive["layers"] if b["layer"].startswith("Spirits brand"))
+    row = next(c for c in sp["companies"] if c["symbol"] == "IGLSPIRITS")
+    assert row["calc"]["in"] is False and row["calc"]["kind"] == D.BASIS_KIND
+    assert row["calc"]["detail"].startswith("its revenue (₹8,416 crore, Mar 2026) is its only stored year")
+    assert sp["stats"]["ebitda"]["n"] == 1 and sp["n"] == 1                        # United Spirits' alone
+    assert D.EXCISE_NOTE in dive["basis"]
+    # guards: a liquor maker with its series stored, and a company of another industry with one year, are on the store's basis
+    assert D.basis_apart("IN", {"industry": ["Breweries & Distilleries"], "revenue": 6037.0, "years": [{"sales": 4843}, {"sales": 6037}]}) == ""
+    assert D.basis_apart("IN", {"industry": ["Chemicals"], "revenue": 900.0, "years": [{"sales": 900}]}) == ""

@@ -1290,10 +1290,39 @@ def refit_of(layer: dict, sym: str) -> dict:
     return out
 
 
+# e89 (the owner's Alcoholic beverages deck: IGL Spirits at ₹8,416 crore of revenue beside India Glycols' ₹4,211 crore, the whole company its
+# spirits business was demerged from, and a ₹5,341 crore market value): an Indian liquor maker's results state revenue with the state excise
+# duty in it and net of it. The store holds each company's page "Sales" line, its own series of years; for the theme's liquor makers with a
+# series (United Spirits ₹12,467 crore, Radico Khaitan ₹6,037 crore, United Breweries ₹9,240 crore to Mar 2026) that is revenue net of excise
+# duty, the basis the layers compare. A company of these industries with no earlier stored year (a new listing, a business just demerged) has
+# no series to place its one figure on, so whether it is net of excise can't be checked: its row is labelled and its revenue and margins are
+# in no total or median (basis_apart). The basis note says it (EXCISE_NOTE).
+EXCISE_INDUSTRIES = {"IN": ("breweries & distilleries", "cigarettes & tobacco products")}
+EXCISE_NOTE = ("Liquor and tobacco makers' revenue is net of excise duty, as each company's stored series of results states it; one with no "
+               "earlier year stored, whose basis can't be checked, is marked and left out of every revenue total and margin median.")
+
+
+def excise_industry(region: str, r: dict) -> bool:
+    """e89: whether a company is filed under an industry whose makers' results state revenue with excise duty in it (EXCISE_INDUSTRIES)."""
+    inds = {str(x).strip().lower() for x in r.get("industry") or []}
+    return bool(inds & set(EXCISE_INDUSTRIES.get(region, ())))
+
+
+def basis_apart(region: str, r: dict) -> str:
+    """e89: why a company's revenue is on no confirmed basis (net of excise duty) beside its layer's, in words; "" when it is on one (or its
+    industry levies none): a company of an excise-levied industry with revenue and no earlier stored year."""
+    if not excise_industry(region, r) or r.get("revenue") is None or r.get("status") == "unverified":
+        return ""
+    if len([y for y in r.get("years") or [] if num(y.get("sales"))]) >= 2:
+        return ""
+    return (f"its revenue ({_money(region, r['revenue'])}, {r.get('year') or 'its latest year'}) is its only stored year, with no earlier one "
+            "to show it is net of excise duty as the layer's other companies' is, so its revenue and margins are in no total or median")
+
+
 # ---------- one record of who is in a layer's calculations (lane m1: the outside review of the live R32 decks, "15 equipment companies" in
 # the value-chain table beside "14 of 17" on the layer's page and in the appendix) ----------
 # why a listed company is left out of its layer's calculations, in the order the pages say them
-CALC_WHY = ("other business", "way of earning not shown", "not confirmed", "no revenue figure", "too small or too stale")
+CALC_WHY = ("other business", "way of earning not shown", "not confirmed", "no revenue figure", "too small or too stale", "revenue basis not confirmed")
 
 
 # ex49 (R48, the outside review of the live Release 48 decks: lululemon left out of "Apparel and consumer brand owners" as "another business";
@@ -1301,12 +1330,17 @@ CALC_WHY = ("other business", "way of earning not shown", "not confirmed", "no r
 # each left-out company's one reason category, in the order the pages say them, and what exactly it is (calc_record "kind", "label", "detail")
 # e89: DUST_KIND, a company under the theme's size and quality floor (dust_of), listed once in the appendix, in no layer's table or figure
 DUST_KIND = "too small or too stale to compare"
-CALC_KINDS = ("different revenue model", "another business", "insufficient evidence", "not confirmed in the theme", "no figure stored", DUST_KIND)
+# e89: BASIS_KIND, a company of an excise-levied industry whose revenue basis (net or gross of excise duty) can't be checked (basis_apart)
+BASIS_KIND = "revenue basis not confirmed"
+CALC_KINDS = ("different revenue model", "another business", "insufficient evidence", "not confirmed in the theme", "no figure stored", DUST_KIND,
+              BASIS_KIND)
 WHY_KIND = {"other business": "different revenue model", "way of earning not shown": "insufficient evidence", "not confirmed": "not confirmed in the theme",
-            "no revenue figure": "no figure stored", "too small or too stale": DUST_KIND}    # a kept key (CALC_WHY) -> its kind, for a record kept before ex49
+            "no revenue figure": "no figure stored", "too small or too stale": DUST_KIND,
+            "revenue basis not confirmed": BASIS_KIND}    # a kept key (CALC_WHY) -> its kind, for a record kept before ex49
 KIND_SAID = {"different revenue model": "it earns another way than the layer's companies", "another business": "its own words describe another business",
              "insufficient evidence": "its evidence doesn't show clearly how it earns", "not confirmed in the theme": "its own words don't show this work",
-             "no figure stored": "no figure of it is stored", DUST_KIND: "it is too small or its latest figures too old to compare"}
+             "no figure stored": "no figure of it is stored", DUST_KIND: "it is too small or its latest figures too old to compare",
+             BASIS_KIND: "whether its revenue is net of excise duty, as the layer's other companies' is, can't be checked"}
 
 # e89 (the owner's Alcoholic beverages deck, 25 Nov: Tahmar Enterprises, ₹2 crore of revenue and no market value, at −361% EBITDA margin in
 # "Grain distilling" and its median; Winsome Breweries ₹1 crore, Silver Oak and Cupid Breweries with no revenue in their latest year, Kati
@@ -1426,6 +1460,8 @@ def out_reason(r: dict) -> dict:
                 "detail": "it earns another way than the layer's companies"}
     if r.get("dust") and not r.get("model_out"):
         return {"kind": DUST_KIND, "label": DUST_KIND, "detail": r["dust"]}
+    if r.get("basis_apart") and not r.get("model_out"):
+        return {"kind": BASIS_KIND, "label": f"{BASIS_KIND} (excise duty)", "detail": r["basis_apart"]}
     if r.get("model_out"):
         full, short = EVIDENCE_GAP.get(why) or ("its evidence doesn't show clearly how it earns", "")
         # gl52 (R52, the rotating review of Release 51: Labcorp, Quest and Fiserv "read as managed and outsourced it services, low
@@ -1446,6 +1482,8 @@ def calc_record(r: dict) -> dict:
         why = "other business" if r["model_out"] == "other" else "way of earning not shown"
     elif r.get("dust"):              # e89: under the theme's size and quality floor (dust_of)
         why = "too small or too stale"
+    elif r.get("basis_apart"):       # e89: an excise-levied industry's company whose revenue basis can't be checked (basis_apart)
+        why = "revenue basis not confirmed"
     elif r.get("revenue") is None and not any(r.get(k) is not None for k in STAT_KEYS + tuple(sector_metrics.KEYS)):
         why = "no revenue figure"
     else:
@@ -4566,6 +4604,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     period = theme_period(rows.values())
     for r in rows.values():
         r["dust"] = dust_of(region, r, period)
+        r["basis_apart"] = "" if r["dust"] else basis_apart(region, r)
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
@@ -4731,7 +4770,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     size_words = lambda s_: _kind(checked.get("sector") or theme) | _kind(layer_name.get(s_) or "")      # noqa: E731  (gl52: the theme's segment)
     out = {
         "region": region, "sector": checked.get("sector") or theme, "as_of": as_of, "as_of_older": older, "ebitda_whole": whole_points(own), "unit": next((r["unit"] for r in members if r.get("unit")), None),
-        "basis": basis_text(members, region), "layers": blocks, "chain": chain, "subs": subs, "company_wide": sorted(wide & set(syms)),
+        "basis": basis_text(members, region) + (" " + EXCISE_NOTE if any(excise_industry(region, r) for r in members) else ""), "layers": blocks, "chain": chain, "subs": subs, "company_wide": sorted(wide & set(syms)),
         # "with figures" means the key figures exist (revenue or profit), not just a stored page (R20: a bank with dashes in every field
         # counted among "20 of 20 with figures")
         "members": sum(1 for r in members if has_figures(r)),

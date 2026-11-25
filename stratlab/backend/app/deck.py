@@ -2264,9 +2264,11 @@ ROLL_FULL = 40                    # a layer page names every company when the li
 from .intel.theme_data import CALC_KINDS as ROLL_WHY, f1, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
 # ex49 (R48): the mark on a left-out company's own row is its reason's kind (theme_data.out_reason), each with its note under the table
 ROLL_TAG = {"different revenue model": "different model", "another business": "another business", "insufficient evidence": "insufficient evidence",
-            "not confirmed in the theme": "not confirmed", "no figure stored": "no figures", "too small or too stale to compare": "too small or stale"}
+            "not confirmed in the theme": "not confirmed", "no figure stored": "no figures", "too small or too stale to compare": "too small or stale",
+            "revenue basis not confirmed": "basis not confirmed"}
 KIND_OF = {"other business": "different revenue model", "way of earning not shown": "insufficient evidence", "not confirmed": "not confirmed in the theme",
-           "no revenue figure": "no figure stored", "too small or too stale": "too small or too stale to compare"}       # a record's kept key (theme_data.CALC_WHY) -> its kind, for a record with none
+           "no revenue figure": "no figure stored", "too small or too stale": "too small or too stale to compare",
+           "revenue basis not confirmed": "revenue basis not confirmed"}       # a record's kept key (theme_data.CALC_WHY) -> its kind, for a record with none
 
 
 def why_kind(rec: dict) -> str:
@@ -7042,6 +7044,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 return ROLL_TAG.get(why_kind(calc_of(c)), "insufficient evidence")      # ex49: the reason's kind
             if c["symbol"] in nofig:
                 return ROLL_TAG["no figure stored"]
+            if c.get("basis_apart") and not calc_of(c).get("in"):          # e89: its revenue basis (excise duty) can't be checked
+                return ROLL_TAG["revenue basis not confirmed"]
             if c.get("distress"):          # y57 (R57, TEL-5): its margins on its row, out of every median and range
                 return "in distress"
             return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else \
