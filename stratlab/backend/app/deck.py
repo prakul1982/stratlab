@@ -7666,7 +7666,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 and not (c.get("developer") and mkey in DEVELOPER_KEYS) and not (c.get("distress") and mkey in DISTRESS_KEYS)]
         chart = None
         # deck89 (owner, 25 Nov): a layer's chart is its companies' market value, the largest first (each one's margins are on its row)
-        capped = [c for c in cos if c.get("cap") and c["symbol"] not in unsure | unmodelled]          # a company left out of its figures isn't charted with them
+        capped = [c for c in cos if c.get("cap") and c["symbol"] not in unsure | unmodelled and calc_of(c)["in"]]          # a company left out of its figures isn't charted with them
         if len(capped) >= 2:
             top = sorted(capped, key=lambda c: -c["cap"])[:8]
             chart = {"kind": "hbars", "title": "Market value by company", "cats": [c["name"] for c in top], "vals": [c["cap"] for c in top], "fmt": money_fmt(us)}
@@ -8079,7 +8079,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("text", (M, BOT - rnh, CW, rnh), paras=[rnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             later_slides.append(s)
 
+    roll_end = len(later_slides)
     _figure_sources(later_slides, v, eb("Appendix"))       # R46: every checked figure's source record, after the figures it is of
+    sources_end = len(later_slides)
     _comparison_basis(later_slides, v, eb("Appendix"))     # R48: every comparison's metric, companies by name and rule
 
     # 7. tailwinds and risks, on one page (R19); the headlines and new listings stay on the theme's page
@@ -8202,7 +8204,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     for x in body:              # each page's eyebrow says the part of the story it is in
         if x.kind == "content" and x is not contents and x.eyebrow and _story_rank(x.title)[1] != 99:
             x.eyebrow = eb(STORY[_story_rank(x.title)[0]][0])
-    apx_ = sorted(apx_ + method, key=lambda x: (_story_rank(x.title), (apx_ + method).index(x)))
+    # the appendix in APPENDIX_ORDER; a reference page of another name keeps its place after the figures, in the order it was made
+    apx_ = sorted(apx_ + method, key=lambda x: (_story_rank(x.title) if _story_rank(x.title)[0] == len(STORY) else (len(STORY), 0.5), (apx_ + method).index(x)))
     slides[:] = body + apx_
     # the contents: each part of the story with its first page, then the appendix
     lines_ = {t: line for t, line, _ in parts}

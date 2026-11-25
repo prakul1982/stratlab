@@ -127,7 +127,9 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     assert "who is in each layer's calculations" in texts([s for s in slides if s.title == "Contents"])
     assert slides[0].gate["passed"] == slides[0].gate["of"], slides[0].gate
     # the appendix is its tables: every company's figures, then the roll (the every-rule check, changed on purpose for R35)
-    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE)) for s in slides if s.eyebrow and s.eyebrow.endswith("· Appendix"))      # (R46: and the figures' source records, updated on purpose)
+    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.METHOD_TITLE, deck.NOTES_TITLE, deck.COMPARE_TITLE,
+                                   deck.LAYER_PROFILE_TITLE))
+               for s in slides if s.eyebrow and s.eyebrow.endswith("· Appendix"))      # (R46: and the figures' source records, updated on purpose; deck89, changed on purpose: and "Method and coverage" and how the figures are built)
     every_rule("IT, a long roll", v, slides)
 
 
