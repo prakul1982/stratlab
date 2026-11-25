@@ -142,7 +142,7 @@ def realty_theme():
 
 
 def conf_rows(slides):
-    conf = next(s for s in slides if s.title == "Data confidence")
+    conf = deck.joined(deck.with_held(slides))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     return {r[0]: r for b in conf.blocks if b["kind"] == "table" for r in b["rows"]}
 
 
@@ -159,7 +159,7 @@ def test_the_deck_keeps_the_reconciled_developers_and_shows_each_figures_source_
                          "over revenue ₹1,000 crore, Mar 2026: 25%; above EBITDA by ₹130 crore: other income ₹50 crore and items after tax ₹152 crore; "
                          "annual results, consolidated); Estate Credit Ltd, net margin 24% (")
     assert "a tax credit ₹120 crore" in vf and "items before tax ₹170 crore" in vf
-    assert re.search(r"Each one's document, stored page and lines: p\. \d+\.$", vf)
+    assert vf.endswith(f"Each one's document, stored page and lines: {deck.THEME_PAGE}.")          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     nb = rows["Net above EBITDA margin"][1]
     assert nb.startswith("Net margin above the EBITDA margin at 1 company, that the year's stored lines don't cover: Estate Old Ltd (25% net, 12% EBITDA).")
     # (updated on purpose, ex49: each company named with the lines it still needs)
@@ -167,7 +167,7 @@ def test_the_deck_keeps_the_reconciled_developers_and_shows_each_figures_source_
             "each still missing: Estate Old Ltd: profit before tax, tax rate.") in nb
     assert "no stored figure that explains it" not in texts(slides)
     # the appendix's source page: one row per checked figure, verified first, each with its document, page, lines and what they show
-    page = next(s for s in slides if s.title == deck.SOURCES_TITLE)
+    page = next(s for s in deck.held(slides) if s.title == deck.SOURCES_TITLE)          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert page.eyebrow.endswith("Appendix") and page.subtitle.startswith("4 checked figures, 3 verified")
     tab = next(b for b in page.blocks if b["kind"] == "table")
     by = {r[0]: r for r in tab["rows"]}
@@ -185,7 +185,7 @@ def test_the_deck_keeps_the_reconciled_developers_and_shows_each_figures_source_
     assert note.startswith("Each company's year as its stored page holds it (/stocks/in/SYMBOL), in the filing's unit.")
     contents = next(s for s in slides if s.title == "Contents")
     apx = next(r for b in contents.blocks if b["kind"] == "table" for r in b["rows"] if r[0] == "Appendix")
-    assert "each checked figure's source and statement lines" in apx[1]
+    assert f"every figure's source lines are {deck.THEME_PAGE}" in apx[1]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     got = deck_check.check_pages(["\n".join(x for x in texts(slides).split("\n") if x != "None")])      # (texts lists a card's empty fields as None)
     assert not deck_check.failed(got, strict=True), got["findings"][:3]
     assert not deck.CAUSE_WORDS.search(texts(slides))
@@ -203,13 +203,22 @@ def test_a_short_questions_card_goes_under_the_chart_rather_than_alone_on_a_page
     slides = deck.theme_plan(v)[0]
     titles = [s.title for s in slides]
     assert "Questions the figures raise" not in titles                 # the live R45 Insurance deck's p.14: one question alone on a page
-    chart = next(s for s in slides if s.title == "Median ROE and Net margin by layer")
+    # deck89 (changed on purpose, owner 25 Nov: no page of one chart): the layers' medians are charted under the "Layers side by side" table
+    # when there is room, the card beside the chart (else under it, the chart made shorter, as before)
+    chart = next(s for s in slides if any(b["kind"] == "columns" for b in s.blocks) and any(b["kind"] == "cards" for b in s.blocks))
     cards = [it for b in chart.blocks if b["kind"] == "cards" for it in b["items"]]
     assert cards and cards[0]["title"] == "Questions the figures raise" and cards[0]["lines"] == [q]
     col = next(b for b in chart.blocks if b["kind"] == "columns")
     card = next(b for b in chart.blocks if b["kind"] == "cards")
-    assert col["box"][3] >= deck.CHART_MIN and col["box"][1] + col["box"][3] <= card["box"][1]          # the chart shorter, nothing overlaps
-    assert chart.subtitle.endswith("; the questions the figures raise under it")
-    # a card too tall for the chart to keep CHART_MIN still gets a page of its own
-    monkeypatch.setattr(deck, "economics_questions", lambda *a, **k: [q + f" ({i})" for i in range(5)])
-    assert "Questions the figures raise" in [s.title for s in deck.theme_plan(v)[0]]
+    beside = col["box"][0] + col["box"][2] <= card["box"][0]
+    assert col["box"][3] >= (1.7 if beside else deck.CHART_MIN) and (beside or col["box"][1] + col["box"][3] <= card["box"][1])          # nothing overlaps
+    assert chart.subtitle.endswith("; the questions the figures raise beside it" if beside else "; the questions the figures raise under it")
+    # a card too tall for the chart to keep CHART_MIN still gets a page of its own (deck89, changed on purpose: or, beside the chart, the
+    # questions that fit there and the rest in full among the appendix's notes; never one lost)
+    many = [q + f" ({i})" for i in range(5)]
+    monkeypatch.setattr(deck, "economics_questions", lambda *a, **k: many)
+    slides = deck.theme_plan(v)[0]
+    shown = [ln for s in slides if not deck.is_appendix(s) for b in s.blocks if b["kind"] == "cards" for it in b["items"]
+             if it.get("title") == "Questions the figures raise" for ln in it["lines"]]
+    noted = [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]
+    assert all(x in shown or any(x in n for n in noted) for x in many)

@@ -49,28 +49,33 @@ def test_the_theme_deck_carries_every_part_of_the_page():
     v = full_view()
     slides, _ = deck.theme_plan(v)
     titles = [s.title for s in slides]
-    page = ["Contents", "Key findings", "Data confidence", "Dated company updates",
+    # deck89 (changed on purpose, owner 25 Nov: "it looks absolutely trash"): the data-confidence page and the notes are the appendix's "Method
+    # and coverage"; a short list of dated updates sits under the tailwinds and risks (the slide's `also`)
+    page = ["Contents", "Key findings", deck.METHOD_TITLE,
             "The value chain by layer",                 # ChainCard
             deck.SMALL_TITLE,                           # LayerCard: every layer with companies (lane d1: layers of 2, one page; updated on purpose)
             # (operating figures: one company files them in this fixture, under 3: a line in data confidence, no page, R21)
             "Tailwinds and risks",                      # ClaimsCard
             "Size and shape", "Growth and profitability", "Valuation", "The latest quarter against a year earlier",       # NumbersCards
-            "How to read this deck",                    # the page's notes
             "Every company's figures"]                  # LeadersCard: the appendix
     for t in page:
-        assert t in titles, t
+        assert any(x == t or x.startswith(t + " (") for x in titles), t
+    assert deck.UPDATES_TITLE in titles or any(deck.UPDATES_TITLE in (getattr(s, "also", None) or []) for s in slides)
     for gone in ("The theme at a glance", "Every company in this theme", "Latest on this theme", "New listings in the theme", "Margins over time",
                  "Ownership", "Events", "Management report cards"):
         assert gone not in titles, gone
     words = texts(slides)
     # lane d1 (updated on purpose): both layers have 2 confirmed companies, so they are rows of "Smaller layers", which shows each company's
     # own words, not the layer's description ("Digs it out.", "Makes cells.")
-    for must in ("ore turned into cells", "BATT", "Subsidy scheme extended", "filed operating figures between results",
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the one company's operating figures (under 3, no page) are a line of the checks kept with the deck
+    for must in ("BATT", "filed operating figures between results"):
+        assert must in texts(deck.with_held(slides)), must
+    for must in ("ore turned into cells", "Subsidy scheme extended",
                  "Resignation of an auditor", "Quarterly results", "ritten by AI from general knowledge"):          # lane d1: "written by AI" on "Smaller layers" (updated on purpose)     # m2 (on purpose): the auditor's event as a neutral fact
         assert must in words, must
     lead = [r[0].removesuffix(" (whole company)") for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
     assert sorted(lead) == sorted(x["name"] for x in v["sections"]["leaders"] if v["status"].get(x["symbol"]) != "unverified")      # confirmed, once each
-    notes = texts([s for s in slides if s.title == "How to read this deck"])
+    notes = texts([s for s in slides if s.title.startswith(deck.METHOD_TITLE)])          # deck89 (changed on purpose): the notes in "Method and coverage"
     assert "Not read when this deck was made" not in notes and "On the theme's page: the latest headlines and new listings" in notes
 
 
@@ -82,9 +87,9 @@ def test_a_part_the_page_has_nothing_for_is_said_once_never_drawn_empty():
     words = texts(slides)
     assert not any("Recycling" in s.title for s in slides)                                    # no slide (or card) for a layer with no company
     assert "0 companies" not in words and "0 company" not in words
-    assert words.count("No listed company is shown for Recycling") == 1
+    assert "0 companies" not in texts(deck.with_held(slides)) and texts(deck.with_held(slides)).count("No listed company is shown for Recycling") == 1   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "Recycling" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
-    notes = texts([s for s in slides if s.title == "How to read this deck"])
+    notes = texts([s for s in slides if s.title.startswith(deck.METHOD_TITLE)])          # deck89 (changed on purpose): the notes in "Method and coverage"
     assert "On the theme's page: the latest headlines and new listings" in notes       # R16: no internal wording ("when this deck was made")
 
 

@@ -54,10 +54,12 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
     assert "confirmed" not in words and (" description-verified, " in words and " not checked" in words if c.get("tally")
                                          else "membership checked " in words or " · in the theme " in words)
     assert not c["each"] or "in each calculation: " in words
-    conf = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
-    find = next(ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]
-                if ln.startswith("Considered"))
-    assert conf.startswith(f"Counts: {words}.") and find == f"{words}."
+    conf = next(p for s in deck.held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
+    # deck89 (changed on purpose, owner 25 Nov: no engine wording on the story pages): the counts are said once, in "Method and coverage"
+    assert conf.startswith(f"Counts: {words}.")
+    assert not any(str(ln).startswith("Considered") for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards"
+                   for it in b["items"] for ln in it["lines"])
     t = texts(slides)
     assert not deck._BARE_SHARE.search(t), deck._BARE_SHARE.findall(t)[:3]          # never "100% of value" without "of what"
     for m in re.finditer(r"(\d+)% of the (?:combined )?market value of (?:all (\d[\d,]*)|the (\d[\d,]*) of (\d[\d,]*) with one)", t):
@@ -129,7 +131,7 @@ def test_a_net_margin_above_the_ebitda_margin_is_flagged_as_an_anomaly_never_exp
     v = full_view()
     v["checks"] = {**(v.get("checks") or {}), "one_off": [{"symbol": "X", "name": "X Ltd", "net": 24.6, "ebitda": 6.0}], "net_with": 9.9, "net_without": 7.7}
     slides = deck.theme_plan(v)[0]
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # changed on purpose (m2): a flag with no day is not a dated update; it is on the data-confidence page, still with no cause named
     assert "X Ltd (24.6% net, 6% EBITDA)" in t and "with them; the filing would show why." in t
     assert not any(x["name"] == "X Ltd" for x in deck.watch_list(v, __import__("datetime").date(2026, 11, 7)))
@@ -270,9 +272,8 @@ def test_the_gate_runs_on_every_deck_before_it_is_stored_and_every_item_passes_o
     assert g["passed"] == 10, [(x["id"], x["dropped"]) for x in g["items"] if not x["ok"]]
     skipped = {x["id"]: x["note"] for x in g["items"] if x["note"].startswith("Skipped")}
     assert set(skipped) <= {"classified", "applicable"}                                         # the later lanes' data, a pass with a note until then
-    reading = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
-                   if it["title"] == "Reading the figures")
-    assert deck.MARKS_LINE in reading["lines"]                                                  # missing, n/a, not comparable: three marks
+    reading = deck.plain_section(slides, "Reading the figures")          # deck89 (changed on purpose, owner 25 Nov): the notes in "Method and coverage"
+    assert deck.MARKS_LINE in reading                                                           # missing, n/a, not comparable: three marks
 
 
 def test_a_failing_item_drops_what_failed_and_the_result_lists_it():
@@ -351,7 +352,7 @@ def test_how_the_valuation_is_worked_out_lives_on_the_notes_page_with_one_pointe
     val = next(s for s in slides if s.title == "Valuation")
     lines = [ln for b in val.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]]
     assert sum(1 for ln in lines if "How each is worked out" in ln) == 1 and not any(ln.startswith(("P/E: the price", "Comparable peers:")) for ln in lines)
-    notes = {r[0]: r for s in slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    notes = {r[0]: r for s in deck.held(slides) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert "Comparable peers" in notes and "P/E" in notes and "own sector" in notes["Comparable peers"][3]
 
 

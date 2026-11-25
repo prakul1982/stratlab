@@ -79,7 +79,7 @@ def test_the_chemicals_ranking_states_its_metric_company_sets_and_rule():
     assert it["threshold"] == D.INTENSITY_FACTOR and it["ratio"] == 1.0 and {x["layer"]: x["value"] for x in it["values"]}["Basic organic intermediates"] == 3.0
     # printed: the appendix page, a row per compared layer with its companies by name; the value chain and the findings point to it
     # (updated on purpose, ex49: one comparison a page, its claim the page's takeaway, its rules a line each, one table of its layers)
-    claim, rules_, rows = next(p for p in basis_pages(slides) if p[0].startswith("EBITDA margin by layer"))
+    claim, rules_, rows = next(p for p in basis_pages(deck.with_held(slides)) if p[0].startswith("EBITDA margin by layer"))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert claim.startswith("EBITDA margin by layer, among layers with at least 5 companies with the figure: highest Custom synthesis manufacturers, "
                             "lowest Basic organic intermediates. p. ")
     assert any(x.startswith("Headline floor (met): each layer with at least 5 companies with the figure") for x in rules_)
@@ -89,10 +89,10 @@ def test_the_chemicals_ranking_states_its_metric_company_sets_and_rule():
     assert first[1:3] == ["22% (6)", "3.00 (6)"] and first[-1].startswith("Custom Chem 0 Ltd, Custom Chem 1 Ltd")
     assert any(r[0] == "Basic organic intermediates" and r[1] == "9.5% (8)" and "Basic Chem 7 Ltd" in r[-1] for r in rows)
     vc = next(s for s in slides if s.title == "The value chain by layer")
-    page = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.COMPARE_TITLE))
-    assert f"Each compared layer's companies by name, the rules and the capital figures: p. {page}." in " ".join(p for bl in vc.blocks for p in bl.get("paras") or [])
+    # deck89 (owner 25 Nov: short footnotes): a sentence that points to a page stays on the page's short footnote; deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): it says the theme's page
+    assert f"Each compared layer's companies by name, the rules and the capital figures: {deck.THEME_PAGE}." in " ".join(p for bl in vc.blocks for p in bl.get("paras") or [])
     con = table(slides, "Contents")
-    assert "each comparison's companies and rule" in next(r for r in con if r[0] == "Appendix")[1]
+    assert f"are {deck.THEME_PAGE}" in next(r for r in con if r[0] == "Appendix")[1]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the contents say the full records are there
     got = deck_check.check_pages(["\n".join(x for x in texts(slides).split("\n") if x != "None")])
     assert not deck_check.failed(got, strict=True), got["findings"][:3]
 
@@ -104,7 +104,7 @@ def test_layers_whose_capital_needs_differ_are_not_ranked_and_the_test_figures_a
     assert v["chain"]["highest"] is None and not b["made"] and b["why"] == "capital for each unit of revenue differs more than threefold"
     it = next(r for r in b["rules"] if r["rule"] == "capital intensity")
     assert not it["passed"] and it["test"]["ratio"] == 8.0 and it["test"]["high"] == "Custom synthesis manufacturers"
-    claim, rules_, rows = basis_pages(slides)[0]          # (updated on purpose, ex49: the claim, the rules' lines and the table apart)
+    claim, rules_, rows = basis_pages(deck.with_held(slides))[0]          # (updated on purpose, ex49: the claim, the rules' lines and the table apart) · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert claim.startswith("EBITDA margin by layer: not ranked, capital for each unit of revenue differs more than threefold.")
     assert any(x.startswith("Capital intensity, a proxy for capital needs (not met): ") and "is 8.0 times the smallest; ranked only at 3 times or less" in x
                for x in rules_)
@@ -125,14 +125,14 @@ def test_every_ranking_the_deck_makes_has_its_basis_and_the_findings_point_to_it
     v, slides = deck_of("IN", m, f)
     t = texts(slides)
     assert "Revenue grew fastest in the latest year in Custom synthesis manufacturers" in t  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
-    claims = [p[0] for p in basis_pages(slides)]          # (updated on purpose, ex49: each comparison's claim is its page's takeaway)
+    claims = [p[0] for p in basis_pages(deck.with_held(slides))]          # (updated on purpose, ex49: each comparison's claim is its page's takeaway) · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert any(c.startswith("Revenue growth in the latest year (median) by layer, among layers with at least 5 companies with the figure: highest "
                             "Custom synthesis manufacturers, lowest Basic organic intermediates. p. ") for c in claims)
     assert any(c.startswith("Median ROCE by layer") or c.startswith("Revenue growth") for c in claims)
     cards = next(s for s in slides if s.title == "Key findings")
-    page = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.COMPARE_TITLE))
-    notes = [it.get("note") for b in cards.blocks if b["kind"] == "cards" for it in b["items"]]
-    assert any(f"p. {page}" in str(n) for n in notes)
+    # deck89 (changed on purpose, owner 25 Nov: no page references in the findings' tiles and lines): the page's footnote points to it once
+    notes = [p for b in cards.blocks if b["kind"] == "text" for p in b["paras"]]
+    assert any(f"Each ranking's layers, companies and rule: {deck.THEME_PAGE}" in str(n) for n in notes)          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert next(x for x in slides[0].gate["items"] if x["id"] == "sourced")["ok"]       # each claim's layers have their rows (P2)
 
 
@@ -149,7 +149,7 @@ def test_a_checked_figure_with_no_source_row_or_a_dead_reference_fails_the_gate(
     v, slides = deck_of("IN", chem_map(), chem_facts())
     view = {**v, "comparisons": v["chain"].get("basis") and [v["chain"]["basis"]] or []}
     assert not [x for x in deck.provenance_flags(slides, view) if "source row" in x["why"]]
-    for s in slides:                      # the Swan Corp row taken off the source page
+    for s in deck.with_held(slides):                      # the Swan Corp row taken off the source page (deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed))
         if s.title.startswith(deck.SOURCES_TITLE):
             for b in s.blocks:
                 if b["kind"] == "table":
@@ -173,7 +173,7 @@ def test_the_findings_cards_point_only_to_pages_the_deck_has(monkeypatch):
     monkeypatch.setattr(deck, "_refs", lambda slides: None)
     for name, v, _ in S.decks():
         slides, _ = deck.theme_plan(v)
-        titles = [s.title for s in slides]
+        titles = [s.title for s in deck.with_held(slides)]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): a reference to a record kept with the deck says it is on the theme's page
         refs = {m.group(1) for t in texts(slides).split("\n") for m in deck.REF.finditer(t)}
         assert refs and all(any(t.startswith(r) for t in titles) for r in refs), (name, sorted(r for r in refs if not any(t.startswith(r) for t in titles)))
 
@@ -182,13 +182,13 @@ def test_a_data_confidence_row_of_checked_figures_points_to_their_source_rows():
     v, slides = deck_of("IN", chem_map(), chem_facts())
     view = {**v, "comparisons": []}
     # before R48 the "Figure checks" row named its figures with no reference to their source rows
-    for s in slides:
-        if s.title == "Data confidence":
+    for s in deck.with_held(slides):          # deck89 (changed on purpose, owner 25 Nov): the checks' table is in the appendix's "Method and coverage"; deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+        if s.title.startswith(deck.RECORDS_TITLE):
             for b in s.blocks:
-                if b["kind"] == "table":
+                if b["kind"] == "table" and b["head"] == deck.CONF_HEAD:
                     b["rows"] = [r if isinstance(r, dict) or r[0] != "Net above EBITDA margin" else [r[0], r[1].split(" Each one's")[0], r[2]]
                                  for r in b["rows"]]
-    assert {"slide": "Data confidence", "text": "Net above EBITDA margin", "why": "checked figures named with no reference to their source rows",
+    assert {"slide": deck.RECORDS_TITLE, "text": "Net above EBITDA margin", "why": "checked figures named with no reference to their source rows",
             "rule": "sourced"} in deck.provenance_flags(slides, view)
     held = deck.confidence_rows({**v, "checks": {**v["checks"], "held": [{"symbol": "X", "name": "X Ltd", "key": "roce", "value": -2.0,
                                                                           "checks": ["c"], "state": D.INVALID}]}}, deck.coverage(v), deck.date(2026, 11, 13))

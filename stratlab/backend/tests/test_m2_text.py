@@ -63,7 +63,7 @@ def test_a_ranking_headline_says_which_layers_it_ranks_and_why_a_layer_beyond_it
                               {"layer": "Sponge iron makers", "why": f"fewer than {D.HEADLINE_MIN} companies with the figure"}]
     # every sentence that names a highest, lowest, fastest or slowest layer says the floor in that same sentence: cover, contents,
     # findings, the value chain's pages, the questions
-    ranked = [x for t in said(slides) for x in re.split(r"(?<=[.!?])\s+(?=[A-Z])", t) if re.search(r"\b(?:highest|lowest|fastest|slowest)\b", x)]
+    ranked = [x for t in said(deck.with_held(slides)) for x in re.split(r"(?<=[.!?])\s+(?=[A-Z])", t) if re.search(r"\b(?:highest|lowest|fastest|slowest)\b", x)]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert len(ranked) >= 6 and all(FLOOR in x for x in ranked), [x for x in ranked if FLOOR not in x]
     assert slides[0].gate["passed"] == slides[0].gate["of"] and not slides[0].gate["dropped"]
     every_rule("steel, a layer above and one below the ranking", v, slides)
@@ -72,13 +72,15 @@ def test_a_ranking_headline_says_which_layers_it_ranks_and_why_a_layer_beyond_it
 def test_the_value_chains_footnote_and_chart_agree_with_the_headline():
     v, slides = steel()
     page = next(s for s in slides if s.title == "The value chain by layer")
-    foot = " ".join(p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
+    foot = deck.page_said(deck.with_held(slides), "The value chain by layer")          # deck89 (changed on purpose, owner 25 Nov): its footnote in full in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert (f"among the layers ranked: those with {FLOOR} and one kind of business. "
             "Shown, not ranked: Aluminium smelting, a different commodity; Sponge iron makers, "
             f"fewer than {D.HEADLINE_MIN} companies with the figure.") in foot
     assert f"A median is shown for {D.COMPARE_MIN} companies or more." in foot
     assert "at least 3 companies;" not in foot                                                    # the marks' floor is the headline's, said once
-    bars = [b for s in slides if s.title.startswith(("The value chain by layer", "Median EBITDA margin by layer")) for b in s.blocks if b["kind"] == "hbars"]
+    # deck89 (changed on purpose, owner 25 Nov): the value chain's page charts its revenue by layer too; the margins' chart is the one titled so
+    bars = [b for s in slides if s.title.startswith(("The value chain by layer", "Median EBITDA margin by layer")) for b in s.blocks if b["kind"] == "hbars"
+            and str(b.get("title") or "Median").startswith("Median")]
     assert bars
     for b in bars:
         assert b["cats"] == ["Integrated steel (5)", "Mini mills (6)", "Aluminium smelting (5, not ranked)", "Sponge iron makers (3, not ranked)"]
@@ -177,9 +179,11 @@ def test_the_page_is_named_dated_company_updates_everywhere_and_takes_no_side():
     assert rows["Bare Co"][4] == "Exchange filing"                                                 # no address held: the source named, not linked
     assert [r[2] for r in t["rows"]] == sorted((r[2] for r in t["rows"]), key=lambda d: datetime.strptime(d, "%d %b %Y" if d[:2].isdigit() else "%b %Y"),
                                                 reverse=True)
-    card = next(it for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
-                if "ated company updates" in it["title"])
-    assert any("dated updates at" in ln and "each with its date, status and source" in ln for ln in card["lines"])
+    # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences; the updates' line is one of them (or, where it
+    # gives way, said in full among the appendix's notes)
+    said = [ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]]
+    said += [r[1] for r in (deck.table_with(slides, deck.NOTES_HEAD) or {}).get("rows") or [] if not isinstance(r, dict)]
+    assert any("dated updates at" in ln and "each with its date, status and source" in ln for ln in said)
     assert any("the companies' dated updates" in str(r[1]) for r in table_of(slides, "Contents")["rows"])
     words = " ".join(texts([page]).lower().split())
     for word in ("worth", "warning", "red flag", "concerning", "worrying", "good news", "bad news", "positive", "negative", "trigger", "alert"):
@@ -302,7 +306,8 @@ def test_the_smaller_layers_page_never_ends_a_description_in_an_ellipsis():
         assert cells and not any(str(c).endswith("…") for c in cells)
     src = open(deck.__file__).read()
     # r63e (updated on purpose): the smaller layers' cell is layer_cell (whole_clause, and the item of its words that says its layer)
-    assert 'layer_cell(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' in src   # LIVE6-007 passes the name (updated on purpose)
+    # deck89 (changed on purpose, owner 25 Nov: "Sub-themes" repeats the layers): no sub-themes page, so no sub-theme's detail is cut there
+    assert 'layer_cell(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' not in src   # LIVE6-007 passes the name (updated on purpose)
     assert "got = whole_clause(text, limit)" in src[src.index("def layer_cell"):src.index("def _what")]
 
 

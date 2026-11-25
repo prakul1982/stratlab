@@ -172,8 +172,16 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     # changed on purpose (R35): where a layer's page left names off, "Who is in each layer's calculations" follows it, a table too
     # changed on purpose (R46): each checked figure's source record follows them, a table too
     # changed on purpose (R48): and each comparison's basis (its metric, rule and each layer's companies), a table too
-    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.COMPARE_TITLE)) and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"]
-               for s in slides[at:])
+    # deck89 (changed on purpose, owner 25 Nov: the audit in the appendix): with "Method and coverage" (the checks, the coverage, the notes) and
+    # how the figures are built, tables too, after the companies' figures
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the printed appendix is the companies' figures and the one method page; the rest are the records kept with the deck
+    assert [s.title for s in slides[at:]][-1].startswith(deck.METHOD_TITLE) and len(slides[at:]) <= 5
+    kept_ = deck.with_held(slides)
+    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.COMPARE_TITLE, deck.METHOD_TITLE, deck.RECORDS_TITLE,
+                                   deck.NOTES_TITLE, deck.LAYER_PROFILE_TITLE))
+               and ({b["kind"] for b in s.blocks if b["kind"] != "text"} == {"table"}
+                    or s.title.startswith(deck.LAYER_PROFILE_TITLE) and {b["kind"] for b in s.blocks if b["kind"] != "text"} <= {"table", "cards"})
+               for s in kept_[at:])
     # R21: a theme with layers of its own has no exchange-industry layer beside them; a chart plots no layer median under 3
     lays = v.get("layers") or []
     if any(not x.get("official") for x in lays):
@@ -182,7 +190,9 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
         for b in s.blocks:
             if b["kind"] == "hbars" and str(b.get("title", "")).startswith("Median"):
                 for cat in b["cats"]:
-                    assert int(re.search(r"\((\d+)(?: of \d+)?\)$", cat).group(1)) >= 3, cat        # R25: "(5 of 6)" when the layer has more
+                    # deck89 (changed on purpose): the value chain's own page charts the medians now, its labels saying "not ranked" or
+                    # "adjacent" after the count (bar_marks); the count still at least 3
+                    assert int(re.search(r"\((\d+)(?: of \d+)?(?:, [^()]*)?\)$", cat).group(1)) >= 3, cat        # R25: "(5 of 6)" when the layer has more
     # no card line cut with an ellipsis
     for s in slides:
         for b in s.blocks:
@@ -228,8 +238,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     cov = deck.coverage(v)
     cover = {it[0]: it for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"]}
     # y57 (R57, PAY-9): with adjacent participants, the cover's count is said to be of the core members (updated on purpose)
-    assert cover["Core with figures" if cov.get("adjacent") else "With figures"][1] == f"{cov['n']:,}" and cov["line"] in t
-    counts = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+    assert cover["Core with figures" if cov.get("adjacent") else "With figures"][1] == f"{cov['n']:,}" and cov["line"] in texts(deck.with_held(slides))   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    counts = next(p for s in deck.held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage"
     # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
     assert counts.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, cov))}.") and cov["line"] in counts
     q = (v.get("sections") or {}).get("quarter") or {}
@@ -237,8 +247,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
         tiles = {it[0]: it for s in slides if s.title == "The latest quarter against a year earlier" for b in s.blocks if b["kind"] == "stats" for it in b["items"]}
         n_of = lambda k: (q.get(k) or {}).get("n") or (q.get(f"{k}_up", 0) + q.get(f"{k}_down", 0))      # noqa: E731
         assert tiles["Median revenue change"][2].endswith(f"of {n_of('sales')}") and tiles["Median net profit change"][2].endswith(f"of {n_of('profit')}")
-        card = next(c for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for c in b["items"] if c["title"] == "What changed")
-        said = next((x for x in card["lines"] if x.startswith("Quarter to")), None)
+        # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences (a line that gives way, in the appendix's notes)
+        said = next((x for x in deck.findings_lines(deck.with_held(slides)) if x.startswith("Quarter to")), None)      # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
         if said:
             assert f"({_count(q['sales']['n'])})" in said
             if (q.get("profit") or {}).get("n", 0) >= 3:
@@ -364,7 +374,7 @@ def test_the_operating_figures_subtitle_counts_the_companies_not_the_headings():
 # ---------- 7, 9, 10: true counts, the P/E's base, lenders' growth ----------
 def test_with_figures_means_key_figures_and_the_valuation_says_whose_pe_it_is():
     v, slides = deck_of(*sparse_theme())
-    assert v["with_figures"] == 2 and deck.coverage(v)["n"] == 2 and "9 in the exchange's industries · 2 with figures" in texts(slides)
+    assert v["with_figures"] == 2 and deck.coverage(v)["n"] == 2 and "9 in the exchange's industries · 2 with figures" in texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     note = next(p for s in slides if s.title.startswith("Every company's figures") for b in s.blocks for p in b.get("paras") or [] if "No reported figures yet" in p)
     assert "Sparse 2 Ltd, Sparse 3 Ltd" in note
     v, slides = deck_of(*us_map_theme())

@@ -166,7 +166,7 @@ def chem_facts():
 
 
 def conf_rows(slides):
-    conf = next(s for s in slides if s.title == "Data confidence")
+    conf = deck.joined(deck.with_held(slides))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     return {r[0]: r for b in conf.blocks if b["kind"] == "table" for r in b["rows"]}
 
 
@@ -179,6 +179,6 @@ def test_no_figure_on_the_data_confidence_page_is_suppressed_for_the_signs_alone
     assert "Swan Corp Ltd (6.2% net, −4.7% EBITDA)" in rows["Net above EBITDA margin"][1]
     t = texts(slides)
     assert "6.2%†" in t
-    src = next(s for s in slides if s.title.startswith(deck.SOURCES_TITLE))
+    src = next(s for s in deck.held(slides) if s.title.startswith(deck.SOURCES_TITLE))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     row = next(r for b in src.blocks if b["kind"] == "table" for r in b["rows"] if r[0].startswith("Swan Corp Ltd"))
     assert "not reconciled" in row[1] and "EBIT −205 (EBITDA, before depreciation): an operating loss, as ROCE −1% says" in row[4]

@@ -253,7 +253,7 @@ def test_the_deck_says_a_fallen_cohort_on_the_data_confidence_page_and_the_gate_
     drops = v2["checks"]["cohort"]
     assert len(hist) == 2 and drops and drops[0]["from"] - drops[0]["to"] == 5
     assert {x["symbol"] for x in drops[0]["left"]} == {c["ticker"] for c in gone} and {x["why"] for x in drops[0]["left"]} == {"way of earning not shown"}
-    page = next(s for s in slides if s.title == "Data confidence")
+    page = deck.joined(deck.with_held(slides))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     rows = [r for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
     said = next(r for r in rows if r[0] == "Since the run before")
     assert f"{drops[0]['from']} in its calculations at the run of" in said[1] and "(way of earning not shown)" in said[1]

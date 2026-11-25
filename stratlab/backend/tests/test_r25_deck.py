@@ -72,8 +72,9 @@ def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it(mo
     v = full_view()
     blocks = [block("Mining", 6, 30.0, 5), block("Cells", 4, 12.0, 3)]
     v["chain"] = D.chain_table(blocks)
-    s = next(x for x in deck.theme_plan(v)[0] if x.title == "The value chain by layer")
-    foot = " ".join(p for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    slides_ = deck.theme_plan(v)[0]
+    s = next(x for x in slides_ if x.title == "The value chain by layer")
+    foot = deck.page_said(deck.with_held(slides_), "The value chain by layer")          # deck89 (changed on purpose): its footnote in full among the appendix's notes; deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # changed on purpose (m2): one floor for the marks and the headline, said once; the floor a median is shown on beside it
     assert "among the layers ranked: those with at least 3 companies with the figure; any other layer is shown, not ranked." in foot
     assert "A median is shown for 3 companies or more." in foot
@@ -81,9 +82,10 @@ def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it(mo
     t = next(b for b in s.blocks if b["kind"] == "table")
     assert set(t["colors"].values()) == {deck.UP, deck.DOWN}
     v["chain"] = D.chain_table([block("Mining", 6, 30.0, 5), block("Cells", 4, 12.0, 2)])        # Cells under the base: nothing marked
-    s = next(x for x in deck.theme_plan(v)[0] if x.title == "The value chain by layer")
+    slides_ = deck.theme_plan(v)[0]
+    s = next(x for x in slides_ if x.title == "The value chain by layer")
     assert not next(b for b in s.blocks if b["kind"] == "table")["colors"]
-    assert "A layer is ranked only on a median of at least 3 companies with the figure" in " ".join(p for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    assert "A layer is ranked only on a median of at least 3 companies with the figure" in deck.page_said(deck.with_held(slides_), "The value chain by layer")   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
 
 
 @pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
@@ -119,7 +121,7 @@ def test_a_median_of_fewer_companies_than_its_group_reads_n_of_m_in_tables_chart
     t = next(b for b in s.blocks if b["kind"] == "table")
     row = next(r for r in t["rows"] if r[0] == "Mining")
     assert row[t["head"].index("Companies")] == "6" and row[t["head"].index("EBITDA margin")] == "30% (5 of 6)"
-    chart = next(b for b in s.blocks if b["kind"] == "hbars")
+    chart = next(b for b in s.blocks if b["kind"] == "hbars" and str(b.get("title") or "").startswith("Median"))          # deck89: the medians' chart, beside the revenue's
     assert chart["cats"] == ["Mining (5 of 6)", "Cells (3 of 4)"]
     assert "highest in Mining (30%, 5 of 6 companies) and lowest in Cells (12%, 3 of 4 companies)" in s.subtitle
     assert deck.sector_lines({"sector": {"families": {"insurer": {"n": 6, "medians": {"combined_ratio": {"n": 3, "median": 106.0}}}}}}) == \
@@ -204,15 +206,17 @@ def test_a_gap_said_beside_two_figures_is_the_difference_of_the_figures_as_print
 # ---------- 4. one page on how the figures shown are built ----------
 @pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
 def test_the_notes_page_explains_only_the_figures_the_deck_shows_with_period_source_and_limits(name, v, slides):
-    pages = [s for s in slides if s.title.startswith(deck.NOTES_TITLE)]
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the notes page is kept with the deck; the printed method page names each of its figures, one line each, in its order
+    pages = [s for s in deck.held(slides) if s.title.startswith(deck.NOTES_TITLE)]
     assert 1 <= len(pages) <= 2
-    titles = [s.title for s in slides]
-    assert titles.index(pages[0].title) == titles.index("How to read this deck") + 1
     rows = [r for s in pages for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
+    said = [x for s in slides if s.title.startswith(deck.METHOD_TITLE) for b in s.blocks if b["kind"] == "table" and b["head"][:2] == ["Figure", "What it is"]
+            for r in plain(b["rows"]) for x in r[::2] if x]          # (one figure a row beside the plain words, or two a row under them)
+    assert said == [r[0] for r in rows], (name, said)
     assert all(len(r) == 4 and all(str(c).strip() for c in r) for r in rows)
     names = [r[0] for r in rows]
     assert len(names) == len(set(names))                                                      # one row a figure (a filed figure replaces the page's own)
-    rest = [s for s in slides if not s.title.startswith(deck.NOTES_TITLE)]
+    rest = [s for s in deck.with_held(slides) if not s.title.startswith((deck.NOTES_TITLE, deck.METHOD_TITLE))]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     heads = {h for s in rest for b in s.blocks if b["kind"] == "table" for h in b["head"]}
     for nm in names:                                                                          # nothing the deck doesn't show
         assert nm in heads or any(nm in str(b.get("title") or "") or any(nm in str(r[0]) for r in plain(b.get("rows") or []) if r)
@@ -225,7 +229,8 @@ def test_the_notes_page_explains_only_the_figures_the_deck_shows_with_period_sou
 
 
 def test_each_family_gets_its_own_figures_explained_and_no_other_familys():
-    got = {name: {r[0]: r for s in sl if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the notes page read among the records kept with the deck
+    got = {name: {r[0]: r for s in deck.held(sl) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
            for name, (_, sl) in families()}
     bank, ins, us = got["banks with filed figures"], got["insurers with filed figures"], got["US software with filed figures"]
     assert {"Gross NPA", "CET1 ratio", "Credit cost", "ROA", "ROE"} <= set(bank) and "EBITDA margin" not in bank and "Solvency ratio" not in bank
@@ -235,21 +240,23 @@ def test_each_family_gets_its_own_figures_explained_and_no_other_familys():
     assert {"SBC / revenue", "FCF margin", "RPO growth", "EBITDA margin"} <= set(us) and "SEC" in us["FCF margin"][2]
     assert "CET1 ratio" not in us and "Gross NPA" not in us and "Solvency ratio" not in us
     _, plain_slides = ALL[0][1]
-    pk = {r[0] for s in plain_slides if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
+    pk = {r[0] for s in deck.held(plain_slides) if s.title.startswith(deck.NOTES_TITLE) for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])}
     assert {"Revenue", "EBITDA margin", "Net margin"} <= pk and not pk & {"Gross NPA", "CET1 ratio", "SBC / revenue", "NII / assets"}
 
 
 def test_the_contents_lists_the_notes_page_and_references_point_at_it():
     _, v, slides = EVERY[0]
     crow = plain(table_of(slides, "Contents")["rows"])
-    at = next(int(r[2]) for r in crow if r[0] == deck.NOTES_TITLE)
-    assert slides[at - 1].title.startswith(deck.NOTES_TITLE)
+    # deck89 (changed on purpose, owner 25 Nov): the page is in the appendix, which the contents' last row names ("how each figure is built")
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the printed method page says what each figure is, a line each; a reference to how a figure is built points to it
+    assert crow[-1][0] == "Appendix" and "what each figure is" in crow[-1][1]
+    at = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.METHOD_TITLE))
     assert "⟦" not in texts(slides) and f"p. {at}" in texts(slides)
 
 
 # ---------- 5. the version ----------
 def test_the_deck_version_is_27_so_kept_deck_files_are_made_again_once():
-    assert deck.THEME_DECK_VERSION == 91                     # e85 (LIVE21A, the R84 decks): deck 91 (updated on purpose); e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose); e78 (the live R76 decks): RULES 73, PLACE_CARRY[73] = 72, EARLIER_MAX 28, deck 84, dive text 44 (updated on purpose); e77 (the live R76 decks): RULES 72, PLACE_CARRY[72] = 71, EARLIER_MAX 27, deck 83, dive text 43 (updated on purpose); fix20 (the live R75 decks): RULES 71 kept, deck 82, dive text 42 (updated on purpose); r69e (R69): RULES 71, PLACE_CARRY[71] = 70, EARLIER_MAX 26, deck 81, dive text 41 (updated on purpose); r68e (R68): deck 80, dive text 40 (updated on purpose); r67e (R67): RULES 69, PLACE_CARRY[69] = 68, EARLIER_MAX 24, deck 79, dive text 39 (updated on purpose); r66e (R66): RULES 68, PLACE_CARRY[68] = 67, EARLIER_MAX 23, deck 78, dive text 38 (updated on purpose); r65e (R65): RULES 67, PLACE_CARRY[67] = 66, EARLIER_MAX 22, deck 77, dive text 37 (updated on purpose); r64e (R64): RULES 66, PLACE_CARRY[66] = 65, EARLIER_MAX 21, deck 76, dive text 36 (updated on purpose); r63e (R63): RULES 65, PLACE_CARRY[65] = 64, EARLIER_MAX 20, deck 75, dive text 35 (updated on purpose); r62 (R62): RULES 64, PLACE_CARRY[64] = 63, EARLIER_MAX 19, deck 74, dive text 34 (updated on purpose); r60 (R60): RULES 63, PLACE_CARRY[63] = 62, EARLIER_MAX 18, deck 73, dive text 33 (updated on purpose); r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose); c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped it (R25's test, updated: a new release makes kept files again)
+    assert deck.THEME_DECK_VERSION == 92                     # deck89 (changed on purpose, owner 25 Nov: the theme deck remade as research): deck 92; e85 (LIVE21A, the R84 decks): deck 91 (updated on purpose); e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose); e78 (the live R76 decks): RULES 73, PLACE_CARRY[73] = 72, EARLIER_MAX 28, deck 84, dive text 44 (updated on purpose); e77 (the live R76 decks): RULES 72, PLACE_CARRY[72] = 71, EARLIER_MAX 27, deck 83, dive text 43 (updated on purpose); fix20 (the live R75 decks): RULES 71 kept, deck 82, dive text 42 (updated on purpose); r69e (R69): RULES 71, PLACE_CARRY[71] = 70, EARLIER_MAX 26, deck 81, dive text 41 (updated on purpose); r68e (R68): deck 80, dive text 40 (updated on purpose); r67e (R67): RULES 69, PLACE_CARRY[69] = 68, EARLIER_MAX 24, deck 79, dive text 39 (updated on purpose); r66e (R66): RULES 68, PLACE_CARRY[68] = 67, EARLIER_MAX 23, deck 78, dive text 38 (updated on purpose); r65e (R65): RULES 67, PLACE_CARRY[67] = 66, EARLIER_MAX 22, deck 77, dive text 37 (updated on purpose); r64e (R64): RULES 66, PLACE_CARRY[66] = 65, EARLIER_MAX 21, deck 76, dive text 36 (updated on purpose); r63e (R63): RULES 65, PLACE_CARRY[65] = 64, EARLIER_MAX 20, deck 75, dive text 35 (updated on purpose); r62 (R62): RULES 64, PLACE_CARRY[64] = 63, EARLIER_MAX 19, deck 74, dive text 34 (updated on purpose); r60 (R60): RULES 63, PLACE_CARRY[63] = 62, EARLIER_MAX 18, deck 73, dive text 33 (updated on purpose); r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose); c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped it (R25's test, updated: a new release makes kept files again)
 
 
 # ---------- 6. the live R24 decks: a layer's columns follow its family; notes name only the families shown ----------
