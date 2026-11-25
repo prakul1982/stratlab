@@ -92,7 +92,7 @@ def test_the_chemicals_ranking_states_its_metric_company_sets_and_rule():
     # deck89 (owner 25 Nov: short footnotes): a sentence that points to a page stays on the page's short footnote; deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): it says the theme's page
     assert f"Each compared layer's companies by name, the rules and the capital figures: {deck.RECORDS}." in " ".join(p for bl in vc.blocks for p in bl.get("paras") or [])  # (changed on purpose, rel90: the figures' source lines, comparison basis and full checks are kept in StratLab's records for this deck, not on the theme's page, so the pointer says so)
     con = table(slides, "Contents")
-    assert f"are {deck.THEME_PAGE}" in next(r for r in con if r[0] == "Appendix")[1]          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the contents say the full records are there
+    assert f"are {deck.RECORDS}" in next(r for r in con if r[0] == "Appendix")[1]          # rel90 (changed on purpose, e89 merge: the held records are "in StratLab's records for this deck", deck.RECORDS, not the theme's page); deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the contents say the full records are there
     got = deck_check.check_pages(["\n".join(x for x in texts(slides).split("\n") if x != "None")])
     assert not deck_check.failed(got, strict=True), got["findings"][:3]
 
