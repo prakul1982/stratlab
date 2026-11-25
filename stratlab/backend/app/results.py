@@ -304,9 +304,85 @@ def fiscal_purpose(row: dict) -> dict:
     return {**row, "purpose": f"Quarterly results (fiscal Q{m.group(1)} {m.group(2)})"} if m else row
 
 
+EVENT_DAYS = 10                      # two sources' dates for one US company this close together are the same results (site89b)
+_SRC_RANK = {"market calendar": 0, "company data": 1, "filing": 2}
+
+
+def _same_event(a: dict, b: dict) -> bool:
+    """Whether two US rows of one company are the same results: the same quarter said the same way (the calendar's "Oct 2026" twice, or
+    the company data's fiscal "Q3 2026" twice), or, when the two can't be set side by side (the calendar's quarter-end month against the
+    company's fiscal quarter, or a filing's row with none), dates within EVENT_DAYS of each other (a company reports once a quarter)."""
+    pa, pb = a.get("period"), b.get("period")
+    if pa and pb and bool(_FISCAL_P.match(pa)) == bool(_FISCAL_P.match(pb)):
+        return pa == pb
+    try:
+        return abs((date.fromisoformat(a["date"][:10]) - date.fromisoformat(b["date"][:10])).days) <= EVENT_DAYS
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+_FISCAL_P = re.compile(r"^Q\d \d{4}$")
+
+
+def one_per_event(rows: list[dict]) -> list[dict]:
+    """site89b (US calendar duplicates): one row per US company per results. The market calendar and the company data can date the same
+    results a day or more apart (Burlington: the company data's Mon 23 Nov "fiscal Q3 2027" beside the calendar's Tue 24 Nov "quarter
+    ended Oct 2026, before the open"; Chagee and Nordic American on Thanksgiving and again on Fri 27 Nov), and the calendar itself can keep
+    a company on two days for one quarter (CrowdStrike, Oct 2026, on 23 Nov and 1 Dec); each was listed twice. The row kept: one whose
+    results are out (they came on that day; a later date for the same quarter is the date given before), then the market calendar's (it
+    names the session), then the company data's, then a filing's own; the latest date among equals (a date moved is usually put back).
+    What the others learnt (the filing, the reported numbers, the session, who was already told) carries over. India's rows are as they are
+    (the exchange lists one meeting a day per company, india_rows)."""
+    by_sym: dict[str, list[dict]] = {}
+    for r in rows:
+        if r.get("region") == "US" and r.get("symbol") and r.get("date"):
+            by_sym.setdefault(r["symbol"], []).append(r)
+    put: dict[int, dict | None] = {}             # id(row) -> the row in its place (the merged one), or None: left out
+    for group in by_sym.values():
+        if len(group) < 2:
+            continue
+        events: list[list[dict]] = []
+        for r in sorted(group, key=lambda r: r["date"]):
+            hit = next((e for e in events if any(_same_event(r, x) for x in e)), None)
+            if hit is None:
+                events.append([r])
+            else:
+                hit.append(r)
+        for e in events:
+            if len(e) == 1:
+                continue
+            keep = min(e, key=lambda r: (not (r.get("out") or r.get("reported")), _SRC_RANK.get(r.get("src"), 3), _neg_day(r["date"])))
+            merged = dict(keep)
+            for r in e:
+                if r is keep:
+                    continue
+                put[id(r)] = None
+                for f in ("out", "reported", "when", "name"):
+                    if not merged.get(f) and r.get(f):
+                        merged[f] = r[f]
+                if r.get("out") and r.get("told") is not False and merged.get("told") is False:
+                    merged["told"] = True          # already told for this results under the other date: never twice
+                if r.get("told_to"):
+                    merged["told_to"] = sorted(set(merged.get("told_to") or []) | set(r["told_to"]))
+            if merged.get("told") is True:
+                merged.pop("told_to", None)
+            put[id(keep)] = merged
+    if not put:
+        return rows
+    return [put.get(id(r), r) for r in rows if put.get(id(r), r) is not None]
+
+
+def _neg_day(iso: str) -> int:
+    try:
+        return -date.fromisoformat(iso[:10]).toordinal()
+    except ValueError:
+        return 0
+
+
 def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
-    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": [fiscal_purpose(r) for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
+    rows = [fiscal_purpose(r) for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]
+    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": one_per_event(rows) if region == "US" else rows}
 
 
 def save(region: str, rows: list[dict]):
@@ -507,6 +583,8 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
         merged = merge(old, rows, frm, today)
         if region == "IN":
             merged = without_reported(merged, load_past(region)["rows"], today, filed_since(feed))
+        else:
+            merged = one_per_event(merged)       # site89b: the two US lists' dates for one company's results are one row
         save(region, merged)
     add_past(region, merged, today)          # the days gone by stay on a company's list of earlier results days (the table's usual move)
     return {"rows": len(merged), "problems": problems}
