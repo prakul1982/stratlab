@@ -304,9 +304,85 @@ def fiscal_purpose(row: dict) -> dict:
     return {**row, "purpose": f"Quarterly results (fiscal Q{m.group(1)} {m.group(2)})"} if m else row
 
 
+EVENT_DAYS = 10                      # two sources' dates for one US company this close together are the same results (site89b)
+_SRC_RANK = {"market calendar": 0, "company data": 1, "filing": 2}
+
+
+def _same_event(a: dict, b: dict) -> bool:
+    """Whether two US rows of one company are the same results: the same quarter said the same way (the calendar's "Oct 2026" twice, or
+    the company data's fiscal "Q3 2026" twice), or, when the two can't be set side by side (the calendar's quarter-end month against the
+    company's fiscal quarter, or a filing's row with none), dates within EVENT_DAYS of each other (a company reports once a quarter)."""
+    pa, pb = a.get("period"), b.get("period")
+    if pa and pb and bool(_FISCAL_P.match(pa)) == bool(_FISCAL_P.match(pb)):
+        return pa == pb
+    try:
+        return abs((date.fromisoformat(a["date"][:10]) - date.fromisoformat(b["date"][:10])).days) <= EVENT_DAYS
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+_FISCAL_P = re.compile(r"^Q\d \d{4}$")
+
+
+def one_per_event(rows: list[dict]) -> list[dict]:
+    """site89b (US calendar duplicates): one row per US company per results. The market calendar and the company data can date the same
+    results a day or more apart (Burlington: the company data's Mon 23 Nov "fiscal Q3 2027" beside the calendar's Tue 24 Nov "quarter
+    ended Oct 2026, before the open"; Chagee and Nordic American on Thanksgiving and again on Fri 27 Nov), and the calendar itself can keep
+    a company on two days for one quarter (CrowdStrike, Oct 2026, on 23 Nov and 1 Dec); each was listed twice. The row kept: one whose
+    results are out (they came on that day; a later date for the same quarter is the date given before), then the market calendar's (it
+    names the session), then the company data's, then a filing's own; the latest date among equals (a date moved is usually put back).
+    What the others learnt (the filing, the reported numbers, the session, who was already told) carries over. India's rows are as they are
+    (the exchange lists one meeting a day per company, india_rows)."""
+    by_sym: dict[str, list[dict]] = {}
+    for r in rows:
+        if r.get("region") == "US" and r.get("symbol") and r.get("date"):
+            by_sym.setdefault(r["symbol"], []).append(r)
+    put: dict[int, dict | None] = {}             # id(row) -> the row in its place (the merged one), or None: left out
+    for group in by_sym.values():
+        if len(group) < 2:
+            continue
+        events: list[list[dict]] = []
+        for r in sorted(group, key=lambda r: r["date"]):
+            hit = next((e for e in events if any(_same_event(r, x) for x in e)), None)
+            if hit is None:
+                events.append([r])
+            else:
+                hit.append(r)
+        for e in events:
+            if len(e) == 1:
+                continue
+            keep = min(e, key=lambda r: (not (r.get("out") or r.get("reported")), _SRC_RANK.get(r.get("src"), 3), _neg_day(r["date"])))
+            merged = dict(keep)
+            for r in e:
+                if r is keep:
+                    continue
+                put[id(r)] = None
+                for f in ("out", "reported", "when", "name"):
+                    if not merged.get(f) and r.get(f):
+                        merged[f] = r[f]
+                if r.get("out") and r.get("told") is not False and merged.get("told") is False:
+                    merged["told"] = True          # already told for this results under the other date: never twice
+                if r.get("told_to"):
+                    merged["told_to"] = sorted(set(merged.get("told_to") or []) | set(r["told_to"]))
+            if merged.get("told") is True:
+                merged.pop("told_to", None)
+            put[id(keep)] = merged
+    if not put:
+        return rows
+    return [put.get(id(r), r) for r in rows if put.get(id(r), r) is not None]
+
+
+def _neg_day(iso: str) -> int:
+    try:
+        return -date.fromisoformat(iso[:10]).toordinal()
+    except ValueError:
+        return 0
+
+
 def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
-    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": [fiscal_purpose(r) for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
+    rows = [fiscal_purpose(r) for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]
+    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": one_per_event(rows) if region == "US" else rows}
 
 
 def save(region: str, rows: list[dict]):
@@ -507,6 +583,8 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
         merged = merge(old, rows, frm, today)
         if region == "IN":
             merged = without_reported(merged, load_past(region)["rows"], today, filed_since(feed))
+        else:
+            merged = one_per_event(merged)       # site89b: the two US lists' dates for one company's results are one row
         save(region, merged)
     add_past(region, merged, today)          # the days gone by stay on a company's list of earlier results days (the table's usual move)
     return {"rows": len(merged), "problems": problems}
@@ -1080,14 +1158,48 @@ def _plain(r: dict) -> bool:
     return bool(PLAIN_RESULTS.match(str(r.get("purpose") or "").strip()))
 
 
-def _moves_of(region: str, symbol: str, store: dict) -> dict | None:
+RESULTS_GAP = 30                     # results days of one company this close together are one results (a meeting put off, two sources' dates)
+MIN_USUAL = 2                        # earlier results days a "usual move" needs: one day's move is that day's, not a usual one
+
+
+def one_per_results(days) -> list[str]:
+    """site89b: a company's results days, newest first, one per results: days within RESULTS_GAP of a later kept one are the same results
+    (SETCO's 29 and 31 Aug, Simbhaoli's 12 and 26 Aug, a US company's results dated a day apart by two sources) and counted once, under
+    the later day (a meeting put off is held on its new date)."""
+    out: list[str] = []
+    for d in sorted({x for x in days or [] if isinstance(x, str) and len(x) >= 10}, reverse=True):
+        try:
+            if out and (date.fromisoformat(out[-1][:10]) - date.fromisoformat(d[:10])).days <= RESULTS_GAP:
+                continue
+        except ValueError:
+            continue
+        out.append(d)
+    return out
+
+
+def _near(d: str, anchors) -> bool:
+    try:
+        x = date.fromisoformat(d[:10])
+        return any(abs((x - date.fromisoformat(a[:10])).days) <= RESULTS_GAP for a in anchors or [])
+    except ValueError:
+        return False
+
+
+def _moves_of(region: str, symbol: str, store: dict, own=()) -> dict | None:
+    """The company's usual move on a results day: the average size of its moves over its earlier results days (one per results), with
+    the days it stands on. site89b ("Usual move" checked): `own` are the dates of the results the row itself is for, left out (BURL's
+    row for 24 Nov said "±0.4%", its own results' move under the company data's date of 23 Nov, and NVDA's "±3.3%" was its 17 Nov move
+    alone: a US company had only its latest results day kept); fewer than MIN_USUAL earlier days is no usual move."""
     got = (store.get("rows") or {}).get(symbol)
     if not got or not got.get("moves"):
         return None
-    pcts = [m[1] for m in got["moves"] if isinstance(m, list) and len(m) == 2 and isinstance(m[1], (int, float))]
-    if not pcts:
+    kept = {m[0]: m[1] for m in got["moves"] if isinstance(m, list) and len(m) == 2 and plausible_move(m[1]) and isinstance(m[0], str)}
+    days = [d for d in one_per_results(kept) if not _near(d, own)][:PAST_KEEP]
+    if len(days) < MIN_USUAL:
         return None
-    return {"avg": round(sum(abs(x) for x in pcts) / len(pcts), 1), "n": len(pcts), "last": pcts[:4], "dates": [m[0] for m in got["moves"]][:4]}
+    pcts = [kept[d] for d in days]
+    return {"avg": round(sum(abs(x) for x in pcts) / len(pcts), 1), "n": len(pcts), "last": pcts[:4], "dates": days,
+            "basis": "close before the results day to the close of the session after it"}
 
 
 def _today_dates(day: str | None, today: date) -> str | None:
@@ -1124,10 +1236,11 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
     first, last = week_of(today)[0], week_of(today)[0] + timedelta(days=13)
 
     def rich(r: dict) -> dict:
-        out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv),
+        out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv, (r["date"],)),
                # LIVE20A-006: how many earlier results days are kept for the company: with none it can have no usual move, and the page knows
-               # that from the first frame (the US column stood 10 s with "–" on every row while each was asked for)
-               **({"mv_days": len(past.get(r["symbol"]) or [])} if past is not None else {})}
+               # that from the first frame (the US column stood 10 s with "–" on every row while each was asked for). site89b: one per
+               # results, the row's own left out
+               **({"mv_days": len([d for d in one_per_results(past.get(r["symbol"])) if not _near(d, (r["date"],))])} if past is not None else {})}
         if region == "US" and (r.get("out") or {}).get("numbers"):
             # LIVE16A-005: a foreign filer's stored figures (stored as dollars before) in the currency it reports in, the dollars beside them
             out["out"] = {**r["out"], "numbers": in_currency(r["out"]["numbers"], *_report_currency(r["symbol"], ctx.snaps))}
@@ -1219,13 +1332,17 @@ MOVES_BUDGET = 8.0                   # seconds one request spends reading price 
 IMPLIED_BUDGET = 8.0                 # the same for the option chains of one request
 MAX_PAST = 4000                      # companies in either store
 HISTORY_DAYS = 500                   # days of daily prices read for a company's moves
-_hist = {"fn": None, "options": None, "options_many": None}
+_hist = {"fn": None, "options": None, "options_many": None, "filed": None}
+FILED_PER_ASK = 6                    # US companies whose earnings releases (the SEC's filing list) one request reads for their results days
+_filed_asked: dict = {}              # symbol -> the day its filing list was last read for its results days (once a day each)
 
 
-def setup(history=None, options=None, options_many=None):
+def setup(history=None, options=None, options_many=None, filed=None):
     """Where the daily prices (region, symbol, days) and a stock's option chain (symbol, expiry) come from: main.py's readers, or a test's.
-    `options_many` (symbols, day) -> {symbol: implied move or None} reads several stocks at once, where given."""
-    _hist["fn"], _hist["options"], _hist["options_many"] = history, options, options_many
+    `options_many` (symbols, day) -> {symbol: implied move or None} reads several stocks at once, where given. `filed` (symbol) -> the
+    ISO days a US company filed its earnings releases (8-K, item 2.02) with the SEC: its earlier results days (site89b)."""
+    _hist["fn"], _hist["options"], _hist["options_many"], _hist["filed"] = history, options, options_many, filed
+    _filed_asked.clear()
     if _implied is not None:
         _implied.clear()                     # the implied moves kept were read from the sources set before
 
@@ -1246,9 +1363,10 @@ def add_past(region: str, rows: list[dict], today: date) -> int:
                 continue
             ds = have.get(r["symbol"]) or []
             if r["date"] not in ds:
-                ds = sorted(set(ds) | {r["date"]}, reverse=True)[:PAST_KEEP]
-                have[r["symbol"]] = ds
-                new += 1
+                got = one_per_results(set(ds) | {r["date"]})[:PAST_KEEP]       # site89b: one day per results
+                if got != ds:
+                    have[r["symbol"]] = got
+                    new += 1
         if new:
             if len(have) > MAX_PAST:
                 for s in sorted(have, key=lambda s: have[s][0])[: len(have) - MAX_PAST]:
@@ -1294,9 +1412,15 @@ def reaction(bars: list[dict], day: date) -> float | None:
     after = [c for d, c in seen if d > day.isoformat()]
     on = [c for d, c in seen if d == day.isoformat()]
     end = after[0] if after else (on[0] if on else None)
-    if not before or end is None or before[-1] <= 0:
+    if not before or end is None or before[-1] <= 0 or not plausible_move((end / before[-1] - 1) * 100):
         return None
     return round((end / before[-1] - 1) * 100, 2)
+
+
+def plausible_move(pct) -> bool:
+    """site89b: a change over a results day of half or less, or double or more, is a change of the price's basis (a split or a reverse split
+    in the daily prices: Vicarious Surgical's "usual move" read ±900.0% from a 1-for-10 reverse split), not what the results did."""
+    return isinstance(pct, (int, float)) and -50 < pct < 100
 
 
 SINCE_DAYS = 7                       # a results day this recent has "since the results" beside it
@@ -1340,17 +1464,24 @@ def moves_for(region: str, symbols: list[str], today: date | None = None, pendin
     if _since is None:
         _since = TTLCache(max_items=500, max_bytes=1024 * 1024)
     today = today or local_today(region)
+    uniq = list(dict.fromkeys(symbols))
+    start = time.monotonic()
+    budget = MOVES_BUDGET if budget is None else budget
+    if region == "US":
+        _filed_days(uniq, today, start, budget)
     past = load_past(region)["rows"]
     store = load_moves(region)
     rows = store["rows"]
-    uniq = list(dict.fromkeys(symbols))
     events = {s: recent_event(region, s, today) for s in uniq}
+    # site89b: the dates of each company's results on the calendar now are its own results, never part of its usual move
+    own: dict[str, list[str]] = {}
+    for r in load(region)["rows"]:
+        if r.get("symbol") in events:
+            own.setdefault(r["symbol"], []).append(r["date"])
     stale = lambda s: not rows.get(s) or rows[s].get("dates") != past[s] or (rows[s].get("failed") and rows[s].get("at") != today.isoformat())  # noqa: E731
     todo = [s for s in uniq if (past.get(s) and stale(s)) or (events[s] and _since.get((region, s, events[s])) is None)]
     read = _hist.get("fn")
     done, changed = 0, False
-    start = time.monotonic()
-    budget = MOVES_BUDGET if budget is None else budget
     for i, s in enumerate(todo):
         if read is None:
             break
@@ -1391,9 +1522,37 @@ def moves_for(region: str, symbols: list[str], today: date | None = None, pendin
     out: dict[str, dict | None] = {}
     for s in uniq:
         got = (_since.get((region, s, events[s])) or {}).get("pct") if events[s] else None
-        mv = _moves_of(region, s, {"rows": rows})
+        mv = _moves_of(region, s, {"rows": rows}, [*own.get(s, []), *([events[s]] if events[s] else [])])
         out[s] = {"moves": mv, "since": {"date": events[s], "pct": got} if got is not None else None} if (mv or got is not None) else None
     return out
+
+
+def _filed_days(symbols: list[str], today: date, start: float, budget: float) -> None:
+    """site89b: a US company's earlier results days from its earnings releases on the SEC's filing list (8-K, item 2.02, the day the
+    results came out), for one with fewer than PAST_KEEP kept: the US company data's past calendar came back empty, so a US company had
+    only its latest results day and its "usual move" was that one day's move. At most FILED_PER_ASK companies a request, each once a day."""
+    read = _hist.get("filed")
+    if read is None:
+        return
+    past = load_past("US")["rows"]
+    asked = 0
+    for s in symbols:
+        if asked >= FILED_PER_ASK or (asked and time.monotonic() - start > budget / 2):
+            break
+        if _filed_asked.get(s) == today.isoformat() or len(one_per_results(past.get(s))) >= PAST_KEEP:
+            continue
+        asked += 1
+        _filed_asked[s] = today.isoformat()
+        if len(_filed_asked) > MAX_PAST:
+            _filed_asked.pop(next(iter(_filed_asked)))
+        try:
+            days = [d for d in read(s) or [] if isinstance(d, str) and d[:10] < today.isoformat()
+                    and d[:10] >= (today - timedelta(days=PAST_BACK_DAYS)).isoformat()]
+        except Exception as e:                   # a company the SEC doesn't have (a foreign filer) or a busy source: its calendar days stay
+            print("results days from filings:", s, str(e)[:100])
+            continue
+        if days:
+            add_past("US", [{"symbol": s, "date": d[:10]} for d in days], today)
 
 
 IMPLIED_FRESH = 300.0                # seconds an implied move is served as it is; older, it is served at once and read again behind it

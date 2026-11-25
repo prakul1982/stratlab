@@ -44,6 +44,7 @@ SEEN_DAYS = 12
 UPCOMING_DAYS = 30                     # the page's "coming up" window
 PAST_DAYS = 21                         # ...and its "held" window
 MAX_ROWS = 400                         # rows in one answer
+PAGE = 50                              # rows in one page of the Earnings calls list (site89b: the rest load as the reader scrolls)
 NOTE = {
     "IN": "From the companies' own filings with the exchange: each notice's date, time and zone as filed, and only links the "
           "filings carry. After a call, its transcript, recording or presentation once a later filing has it. Not advice.",
@@ -584,12 +585,14 @@ def held_today(r: dict, today: date, now: datetime) -> bool:
 
 
 def view(region: str, scope: str = "all", mine: set[str] | None = None, when: str = "upcoming", kind: str = "all", q: str = "",
-         today: date | None = None, limit: int = MAX_ROWS, full: bool = True, now: datetime | None = None) -> dict:
+         today: date | None = None, limit: int = MAX_ROWS, full: bool = True, now: datetime | None = None, offset: int = 0) -> dict:
     """The calendar's rows: `when` "upcoming" (today to UPCOMING_DAYS ahead, soonest first) or "past" (the last PAST_DAYS,
     latest first, with what was filed after); `kind` "call", "meet" or "all"; `mine` the person's stocks (scope "mine").
     Without `full` (a plan without the full calendar): this week's rows only (to Sunday), each with its notice and webcast
-    or dial-in link, and none of what was filed after a call."""
+    or dial-in link, and none of what was filed after a call. `offset`, `limit`: the page of the rows asked for (site89b: the page reads
+    the list a page at a time as the reader scrolls, never every row at once); `more` is how many come after this page."""
     region = "US" if region == "US" else "IN"
+    offset = max(0, int(offset or 0))
     today = today or datetime.now(ZoneInfo("America/New_York") if region == "US" else IST).date()
     past = when == "past" and full
     frm, to = (today - timedelta(days=PAST_DAYS), today - timedelta(days=1)) if past else (today, today + timedelta(days=UPCOMING_DAYS))
@@ -626,7 +629,7 @@ def view(region: str, scope: str = "all", mine: set[str] | None = None, when: st
     at = st.get("at") if region == "IN" else results.load("US").get("at")
     return {"region": region, "scope": "mine" if scope == "mine" else "all", "when": "past" if past else "upcoming", "kind": kind,
             "today": today.isoformat(), "from": frm.isoformat(), "to": to.isoformat(), "updated_at": at, "matching": len(rows),
-            "rows": rows[:limit], "more": max(0, len(rows) - limit), "counts": counts, "note": NOTE[region],
+            "rows": rows[offset:offset + limit], "offset": offset, "more": max(0, len(rows) - offset - limit), "counts": counts, "note": NOTE[region],
             "pending": region == "IN" and not st.get("through"), "full": full}
 
 

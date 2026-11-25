@@ -87,7 +87,8 @@ def test_a_chart_s_names_are_whole_on_their_lines():
     names = ["Northfield Life Insurance Corporation Of India", "Harbour Prudential Life Insurance Company Limited", "Kestrel Life",
              "Stonebridge Life Insurance Company Limited", "Canal General Insurance Company Ltd", "Maxwell Financial Services Ltd"]
     lw, labels, size = deck.hbar_labels(names, 3.5, 3.4)
-    assert lw <= 3.5 * 0.45 + 1e-6 and size in (BODY_MIN, 10)
+    # deck89 (changed on purpose, owner 25 Nov: text never under 11 pt): the names' column may take up to 55% of the chart, never a smaller type
+    assert lw <= 3.5 * 0.55 + 1e-6 and size == BODY_MIN
     assert not any(ls[-1].endswith("…") for ls in labels), labels
     assert all(deck._width(ln, size) <= lw - 0.12 + 0.01 for ls in labels for ln in ls)
     cols, fs = deck.column_labels(LAYERS, CW - 0.75, 11)
@@ -239,7 +240,8 @@ def test_a_wide_value_chain_table_keeps_the_full_width_and_its_chart_follows_on_
     own = [s for s in slides if s.title.startswith("Median ") and s.title.endswith(" by layer") and any(b["kind"] == "hbars" for b in s.blocks)]
     for s in pages:
         t = next(b for b in s.blocks if b["kind"] == "table")
-        beside = [b for b in s.blocks if b["kind"] in ("hbars", "columns")]
+        # deck89 (changed on purpose): a chart may sit under a wide table, never beside it
+        beside = [b for b in s.blocks if b["kind"] in ("hbars", "columns") and b["box"][1] < t["box"][1] + t["box"][3] - 0.01]
         assert not (len(t["head"]) > 5 and beside), (name, t["head"])                            # no chart pressed beside a wide table
         assert len(t["head"]) <= 5 or abs(t["box"][2] - CW) < 1e-6
     if own:
@@ -252,28 +254,44 @@ def test_a_wide_value_chain_table_keeps_the_full_width_and_its_chart_follows_on_
             r = rows[cat.rsplit(" (", 1)[0]]
             assert (r.get(f"{key}_n") or 0) >= deck.MIN_BASE and r.get(key) is not None, cat
         assert any(b["kind"] == "text" and "every layer is in the table before this page" in b["paras"][0] for b in own[0].blocks)
+    # deck89 (moved on purpose): the layers' median chart is on the value chain's page now; each bar still a layer on a median of MIN_BASE
+    # companies or more
+    rows = {r["layer"]: r for r in v["chain"]["rows"]}
+    for b in [b for s in pages for b in s.blocks if b["kind"] == "hbars" and str(b.get("title") or "").startswith("Median ")]:
+        key = "roe" if "ROE" in b["title"] else "ebitda"
+        assert len(b["cats"]) >= 2 and len(b["cats"]) == len(b["vals"])
+        for cat in b["cats"]:
+            r = rows[cat.rsplit(" (", 1)[0]]
+            assert (r.get(f"{key}_n") or 0) >= deck.MIN_BASE and r.get(key) is not None, cat
     side = [s for s in slides if s.title.startswith("Layers side by side")]
     for s in side:
         t = next(b for b in s.blocks if b["kind"] == "table")
-        assert not (len(t["head"]) > 5 and any(b["kind"] == "columns" for b in s.blocks)), name
+        assert not (len(t["head"]) > 5 and any(b["kind"] == "columns" and b["box"][1] < t["box"][1] + t["box"][3] - 0.01 for b in s.blocks)), name
     cols = [s for s in slides if s.title.startswith("Median ") and any(b["kind"] == "columns" for b in s.blocks)]
     assert len(own) + len(cols) <= 1                                                             # one page charting the layers' medians, not two
     for s in cols:
         assert titles.index(s.title) == titles.index(side[-1].title) + 1 and abs(next(b for b in s.blocks if b["kind"] == "columns")["box"][2] - CW) < 1e-6
 
 
-def test_some_synthetic_deck_has_each_kind_of_chart_page_and_one_has_none():
-    own = [n for n, _, sl in ALL27 if any(s.title.startswith("Median ") and any(b["kind"] == "hbars" for b in s.blocks) for s in sl)]
-    cols = [n for n, _, sl in ALL27 if any(s.title.startswith("Median ") and any(b["kind"] == "columns" for b in s.blocks) for s in sl)]
-    none = [n for n, _, sl in ALL27 if not any(s.title.startswith("Median ") for s in sl)]
+# deck89 (changed on purpose, owner 25 Nov: no page of one chart, a chart on most pages): the layers' median margin is charted on the value
+# chain's own page (beside its revenue by layer) and their medians side by side under the "Layers side by side" table, never on a page alone
+def _median_chart(sl, kind):
+    return any(b["kind"] == kind and str(b.get("title") or "").startswith("Median ") for s in sl for b in s.blocks)
+
+
+def test_some_synthetic_deck_has_each_kind_of_median_chart_and_one_has_none():
+    own = [n for n, _, sl in ALL27 if _median_chart(sl, "hbars")]
+    cols = [n for n, _, sl in ALL27 if _median_chart(sl, "columns")]
+    none = [n for n, _, sl in ALL27 if not _median_chart(sl, "hbars") and not _median_chart(sl, "columns")]
     assert own and cols and none, (own, cols, none)
+    assert not any(s.title.startswith("Median ") for _, _, sl in ALL27 for s in sl)               # no page of one chart
 
 
-def test_fewer_than_two_layers_on_enough_companies_get_no_chart_page():
-    name, v, _ = next(x for x in ALL27 if any(s.title == "Median EBITDA margin by layer" for s in x[2]))
+def test_fewer_than_two_layers_on_enough_companies_get_no_median_chart():
+    name, v, _ = next(x for x in ALL27 if _median_chart(x[2], "hbars"))
     v2 = {**v, "chain": {**v["chain"], "rows": [{**r, "ebitda_n": 2 if i else r.get("ebitda_n")} for i, r in enumerate(v["chain"]["rows"])]}}
     slides = deck.theme_plan(v2)[0]
-    assert not any(s.title == "Median EBITDA margin by layer" for s in slides)
+    assert not any(b["kind"] == "hbars" and str(b.get("title") or "").startswith("Median EBITDA") for s in slides for b in s.blocks)
 
 
 # ---------- what the layout check found on the way ----------
@@ -299,6 +317,15 @@ def test_every_synthetic_deck_with_a_line_chart_is_made_as_a_pdf():
         if any(b["kind"] == "lines" and len(deck.drawn_lines(b)["series"]) < len(b["series"]) for s in slides for b in s.blocks):
             assert deck._render(slides, "foot", name, pdf=True)[:5] == b"%PDF-", name
             done += 1
+    # deck89 (changed on purpose, owner 25 Nov): a layer's chart is its companies' market value now, so its margins by year (with a series of
+    # no points) are drawn only for a layer with no market value; such a page is added to a synthetic deck, which must still be made
+    if not done:
+        name, v, slides = ALL27[0]
+        extra = Slide("Layer 9 · Margins only", "x")
+        extra.add("lines", (M, TOP, 6.0, 3.0), title="Margins by year, the same 3 companies", cats=["Mar 2024", "Mar 2025", "Mar 2026"],
+                  series=[("EBITDA margin", [8.2, 7.6, 7.0], deck.BLUE), ("Net margin", [None, None, None], deck.ORANGE)], fmt="pct", labels=True)
+        assert deck._render(slides + [extra], "foot", name, pdf=True)[:5] == b"%PDF-", name
+        done += 1
     assert done >= 1
 
 
@@ -314,4 +341,4 @@ def test_the_page_of_what_moved_the_margin_keeps_its_total_row_whatever_the_name
 
 
 def test_the_deck_version_is_44_so_kept_files_are_made_again():
-    assert deck.THEME_DECK_VERSION == 91          # e85 (LIVE21A, the R84 decks): deck 91 (updated on purpose); e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose); e78 (the live R76 decks): RULES 73, PLACE_CARRY[73] = 72, EARLIER_MAX 28, deck 84, dive text 44 (updated on purpose); e77 (the live R76 decks): RULES 72, PLACE_CARRY[72] = 71, EARLIER_MAX 27, deck 83, dive text 43 (updated on purpose); fix20 (the live R75 decks): deck 82, dive text 42 (updated on purpose); r69e (R69): RULES 71, PLACE_CARRY[71] = 70, EARLIER_MAX 26, deck 81, dive text 41 (updated on purpose); r68e (R68): deck 80, dive text 40 (updated on purpose); r67e (R67): RULES 69, PLACE_CARRY[69] = 68, EARLIER_MAX 24, deck 79, dive text 39 (updated on purpose); r66e (R66): RULES 68, PLACE_CARRY[68] = 67, EARLIER_MAX 23, deck 78, dive text 38 (updated on purpose); r65e (R65): RULES 67, PLACE_CARRY[67] = 66, EARLIER_MAX 22, deck 77, dive text 37 (updated on purpose); r64e (R64): RULES 66, PLACE_CARRY[66] = 65, EARLIER_MAX 21, deck 76, dive text 36 (updated on purpose); r63e (R63): RULES 65, PLACE_CARRY[65] = 64, EARLIER_MAX 20, deck 75, dive text 35 (updated on purpose); r62 (R62): RULES 64, PLACE_CARRY[64] = 63, EARLIER_MAX 19, deck 74, dive text 34 (updated on purpose); r60 (R60): RULES 63, PLACE_CARRY[63] = 62, EARLIER_MAX 18, deck 73, dive text 33 (updated on purpose); r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose); c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 92          # deck89 (changed on purpose, owner 25 Nov: the theme deck remade as research): deck 92; e85 (LIVE21A, the R84 decks): deck 91 (updated on purpose); e84 (LIVE20A, the R82 decks): RULES 79, PLACE_CARRY[79] = 78, EARLIER_MAX 34, deck 90, dive text 50, blog GEN 12 (updated on purpose); e83 (LIVE19A, the R81 decks): RULES 78, PLACE_CARRY[78] = 77, EARLIER_MAX 33, deck 89, dive text 49, blog GEN 11 (updated on purpose); e82 (LIVE18A, the R80 decks): RULES 77, PLACE_CARRY[77] = 76, EARLIER_MAX 32, deck 88, dive text 48 (updated on purpose); e81 (LIVE17A, the R79 decks): RULES 76, PLACE_CARRY[76] = 75, EARLIER_MAX 31, deck 87, dive text 47 (updated on purpose); e80 (LIVE16A, the R78 decks): RULES 75, PLACE_CARRY[75] = 74, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose); e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose); e78 (the live R76 decks): RULES 73, PLACE_CARRY[73] = 72, EARLIER_MAX 28, deck 84, dive text 44 (updated on purpose); e77 (the live R76 decks): RULES 72, PLACE_CARRY[72] = 71, EARLIER_MAX 27, deck 83, dive text 43 (updated on purpose); fix20 (the live R75 decks): deck 82, dive text 42 (updated on purpose); r69e (R69): RULES 71, PLACE_CARRY[71] = 70, EARLIER_MAX 26, deck 81, dive text 41 (updated on purpose); r68e (R68): deck 80, dive text 40 (updated on purpose); r67e (R67): RULES 69, PLACE_CARRY[69] = 68, EARLIER_MAX 24, deck 79, dive text 39 (updated on purpose); r66e (R66): RULES 68, PLACE_CARRY[68] = 67, EARLIER_MAX 23, deck 78, dive text 38 (updated on purpose); r65e (R65): RULES 67, PLACE_CARRY[67] = 66, EARLIER_MAX 22, deck 77, dive text 37 (updated on purpose); r64e (R64): RULES 66, PLACE_CARRY[66] = 65, EARLIER_MAX 21, deck 76, dive text 36 (updated on purpose); r63e (R63): RULES 65, PLACE_CARRY[65] = 64, EARLIER_MAX 20, deck 75, dive text 35 (updated on purpose); r62 (R62): RULES 64, PLACE_CARRY[64] = 63, EARLIER_MAX 19, deck 74, dive text 34 (updated on purpose); r60 (R60): RULES 63, PLACE_CARRY[63] = 62, EARLIER_MAX 18, deck 73, dive text 33 (updated on purpose); r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose); c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)

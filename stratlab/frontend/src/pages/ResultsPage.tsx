@@ -16,6 +16,7 @@ import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
 import { capAt, laterDays, movesEmpty, purposeShown, quarterLabel, reportedQuarter, whenShort } from "../lib/resultsRows";
+import { usualTitle } from "../lib/usualMove";
 import { resultDay } from "../lib/resultDay";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
@@ -37,7 +38,8 @@ function capCell(r: ResultRow, live: number | null | undefined, fmt: (v: number)
 
 /** `currency`: a foreign filer's figure, in the currency it reports in with its dollar figure beside it (LIVE16A-005) */
 interface ResultNumber { label: string; value: string; currency?: string }
-export interface Moves { avg: number; n: number; last: number[]; dates: string[] }
+/** site89b: `dates` are every earlier results day the figure stands on (newest first), `basis` how each day's move is measured */
+export interface Moves { avg: number; n: number; last: number[]; dates: string[]; basis?: string }
 /** `unreported` (LIVE15A-010): the latest quarter kept is older than the one this day reports and the one before it, so no growth is shown */
 interface Quarter { sales: number | null; profit: number | null; of: string | null; unreported?: boolean }
 export interface ResultRow {
@@ -279,14 +281,16 @@ export function ResultsPage() {
     { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} />, csv: (r) => r.q?.sales ?? null },
     { key: "pat", header: "Profit", csvHeader: "Profit YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} />, csv: (r) => r.q?.profit ?? null },
     // LIVE10A-020: no row with a past results-day move once every row's read is back (US: "–" on every row): no column for it
-    ...(mvEmpty ? [] : [{ key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
+    ...(mvEmpty ? [] : [{ key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six, at least two; the results this row is for are left out, and two dates of one results count once), from its daily prices. The figure is their average size, with how many results days it stands on; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
       const a = moves[r.symbol], m = a?.moves ?? r.moves;
       const since = a?.since;
       if (!m && !since) return a === undefined ? <Working inline label="Reading earlier results days" /> : <span className="k-muted">–</span>;
       return (
         <span className="res-mv">
           <span className="res-mv-top">
-            {m ? <b>±{m.avg.toFixed(1)}%</b> : <span className="k-muted">–</span>}
+            {/* site89b: the figure says what it stands on: how many earlier results days, and (on hover) which ones and how each is measured */}
+            {m ? <b title={usualTitle(m)}>±{m.avg.toFixed(1)}%</b> : <span className="k-muted">–</span>}
+            {m && <span className="k-note k-muted" data-testid="res-mv-n">{m.n} results day{m.n === 1 ? "" : "s"}</span>}
             {since && <span className="k-note k-muted" title={`Since the results of ${resultDay(since.date)}, close to latest close`}>since {resultDay(since.date)} <Move v={since.pct} /></span>}
           </span>
           {/* LIVE9A-028: a space between the latest moves, so two flat ones never read as "0.00.0" */}

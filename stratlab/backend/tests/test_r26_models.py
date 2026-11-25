@@ -149,7 +149,7 @@ def test_a_layer_resting_on_under_half_its_companies_says_so_plainly_in_the_deck
     assert deck.layer_common({"model": {"line": "They earn mainly from x.", "known": 3, "of": 4}}) == "In common: they earn mainly from x."
     m = {**m, "value_chain": vc}
     v, slides = deck_of(region, m, f)
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert mid["model"]["line"] in t
     page = next(s for s in slides if s.title.startswith("Layer ") and "Cloud" in s.title)
     lines = [x for b in page.blocks if b["kind"] == "cards" for it in b["items"] for x in it["lines"]]

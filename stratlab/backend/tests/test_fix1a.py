@@ -131,7 +131,9 @@ def test_the_company_directory_names_both_markets_and_carries_structured_data():
     """LIVE1A-065/066: /stocks' description read "listed in US" (a loop overwrote the page's own wording), and the page had no JSON-LD."""
     from app import stock_pages
     page = stock_pages.index_page(None, "")
-    assert 'content="Find any company listed in India or the US: price, results, margins, debt and filings, from reported data."' in page
+    # (changed on purpose, site89b honest coverage counts: "any company listed" became the number of companies that have a page)
+    n_in, n_us = len(stock_pages.companies("IN")), len(stock_pages.companies("US"))
+    assert f'content="Find a company among the {n_in:,} companies listed in India and {n_us:,} in the US: price, results, margins, debt and filings, from reported data."' in page
     assert "application/ld+json" in page and "BreadcrumbList" in page
     assert "listed in US:" not in page
     # a search stays out of the index and carries none

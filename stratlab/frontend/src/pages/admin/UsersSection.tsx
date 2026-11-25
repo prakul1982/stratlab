@@ -7,7 +7,14 @@ import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState
 import { endsAt } from "../../lib/offer";
 import { useAdmin } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
-import { PLAN_FILTERS, PLAN_NAME, monthShort, planNote, untilWords, usersPath, type PlanFilter, type UserRow } from "./users";
+import { PLAN_FILTERS, PLAN_NAME, PLAN_RANK, monthShort, planNote, untilWords, usersPath, type PlanFilter, type UserRow } from "./users";
+
+/** An address that breaks after its "@" when its column is narrow, never inside a word ("load59@example .com", admin90). */
+export function Email({ value }: { value: string | null | undefined }) {
+  if (!value) return <>–</>;
+  const at = value.indexOf("@");
+  return <span className="adm-email">{at > 0 ? <>{value.slice(0, at)}<wbr />{value.slice(at)}</> : value}</span>;
+}
 
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null; currency?: string | null }
 
@@ -19,8 +26,17 @@ type AccountsView = { orphans: { id: string; email: string | null; created_at: s
 /** Beside the users (DJ-010, DJ-011): accounts that signed in but have no profile here, so they appear nowhere else, and
  * plans given by hand that end within a week or ended in the last one. Read only. */
 function AccountsCard({ test }: { test: boolean }) {
-  const { fail } = useApp();
+  const { fail, notify } = useApp();
+  const { ov, reload } = useAdmin();
   const [v, setV] = useState<AccountsView | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const stray = ov?.stats.stray_profiles ?? 0;
+  const removeStray = async () => {
+    setBusy(true);
+    try { const r = await api<{ removed: number }>("/admin/stray-profiles/remove", { method: "POST" }); notify(`Removed ${r.removed} stray profile row${r.removed === 1 ? "" : "s"}.`); setRemoving(false); await reload(); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  };
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); api<AccountsView>(`/admin/accounts${test ? "?test=1" : ""}`).then(setV).catch((e) => { setFailed(true); fail(e); }); }, [fail, test]);
   if (!v) return <Card label="Plans ending and sign-ins without a profile">{failed ? <ErrorState title="These couldn't be read" /> : <Skeleton label="Loading" lines={2} />}</Card>;
@@ -39,6 +55,16 @@ function AccountsCard({ test }: { test: boolean }) {
           <ul className="k-small adm-list">{v.orphans.map((o) => (
             <li key={o.id}><b>{o.email ?? o.id}</b> · made {dateOnly(o.created_at)}{o.last_sign_in ? ` · last signed in ${ago(o.last_sign_in)}` : " · never signed in"}</li>))}</ul>
         )}
+      {/* admin90: profile rows no sign-in account has (a settings key's tail taken for a user id), already left out of every count */}
+      {stray > 0 && <>
+        <h3 className="adm-sub">Stray profile rows ({stray})</h3>
+        <div className="k-spread" data-testid="stray-profiles">
+          <span className="k-small k-muted">Rows made by a background job for a key that isn't a user. They have no sign-in, plan or data, and are left out of every count.</span>
+          <button type="button" className="btn quiet sm" onClick={() => setRemoving(true)}>Remove them</button>
+        </div>
+      </>}
+      {removing && <ConfirmDialog title={`Remove ${stray} stray profile row${stray === 1 ? "" : "s"}?`} confirmLabel="Remove" busy={busy} onConfirm={removeStray} onClose={() => setRemoving(false)}>
+        Only rows whose id isn't a sign-in account's are removed. No user, plan or data is touched.</ConfirmDialog>}
     </Card>
   );
 }
@@ -124,7 +150,6 @@ export function UsersSection() {
   const [promoDays, setPromoDays] = useState("10");
   const [busy, setBusy] = useState(false);
   const more = useMoreColumns("admin-users", 2);      // invite counts: one click away, so the users table fits a laptop
-  const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: "joined", desc: true });
 
   const seq = useRef(0);       // the answer to the last search or filter is the one shown, whatever order they come in
   const loadUsers = useCallback(async (query: string, on: PlanFilter) => {
@@ -158,13 +183,14 @@ export function UsersSection() {
   const mon = monthShort();
   const cols: Column<UserRow>[] = [
     // a long address breaks inside its cell, so the ⋯ button stays in view at 1280 on any font (site83 CI)
-    { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => <><span className="adm-break">{u.email ?? "–"}</span>{u.test && <> <Badge dot={false}>Test</Badge></>}</> },
+    { key: "email", header: "Email", rowHeader: true, wrap: true, sortValue: (u) => u.email ?? null, cell: (u) => <><Email value={u.email} />{u.test && <> <Badge dot={false}>Test</Badge></>}</> },
     // the badge with its note under it, always: a note that sometimes wrapped made uneven rows (DJ-014)
-    { key: "plan", header: "Plan", cell: (u) => (
+    { key: "plan", header: "Plan", sortValue: (u) => PLAN_RANK[u.plan], cell: (u) => (
       <span className="k-stack adm-plan"><Badge tone={u.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[u.plan]}</Badge>
         {u.plan !== "free" && <span className="k-small k-muted">{planNote(u)}</span>}</span>) },
-    { key: "joined", header: "Joined", sortable: true, cell: (u) => dateOnly(u.created_at) },
-    { key: "active", header: "Last active", sortable: true, info: "The later of the last sign-in and the last experiment or AI build this month",
+    // every header sorts (owner rule; admin90: only Joined and Last active did), each by its value, not its words; as listed, newest first
+    { key: "joined", header: "Joined", sortValue: (u) => (u.created_at ? Date.parse(u.created_at) : null), cell: (u) => dateOnly(u.created_at) },
+    { key: "active", header: "Last active", sortValue: (u) => (u.last_active ? Date.parse(u.last_active) : null), info: "The later of the last sign-in and the last experiment or AI build this month",
       cell: (u) => (u.last_active ? <span title={u.last_sign_in ? `Last signed in ${dateOnly(u.last_sign_in)}` : undefined}>{ago(u.last_active)}</span>
         : <span className="k-muted">{u.sign_ins_unread ? "Not read" : "Not yet"}</span>) },
     { key: "exp", header: `Experiments (${mon})`, cardLabel: `Experiments (${mon})`, numeric: true, cell: (u) => u.experiments },
@@ -188,8 +214,6 @@ export function UsersSection() {
     { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (s) => <button type="button" className="btn quiet sm" aria-label={`Stop ${s.name} (${s.email ?? "no email"})`} onClick={() => setStopping(s)}>Stop</button> },
   ];
   const until = ov?.server.promo_until;
-  const by = (u: UserRow) => (sort.key === "active" ? u.last_active : u.created_at) ?? "";
-  const sorted = users ? [...users].sort((a, b) => (by(a) < by(b) ? -1 : by(a) > by(b) ? 1 : 0) * (sort.desc ? -1 : 1)) : null;
 
   return (
     <>
@@ -208,8 +232,7 @@ export function UsersSection() {
         ) : (
           <>
             {/* site87 (owner: no paging buttons): every user loaded, the table a block sized to the screen that scrolls inside itself */}
-            <DataTable label="Users" rows={sorted ?? users} rowKey={(u) => u.id} columns={cols} stack
-              sort={{ ...sort, onSort: (key) => { setSort((x) => ({ key, desc: x.key === key ? !x.desc : true })); } }} />
+            <DataTable label="Users" rows={users} rowKey={(u) => u.id} columns={cols} stack />
             {users.length >= 200 && <p className="k-small k-muted">The newest 200 are listed. Search by email to find others.</p>}
           </>
         )}
@@ -238,7 +261,10 @@ export function UsersSection() {
 
       <Card label="Paper trading now">
         <CardHead title={`Paper trading now (${sessions?.length ?? 0})`} />
-        {!sessions ? (sessionsFailed ? <ErrorState title="The sessions couldn't be read" action={{ label: "Try again", onClick: () => void loadSessions() }} /> : <Skeleton label="Loading sessions" lines={2} />) : <DataTable label="Paper trading sessions" rows={sessions} rowKey={(s) => s.id} columns={sess} empty="No sessions running." stack />}
+        {/* none running: one line, not a table of headers over nothing (admin90, as LIVE1C-012 did for invite rewards) */}
+        {!sessions ? (sessionsFailed ? <ErrorState title="The sessions couldn't be read" action={{ label: "Try again", onClick: () => void loadSessions() }} /> : <Skeleton label="Loading sessions" lines={2} />)
+          : !sessions.length ? <p className="k-small k-muted" data-testid="sessions-none">No paper trading session is running{showTest ? "" : " (test accounts' sessions are left out unless shown)"}.</p>
+            : <DataTable label="Paper trading sessions" rows={sessions} rowKey={(s) => s.id} columns={sess} stack />}
       </Card>
 
       {open && <UserDialog user={open} onClose={() => setOpen(null)} onChanged={() => { void loadUsers(q, plan); void reload(); }} />}

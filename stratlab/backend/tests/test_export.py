@@ -49,7 +49,13 @@ def test_every_company_is_a_member_row_with_its_layer_figures_and_how_it_is_in()
 
 
 def table_of(slides, title):
-    return next(b for s in slides if s.title.startswith(title) for b in s.blocks if b["kind"] == "table")
+    for s in slides:
+        if s.title.startswith(title):
+            return next(b for b in s.blocks if b["kind"] == "table")
+        if title in (getattr(s, "also", None) or []):          # e78: a short table under another page's title, after its own heading line
+            at = next(i for i, b in enumerate(s.blocks) if b["kind"] == "text" and str((b.get("paras") or [""])[0]).startswith(title))
+            return next(b for b in s.blocks[at:] if b["kind"] == "table")
+    raise StopIteration(title)
 
 
 def plain(rows):
@@ -71,16 +77,22 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     # balance sheet when it shows nothing), the notes on one page and the appendix one table of every confirmed company's figures
     # c1 (R44, updated on purpose): the coverage's "From other industries" row (Cell A and Cell B, named by the map from another industry, each
     # with why it is in the theme and whether it is in its layer's figures) gives the coverage table a page of its own after the checks
-    assert titles == ["Test theme", "Contents", "Key findings", "Data confidence", "Coverage",
-                      "The value chain by layer", "Smaller layers", "Layers side by side", "What moved the aggregate margin",       # lane d1: two layers of 2 confirmed companies, one page (updated on purpose)
-                      "Tailwinds and risks", "Size and shape", "Growth and profitability", "Valuation", "Price", "How to read this deck",
-                      "How the figures are built", "Every company's figures"]       # R25: changed on purpose, the figures' notes before the appendix
+    # deck89 (changed on purpose, owner 25 Nov: "it looks absolutely trash ... sort everything out"): the story first (findings, the value chain,
+    # industry economics, the theme in numbers, tailwinds and risks), then the appendix: every company's figures, "Method and coverage" (what
+    # the data-confidence, coverage and how-to-read pages said, and each page's notes in full) and how the figures are built
+    method = [t for t in titles if t.startswith(deck.METHOD_TITLE)]
+    # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed): the appendix is every company's figures and the one method page; how the figures are built is kept with the deck
+    assert deck.NOTES_TITLE in [s.title for s in deck.held(slides)]
+    # (no "Layers side by side": no layer of this fixture has a median of 3 companies, so the page would hold only names; the questions the
+    # figures raise have a page of their own)
+    assert titles == ["Test theme", "Contents", "Key findings", "The value chain by layer", "Smaller layers", "Growth and profitability",
+                      "What moved the aggregate margin", "Questions the figures raise", "Size and shape", "Valuation", "Price", "Tailwinds and risks",
+                      "Every company's figures", *method] and method == [deck.METHOD_TITLE]
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
     assert not [s for s in slides if s.kind == "section"]
     contents = table_of(slides, "Contents")["rows"]
-    assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "3"), ("The value chain", "6")]          # each part with its first page; c1 (R44, updated on purpose): the coverage on a page of its own before it
-    assert contents[-1][0] == "Appendix" and contents[-1][2] == "17"            # c1 (R44): one page later, the coverage on a page of its own (updated on purpose); R25: one page later (the figures' notes); lane d1: one layer page fewer (updated on purpose)
-    assert contents[-2][0] == "How the figures are built" and contents[-2][2] == "16"          # c1 (R44): one page later, the coverage on a page of its own (updated on purpose)
+    assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "3"), ("The value chain", "4")]          # each part with its first page (deck89: changed on purpose)
+    assert contents[-1][0] == "Appendix" and contents[-1][2] == str(titles.index("Every company's figures") + 1)            # deck89 (changed on purpose): the appendix after the story
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     # R28: changed on purpose, "with figures" is of the confirmed companies (CELLB, not confirmed, has figures but is never in them)
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "4"          # R20: its share and the universe beneath

@@ -127,7 +127,7 @@ def test_a_layer_whose_companies_are_all_not_confirmed_gets_no_slide_and_the_lay
     assert not any("Machinery" in t for t in titles if t.startswith("Layer"))
     assert any(t.startswith("Layer 1 · Film") for t in titles) and any(t.startswith("Layer 2 · Converters") for t in titles)
     assert not any(t.startswith("Layer 3") for t in titles)
-    assert "No slide for Machinery: none of its companies is in the theme (each one's own words describe other work)." in texts(slides)  # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose)
+    assert "No slide for Machinery: none of its companies is in the theme (each one's own words describe other work)." in texts(deck.with_held(slides))  # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose) · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     _, b = deck_of(*theme_b())
     # changed on purpose (R18): one layer is nothing to set side by side, so no layer slide and no value chain
     assert not [t.title for t in b if t.title.startswith("Layer")] and "The value chain by layer" not in [t.title for t in b]
@@ -144,7 +144,7 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     assert v["membership"] == {"placed": 20, "confirmed": 18, "not_confirmed": 2}
     assert v["membership_evidence"] == {"description_verified": 3, "industry_code_supported": 15, "list_supported": 0, "not_confirmed": 2,
                                         "membership_unverified": 0}
-    t = texts(slides)
+    t = texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     assert ("20 in the exchange's industry list; description-verified 3 of 20 (15%); membership checked 20 of 20: 3 description-verified, "
             "15 industry-supported, 2 own words describe other work, 0 not checked") in t       # h56 (R56): the description-verified share first (updated on purpose)       # p2 and data confidence; l55 (R55): by state names (updated on purpose)
     cover = dict((it[0], it[2] if len(it) > 2 else None) for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"])
@@ -152,7 +152,7 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     # US, most companies with no stored figures: the counts are of every company checked, with figures or not
     vb, sb = deck_of(*theme_b())
     assert vb["membership"]["placed"] == 10 and ("10 in the exchange's industry list; description-verified 10 of 10 (100%); membership checked 10 of 10: 10 description-verified, "
-                                                 "0 industry-supported, 0 not checked") in texts(sb)          # l55 (R55): by state names (updated on purpose)
+                                                 "0 industry-supported, 0 not checked") in texts(deck.with_held(sb))          # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed); l55 (R55): by state names (updated on purpose)
 
 
 def test_whole_points_print_whole_and_a_layers_half_stays():
@@ -179,15 +179,16 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
     chain = v["chain"]
     assert (chain["highest"], chain["lowest"]) == ("Film", "Converters") and chain["gap"] == 7.0
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    where = next(c for c in cards if c["title"] == "Where the margin sits")["lines"][0]
+    # deck89 (changed on purpose, owner 25 Nov): the findings are one card of plain sentences; where the margin sits is its first line
+    where = next(ln for c in cards for ln in c["lines"] if ln.startswith("Median EBITDA margin is highest in"))
     # R18: whole figures print whole; R22: a highest or lowest median on 4 companies or fewer says its count
     # changed on purpose (m2): the headline says in its own sentence which layers it ranks
     assert where.startswith("Median EBITDA margin is highest in Film (19%, 4 companies) and lowest in Converters (12%), a gap of 7 points, among the ") \
         and where.endswith(" layers with at least 3 companies with the figure.")  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert "stands apart" not in texts(slides)
     _, sb = deck_of(*theme_b())                 # one layer: nothing claimed and (R18, changed on purpose) nothing said about it
-    assert "Fewer than two layers" not in texts(sb) and not any(c["title"] == "Where the margin sits" for s in sb if s.title == "Key findings"
-                                                               for b in s.blocks if b["kind"] == "cards" for c in b["items"])
+    assert "Fewer than two layers" not in texts(sb) and not any(ln.startswith("Median EBITDA margin is highest in") for s in sb if s.title == "Key findings"
+                                                               for b in s.blocks if b["kind"] == "cards" for c in b["items"] for ln in c["lines"])
 
 
 def test_long_tables_keep_their_first_page_in_the_core_and_the_rest_in_the_appendix_with_its_page():
@@ -196,10 +197,14 @@ def test_long_tables_keep_their_first_page_in_the_core_and_the_rest_in_the_appen
     app = next(i for i, s in enumerate(slides) if s.title.startswith("Every company's figures"))
     # changed on purpose (R18, then R19, the owner: "keep the important ones not everything"): the appendix is one table of every confirmed
     # company's figures; a long layer keeps its largest companies on its one page and points there; nothing is "continued"
-    assert all(t.startswith("Every company's figures") for t in titles[app:])
+    # deck89 (changed on purpose, owner 25 Nov): then "Method and coverage" and how the figures are built, the appendix's reference pages
+    assert all(t.startswith(("Every company's figures", deck.METHOD_TITLE, deck.NOTES_TITLE, deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.COMPARE_TITLE))
+               for t in titles[app:])
     assert not any("continued" in t or "all companies" in t for t in titles)
     conv = next(s for s in slides if s.title == "Layer 2 · Converters")
-    assert any(p.endswith(f"every one: appendix, p. {app + 1}.") for b in conv.blocks for p in b.get("paras") or [])
+    # deck89 (changed on purpose): the layer's table is set close and may show every company; when it doesn't, it says where the rest are
+    shown = [r for b in conv.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict) and not str(r[0]).startswith(("Median", "Range", "Together"))]
+    assert len(shown) == 14 or any(p.endswith(f"every one: appendix, p. {app + 1}.") for b in conv.blocks for p in b.get("paras") or [])
 
 
 def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
@@ -213,8 +218,9 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
         size = next(s for s in slides if s.title == "Size and shape")
         assert _re.search(r"\(\d+ compan(y|ies) with figures and a market value\)|\d+ compan(y|ies) with figures and a market value", size.subtitle)
         # changed on purpose (R19): data confidence is one page, its counts one line under the checks
-        assert [s.title for s in slides if s.title.startswith("Data confidence")] == ["Data confidence"]
-        line = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+        # deck89 (changed on purpose, owner 25 Nov): no data-confidence page; its checks and counts are in "Method and coverage"
+        assert not [s for s in slides if s.title.startswith("Data confidence")] and deck.table_with(deck.with_held(slides), deck.CONF_HEAD)  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+        line = next(p for s in deck.with_held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
         # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
         assert line.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, deck.coverage(v)))}. {deck.coverage(v)['line']};") and "with a market value (the theme's total market value)" in line   # R20: one wording
         assert _re.search(r"in each calculation: EBITDA margin \d+, net margin \d+", line)       # R27: one list of each calculation's count

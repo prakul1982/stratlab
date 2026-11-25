@@ -7,7 +7,8 @@ import { IST, fmtDateTime, money, safeHref } from "../../lib/format";
 import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, FigureTable, HealthGrid, HealthTile, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
-import { attention, errorCounts, fixRows, lights, paidUsers, quotaLine, revenueText, type FixRow } from "./attention";
+import { attention, errorCounts, fixRows, lights, paidUsers, quotaLine, revenueText, withUsd, type FixRow } from "./attention";
+import { usePricing } from "../../lib/currency";
 
 type InvoiceRow = { date: string; total: number; currency: string };
 
@@ -25,6 +26,8 @@ export function OverviewSection() {
   const { fail } = useApp();
   const { ov, jobs, reported, loading, reload, showTest } = useAdmin();
   const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
+  const { rate } = usePricing();         // rupees a dollar, for the dollar figure beside each rupee sum (admin90)
+  const inr = (v: number, c: string) => withUsd(v, c, (x, cur) => money(x, cur), rate);
   useEffect(() => {
     api<{ invoices: InvoiceRow[] }>("/admin/invoices").then((x) => setInvoices(x.invoices)).catch(fail);
   }, [fail, loading]);
@@ -47,6 +50,8 @@ export function OverviewSection() {
   // the feeds that need a look stay in view; the rest are one line until opened (DJ-008: twenty green tiles)
   const okFeeds = feeds.filter((l) => l.state === "ok"), lookFeeds = feeds.filter((l) => l.state !== "ok");
   const tested = st.test_accounts ? (showTest ? `${st.test_accounts} test accounts counted` : `${st.test_accounts} test accounts left out`) : "";
+  // when the counts were read: the server keeps them 45 s, and Refresh reads them again (admin90: the numbers had no time beside them)
+  const counted = st.counted_at ? `Counted ${fmtDateTime(st.counted_at, { tz: IST, zone: true, year: false })}` : "";
 
   return (
     <>
@@ -74,11 +79,11 @@ export function OverviewSection() {
 
       <Card label="Today's numbers">
         <CardHead title="Today's numbers" info={`Sign-ups and revenue are for today in India (IST). Server errors are the crashes since the server last started. Test accounts (the +sl- addresses made for reviewers) are ${showTest ? "counted, as asked in Users and growth" : "left out of every count; Users and growth can show them"}.`}
-          actions={tested ? <span className="k-small k-muted">{tested}</span> : undefined} />
+          actions={tested || counted ? <span className="k-small k-muted" data-testid="counted-at">{[counted, tested].filter(Boolean).join(" · ")}</span> : undefined} />
         <FigureTable label="Today" rows={[
-          { key: "signups", label: "Sign-ups today", value: st.signups_today, note: `${st.new_7d} in the last 7 days · ${st.users} in all` },
+          { key: "signups", label: "Sign-ups today", value: st.signups_today, note: `${st.new_7d} in the last 7 days · ${st.users} in all${st.stray_profiles ? ` · ${st.stray_profiles} stray profile row${st.stray_profiles === 1 ? "" : "s"} left out` : ""}` },
           { key: "paid", label: paidStat.label, value: paidStat.value, note: paidStat.note },
-          { key: "revenue", label: "Revenue today", value: invoices ? money(rupees, "INR") : "–",
+          { key: "revenue", label: "Revenue today", value: invoices ? inr(rupees, "INR") : "–",
             note: invoices ? `${todays.length} invoice${todays.length === 1 ? "" : "s"}${others.length ? ` · also in ${others.join(", ")}` : ""}` : undefined },
           // named for what it counts, which isn't today (DJ-005)
           { key: "errors", label: "Server errors (since restart)", value: errors.since, note: <Link className="link" to="/admin/system">{errors.before ? `${errors.before} kept from before it` : "see System"}</Link> },
@@ -88,7 +93,7 @@ export function OverviewSection() {
       <Card label="Money, use and limits">
         <CardHead title="Money, use and limits" info="What StratLab itself can read: its own invoices, who used it, this month's experiments and AI builds, and the email service's daily limit. Bills it can't read (hosting, AI, payments) are linked to their own dashboards rather than guessed." />
         <FigureTable label="Money and use" rows={[
-          { key: "rev30", label: "Revenue, last 30 days", value: st.revenue_30d ? revenueText(st.revenue_30d.by_currency, (v, c) => money(v, c)) : "–",
+          { key: "rev30", label: "Revenue, last 30 days", value: st.revenue_30d ? revenueText(st.revenue_30d.by_currency, inr) : "–",
             note: st.revenue_30d ? `${st.revenue_30d.count} invoice${st.revenue_30d.count === 1 ? "" : "s"}` : "Not read" },
           { key: "active", label: "Active users, last 7 days", value: st.active_7d ?? "–", note: st.active_7d == null ? "Not read" : "signed in, or ran an experiment, an AI build or an AI read" },
           ...(st.plan_interest != null ? [{ key: "plans", label: "Waiting for plans", value: st.plan_interest, note: st.plan_interest === 1 ? "person asked to be told when plans open" : "people asked to be told when plans open" }] : []),

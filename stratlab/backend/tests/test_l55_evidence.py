@@ -50,11 +50,10 @@ def test_every_count_of_the_members_says_its_evidence_states_and_none_says_confi
     c = deck.reconciled_counts(v, deck.coverage(v))
     assert deck.counts_words(c) == (f"Considered 30 · {split} · with figures {c['with_figures']}"
                                     + (" · in each calculation: " + ", ".join(f"{a} {b}" for a, b in c["each"]) if c["each"] else ""))
-    find = next(ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
-                for ln in it["lines"] if ln.startswith("Considered"))
-    conf = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
-    assert split in find and split in conf
-    rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
+    conf = next(p for s in deck.with_held(slides) if s.title.startswith(deck.RECORDS_TITLE) for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))  # deck89 (changed on purpose, owner 25 Nov): the data-confidence page is the appendix's "Method and coverage" · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+    assert split in conf          # deck89 (changed on purpose): said once there, never on the findings' page
+    assert not any(ln.startswith("Considered") for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"])
+    rows = {r[0]: r for s in deck.with_held(slides) for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     # h56 (R56, updated on purpose): the description-verified share first, then the membership check's count
     # r62 (updated on purpose: the owner's review of the live R60 decks, P1, the sources of the companies add up to them; the fixture's 10
     # members beyond its view carry no source)
@@ -84,14 +83,14 @@ def test_the_informative_layers_and_each_layer_say_their_evidence_mix():
     """Fails before: "In informative layers 26 of 30" beside 22 checked, every layer's list reading as equally verified."""
     v, first = partial_view()
     slides = deck.theme_plan(v)[0]
-    rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
+    rows = {r[0]: r for s in deck.with_held(slides) for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     inf = rows["In informative layers"]
     k = int(re.match(r"(\d+) of 30", inf[1]).group(1))
     m = re.search(r"by membership evidence: (\d+) description-verified, (\d+) industry-supported, (?:(\d+) own words describe other work, )?(\d+) not checked", inf[2])
     assert m and sum(int(x) for x in m.groups() if x) == k and int(m.group(4)) == 8          # the 8 not checked are in a named layer
     page = next(s for s in slides if s.title.endswith(f"· {first}"))
     # (in the headline where its two lines hold it, else the page's first note)
-    said = [page.subtitle] + [p for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or []]
+    said = [page.subtitle] + [p for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or []] + [deck.page_said(deck.with_held(slides), page.title)]      # deck89 (changed on purpose): its notes in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     line = next(re.search(r"[Mm]embership of its .*", p).group(0) for p in said if re.search(r"[Mm]embership of its ", p))
     # y57 (R57, BIO-12): a count other than the header's says it is of the layer's companies stored in all (updated on purpose)
     lm = re.match(r"[Mm]embership of its (\d+) companies stored in all \(figures read for the header's (?:\d+)\): (\d+) description-verified, "
@@ -101,8 +100,9 @@ def test_the_informative_layers_and_each_layer_say_their_evidence_mix():
     region, mm, f = theme_a()
     v2, s2 = deck_of(region, mm, f)
     pages = [s for s in s2 if s.title.startswith("Layer ")]
-    assert pages and all(any(re.search(r"[Mm]embership of its \d+ compan(?:y|ies): \d+ description-verified, .*, 0 not checked", p)
-                             for p in [s.subtitle] + [p for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or []]) for s in pages)
+    # deck89 (changed on purpose, owner 25 Nov: short footnotes): the line is among the appendix's notes, under the layer's page
+    assert pages and all(re.search(r"[Mm]embership of its \d+ compan(?:y|ies): \d+ description-verified, .*, 0 not checked", deck.page_said(deck.with_held(s2), s.title))   # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
+                         for s in pages)
 
 
 def test_the_membership_check_is_said_apart_from_the_count_with_figures():

@@ -135,14 +135,14 @@ def test_the_coverage_and_the_universe_lead_with_the_description_verified_share(
     """Fails before: "Membership checked 22 of 30 (73%)" the only share, a larger checked count read as more verified."""
     v = _partial()
     slides = deck.theme_plan(v)[0]
-    rows = [r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)]
+    rows = [r for s in deck.with_held(slides) for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)]  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     mc = next(r for r in rows if r[0] == "Membership checked")          # (no row added: the coverage table keeps its length)
     assert mc[1] == "22 of 30 (73%)" and mc[2].startswith(
         "Description-verified 4 of 30 (13%); description-verified share after each stored version: 10% (07 Nov 2026) → 13% (14 Nov 2026). "
         "By state: 4 description-verified, 16 industry-supported, 2 own words describe other work, 8 not checked")
     uni = next(r for r in rows if r[0] == "Universe")
     assert "; description-verified 4 of 30 (13%); membership checked 22 of 30" in uni[1]
-    assert "description-verified 4 of 30 (13%)" in texts(slides)
+    assert "description-verified 4 of 30 (13%)" in texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     if shutil.which("pdftotext"):          # the deck as a reader gets it: each history ends on its row's share
         path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"h56-{os.getpid()}.pdf")
         with open(path, "wb") as fh:

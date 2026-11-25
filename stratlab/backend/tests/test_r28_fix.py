@@ -55,7 +55,7 @@ def test_an_unconfirmed_company_with_figures_is_never_counted_with_figures(name,
     gate = {x["id"]: x for x in slides[0].gate["items"]}
     assert gate["reconcile"]["ok"], slides[0].gate["dropped"]
     words = deck.counts_words(c)
-    assert f"with figures {c['with_figures']:,}" in texts(slides) and words in texts(slides)
+    assert f"with figures {c['with_figures']:,}" in texts(deck.with_held(slides)) and words in texts(deck.with_held(slides))  # deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     every_rule(name, v, slides)
 
 

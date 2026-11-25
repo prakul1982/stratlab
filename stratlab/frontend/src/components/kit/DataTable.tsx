@@ -143,8 +143,10 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
    *  card): the file is one of the card's menu entries, not a button over the table. Needs a Card with a title. */
   csvInMenu?: boolean;
   /** AUTO-LOAD (site87, owner: "no next page, show more or load more"): a list whose server sends it a page at a time. Its next rows are
-   *  asked for on their own as the reader nears the end of the rows drawn (in the block's own scroll), and a line says "Loaded N of M". */
-  more?: { total: number; load: () => void; busy?: boolean; noun?: string };
+   *  asked for on their own as the reader nears the end of the rows drawn (in the block's own scroll), and a line says "Loaded N of M".
+   *  `loaded` (site89b): the rows of the whole list loaded so far, when this table draws only its last part (a list drawn day by day, one
+   *  table a day, with the next page asked for from the last day's table); the table's own rows otherwise. */
+  more?: { total: number; load: () => void; busy?: boolean; noun?: string; loaded?: number };
   /** No longer used: every table's block is sized to the screen (SCROLL BY SCREEN, site87). Kept so callers need not change. */
   sticky?: boolean;
   /** No longer used (site87): the screen, not a row count, sets when a table scrolls. */
@@ -280,7 +282,8 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   // SCROLL BY SCREEN (owner, site87): a table taller than the screen gives it scrolls inside its block, its header row kept at the top, whole
   // rows at rest and the fade while more is below (the owner's reference: Movers); one that fits is drawn whole. A phone's cards the same.
   // AUTO-LOAD: nearing the end of the rows drawn asks the server for the next ones (no button)
-  const loadMore = more && !more.busy && allRows.length < more.total ? more.load : undefined;
+  const loaded = more?.loaded ?? allRows.length;
+  const loadMore = more && !more.busy && loaded < more.total ? more.load : undefined;
   useScrollRows(box, { items: bodyRows, onEnd: loadMore });
   // EXPORT in the card's "⋯" menu (csvInMenu): one entry there, kept up to date with the rows
   const frame = useSection();
@@ -373,7 +376,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
     </div>
     {more && allRows.length > 0 && (
       <p className="k-note k-loaded" aria-live="polite" data-testid="k-loaded">
-        Loaded {allRows.length.toLocaleString("en-IN")} of {Math.max(more.total, allRows.length).toLocaleString("en-IN")}{more.noun ? ` ${more.noun}` : ""}{more.busy ? "; loading more…" : allRows.length < more.total ? "; more load as you scroll" : ""}
+        Loaded {loaded.toLocaleString("en-IN")} of {Math.max(more.total, loaded).toLocaleString("en-IN")}{more.noun ? ` ${more.noun}` : ""}{more.busy ? "; loading more…" : loaded < more.total ? "; more load as you scroll" : ""}
       </p>
     )}
     </>

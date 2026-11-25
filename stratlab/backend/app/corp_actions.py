@@ -1088,12 +1088,22 @@ def ahead_note(region: str, known: bool, has_ahead: bool, cal: dict) -> str | No
 SORTS = ("date", "cap", "yield", "name")          # ex-date (the order of the days), then market value, yield of the payment, name within each day
 
 
+PAGE = 50                            # rows of each list (ahead, gone by) in one page of the page's answer (site89b)
+
+
 def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = "", today: date | None = None, limit: int = 400, *,
-         size=(), sector: str = "", index: str = "", fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None) -> dict:
+         size=(), sector: str = "", index: str = "", fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None,
+         part: str = "", offset: int = 0) -> dict:
     """Ex-dates from today on, and the last two weeks: the user's own stocks, or every company in the calendar, narrowed by the kind of
     action, company size, sector, index, F&O and an ex-date, and sorted within each day. Each row carries what the app keeps about the
-    company (market value, sector, last close, F&O, indices) and, for a dividend, its yield at that close."""
+    company (market value, sector, last close, F&O, indices) and, for a dividend, its yield at that close.
+
+    site89b (server paging): each list is answered a page of `limit` rows at a time; `part` ("ahead" or "recent") with `offset` asks for
+    the next page of that list alone (the other comes back empty). `ahead_total` and `recent_total` count each list's rows, and `days`
+    lists every ex-date of the rows that match (for the day filter), so the page never needs every row to say them."""
     today = today or local_today(region)
+    part = part if part in ("ahead", "recent") else ""
+    offset = max(0, int(offset or 0)) if part else 0
     cal = load(region)
     mine = set(results.my_stocks(uid, region))
     q, kind = _clean_q(q), kind if kind in KINDS else ""
@@ -1131,7 +1141,11 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = ""
     ahead = ordered([r for r in rows if r["ex_date"] >= t], False)
     recent = ordered([r for r in rows if back <= r["ex_date"] < t], True)
     unknown = sum(1 for r in window if r["band"] is None)       # said whatever the filters (CX2: sizes adding to 9 under "10 companies")
-    return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": ahead[:limit], "recent": recent[:limit],
+    page_a = ahead[offset:offset + limit] if part in ("", "ahead") else []
+    page_r = recent[offset:offset + limit] if part in ("", "recent") else []
+    days = sorted({r["ex_date"] for r in window if r["ex_date"] >= back and (not kind or r["kind"] == kind) and ctx.passes(r, size, sector, index, fo)})
+    return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": page_a, "recent": page_r,
+            "ahead_total": len(ahead), "recent_total": len(recent), "part": part, "offset": offset, "days": days,
             "more": max(0, len(ahead) - limit) + max(0, len(recent) - limit), "mine_count": len(mine), "alerts": alerts_on(uid),
             "kinds": list(KINDS), "ahead_known": ahead_known(region, cal["rows"], cal.get("declared_at")), "note": NOTE, "recent_days": recent_days,
             "ahead_note": ahead_note(region, ahead_known(region, cal["rows"], cal.get("declared_at")), bool(ahead), cal),

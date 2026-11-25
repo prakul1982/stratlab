@@ -116,7 +116,7 @@ def own_filings(region: str, sym: str) -> str:
 # r68e (R68): the version of the reader that takes another company's opening sentences off a stored description (theme_base.own_part,
 # names_other), kept beside every description read since; a stored record left with no description by an earlier version of it is read once
 # more (thin_about), and a record whose description a read emptied keeps the words it had ("was_about") until a read gives words again
-OWN_PART_V = 2
+OWN_PART_V = 3                # e89: 3, a record a read emptied of an Indian company's own profile page under its earlier name is read once more
 OWN_PART_SINCE = "2026-11-17"           # the first day R66's version of it ran live (the live R65 decks were made on 17 Nov, R66's on 18 Nov)
 ABOUT_WORDS, ABOUT_V = 30, 5          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
 # lane n2 (the outside review of the live R33 decks: UMC's article, "a Taiwanese company based in Hsinchu ... founded as Taiwan's first
@@ -172,7 +172,10 @@ def reader_due(got: dict, region: str = "") -> bool:
 # reader (QUOTE_V), is read once more, its annual report first (evidence_reader), the largest of a theme first (describe_top, the re-check's
 # describe_quoted, describe_missing), within the SEC reads a minute already set (FILING_READS_PER_MINUTE); a read still owed keeps the words
 # it has, and one whose report gives no such line keeps them too, marked so it is not asked again until EVIDENCE_DAYS
-QUOTE_V = 1
+# e89 (Semiconductors 77 description-verified live, about 90 expected: Intel, Skyworks, MACOM and Arm read once under QUOTE_V 1 by a reader
+# that found no opening or read their cautionary note, marked so and never asked again; McDonald's the same in Restaurants): 2, every US
+# record with no line a page may quote is read once more by the reader that finds them (sec.BUSINESS_KEY 6)
+QUOTE_V = 2
 QUOTE_READS = 120                 # companies of one theme read so at its re-check, largest first (two minutes of the SEC reads a minute)
 QUOTE_BUDGET = 150.0              # ...within this many seconds (the re-check runs in the background: no page waits on it)
 
@@ -190,7 +193,10 @@ def quote_due(got: dict, region: str = "", name: str = "") -> bool:
     about = str((got or {}).get("about") or "")
     if region != "US" or not about or about.startswith("From its own filings:") or got.get("owed") or got.get("qv") == QUOTE_V:
         return False
-    return not quotable_work(about, name)
+    # e89 (Newmont's stored words, its 10-K read as "Doré is an alloy ... Doré is sent to refiners ...", a line of its product, not of
+    # itself: description-verified with no line of its own a deck quotes): words read from its annual report by an earlier reader
+    # (sec.BUSINESS_KEY) are read once more by today's, which finds its opening
+    return not quotable_work(about, name) or bool(got.get("filed") and got.get("bv") != sec_business_v())
 
 
 def thin_about(got: dict, region: str = "", name: str = "") -> bool:
@@ -371,6 +377,8 @@ def own_got(region: str, sym: str, got: dict, name: str = "") -> tuple[dict, boo
         # r68e: a record a read emptied keeps the words it had: read again by today's reader, they are its words when it finds them its own
         was = theme_base.own_part(str((got or {}).get("was_about") or ""), nm)
         return ({**got, "about": was, "restored": True}, False) if was else (got, False)
+    if region == "IN" and (got or {}).get("page"):
+        return got, False                                  # e89: its own profile page under an earlier name (evidence_reader)
     own = theme_base.own_part(about, nm)
     if own == about:
         return got, False
@@ -418,11 +426,13 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                     hit = got
         if hit is None:
             about, industry, no_page, owed, filed_first, wiki = "", "", False, False, False, ""
+            page_ = ""
             if region == "IN":
                 p = india_profile(R.hub.screener, sym)
                 no_page = p is None
                 p = p or {}
                 about, industry = p.get("about") or "", " > ".join(p.get("industry_path") or [])
+                page_ = " ".join(about.split())
             elif region == "US":
                 about, owed = filed_business(region, sym, until=pace["until"])          # e57: its own annual report first
                 filed_first = True
@@ -448,7 +458,16 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
             read_ = about
-            about = theme_base.own_part(about, names.get(sym) or _index_name(region, sym))          # r66e: never another company's words
+            nm_ = names.get(sym) or _index_name(region, sym)
+            about = theme_base.own_part(about, nm_)          # r66e: never another company's words
+            # e89 (Kalpataru Projects International, Gujarat Energy, Accelya: no description of their own, their profile pages opening on
+            # their earlier names, read as another company's): an Indian company's own profile page, read by its symbol, under an earlier
+            # name of the company is its own words; only an encyclopedia's words after it are read for another company's
+            page_kept = False
+            if region == "IN" and page_ and not about.startswith(page_[:80]) and theme_base.earlier_name(page_, nm_):
+                rest_ = " ".join(read_.split())[len(page_):].strip()
+                about = " ".join(x for x in (page_, theme_base.own_part(rest_, nm_) if rest_ else "") if x)
+                page_kept = True
             # r68e (P0, the owner's review of the live R66 decks: "no loss of verified evidence"): a read that leaves no words of its own
             # never takes away the words the record had: they are kept ("was_about", with what the new read opened on) and read again
             # by each later reader (own_got)
@@ -456,6 +475,7 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
             keep_ = ({"was_about": old_[:3000], "was_at": (prior or {}).get("was_at") or (prior or {}).get("at")} if not about and old_ else {})
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
                    "op": OWN_PART_V, **keep_, **({"other": opening_of(read_)} if read_ and not about else {}),
+                   **({"page": True} if page_kept else {}),          # e89: its own profile page under an earlier name, kept whole
                    # e80 (LIVE16A-002): the encyclopedia's extract run into the words, kept apart too: its sentences are never quoted
                    **({"wiki": wiki[:3000]} if wiki and about else {}),
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),
@@ -673,10 +693,10 @@ def listed_as(name, symbol):
     return grounding.listed_name(name, symbol, symbol)
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73, 75: 74, 76: 75, 77: 76, 78: 77, 79: 78}  # rules versions whose change only adds to a kept placement (e80, R75: the answers unchanged, encyclopedia sentences no line of own words; e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73, 75: 74, 76: 75, 77: 76, 78: 77, 79: 78, 80: 79}  # rules versions whose change only adds to a kept placement (e80, R75: the answers unchanged, encyclopedia sentences no line of own words; e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 34                # (e84: 34, one more for the version R79 carries; e83: 33, one more for the version R78 carries; e82: 32, one more for the version R77 carries; e81: 31, one more for the version R76 carries; e80: 30, one more for the version R75 carries; e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 35                # (e89: 35, one more for the version R80 carries; e84: 34, one more for the version R79 carries; e83: 33, one more for the version R78 carries; e82: 32, one more for the version R77 carries; e81: 31, one more for the version R76 carries; e80: 30, one more for the version R75 carries; e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -2519,6 +2539,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             # r68e (R68): the core-and-adjacent rules' version and each company that joined or left the core members, with why
             "population_rule": dive.get("population_rule"), "population_change": dive.get("population_change"),
             "distress": dive.get("distress") or [],          # y57 (R57): companies in distress, out of every median and range, with why
+            "too_small": dive.get("too_small") or [],        # e89: the companies under the theme's size and quality floor, with why
             # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
             "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
             "membership_check": dive.get("membership_check") or {},
@@ -2527,7 +2548,22 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
-def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
+def apart_symbols(dive: dict | None) -> set:
+    """e89: the companies a dive keeps out of every figure (theme_data's floor and a business demerged since its year: its "too_small"),
+    which no price count, return median or other figure of the theme counts either."""
+    return {str(x.get("symbol")) for x in (dive or {}).get("too_small") or [] if isinstance(x, dict) and x.get("symbol")}
+
+
+def kept_apart(r: str, theme: str, m: dict) -> set:
+    """e89: apart_symbols of the theme's kept dive, read only (never worked out here); none when no dive is kept."""
+    try:
+        got = computed.get(theme_library.DIVE, dive_key(r, theme, m), count=False)
+        return apart_symbols(((got or {}).get("value") or {}).get("dive"))
+    except Exception:
+        return set()
+
+
+def deck_extras(r: str, theme: str, m: dict, profile: dict, apart=()) -> dict:
     """The parts of the theme's page that it reads on its own, as the page last read them: the latest headlines and the new listings from
     their caches, the prices of the companies already read (no candles fetched for the deck), and the business updates on the plans that
     have them. A part not read yet is None, and the deck says so once."""
@@ -2540,7 +2576,7 @@ def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
     out["listings"] = listed["items"] if listed and listed.get("checked") else None
     names = _map_names(fm)
     placed = sorted({c["ticker"]: names.get(c["ticker"]) for grp in (fm.get("value_chain") or []) + (fm.get("sub_themes") or [])
-                     for c in grp.get("companies") or []}.items())
+                     for c in grp.get("companies") or [] if c["ticker"] not in set(apart)}.items())         # e89: the floor's apart
     daily = daily_rows(r) if placed else ({}, None, {})
     if placed and (any(PRICE_CACHE.get(f"{r}:{sym}") for sym, _ in placed) or any(sym in daily[0] for sym, _ in placed)):
         try:          # LIVE7A-002: the page's figures, its stored daily rows for the companies whose candles aren't read
@@ -2687,7 +2723,7 @@ def deck_file(R, r: str, theme: str, m: dict, profile: dict, format: str, biz: b
             except ValueError:
                 body = None
         if body is None:
-            view = deck_view(r, m, dive, deck_extras(r, theme, m, profile))
+            view = deck_view(r, m, dive, deck_extras(r, theme, m, profile, apart=apart_symbols(dive)))
             body, gate = deck.build_theme_gated(view, pdf=format == "pdf")
             # R27: the publication gate's result (pass or fail per item, what was dropped) is kept with the deck, for Admin -> Library;
             # R29: a deck still waiting for filed figures isn't kept in the shared store (it is made again once they are in)
@@ -3122,9 +3158,12 @@ def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budg
 def theme_dive_prices(q: str, region: str = "IN", profile=Depends(current_profile)):
     R = _routes()
     r, theme, m, _ = R.theme_map(profile, region, q)
-    m = theme_base.for_figures(checked(r, theme, m))[0]
+    m_ = checked(r, theme, m)
+    apart = kept_apart(r, theme, with_descriptions(r, m_))     # e89: no price count of a company kept out of every figure (floor, demerged)
+    m = theme_base.for_figures(m_)[0]
     names = _map_names(m)
-    placed = {c["ticker"]: names.get(c["ticker"]) for grp in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in grp.get("companies") or []}
+    placed = {c["ticker"]: names.get(c["ticker"]) for grp in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in grp.get("companies") or []
+              if c["ticker"] not in apart}
     members = sorted(placed.items())
     if not members:
         return R.ok({"companies": [], "pending": 0, "line": None, "returns": None, "median": {}, "benchmark": ""})

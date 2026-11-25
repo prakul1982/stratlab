@@ -200,7 +200,7 @@ def test_a_row_carries_its_kept_reason_before_the_whole_company_mark_and_a_mark_
     tbl = next(b for b in s.blocks if b["kind"] == "table")
     name = next(c_ for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2] if str(c_).startswith(c0["name"]))
     assert name.endswith("(insufficient evidence)")          # (updated on purpose, ex49: the mark is the reason's kind)
-    notes = " ".join(p for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or [])
+    notes = deck.page_said(deck.with_held(slides), s.title)          # deck89 (changed on purpose, owner 25 Nov: short footnotes): with its notes in full in the appendix · deck89 round 2 (changed on purpose, coordinator 25 Nov: the full records are kept with the deck, on the theme's page, not printed)
     whole_rows = any(str(c_).endswith("(whole company)") for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2])
     assert "(insufficient evidence):" in notes and ("(whole company):" in notes) == whole_rows          # a mark's note only with a row that carries it
 
@@ -215,7 +215,8 @@ def test_the_contents_line_for_tailwinds_and_risks_uses_the_page_s_own_counts():
     page = next(s for s in slides if s.title == "Tailwinds and risks")
     row = next(r for s in slides if s.title == "Contents" for b in s.blocks for r in b.get("rows") or [] if r[0] == "Tailwinds and risks")
     # the live deck's contents said "4 tailwinds and 4 risks; 5 with a dated headline ... that shows it is still current" over a page of 2 and 2
-    assert row[1] == "4 tailwinds and 4 risks shown, 4 with a dated source; the rest are on the theme's page."
+    # deck89 (changed on purpose, owner 25 Nov): the dated updates follow the tailwinds and risks, and the contents' line says so after them
+    assert row[1].removesuffix("; then the companies' dated updates.").rstrip(".") + "." == "4 tailwinds and 4 risks shown, 4 with a dated source; the rest are on the theme's page."
     assert page.subtitle.startswith("4 tailwinds and 4 risks, 4 of the 8 with a dated source")
 
 

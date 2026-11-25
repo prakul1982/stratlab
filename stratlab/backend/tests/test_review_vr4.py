@@ -53,10 +53,13 @@ def test_the_blog_list_gives_each_brief_its_figures_not_its_day_and_not_the_foot
 def test_a_markets_own_directory_page_names_its_market(w):
     c = w["client"]
     both, india, us = page(c, "/stocks"), page(c, "/stocks/in"), page(c, "/stocks/us")
-    assert "<h1>Company pages</h1>" in both and "Every company listed in India (NSE and BSE) and the US:" in both
-    assert "<h1>Companies listed in India</h1>" in india and "Every company listed in India (NSE and BSE): its last close" in india
+    # (changed on purpose, site89b honest coverage counts: "Every company listed" became the number of companies that have a page)
+    from app import stock_pages
+    n_in, n_us = len(stock_pages.companies("IN")), len(stock_pages.companies("US"))
+    assert "<h1>Company pages</h1>" in both and f"{n_in:,} companies listed in India (NSE and BSE) and {n_us:,} in the US, each with a page:" in both
+    assert "<h1>Companies listed in India</h1>" in india and f"{n_in:,} companies listed in India (NSE and BSE), each with a page: its last close" in india
     assert "and the US" not in india.split("<h1>")[1].split("</p>")[0]
-    assert "<h1>Companies listed in the US</h1>" in us and "Every company listed in the US:" in us
+    assert "<h1>Companies listed in the US</h1>" in us and f"{n_us:,} companies listed in the US, each with a page:" in us
     assert "<title>Company pages: India · StratLab</title>" in india and "<title>Company pages: US · StratLab</title>" in us
 
 

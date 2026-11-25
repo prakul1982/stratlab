@@ -2961,15 +2961,17 @@ def corp_ready(region: str):
 
 @app.get("/research/corp-actions")
 def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", size: str = "", sector: str = "", index: str = "",
-                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, profile=Depends(current_profile)):
+                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, part: str = "",
+                      offset: int = Query(0, ge=0, le=20000), profile=Depends(current_profile)):
     """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company, narrowed by the kind
     of action, company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with futures and options)
-    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name)."""
+    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name). site89b: a page of each list
+    (corp_actions.PAGE rows); `part` (ahead or recent) with `offset` is the next page of that list, asked for as the reader scrolls."""
     r = research_routes.region_of(region)
     corp_ready(r)
-    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20],
+    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20], limit=corp_actions.PAGE,
                                                 size=[x for x in size.split(",") if x][:4], sector=sector[:80], index=index[:20], fo=fo, on=on[:10],
-                                                sort=sort[:10], desc=desc))
+                                                sort=sort[:10], desc=desc, part=part[:10], offset=offset))
 
 
 @app.get("/research/corp-actions/{region}/{symbol}/unadjusted")
@@ -5896,7 +5898,15 @@ def results_options_many(symbols: list[str], day: str | None) -> dict[str, dict 
 
 
 # the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
-results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many)
+def results_filed(symbol: str) -> list[str]:
+    """site89b: the days a US company filed its earnings releases (8-K, item 2.02) with the SEC, from its filing list (cached six hours):
+    its earlier results days, for the Results page's usual move."""
+    return [d["at"] for d in sec.documents(sec_feed.submissions(sec_feed.cik(symbol)), days=results_calendar.PAST_BACK_DAYS)
+            if d["kind"] == "earnings_release"]
+
+
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many,
+                       filed=results_filed)
 # a theme's companies outside the stored heatmap rows are read on demand, with the same short wait for a broker turn (LIVE6-005)
 heatmap.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0))
 
@@ -7111,7 +7121,10 @@ def overview_stats(fresh: bool = False, include_test: bool = False) -> dict:
         return run
     st = admin.stats(month_start_iso(), include_test=include_test,
                      extra={"plan_interest": plan_interest.count, "revenue_30d": safe(revenue_since),
-                            "active_7d": safe(lambda: admin.active_users(7, include_test))})
+                            "active_7d": safe(lambda: admin.active_users(7, include_test)),
+                            "stray_profiles": lambda: len(admin.stray_rows())})
+    # when these counts were read (admin90: they are kept OVERVIEW_FOR seconds, and Overview showed no time beside them)
+    st["counted_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with _overview_lock:
         if gen == _overview_gen:            # nothing was forgotten while these were read: keep them
             _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st, test=include_test)
@@ -7169,6 +7182,20 @@ def admin_review_invite_reward(user_id: str, decision: str, who=Depends(admin.ad
         err(404, "not_found", "That reward isn't waiting for review.")
     log.info("admin %s: invite reward for %s, %s -> %s", who.get("email"), user_id, decision, status)
     return {"status": status, **invite_rewards.admin_view()}
+
+
+@app.post("/admin/stray-profiles/remove")
+def admin_remove_stray_profiles(who=Depends(admin.admin_profile)):
+    """Delete the stray profile rows (admin.is_stray: a settings key's tail taken for a user id, never a sign-in account), which
+    Overview already leaves out of every count. At most 1000 a press; nothing else is touched."""
+    not_viewing(who)
+    try:
+        n = admin.remove_stray_profiles()
+    except Exception as e:
+        err(502, "remove_failed", f"The stray rows couldn't be removed: {str(e)[:160]}")
+    forget_overview()
+    log.warning("admin %s removed %d stray profile rows", who.get("email"), n)
+    return {"removed": n}
 
 
 @app.post("/admin/users/{user_id}/plan")
@@ -7245,7 +7272,11 @@ def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
         owners[s.id] = s.user_id
         try:
             if s.user_id not in emails:
-                emails[s.user_id] = (db.get_profile(s.user_id) or {}).get("email")
+                emails[s.user_id] = (db.find_profile(s.user_id) or {}).get("email")       # read only: never makes a profile (admin90)
+        except Exception as e:   # the address is extra: the session's own figures still show (admin90)
+            print("admin sessions: email not read:", s.id, e)
+            emails[s.user_id] = None
+        try:
             account = s.snapshot().get("account") or {}
         except Exception as e:   # one broken session mustn't hide the rest
             print("admin sessions:", s.id, e)
@@ -7261,7 +7292,7 @@ def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
             inst = r.get("instrument") or {}
             try:
                 if r.get("user_id") not in emails:
-                    emails[r.get("user_id")] = (db.get_profile(r.get("user_id")) or {}).get("email")
+                    emails[r.get("user_id")] = (db.find_profile(r.get("user_id")) or {}).get("email")
             except Exception as e:
                 print("admin sessions:", r.get("id"), e)
             market = inst.get("market")
@@ -8125,7 +8156,7 @@ def admin_library(_=Depends(admin.admin_profile)):
         owner = e.get("owner")
         if owner and owner not in emails:
             try:
-                emails[owner] = (db.get_profile(owner) or {}).get("email")
+                emails[owner] = (db.find_profile(owner) or {}).get("email")       # read only: a deleted author is shown, no row made (admin90)
             except Exception:
                 emails[owner] = None
         reasons: dict[str, int] = {}
