@@ -320,5 +320,5 @@ def test_a_dated_headline_row_is_no_financial_margin_and_consumer_lenders_are_sa
 
 def test_versions():
     from app import blog_research, deck
-    assert B.RULES == 79 and TR.PLACE_CARRY[79] == 78 and TR.EARLIER_MAX == 34
-    assert D.DIVE_TEXT == 51 and deck.THEME_DECK_VERSION == 91 and blog_research.GEN == 12          # e85 (LIVE21A, the R84 decks): deck 91, dive text 51 (updated on purpose)
+    assert B.RULES == 80 and TR.PLACE_CARRY[80] == 79 and TR.PLACE_CARRY[79] == 78 and TR.EARLIER_MAX == 35          # e89 (the owner's Alcoholic beverages deck, 25 Nov): RULES 80, PLACE_CARRY[80] = 79, EARLIER_MAX 35, dive text 52 (changed on purpose, e89)
+    assert D.DIVE_TEXT == 52 and deck.THEME_DECK_VERSION == 91 and blog_research.GEN == 12          # e89 (the owner's Alcoholic beverages deck, 25 Nov): RULES 80, PLACE_CARRY[80] = 79, EARLIER_MAX 35, dive text 52 (changed on purpose, e89); e85 (LIVE21A, the R84 decks): deck 91, dive text 51 (updated on purpose)
