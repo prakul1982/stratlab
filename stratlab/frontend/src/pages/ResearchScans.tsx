@@ -244,12 +244,23 @@ export function ScanPage() {
       <PageHeader eyebrow={eyebrowOf("/research/scan")} title="Trend scan"
         lede="Which stocks match a chart rule right now. Each match is a fact about the chart on a date, not advice."
         asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend. Or build your own from up to five rules." infoLabel="Which rules" />
-      <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
+      {setsFailed && <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>}
       {!pro && me && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
       {setsFailed ? <Card><ErrorState title="The groups to scan couldn't be loaded" action={{ label: "Try again", onClick: () => setSetsTry((n) => n + 1) }}>They couldn't be read just now.</ErrorState></Card> : <Card>
         <CardHead title="Scan a group" />
-        <FormGrid label="Scan a group" onSubmit={runScan}>
-          <FieldGroup label="Scan" wide info={<>Each scan is a short list of chart rules, all of which must hold. Pick one to read its rules below.</>}>
+        {/* FORMS SWEEP (site89b, the Search filings form's layout of site87): the market toggle floated above the card and Scan sat small and
+            alone at the bottom left under a full-width box. One form: its top row is the market, the group and Scan, their boxes on one line;
+            then the chart rule, its rules, and the alert; on a phone one column, the rules two to a row */}
+        <form className="k-sform" aria-label="Scan a group" onSubmit={runScan}>
+          <div className="k-sform-row k-sform-top">
+            <div className="k-sform-market"><span className="k-sform-lab" aria-hidden="true">Market</span><RegionSwitch region={region} setRegion={setRegion} /></div>
+            <Field label="Group to scan">
+              {(id) => <Select id={id} value={setId} onChange={chooseSet}
+                options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: custom && s.stored ? `${s.name} (ready-made scans only)` : s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count}${!s.stored && s.as_of ? `, list of ${s.as_of}` : ""})`, disabled: ((s.id === "watchlist" || !!s.stored) && !s.count) || (custom && !!s.stored) }))} />}
+            </Field>
+            <button className="btn k-sform-go" disabled={busy || !pro || !cur?.count}>{busy ? scanningText(cur?.count) : "Scan"}</button>
+          </div>
+          <FieldGroup label="Chart rule" info={<>Each scan is a short list of chart rules, all of which must hold. Pick one to read its rules below.</>}>
             <ChipBar label="Scan rule sets" wrap value={scan.id} onChange={pickScan} options={scans.map((s) => ({ value: s.id, label: s.name }))} />
           </FieldGroup>
           {custom && (
@@ -290,20 +301,17 @@ export function ScanPage() {
               {scan.rules.length > 0 && <p className="k-note">Rules: {scan.rules.join("; ")}. {scan.within === 1 ? "Counts as a match when it held on the latest candle." : `Counts as a match when it held on any of the last ${scan.within} candles.`}</p>}
             </div>
           )}
-          <Field label="Group to scan" wide>
-            {(id) => <Select id={id} value={setId} onChange={chooseSet}
-              options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: custom && s.stored ? `${s.name} (ready-made scans only)` : s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count}${!s.stored && s.as_of ? `, list of ${s.as_of}` : ""})`, disabled: ((s.id === "watchlist" || !!s.stored) && !s.count) || (custom && !!s.stored) }))} />}
-          </Field>
-          <FormActions>
-            <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? scanningText(cur?.count) : "Scan"}</button>
-            {sets && scan.id === "st_s2" && <CheckField checked={sets.alerts} disabled={!pro} onChange={toggleAlerts}
-              label={<>Alert me after each close when a watchlist stock newly meets both (Stage 2 + Supertrend)
-                <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />}
-          </FormActions>
+          {sets && scan.id === "st_s2" && (
+            <div className="k-sform-foot">
+              <CheckField checked={sets.alerts} disabled={!pro} onChange={toggleAlerts}
+                label={<>Alert me after each close when a watchlist stock newly meets both (Stage 2 + Supertrend)
+                  <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />
+            </div>
+          )}
           {sets && scan.id === "st_s2" && sets.alerts && sets.channels && sets.channels.length === 0 && (
             <p className="k-note k-field wide" data-testid="scan-alert-nowhere">The alert is on, but nothing is set up to reach you: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>
           )}
-        </FormGrid>
+        </form>
       </Card>}
       {emptyWatch && <Card compact><EmptyState title={`Your ${REGION_NAME[region]} watchlist is empty`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Press Watch on company pages to add stocks, or scan a ready-made group.</EmptyState></Card>}
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}

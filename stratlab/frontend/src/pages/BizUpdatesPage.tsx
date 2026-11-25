@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { safeHref } from "../lib/format";
 import { bizChange, filedOn, periodName, type Exchange } from "../components/BizUpdates";
 import { bizValueOne, foldEmptyMonths, monthsBefore } from "../lib/biz";
-import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Spark, type Column } from "../components/kit";
+import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, FieldGroup, PageHeader, PlanNote, Seg, Skeleton, Spark, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
 import { useApp } from "../lib/app";
 
@@ -136,10 +136,21 @@ export function BizUpdatesPage() {
               <p className="k-note">{mine.note}</p>
             </Card>
           ))}
-          <div className="k-toolbar">
-            {choices.length <= 4 ? <Seg label="Sector" value={sector} onChange={pick} options={choices} /> : <ChipBar label="Sector" value={sector} onChange={pick} options={choices} />}
-            <Seg label="Range of the small charts" value={range} onChange={setRange} options={RANGES} />
-          </div>
+          {/* FORMS SWEEP (site89b, the Search filings form's layout of site87): the kind of update and the charts' range floated on the page with
+              no label, seven pills in a ragged row (a column of seven on a phone). One card: each choice under its label, the kinds two to a
+              row on a phone */}
+          <Card label="What to show" testId="biz-pick">
+            <div className="k-sform">
+              <FieldGroup label="Kind of update">
+                {choices.length <= 4 ? <Seg label="Sector" value={sector} onChange={pick} options={choices} /> : <ChipBar label="Sector" wrap value={sector} onChange={pick} options={choices} />}
+              </FieldGroup>
+              <div className="k-sform-row k-sform-two">
+                <FieldGroup label="Small charts" info="How many months of each company's figures the small charts in the tables show: one choice for every table on the page." infoLabel="About the small charts">
+                  <Seg label="Range of the small charts" value={range} onChange={setRange} options={RANGES} />
+                </FieldGroup>
+              </div>
+            </div>
+          </Card>
           <Card>
             <CardHead title={d.label} info="Each filing is read once: the figures are copied from the company's own document and kept only when the line they come from is found in it. Each company's page shows the line, the page and its 24-month chart." infoLabel="How the figures are read" />
             {filed.length === 0 ? <EmptyState title="Nothing read into numbers yet">No update in this list has been read into numbers yet. They are read each evening after they're filed.</EmptyState> : (
