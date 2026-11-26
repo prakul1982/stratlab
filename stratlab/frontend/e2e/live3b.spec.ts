@@ -189,12 +189,20 @@ test("Invest's watchlist and Coming up are tables, Coming up agrees with My spac
     await expect(page.getByTestId("breadth-card")).toBeVisible({ timeout: 30_000 });
     expect(await halfEmpty(), `/invest ${w}`).toEqual([]);
     if (w === 1440) {
+      // (changed on purpose, inv96: Invest's Coming up lists the person's own stocks' dates now, the watched three's results days among
+      // them: each company links to its page, and every results day it lists up to the last day My space's list reaches is in My space's
+      // list too, by the company's symbol, as My space names them. The agreement below is that check; the market events it compared
+      // before are on the Trade home.)
+      const own = await coming.locator("tbody tr").evaluateAll((rs) => rs.map((r) => ({ to: r.querySelector("th a")?.getAttribute("href") ?? "", what: r.querySelector("td:last-child")?.textContent?.trim() ?? "" })));
+      expect(own.length, JSON.stringify(own)).toBeGreaterThan(0);
+      for (const o of own) expect(o.to, JSON.stringify(own)).toMatch(/^\/research\/IN\/(RELIANCE|TCS|ITC)$/);
       // every event the Invest home lists up to the last day My space's list reaches is in My space's list too
       // (updated on purpose, R43 earnings calls: the watched TCS's call on the world's day is one more of the person's own dates, so
       // My space's five now end on 29 Oct, before Invest's first market event on 2 Nov, and "some event in both" no longer held
       // although nothing was missing. The check is now the one this comment states, day by day, and it still fails when My space
       // stops short with room to spare: its list must either reach an event Invest lists or be full, with more in the calendar.)
-      const inv = await coming.locator("tbody tr").evaluateAll((rs) => rs.map((r) => ({ name: r.querySelector("th")?.textContent?.trim() ?? "", day: r.querySelector("td")?.textContent?.trim() ?? "" })));
+      const inv = await coming.locator("tbody tr").evaluateAll((rs) => rs.filter((r) => !/^Ex-date/.test(r.querySelector("td:last-child")?.textContent?.trim() ?? ""))
+        .map((r) => ({ name: (r.querySelector("th a")?.getAttribute("href") ?? "").split("/").pop() ?? "", day: r.querySelector("td")?.textContent?.trim() ?? "" })));
       await page.goto("/mine");
       const mine = page.getByTestId("mine-coming");
       await expect(mine.locator(".mine-tl-i").first()).toBeVisible({ timeout: 30_000 });

@@ -123,7 +123,8 @@ test("DF-023: Invest home's first steps in one line, the next expiry in Coming u
   assert.match(read("src/lib/eventTime.ts"), /e\.kind === "expiry" && !happened\(e, o\.today, o\.nowHm\) && e\.date <= o\.weekEnd && !named\.has\(e\.title\)/);          // (LIVE3-015: one rule with My space)
   // VR1-010/011 replaced the two equal-height pairs: the watchlist beside Coming up and Results today stacked
   // (VR6-011: with nothing watched the three stack across the page instead; the pair stays as it was when there is a watchlist)
-  assert.match(home, /<WatchPanel region=\{region\} \/>\s*\{fewWatched \? <><NextEvents region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>/);
+  // (changed on purpose, inv96: Invest's Coming up is InvestComing, the person's own stocks' dates; the same place and stacking)
+  assert.match(home, /<WatchPanel region=\{region\} \/>\s*\{fewWatched \? <><InvestComing region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<InvestComing region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>/);
   assert.match(read("src/components/FirstSteps.tsx"), /if \(compact\) return line\(view, false\);/);   // (updated on purpose, LIVE12B-022: the row is one function, drawn held or live)
   assert.match(read("src/styles.css"), /\.space-panels\.even \{ align-items: stretch; \}/);
 });

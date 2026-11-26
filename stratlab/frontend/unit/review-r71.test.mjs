@@ -29,7 +29,10 @@ test("R71-004: the Invest home's US tab lists the US's own coming events", () =>
   const src = read("src/pages/SpaceHomes.tsx");
   // since LIVE3-015 the rule is one function for both "Coming up" cards (lib/marketEvents comingMarketEvents); unit/live3b checks its output
   assert.match(read("src/lib/eventTime.ts"), /\(o\.region !== "US" \|\| e\.kind === "us"\)/);
-  assert.match(src, /<NextEvents region=\{region\} \/>/);
+  // (changed on purpose, inv96: Invest's Coming up lists the person's stocks' dates in the market picked; with none, the market events it
+  // falls back to are still that market's own)
+  assert.match(src, /<InvestComing region=\{region\} \/>/);
+  assert.match(src, /function InvestComing[\s\S]*?comingMarketEvents\(ev\.events, \{[^}]*region \}\)/);
 });
 
 test("R71-009: Market events shows the newest index change open and folds the earlier ones", () => {
