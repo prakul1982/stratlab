@@ -64,7 +64,7 @@ test("search still finds it by calendar, expiry and tax due; breadcrumbs say Cal
   const crumb = read("src/components/PageBreadcrumb.tsx");
   assert.match(crumb, /const label = group\.fixed \? group\.label : page\.label;/);
   const shell = read("src/components/Shell.tsx");
-  // one entry, in the top part beside the search button, in every space (My space's own list has none of its own)
+  // one entry, in every space (My space's own list has none of its own); (changed on purpose, side97) pinned under the home, not beside the search button
   assert.equal((shell.match(/data-testid="side-calendar"/g) ?? []).length, 1);
   assert.doesNotMatch(shell, /item\("\/calendar"/);
   // the kept choice goes through the app's storage helper, which never throws with storage off (lib/persist)

@@ -338,18 +338,19 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
           <Sparkle size={16} /><span>Ask or do anything</span>{/* no keyboard shortcut on a touch screen (R50-016) */}
           {!window.matchMedia?.("(pointer: coarse)").matches && <kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>}
         </button>
-        {/* cal94 (owner, 26 Nov): the one Calendar, fixed here in every space and in no space's menu list. It opens on the dates for
-            where you are (lib/calendarShow): from Trade the market events and expiries, from Money your money dates, else every date */}
-        <Link to={calEntry(space, calKept)} className={`side-cal${onCalendar ? " active" : ""}`} aria-current={onCalendar ? "page" : undefined}
-          title="Calendar: results, dividends and splits, IPOs, market events and expiries, and your own money dates" data-testid="side-calendar">
-          <Calendar size={16} /><span>Calendar</span>
-        </Link>
       </div>
       <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>
         {/* Themes is one entry, the first of Invest's menu above Companies (owner, 18 Nov: "put it at top like above the companies"), not a
             pill beside the space's home: on its page that entry is the one highlighted item (ui-lint R7) */}
         <div className="side-list side-home">
           <NavLink to={homeOf(space)} end><Compass size={16} /><span className="side-home-label">{homeLabel}</span></NavLink>
+        </div>
+        {/* side97 (owner, 26 Nov: "b looks good"): the one Calendar is a menu entry pinned under the space's home in every space (no
+            longer a second outlined box under the search button). It opens on the dates for where you are (lib/calendarShow): from
+            Trade the market events and expiries, from Money your money dates, else every date */}
+        <div className="side-list side-pin">
+          <Link to={calEntry(space, calKept)} className={onCalendar ? "active" : undefined} aria-current={onCalendar ? "page" : undefined}
+            title="Calendar: results, dividends and splits, IPOs, market events and expiries, and your own money dates" data-testid="side-calendar"><Calendar size={16} /><span>Calendar</span></Link>
         </div>
         {spaceGroups ?? minePart}
       </nav>

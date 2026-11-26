@@ -214,18 +214,19 @@ a.link { margin-inline: -2px; }
 .sidebar { position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column;
   background: var(--paper-2); border-right: 1px solid var(--line); font-size: 14px; }
 /* IA-2 (item 36): a little tighter, so a 1280x800 laptop shows the whole menu with one section and six notebooks open */
-.side-top { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 6px; }   /* cal94: 4px gaps pay for the fixed Calendar row, so the menu keeps its height */
+.side-top { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 6px; }   /* 4px gaps: the menu holds the pinned Calendar row (side97), so a 1280x800 menu with its section open still never scrolls (ia2 item 36) */
 .side-brand { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 4px 2px; }
 .side-close { display: none; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
   border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink); font: 600 13.5px var(--sans); cursor: pointer; }
 .side-new:hover { filter: brightness(1.15); }
-.search-btn, .side-cal { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 10px; border: 1px solid var(--line-2);
-  border-radius: 8px; background: var(--card); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
-.search-btn:hover, .side-cal:hover { color: var(--ink); border-color: var(--dash); }
-.search-btn span, .side-cal span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* cal94: the one Calendar, fixed under the search button in every space with its look, marked like a menu item while it is open */
-.side-cal { text-decoration: none; }
+/* side97: the search button filled, no outline, so it is the one box that reads as a field (Calendar is a menu entry) */
+.search-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 10px; border: 1px solid transparent;
+  border-radius: 8px; background: var(--chip); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
+.search-btn:hover { color: var(--ink); border-color: var(--dash); }
+.search-btn span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* side97: Home and Calendar, pinned in every space, set apart from the space's own menu by a rule */
+.side-pin { margin-top: -9px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }   /* -9px: 1px under Home, as a list's rows sit, past the menu's 10px gap */
 /* cal94: a Coming up card's wait is the height of its five-row table (header and five 44px rows) */
 .coming-skel { min-height: 264px; }
 /* inv96: Invest's Coming up stays a table on a phone, its cells free to wrap (the date and symbol never break), so a row is one or two lines, not a card */
@@ -233,8 +234,6 @@ a.link { margin-inline: -2px; }
 /* inv96: the Invest home's Coming up: "What" takes the room the date and the symbol leave, with no 160px floor (in the 382px column at 1280
    the floor pushed the table past its box) */
 .coming-mine .k-table td.k-wrap, .coming-mine .k-table th.k-wrap { min-width: 0; }
-.side-cal.active { background: var(--side-on); box-shadow: var(--side-on-ring); border-color: transparent; color: var(--ink); font-weight: 600; }
-.side-cal.active > svg { color: var(--ink); }
 .space-switch { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 8px; background: var(--chip); }
 .space-switch button { height: 28px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font: 500 13px var(--sans); color: var(--ink-2); }
 .space-switch button:hover { color: var(--ink); }
@@ -352,7 +351,7 @@ a.link { margin-inline: -2px; }
 .acct-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* touch: rows a finger can hit */
 @media (pointer: coarse) {
-  .side-new, .search-btn, .side-cal { height: 40px; }
+  .side-new, .search-btn { height: 40px; }
   .space-switch button { height: 36px; }
   .side-list a, .side-list.side-sub a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
