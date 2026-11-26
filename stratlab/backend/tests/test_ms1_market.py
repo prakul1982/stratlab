@@ -352,3 +352,18 @@ def test_a_share_that_listed_today_with_no_candle_yet_is_a_new_listing_not_an_un
     assert seen == ["NEWCO"] and prices == [audit.NO_PRICES["new"][1]]
     row = audit.audit_company("OLDCO", base, lambda s, b: view, None, None, lambda s: seen.append(s) or _page())
     assert [i["detail"] for i in row["issues"] if i["area"] == "Prices"] == [audit.NO_PRICES["untraded"][1]]
+
+
+def test_a_first_part_year_report_is_never_the_tiny_base_and_only_a_rate_the_page_shows_is_checked():
+    """Owner, 26 Nov (Admin, VEEFIN: "A 5-year sales growth rate is shown from a tiny base in Mar 2021 (S) 6m instead of n/m"): its
+    first report covers six months, which the page never grows from (deepdive.part_year), so the page shows no 5-year rate at all;
+    the audit takes the same years and checks only a rate the page shows."""
+    years = [{"year": "Mar 2021 (S) 6m", "sales": 0.06, "profit": 0.01}] + \
+            [{"year": f"Mar {2022 + i}", "sales": s, "profit": p} for i, (s, p) in enumerate(((20.0, 3.0), (45.0, 7.0), (62.0, 9.0), (80.0, 12.0), (95.0, 14.0)))]
+    nums = {"years": years, "growth_nm": {}, "growth": {"sales_cagr_3y": 28.0, "sales_cagr_5y": None, "profit_cagr_3y": 26.0, "profit_cagr_5y": None}}
+    assert audit.check_listing(_page(), _p(), nums, {"price": 1134.0, "market_cap_cr": 6495.0}) == []
+    # a whole year as a tiny base, with its rate shown, is still caught
+    years[0] = {"year": "Mar 2021", "sales": 0.06, "profit": 0.01}
+    nums["growth"]["sales_cagr_5y"] = 200.0
+    got = audit.check_listing(_page(), _p(), nums, {"price": 1134.0, "market_cap_cr": 6495.0})
+    assert any("5-year sales growth rate" in i["detail"] and "Mar 2021" in i["detail"] for i in got), got
