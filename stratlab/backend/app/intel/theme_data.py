@@ -4636,11 +4636,19 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             continue
         dem = str(r.get("demerger") or "")
         mine = {str(x).strip().lower() for x in r.get("industry") or []}
-        succ = [x for x in rows.values() if x is not r and str(x.get("range_since") or "") >= dem and x.get("status") != "unverified"
+        # e89 (the live R90 inputs: IGL Spirits' stored page keeps no "range_since", its candles reaching back before its listing; its one
+        # stored year is Mar 2026, India Glycols' latest): a successor is first listed on or after the demerger, or has no year stored but the
+        # one the demerging company's latest year is (the business reported on its own for the year before the split), with no demerger of its own
+        def first_year_only(x):
+            ys = [y for y in x.get("years") or [] if num(y.get("sales"))]
+            return len(ys) == 1 and str(ys[0].get("year") or "").split(" (")[0] == str(r.get("year") or "").split(" (")[0] and not x.get("demerger")
+        succ = [x for x in rows.values() if x is not r and x.get("status") != "unverified"
+                and (str(x.get("range_since") or "") >= dem or first_year_only(x))
                 and mine & {str(y).strip().lower() for y in x.get("industry") or []}]
         if succ:
-            s_ = min(succ, key=lambda x: str(x.get("range_since")))
-            r["moved_on"] = (f"its business of the theme was demerged on {_dmy(dem)} into {s_['name']}, listed on {_dmy(s_['range_since'])}, "
+            s_ = min(succ, key=lambda x: (str(x.get("range_since") or "9999"), x["symbol"]))
+            since_ = f"listed on {_dmy(s_['range_since'])}" if s_.get("range_since") else f"its first stored year {s_.get('year')}"
+            r["moved_on"] = (f"its business of the theme was demerged on {_dmy(dem)} into {s_['name']}, {since_}, "
                              f"which carries the theme; its own revenue since is {abs(num((r.get('quarter') or {}).get('sales')) or 0):g}% "
                              f"below the year before ({(r.get('quarter') or {}).get('of') or 'its latest quarter'})")
 

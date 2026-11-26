@@ -7494,9 +7494,14 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             return
         parts.append([title, line, len(slides)])
 
+    # e89 (the live R90 deck: IGL Spirits' ₹8,416 cr unmarked in "Every company's figures", the smaller layers' row marked): a company whose
+    # revenue is on a basis that can't be checked (theme_data.basis_apart) is marked on every row that prints its revenue
+    basis_ = {c.get("symbol") for b in v.get("layers") or [] for c in b.get("companies") or [] if c.get("basis_apart")}
+
     def name_of(sym, nm):
         nm = clean_name(nm)
-        return f"{nm} (whole company)" if sym in wide else f"{nm} (not confirmed)" if status.get(sym) == "unverified" else nm
+        return f"{nm} (whole company)" if sym in wide else f"{nm} (not confirmed)" if status.get(sym) == "unverified" else \
+            f"{nm} ({ROLL_TAG['revenue basis not confirmed']})" if sym in basis_ else nm
 
     for m in members:                       # what a company does, as one business sentence (headings, glued words, results lines left off)
         if m.get("what"):
@@ -8254,6 +8259,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         note = ("Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (–: a loss over them, or no "
                 "four quarters stored)."
                 + (" (whole company): whole-company figures." if wide else "")
+                # e89: its margins are on that revenue and in no median; P/E and P/B are of its profit and book, whatever the revenue's basis
+                + (f" ({ROLL_TAG['revenue basis not confirmed']}): its revenue's basis (with or net of excise duty) can't be checked against "
+                   "the others', so its revenue and margins are in no total or median; its P/E and P/B do not rest on revenue."
+                   if any(x["symbol"] in basis_ for x in lead) else "")
                 + (f" {ONE_OFF} {ONE_OFF_NOTE}." if any(x.get("one_off") for x in lead) else "")
                 + (f" {GAIN} {GAIN_NOTE}." if any(x.get("gain") and not x.get("one_off") for x in lead) else "")
                 + (f" {VERIFIED_MARK} {VERIFIED_NOTE}." if marked_ else "")
