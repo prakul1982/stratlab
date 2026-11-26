@@ -2285,6 +2285,8 @@ ROLL_NAMES = 6                    # else this many names of each group; the rest
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
 from .intel.theme_data import CALC_KINDS as ROLL_WHY, f1, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
 # ex49 (R48): the mark on a left-out company's own row is its reason's kind (theme_data.out_reason), each with its note under the table
+MARKS_POINTER = "What the marks on its rows mean"          # deck96: the key to the marks, on the method page
+REASON_WHERE = "each company's reason is on the theme's page in StratLab"      # deck96: never said to be on a page that doesn't show it
 ROLL_TAG = {"different revenue model": "different model", "another business": "another business", "insufficient evidence": "insufficient evidence",
             "not confirmed in the theme": "not confirmed", "no figure stored": "no figures", "too small or too stale to compare": "too small or stale",
             "revenue basis not confirmed": "basis not confirmed"}
@@ -7957,7 +7959,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             # deck89 (owner, 25 Nov: short footnotes): what the marks on the layer's rows mean and who is in its figures, in full in the
             # appendix's notes; the page keeps one line that says where
             page_notes.append([title, " ".join(fparts)])
-            fparts = [f"What the marks on its rows mean, and who is in its figures: ⟦{METHOD_TITLE}⟧."]
+            # deck96 (the live decks: "What the marks on its rows mean, and who is in its figures: p. 28", a page with the key to the marks
+            # and no layer's list): the pointer says what the page it names shows, and where each company's own reason is
+            fparts = [f"{MARKS_POINTER}: ⟦{METHOD_TITLE}⟧; {REASON_WHERE}."]
         chh = 0.0
         intro = list(intro_lead)
         below = TOP + (len(wrap(intro[0], 12, CW)) * _lh(12) + 0.15 if intro else 0)
