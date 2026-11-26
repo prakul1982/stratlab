@@ -113,7 +113,6 @@ const mfPage = () => import("./pages/money/MutualFundsPage");
 const MutualFundsPage = page(mfPage, "MutualFundsPage");
 const TaxReportPage = page(taxPage, "TaxReportPage");
 const TaxToolsPage = page(() => import("./pages/money/TaxToolsPage"), "TaxToolsPage");
-const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
 const UsTaxPage = page(() => import("./pages/money/UsTaxPage"), "UsTaxPage");
 const ItrExportPage = page(() => import("./pages/money/ItrExportPage"), "ItrExportPage");
 const SipTestPage = page(() => import("./pages/money/SipTestPage"), "SipTestPage");
@@ -152,7 +151,8 @@ const IposPage = page(() => import("./pages/IposPage"), "IposPage");
 const IpoPage = page(() => import("./pages/IpoPage"), "IpoPage");
 const ChartPage = page(() => import("./pages/ChartPage"), "ChartPage");
 // IA-1: the one Calendar's "All dates" and Market today's Flows
-const CalendarPage = page(() => import("./pages/CalendarPage"), "CalendarPage");
+const calendarPage = () => import("./pages/CalendarPage");
+const CalendarPage = page(calendarPage, "CalendarPage");
 const FlowsPage = page(() => import("./pages/FlowsPage"), "FlowsPage");
 const DevKit = page(() => import("./pages/DevKit"), "DevKit");   // /dev/kit: the design kit on one page (dev builds and admins only)
 
@@ -170,7 +170,7 @@ function warmFirstPage(path: string) {
     : path === "/tax-report" ? taxPage
     : path === "/money/net-worth" ? netWorth
     : path === "/money/mutual-funds" ? mfPage
-    : path === "/money/calendar" ? moneyCalendar
+    : path === "/money/calendar" || path === "/trade/events" || path === "/calendar" ? calendarPage       // cal94: the one Calendar
     : path === "/trade/journal" ? journalPage
     : path === "/research/screens" ? screensPage
     : path.startsWith("/research") ? research

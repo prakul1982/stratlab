@@ -1,10 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { CAL_KEPT, CAL_SHOWS, askedShow, calDefault, calHref, keptShow, type CalKept, type CalShow } from "../lib/calendarShow";
 import { fmtDate, istToday, price } from "../lib/format";
-import { importWithRetry } from "../lib/lazyRetry";
 import { loadEvents, type EventsView } from "../lib/marketEvents";
 import { useMenuSpace } from "../lib/menuSpace";
 import { usePersisted } from "../lib/persist";
@@ -15,6 +14,8 @@ import { TYPES, TYPE_NAME, ipoRows, mergeRows, type CalRow, type CalType } from 
 import type { ResultRow, ResultDay } from "./ResultsPage";
 import type { ActionRow } from "./CorpActionsPage";
 import { RegionSwitch } from "../components/Research";
+import { EventsPage } from "./trade/EventsPage";
+import { MoneyCalendarPage } from "./money/MoneyCalendarPage";
 import { SIZE_NAME, type Facets } from "../components/CalendarFilters";
 import { Card, ChipBar, ChipSet, DataTable, ErrorState, Field, PageHeader, Select, Skeleton, type Column } from "../components/kit";
 
@@ -29,8 +30,7 @@ type ResultsView = { weeks: { from: string; to: string; rows: ResultRow[]; days?
 type CorpView = { ahead: ActionRow[] };
 type MoneyView = { events: { id: string; date: string; title: string; cat: string; detail: string }[] };
 
-const EventsPage = lazy(() => importWithRetry(() => import("./trade/EventsPage")).then((m) => ({ default: m.EventsPage })));
-const MoneyCalendarPage = lazy(() => importWithRetry(() => import("./money/MoneyCalendarPage")).then((m) => ({ default: m.MoneyCalendarPage })));
+// in this page's own download: loaded on their own after it, the title was drawn twice and the page moved (CLS)
 
 /** Each table filter: the kinds of date it lists, its title and line, and the research table it links to for the full picture. */
 const VIEWS: Record<Exclude<CalShow, "events" | "money">, { types: CalType[]; title: string; lede: string; full?: [string, string] }> = {
@@ -61,10 +61,8 @@ export function CalendarPage() {
   const eyebrow = `${space === "mine" ? MINE_NAME : SPACES[space].label} · Calendar`;
   const chips = <ChipBar label="Which dates" value={show ?? ""} onChange={pick} wrap options={CAL_SHOWS} />;
   const row = <Card label="Which dates" className="cal-show" testId="cal-show">{chips}</Card>;
-  if (show === "events" || show === "money") {
-    const Page = show === "events" ? EventsPage : MoneyCalendarPage;
-    return <Suspense fallback={<div className="k-page"><PageHeader eyebrow={eyebrow} title="Calendar" />{row}<Card><Skeleton label="Opening the calendar" /></Card></div>}><Page top={row} eyebrow={eyebrow} /></Suspense>;
-  }
+  if (show === "events") return <EventsPage top={row} eyebrow={eyebrow} />;
+  if (show === "money") return <MoneyCalendarPage top={row} eyebrow={eyebrow} />;
   if (!show) return <div className="k-page"><PageHeader eyebrow={eyebrow} title="Calendar" />{row}<Card><Skeleton label="Reading the calendars" /></Card></div>;
   return <DatesTable key={show} show={show} eyebrow={eyebrow} chips={chips} />;
 }
