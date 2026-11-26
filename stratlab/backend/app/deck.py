@@ -8240,6 +8240,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                                                                                     for c in b.get("companies") or []}
     n_adj = sum(1 for x in lead if x["symbol"] in adj_)
     lead_core = f": {len(lead) - n_adj:,} core members and {_n(n_adj, 'adjacent participant')}" if n_adj else ""
+    # deck96 (the live Automotive deck: "Bajaj Finance Limited is the largest at ₹6.83 lakh cr", a lender, an adjacent participant): the
+    # company the heading names as the largest is the largest core member
+    top_ = next((x for x in lead if x["symbol"] not in adj_), lead[0] if lead else None)
+    top_said = (f"{top_['name']} is the largest{' core member' if n_adj else ''} at {cap(top_.get('cap'))}") if top_ else ""
     if lead:
         # short headings on one line, so 20 or more rows fit a page (R20: 8 rows a page)
         lcols = [("revenue", "Revenue", 1.15), ("sales_1y", "Growth", 0.95), ("ebitda", "EBITDA", 0.95), ("net", "Net", 0.9), ("roce", "ROCE", 0.85)]
@@ -8301,7 +8305,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         for k, chunk in enumerate(pages):
             s = Slide("Every company's figures" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
                       f"{_n(len(lead), 'company', 'companies')} with figures" + (f" ({lead_mix})" if lead_mix else "") + lead_core
-                      + f", one row each; {lead[0]['name']} is the largest at {cap(lead[0].get('cap'))}",
+                      + f", one row each; {top_said}",
                       eyebrow=eb("Appendix"))
             s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, **cbase)
             s.blocks[-1]["syms"] = syms_[sum(len(c_) for c_ in pages[:k]):][:len(chunk)]        # each row's company, for the gate's marks check

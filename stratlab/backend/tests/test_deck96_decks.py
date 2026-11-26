@@ -136,3 +136,18 @@ def test_a_recreational_boat_maker_is_not_confirmed_in_aerospace_and_defense_on_
     assert not D.not_of_kind("US", "Shipbuilding", boat, "") and not D.not_of_kind("IN", "Defence", boat, "")
     # its state: its own words describe other work, listed, in no figure
     assert D.evidence_state(boat, set(), "", status="unverified") == "not_confirmed"
+
+
+def test_the_companies_table_names_the_largest_core_member_never_an_adjacent_participant():
+    # the live Automotive deck: "Bajaj Finance Limited is the largest at ₹6.83 lakh cr" over every company's figures, a lender, an adjacent
+    # participant of the theme
+    v = _view()
+    lay = max((b for b in v["layers"] if not b.get("official")), key=lambda b: max(c.get("cap") or 0 for c in b["companies"]))
+    lay["adjacent"] = {"kind": "lenders and financiers", "theme": "own business (Alcoholic beverages)"}
+    adj = {c["symbol"] for c in lay["companies"]}
+    slides, _ = deck.theme_plan(v)
+    heads = [s.subtitle for s in slides if s.title.startswith("Every company's figures")]
+    assert heads
+    rows = [c for b in v["layers"] for c in b["companies"] if c.get("cap") and c["symbol"] not in adj and c.get("status") != "unverified"]
+    top = max(rows, key=lambda c: c["cap"])
+    assert all(f"{top['name']} is the largest core member at" in h for h in heads), heads[0]
