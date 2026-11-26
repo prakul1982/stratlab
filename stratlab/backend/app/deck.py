@@ -7388,10 +7388,12 @@ def _method_page(printed: list, cards: list, built: list, v: dict, asof: str, ey
         elif not apart and fh <= room:
             pages[0].add("table", (M + lw + 0.3, TOP, rw, fh), head=fhead, rows=figs, widths=fw, numeric=[False, False], tight=True, small=True)
         else:            # a long list of figures, or plain words that need the page's width, runs on its own page, never cut
-            for k, chunk in enumerate(table_pages(fhead, figs, [1.5, 5.0], CW, room)):
+            # deck96 (19 of the 49 live decks: "Method and sources (2 of 3)" and "(3 of 3)", eight figures a page and most of each page
+            # empty): the figures two a row at the page's width, as under the plain words, so a list of 16 takes one page
+            for k, chunk in enumerate(table_pages(head4, figs4, w4, CW, room)):
                 s_ = Slide(METHOD_TITLE, "What each figure this deck shows is, one line each", eyebrow=eyebrow)
-                s_.add("table", (M, TOP, CW, min(room, h_of(fhead, chunk, [1.5, 5.0], CW))), head=fhead, rows=chunk, widths=[1.5, 5.0],
-                       numeric=[False, False], tight=True, small=True)
+                s_.add("table", (M, TOP, CW, min(room, h_of(head4, chunk, w4, CW))), head=head4, rows=chunk, widths=w4,
+                       numeric=[False] * 4, tight=True, small=True)
                 pages.append(s_)
     if len(pages) > 1:
         for k, x in enumerate(pages):

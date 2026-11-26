@@ -151,3 +151,20 @@ def test_the_companies_table_names_the_largest_core_member_never_an_adjacent_par
     rows = [c for b in v["layers"] for c in b["companies"] if c.get("cap") and c["symbol"] not in adj and c.get("status") != "unverified"]
     top = max(rows, key=lambda c: c["cap"])
     assert all(f"{top['name']} is the largest core member at" in h for h in heads), heads[0]
+
+
+def test_the_figures_list_on_its_own_page_takes_one_page_two_figures_a_row():
+    # 19 of the 49 live decks: "Method and sources (2 of 3)" and "(3 of 3)", eight figures a page, most of each page empty
+    long = " ".join(["The AI's layers and additions can be wrong and each company's place and how it was checked are on the theme's page in StratLab."] * 9)
+    cards = [{"title": "How the companies got in", "lines": ["Official industries: Hotels & Resorts · Airline. The base is every listed company the "
+                                                             "exchange's own industry classification puts in these industries."]},
+             {"title": "Who is in it", "lines": ["99 companies in all, each in one layer."]},
+             {"title": "Reading the figures", "lines": [deck.MARKS_LINE]},
+             {"title": "Not in this deck, and what the AI wrote", "lines": [long + " " + deck.THEME_DISCLAIMER]}]
+    built = deck.Slide("How the figures are built")
+    figs = [[f"Figure number {i}", "Passenger revenue per revenue passenger kilometre, as the airline states it for the quarter."] for i in range(16)]
+    built.add("table", (0, 0, 10, 5), head=["Figure", "How it is built"], rows=figs, widths=[1.5, 5.0])
+    pages = deck._method_page([], cards, [built], {"region": "IN"}, "26 Nov 2026", "")
+    assert len(pages) == 2, [p.title for p in pages]
+    said = [x for p in pages[1:] for b in p.blocks if b["kind"] == "table" for r in b["rows"] for x in r[::2] if x]
+    assert said == [f[0] for f in figs]                      # every figure, in its order, none cut
