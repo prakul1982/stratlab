@@ -19,6 +19,8 @@ import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { AsOf, Loading, PanelSkel, VerdictBadge } from "../components/ui";
 import { Card, CardHead, DataTable, Disclosure, FigureTable, PageHeader, Seg, Signed, ScrollList } from "../components/kit";
 import { addDaysIso } from "../lib/mine";
+import { TYPE_NAME, myStockRows, type ActionIn, type CalRow, type ResultIn } from "../lib/calendarRows";
+import { calHref } from "../lib/calendarShow";
 import { Panel, WatchTable } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
@@ -286,9 +288,9 @@ export function InvestHome() {
           so the three stack across the page instead */}
       <div className={fewWatched ? "space-col" : "grid2 space-panels"} data-testid="invest-watch-row">
         <WatchPanel region={region} />
-        {fewWatched ? <><NextEvents region={region} /><ResultsToday region={region} /></> : (
+        {fewWatched ? <><InvestComing region={region} /><ResultsToday region={region} /></> : (
           <div className="space-col">
-            <NextEvents region={region} />
+            <InvestComing region={region} />
             <ResultsToday region={region} />
           </div>
         )}
@@ -299,8 +301,8 @@ export function InvestHome() {
   );
 }
 
-/** The next market events (RBI policy, data releases, the Fed, index changes, holidays, each index's next weekly expiry), from the
- * Events page, as a table. The rule is My space's (lib/marketEvents comingMarketEvents): the US tab lists the US's own (R71-004),
+/** The Trade home's "Coming up": the next market events (RBI policy, data releases, the Fed, index changes, holidays, each index's next
+ * weekly expiry), from the Events page, as a table (the Invest home's lists the person's own stocks' dates: InvestComing). The rule is My space's (lib/marketEvents comingMarketEvents): the US tab lists the US's own (R71-004),
  * India's holidays count (R72-005), each index's next weekly expiry (DF-023), and nothing is in one "Coming up" and missing from the
  * other (LIVE3-015: this one kept a single expiry and dropped a holiday). */
 function NextEvents({ limit = 5, testId = "invest-events", region, calendar = "/calendar" }: { limit?: number; testId?: string; region?: Region; calendar?: string }) {
@@ -315,6 +317,63 @@ function NextEvents({ limit = 5, testId = "invest-events", region, calendar = "/
       {next === null ? <div className={limit === 5 ? "coming-skel" : undefined}><PanelSkel label="Reading the market events" lines={1} /></div> : (
         <DataTable label="Coming up" rows={next} rowKey={(e) => e.id} stack={false}
           columns={[{ key: "d", header: "Date", cell: (e) => evWhen(e) }, { key: "e", header: "Event", rowHeader: true, wrap: true, cell: (e) => e.title }]} />
+      )}
+    </Card>
+  );
+}
+
+type StockResults = { today: string; mine_count: number; weeks: { to: string; rows: ResultIn[] }[] };
+type StockActions = { ahead: ActionIn[] };
+
+/** The Invest home's "Coming up" (inv96, owner 26 Nov): the next five dates of the person's own stocks in the market picked at the top
+ * (watchlist, holdings, notebooks, paper sessions): results days, ex-dividend and record dates, bonuses, splits and the other corporate
+ * actions. They are the Calendar's "My stocks" rows (lib/calendarRows myStockRows, from the same two answers), so the card is the first
+ * five rows of the Calendar it links to. AGMs are not among them: the app keeps no AGM dates.
+ *
+ * With no stocks, or none dated this week or next, the card lists the market's events under a label saying so, rather than one line:
+ * the card stays useful to someone with no watchlist yet, it keeps the height its wait holds (one line under the skeleton's five rows
+ * was a 220px shrink, moving the cards under it), and the label's link is the way to add stocks. The label takes the fifth row's place. */
+function InvestComing({ region }: { region: Region }) {
+  const [v, setV] = useState<{ region: Region; rows: CalRow[]; has: boolean } | { region: Region; error: true } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const q = `region=${region}&scope=mine`;
+    Promise.all([api<StockResults>(`/research/results?${q}`), api<StockActions>(`/research/corp-actions?${q}`)]).then(([res, corp]) => {
+      // the window is the Calendar's: today to the last day the results calendar covers (this week and next)
+      const until = res.weeks.length ? res.weeks[res.weeks.length - 1].to : addDaysIso(res.today, 13);
+      if (live) setV({ region, rows: myStockRows(res.weeks.flatMap((w) => w.rows), corp.ahead, res.today, until), has: res.mine_count > 0 });
+    }).catch(() => live && setV({ region, error: true }));
+    return () => { live = false; };
+  }, [region]);
+  const got = v?.region === region ? v : null;
+  const mine = got && "rows" in got && got.rows.length ? got.rows.slice(0, 5) : null;
+  const ev = useEvents(!!got && !mine);
+  const market = ev ? comingMarketEvents(ev.events, { today: ev.today, nowHm: istHm(), end: addDaysIso(ev.today, 30), weekEnd: addDaysIso(ev.today, 7), region }).slice(0, 4) : null;
+  const add = <Link to={`/research?region=${region}`} className="link">add stocks</Link>;
+  const why = !got ? null : "error" in got ? <>Your stocks&apos; dates couldn&apos;t be read just now. Market events:</>
+    : got.has ? <>Market events (nothing dated for your stocks this week or next)</> : <>Market events ({add} to see their dates)</>;
+  return (
+    <Card testId="invest-events" label="Coming up" className="coming-mine">
+      {/* cal94: "See calendar" opens the one Calendar on this home's own dates; inv96: on My stocks, in the market picked here */}
+      <CardHead title="Coming up" actions={<SeeCalendar to={withRegion(calHref("mine"), region)} />} />
+      {/* cal94: the wait holds the five-row table's height, so the card doesn't grow under what's above it moving (LIVE12B-012's CLS check) */}
+      {mine ? (
+        // three columns kept as a table on a phone too: with each company named by its symbol they fit a 344px card (ui-lint R18), and a
+        // row stays one line high instead of a tall card per date, so the card fits a phone's screen (the scroll rule)
+        <div className="coming-fit"><DataTable label="Coming up" rows={mine} rowKey={(r) => r.id} stack={false}
+          columns={[{ key: "d", header: "Date", cell: (r) => <span className="nowrap">{fmtDate(r.date, { weekday: true, year: false })}</span> },
+            // the symbol, as the watchlist and Results today beside it name the stocks (a 382px column at 1280: three names and the record
+            // date wrapped each row to three lines and the table ran 69px past its box, ui-lint R27/R29); the full name is the link's title
+            { key: "c", header: "Company", rowHeader: true, cell: (r) => <Link className="link" to={r.to} title={r.name}>{r.symbol ?? r.name}</Link> },
+            { key: "w", header: "What", wrap: true, cell: (r) => r.detail || TYPE_NAME[r.type] }]} /></div>
+      ) : !got || !market ? <div className="coming-skel"><PanelSkel label="Reading your stocks' dates" lines={1} /></div> : (
+        <>
+          <p className="small muted" data-testid="invest-coming-why">{why}</p>
+          {market.length ? (
+            <DataTable label="Coming up" rows={market} rowKey={(e) => e.id} stack={false}
+              columns={[{ key: "d", header: "Date", cell: (e) => evWhen(e) }, { key: "e", header: "Event", rowHeader: true, wrap: true, cell: (e) => e.title }]} />
+          ) : <p className="small muted">Nothing dated in the next 30 days.</p>}
+        </>
       )}
     </Card>
   );

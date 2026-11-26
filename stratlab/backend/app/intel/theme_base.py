@@ -37,7 +37,12 @@ CONCEPTS = [
      "IN": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "IN_named": ["BEML"],
      "US": ["Guided Missiles & Space Vehicles & Parts", "Ordnance & Accessories, (No Vehicles/Guided Missiles)",
             "Search, Detection, Navigation, Guidance, Aeronautical Sys", "Aircraft Engines & Engine Parts",
-            "Aircraft Parts & Auxiliary Equipment, Nec", "Ship & Boat Building & Repairing", "Aircraft"]},
+            "Aircraft Parts & Auxiliary Equipment, Nec", "Ship & Boat Building & Repairing", "Aircraft"],
+     # deck96 (the live Aerospace and defense deck: MasterCraft, Malibu Boats, Twin Vee PowerCats, Vision Marine and NextBoat, recreational
+     # boat makers, in its "Other" group on the SEC's "Ship & Boat Building & Repairing", the warship builders' industry): a company of an
+     # industry named here is of the theme only when its own words say this (industry_must)
+     "US_must": {"Ship & Boat Building & Repairing": r"\b(?:nav(?:y|al|ies)|defen[cs]e|military|warships?|submarines?|aircraft carriers?|"
+                                                     r"coast guard|combatants?|armed forces|department of (?:the navy|defense)|government)\b"}},
     {"words": {"shipbuilding", "shipyard", "shipbuilder"}, "IN": ["Ship Building & Allied Services"], "US": ["Ship & Boat Building & Repairing"]},
     {"words": {"railway", "rail", "railroad", "train", "metro"}, "IN": ["Railway Wagons"],
      "IN_named": ["RVNL", "IRCON", "IRFC", "RITES", "IRCTC", "RAILTEL", "BEML", "CONCOR", "KERNEX"],
@@ -264,6 +269,17 @@ def named_lists(region: str, theme: str) -> tuple[list[str], list[str]]:
         named += [s for s in c.get(f"{region}_named", []) if s not in named]
         out += [s for s in c.get(f"{region}_except", []) if s not in out]
     return named, [s for s in out if s not in named]
+
+
+def industry_must(region: str, theme: str) -> dict:
+    """deck96: {industry key: what a company of that industry must say in its own words to be of the theme} from the curated entries the
+    theme names (`<region>_must`): an industry of the theme's list that also holds another kind of business (recreational boat makers beside
+    the warship builders)."""
+    out: dict = {}
+    for c in concepts_of(theme):
+        for ind, rx in (c.get(f"{region}_must") or {}).items():
+            out[key(ind)] = re.compile(rx, re.I)
+    return out
 
 
 def curated(region: str, theme: str, known: dict[str, str]) -> list[str] | None:

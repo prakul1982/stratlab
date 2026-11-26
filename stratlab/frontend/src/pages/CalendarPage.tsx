@@ -3,14 +3,14 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { CAL_KEPT, CAL_SHOWS, askedShow, calDefault, calHref, keptShow, type CalKept, type CalShow } from "../lib/calendarShow";
-import { fmtDate, istToday, price } from "../lib/format";
+import { fmtDate, istToday } from "../lib/format";
 import { loadEvents, type EventsView } from "../lib/marketEvents";
 import { useMenuSpace } from "../lib/menuSpace";
 import { usePersisted } from "../lib/persist";
 import { useRegion, useWatchlist, type Region } from "../lib/research";
 import { MINE_NAME, SPACES } from "../lib/spaces";
 import type { IpoList } from "../lib/ipo";
-import { TYPES, TYPE_NAME, ipoRows, mergeRows, type CalRow, type CalType } from "../lib/calendarRows";
+import { TYPES, TYPE_NAME, actionRows, ipoRows, mergeRows, resultRows, type CalRow, type CalType } from "../lib/calendarRows";
 import type { ResultRow, ResultDay } from "./ResultsPage";
 import type { ActionRow } from "./CorpActionsPage";
 import { RegionSwitch } from "../components/Research";
@@ -128,13 +128,9 @@ function DatesTable({ show, eyebrow, chips }: { show: Exclude<CalShow, "events" 
   const rows = useMemo(() => {
     const ok = <T,>(v: T | null | "error"): v is T => !!v && v !== "error";
     const parts: CalRow[][] = [];
-    if (ok(res)) parts.push([...res.weeks.flatMap((w) => w.rows).filter((r) => !fullDays[r.date.slice(0, 10)]), ...Object.values(fullDays).flat()].filter((r) => r.date >= today).map((r) => ({
-      id: `res:${r.region}:${r.symbol}:${r.date}`, date: r.date.slice(0, 10), type: "results" as const, name: r.name ?? r.symbol, mine: r.mine,
-      to: `/research/${r.region}/${encodeURIComponent(r.symbol)}`, detail: [r.purpose, r.when].filter(Boolean).join(" · ") })));
-    if (ok(corp)) parts.push(corp.ahead.filter((a) => a.ex_date <= until).map((a) => ({
-      id: `act:${a.id}`, date: a.ex_date.slice(0, 10), type: "action" as const, name: a.name ?? a.symbol, mine: a.mine,
-      to: `/research/${a.region}/${encodeURIComponent(a.symbol)}`,
-      detail: [`Ex-date: ${a.label}`, a.kind === "dividend" && a.amount ? `${price(a.amount, a.currency, a.amount < 1 ? 4 : 2)} a share` : null, a.record_date ? `record date ${fmtDate(a.record_date.slice(0, 10), { year: false })}` : null].filter(Boolean).join(" · ") })));
+    // the companies' own dates are lib/calendarRows', the Invest home's Coming up reads the same (inv96)
+    if (ok(res)) parts.push(resultRows([...res.weeks.flatMap((w) => w.rows).filter((r) => !fullDays[r.date.slice(0, 10)]), ...Object.values(fullDays).flat()], today));
+    if (ok(corp)) parts.push(actionRows(corp.ahead, until));
     if (ok(ipos)) parts.push(ipoRows([...(ipos.tabs.upcoming ?? []), ...(ipos.tabs.open ?? []), ...(ipos.tabs.closed ?? [])], today, until));
     if (ok(ev)) parts.push(ev.events.filter((e) => e.date >= today && e.date <= until && (region === "US" ? e.kind === "us" : e.kind !== "us")).map((e) => ({
       id: `ev:${e.id}`, date: e.date, type: "event" as const, name: e.title, to: "/trade/events", detail: [e.time ? `${e.time} IST` : null, e.figure ?? null].filter(Boolean).join(" · ") || ev.kinds[e.kind] || "" })));

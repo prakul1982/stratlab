@@ -384,6 +384,10 @@ def _on_postgres(fake_db, monkeypatch):
 
 def build(monkeypatch, real_clock: bool = False) -> dict:
     """Wire the app to fakes. Returns handles the tests use: the client, the fake AI, the fake database."""
+    # inv96: first, before this world's database is set up: India VIX quotes and history another test read, and its background first
+    # read of the year ended (left running, its next pieces were stored in this world's database)
+    from app import vix
+    vix.forget()
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _no_network)
     # the sources' pacing waits are politeness towards real servers; against fakes they only make a busy test (the
     # fuzz) slow by chance, depending on what ran before it, so no source waits for its rate limit here
@@ -432,8 +436,6 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     surveillance._cache.clear()                 # the surveillance lists another test stored
     from app import etf_nav
     etf_nav.forget()                            # the ETF list and gap history another test stored
-    from app import vix
-    vix.forget()                                # India VIX quotes and history another test read
     from app.intel import company as _company
     _company.forget_closed_quotes()             # quotes read after a close another test kept (LIVE5-001)
     from app import biz_updates, shareholders

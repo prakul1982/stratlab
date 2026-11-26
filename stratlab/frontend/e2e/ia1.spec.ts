@@ -145,7 +145,9 @@ test("the one Calendar: fixed in the sidebar, opening on each space's dates; its
 test("Coming up on every home: Trade, Invest, Money and My space each link to the Calendar on their own dates", async ({ page }) => {
   test.setTimeout(120_000);
   const errors = await open(page, "/trade");
-  for (const [home, card, to] of [["/trade", "trade-coming", "/trade/events"], ["/invest", "invest-events", "/calendar"], ["/money", "money-coming", "/money/calendar"], ["/mine", "mine-coming", "/calendar"]] as const) {
+  // (changed on purpose, inv96: Invest's card lists the person's own stocks' dates, so its link opens the Calendar on My stocks, in the
+  // market picked on the home)
+  for (const [home, card, to] of [["/trade", "trade-coming", "/trade/events"], ["/invest", "invest-events", "/calendar?show=mine&region=IN"], ["/money", "money-coming", "/money/calendar"], ["/mine", "mine-coming", "/calendar"]] as const) {
     await page.goto(home);
     const c = page.getByTestId(card);
     await expect(c.getByRole("heading", { name: "Coming up" }), home).toBeVisible({ timeout: 30_000 });
@@ -159,6 +161,10 @@ test("Coming up on every home: Trade, Invest, Money and My space each link to th
   await page.getByTestId("money-coming").getByTestId("see-calendar").click();
   await expect(page).toHaveURL(/\/money\/calendar$/);
   await expect(page.getByRole("group", { name: "Which dates" }).locator('[aria-pressed="true"]')).toHaveText("My money dates", { timeout: 30_000 });
+  // inv96: following Invest's lands on My stocks
+  await page.goto("/invest");
+  await page.getByTestId("invest-events").getByTestId("see-calendar").click();
+  await expect(page.getByRole("group", { name: "Which dates" }).locator('[aria-pressed="true"]')).toHaveText("My stocks", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 
