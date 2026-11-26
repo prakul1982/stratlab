@@ -358,7 +358,9 @@ function InvestComing({ region }: { region: Region }) {
       <CardHead title="Coming up" actions={<SeeCalendar to={withRegion(calHref("mine"), region)} />} />
       {/* cal94: the wait holds the five-row table's height, so the card doesn't grow under what's above it moving (LIVE12B-012's CLS check) */}
       {mine ? (
-        <DataTable label="Coming up" rows={mine} rowKey={(r) => r.id} stack={false}
+        // three columns: each row stacks on a phone, as Money home's does, so the record date is never off the edge (ui-lint R18; as a
+        // table its columns' phone minimums made it 464px in a 344px card). Below the fold on a phone, so the taller rows move nothing seen.
+        <DataTable label="Coming up" rows={mine} rowKey={(r) => r.id} stack
           columns={[{ key: "d", header: "Date", cell: (r) => <span className="nowrap">{fmtDate(r.date, { weekday: true, year: false })}</span> },
             { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Link className="link" to={r.to}>{r.name}</Link> },
             { key: "w", header: "What", wrap: true, cell: (r) => r.detail || TYPE_NAME[r.type] }]} />
