@@ -214,7 +214,7 @@ a.link { margin-inline: -2px; }
 .sidebar { position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column;
   background: var(--paper-2); border-right: 1px solid var(--line); font-size: 14px; }
 /* IA-2 (item 36): a little tighter, so a 1280x800 laptop shows the whole menu with one section and six notebooks open */
-.side-top { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 8px; }   /* side97: the Calendar is a menu entry again, so the header has its 6px gaps back */
+.side-top { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 6px; }   /* 4px gaps: the menu holds the pinned Calendar row (side97), so a 1280x800 menu with its section open still never scrolls (ia2 item 36) */
 .side-brand { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 4px 2px; }
 .side-close { display: none; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
@@ -3254,7 +3254,7 @@ details.k-fold { display: block; }   /* the fold button's flex row (.k-fold, a s
 @media (max-width: 640px), (pointer: coarse) {
   .info-btn { --hit: 44px; }
   .brand { min-height: 44px; }
-  .side-top { padding-top: 12px; padding-bottom: 8px; }   /* the 4px the 44px logo link adds, given back so the menu keeps its height */
+  .side-top { padding-top: 12px; padding-bottom: 6px; }   /* the 4px the 44px logo link adds, given back so the menu keeps its height */
   select { min-height: 44px; }
   .k-input.sm, .k-input.k-in { height: 44px; }
   .toast button { min-height: 44px; }
