@@ -353,7 +353,7 @@ function InvestComing({ region }: { region: Region }) {
   const why = !got ? null : "error" in got ? <>Your stocks&apos; dates couldn&apos;t be read just now. Market events:</>
     : got.has ? <>Market events (nothing dated for your stocks this week or next)</> : <>Market events ({add} to see their dates)</>;
   return (
-    <Card testId="invest-events" label="Coming up">
+    <Card testId="invest-events" label="Coming up" className="coming-mine">
       {/* cal94: "See calendar" opens the one Calendar on this home's own dates; inv96: on My stocks, in the market picked here */}
       <CardHead title="Coming up" actions={<SeeCalendar to={withRegion(calHref("mine"), region)} />} />
       {/* cal94: the wait holds the five-row table's height, so the card doesn't grow under what's above it moving (LIVE12B-012's CLS check) */}
@@ -362,7 +362,9 @@ function InvestComing({ region }: { region: Region }) {
         // table its columns' phone minimums made it 464px in a 344px card). Below the fold on a phone, so the taller rows move nothing seen.
         <DataTable label="Coming up" rows={mine} rowKey={(r) => r.id} stack
           columns={[{ key: "d", header: "Date", cell: (r) => <span className="nowrap">{fmtDate(r.date, { weekday: true, year: false })}</span> },
-            { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Link className="link" to={r.to}>{r.name}</Link> },
+            // the symbol, as the watchlist and Results today beside it name the stocks (a 382px column at 1280: three names and the record
+            // date wrapped each row to three lines and the table ran 69px past its box, ui-lint R27/R29); the full name is the link's title
+            { key: "c", header: "Company", rowHeader: true, cell: (r) => <Link className="link" to={r.to} title={r.name}>{r.symbol ?? r.name}</Link> },
             { key: "w", header: "What", wrap: true, cell: (r) => r.detail || TYPE_NAME[r.type] }]} />
       ) : !got || !market ? <div className="coming-skel"><PanelSkel label="Reading your stocks' dates" lines={1} /></div> : (
         <>

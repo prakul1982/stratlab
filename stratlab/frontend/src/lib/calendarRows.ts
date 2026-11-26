@@ -8,7 +8,7 @@ export const TYPE_NAME: Record<CalType, string> = { results: "Results", action: 
 export const TYPE_CHIP: Record<CalType, string> = { results: "Results", action: "Corporate actions", ipo: "IPOs", event: "Market events", money: "My money dates" };
 export const TYPES = Object.keys(TYPE_NAME) as CalType[];
 
-export interface CalRow { id: string; date: string; type: CalType; name: string; to: string; detail: string; mine?: boolean }
+export interface CalRow { id: string; date: string; type: CalType; name: string; to: string; detail: string; mine?: boolean; symbol?: string }
 
 /** The dates an IPO has in the window, each its own row: "Opens", "Closes", "Allotment", "Lists". */
 export function ipoRows(rows: IpoRow[], from: string, to: string): CalRow[] {
@@ -42,14 +42,14 @@ const companyTo = (region: string, symbol: string) => `/research/${region}/${enc
 /** Results days from `today` on, each its own row: the company, its page, and what the exchange filing says it is for. */
 export function resultRows(rows: ResultIn[], today: string): CalRow[] {
   return rows.filter((r) => r.date >= today).map((r) => ({
-    id: `res:${r.region}:${r.symbol}:${r.date}`, date: r.date.slice(0, 10), type: "results" as const, name: r.name ?? r.symbol, mine: r.mine,
+    id: `res:${r.region}:${r.symbol}:${r.date}`, date: r.date.slice(0, 10), type: "results" as const, name: r.name ?? r.symbol, symbol: r.symbol, mine: r.mine,
     to: companyTo(r.region, r.symbol), detail: [r.purpose, r.when].filter(Boolean).join(" · ") }));
 }
 
 /** Corporate actions by ex-date up to `until`: the action, a dividend's amount a share, and the record date. */
 export function actionRows(rows: ActionIn[], until: string): CalRow[] {
   return rows.filter((a) => a.ex_date <= until).map((a) => ({
-    id: `act:${a.id}`, date: a.ex_date.slice(0, 10), type: "action" as const, name: a.name ?? a.symbol, mine: a.mine, to: companyTo(a.region, a.symbol),
+    id: `act:${a.id}`, date: a.ex_date.slice(0, 10), type: "action" as const, name: a.name ?? a.symbol, symbol: a.symbol, mine: a.mine, to: companyTo(a.region, a.symbol),
     detail: [`Ex-date: ${a.label}`, a.kind === "dividend" && a.amount ? `${price(a.amount, a.currency, a.amount < 1 ? 4 : 2)} a share` : null,
       a.record_date ? `record date ${fmtDate(a.record_date.slice(0, 10), { year: false })}` : null].filter(Boolean).join(" · ") }));
 }

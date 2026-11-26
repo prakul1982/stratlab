@@ -26,6 +26,7 @@ test("the person's stocks' dates: in date order, results before actions on a day
   assert.deepEqual(rows.map((r) => [r.date, r.type, r.name]), [
     ["2026-12-01", "action", "Reliance Industries"], ["2026-12-03", "results", "Tata Consultancy Services"], ["2026-12-03", "action", "Mahindra & Mahindra"]]);
   assert.equal(rows[2].to, "/research/IN/M%26M");
+  assert.equal(rows[2].symbol, "M&M");
   assert.match(rows[0].detail, /^Ex-date: Final dividend · ₹5\.50 a share · record date /);
   assert.equal(rows[1].detail, "Financial Results");
   assert.equal(rows[2].detail, "Ex-date: Bonus 1:1");
@@ -46,7 +47,8 @@ test("the Calendar's My stocks and the Invest home's card read the same rows", (
   assert.match(card, /myStockRows\(/);
   assert.match(card, /\.slice\(0, 5\)/);
   // Date · Company · What, the company a link to its page
-  assert.match(card, /header: "Date"[\s\S]*header: "Company", rowHeader: true[\s\S]*<Link className="link" to=\{r\.to\}>[\s\S]*header: "What"/);
+  // (the symbol, as the watchlist beside it names the stocks; the full name is the link's title)
+  assert.match(card, /header: "Date"[\s\S]*header: "Company", rowHeader: true, cell: \(r\) => <Link className="link" to=\{r\.to\} title=\{r\.name\}>\{r\.symbol \?\? r\.name\}<\/Link>[\s\S]*header: "What"/);
   // See calendar: the Calendar on My stocks, in the market picked here
   assert.match(card, /<SeeCalendar to=\{withRegion\(calHref\("mine"\), region\)\} \/>/);
   // the wait holds the five-row table's height (cal94, LIVE12B-012)
