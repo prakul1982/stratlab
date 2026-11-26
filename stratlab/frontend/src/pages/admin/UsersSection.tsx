@@ -5,7 +5,7 @@ import { ago, dateOnly, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
 import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Seg, Skeleton, type Column } from "../../components/kit";
 import { endsAt } from "../../lib/offer";
-import { useAdmin } from "./AdminContext";
+import { useAdmin, type Plan } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
 import { PLAN_FILTERS, PLAN_NAME, PLAN_RANK, monthShort, planNote, untilWords, usersPath, type PlanFilter, type UserRow } from "./users";
 
@@ -65,6 +65,53 @@ function AccountsCard({ test }: { test: boolean }) {
       </>}
       {removing && <ConfirmDialog title={`Remove ${stray} stray profile row${stray === 1 ? "" : "s"}?`} confirmLabel="Remove" busy={busy} onConfirm={removeStray} onClose={() => setRemoving(false)}>
         Only rows whose id isn't a sign-in account's are removed. No user, plan or data is touched.</ConfirmDialog>}
+    </Card>
+  );
+}
+
+type TestAccount = { email: string; label: string; plan: string; at: string | null };
+
+/** owner, 26 Nov ("make a button"): test accounts were only reachable through the API. Each is a "+" alias of the admin's own address on
+ * the plan picked here; the server emails that alias (your own inbox) a one-time sign-in link that expires in an hour. Re-using a label
+ * sends a fresh link and sets that account's plan again. */
+function TestAccountsCard() {
+  const { fail, notify } = useApp();
+  const [v, setV] = useState<{ accounts: Record<string, TestAccount>; max: number } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [label, setLabel] = useState("");
+  const [plan, setPlan] = useState<Plan>("pro");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  const load = useCallback(() => { setFailed(false); api<{ accounts: Record<string, TestAccount>; max: number }>("/admin/test-accounts").then(setV).catch((e) => { setFailed(true); fail(e); }); }, [fail]);
+  useEffect(load, [load]);
+  const ok = /^[a-z0-9][a-z0-9-]{0,19}$/.test(label);
+  const send = async (lab: string, pl: Plan) => {
+    setBusy(true);
+    try {
+      await api("/admin/test-account", { method: "POST", body: { label: lab, plan: pl } });
+      const msg = `A one-time sign-in link for "${lab}" (${PLAN_NAME[pl]}) was sent to your own inbox. It works once and expires in an hour.`;
+      notify(msg); setSent(msg); setLabel(""); load();
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  if (!v) return <Card label="Test accounts">{failed ? <ErrorState title="The test accounts couldn't be read" action={{ label: "Try again", onClick: load }} /> : <Skeleton label="Loading" lines={2} />}</Card>;
+  const rows = Object.entries(v.accounts).map(([id, a]) => ({ id, ...a })).sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
+  const full = rows.length >= v.max && !rows.some((r) => r.label === label);
+  return (
+    <Card testId="admin-test-accounts" label="Test accounts">
+      <CardHead title={`Test accounts (${rows.length} of ${v.max})`} info="Accounts on a + alias of your own address, for trying a plan as a user would or for the automated reviewer. Each sign-in link goes to your own inbox, works once and expires in an hour. Test accounts are left out of every count unless Show test accounts is ticked." />
+      {!rows.length ? <p className="k-small k-muted">None yet.</p> : (
+        <ul className="k-small adm-list" data-testid="test-account-list">{rows.map((r) => (
+          <li key={r.id} className="k-spread"><span><b>{r.label}</b> · <span className="adm-break">{r.email}</span> · {PLAN_NAME[r.plan as Plan] ?? r.plan}{r.at ? ` · made ${dateOnly(r.at)}` : ""}</span>
+            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void send(r.label, (r.plan as Plan) in PLAN_NAME ? r.plan as Plan : "free")}>Email a new link</button></li>))}</ul>
+      )}
+      <FormGrid label="Make a test account" onSubmit={(e) => { e.preventDefault(); if (ok && !full) void send(label, plan); }}>
+        <Field label="Name" value={label} onChange={(e) => setLabel(e.target.value.toLowerCase())} placeholder="e.g. pro-check" maxLength={20}
+          hint="Lower-case letters, digits and dashes; up to 20. It becomes the alias: you+name@…" />
+        <Seg label="Tier" options={(["free", "basic", "pro"] as Plan[]).map((p) => ({ value: p, label: PLAN_NAME[p] }))} value={plan} onChange={(x) => setPlan(x as Plan)} />
+        <FormActions><button type="submit" className="btn outline sm" disabled={busy || !ok || full}>{busy ? "Sending…" : "Make it and email a sign-in link"}</button></FormActions>
+        {full && <p className="k-small k-muted">All {v.max} test accounts are made. Re-send a link to one above.</p>}
+      </FormGrid>
+      {sent && <p className="k-small" role="status">{sent}</p>}
     </Card>
   );
 }
@@ -239,6 +286,8 @@ export function UsersSection() {
       </Card>
 
       <AccountsCard test={showTest} />
+
+      <TestAccountsCard />
 
       <InviteRewards onChanged={() => loadUsers(q, plan)} />
 
