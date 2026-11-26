@@ -127,7 +127,7 @@ test("every page has a breadcrumb: space, entry and tab; the entry's tabs are th
   for (const [path, trail] of [
     ["/trade/signals", /Trade\s*›\s*Practise\s*›\s*Forward test/], ["/trade/positioning/stocks", /Trade\s*›\s*F&O desk\s*›\s*Positioning/],
     ["/research/IN/TCS", /Invest\s*›\s*Companies\s*›\s*Look up a company/], ["/research/investor", /Invest\s*›\s*Watchlist\s*›\s*Stocks/],
-    ["/money/calendar", /Money\s*›\s*Calendar\s*›\s*My money dates/], ["/holdings", /Money\s*›\s*Portfolio\s*›\s*Holdings/], ["/notebooks", /Trade\s*›\s*Strategies\s*›\s*Notebooks/],
+    ["/money/calendar", /^Money\s*›\s*Calendar\s*▾/],          // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar) ["/holdings", /Money\s*›\s*Portfolio\s*›\s*Holdings/], ["/notebooks", /Trade\s*›\s*Strategies\s*›\s*Notebooks/],
     ["/trade/journal", /^Trade\s*›\s*Trade journal\s*▾/], ["/research/themes", /^Invest\s*›\s*Themes\s*▾/],
   ] as const) {
     await page.goto(path);

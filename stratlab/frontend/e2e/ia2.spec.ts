@@ -386,7 +386,8 @@ test("item 44: the plan cards' buttons and lists start on one line, signed out a
 // Each card's words now fill it to within 60px of its foot, at the laptop widths.
 test("item 43: the Calendar's page of cards keeps no tall empty band in a card at 1280 and 1440", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "a laptop's widths");
-  await open(page, "/invest/g/calendar", who(false), 1280);
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the research tables' cards are Invest's Results & IPOs
+  await open(page, "/invest/g/company-dates", who(false), 1280);
   for (const w of [1280, 1440]) {
     await page.setViewportSize({ width: w, height: 900 });
     await expect(page.getByTestId("group-card").first()).toBeVisible({ timeout: 30_000 });
