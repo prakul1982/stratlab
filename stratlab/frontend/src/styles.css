@@ -226,7 +226,7 @@ a.link { margin-inline: -2px; }
 .search-btn:hover { color: var(--ink); border-color: var(--dash); }
 .search-btn span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* side97: Home and Calendar, pinned in every space, set apart from the space's own menu by a rule */
-.side-pin { padding-bottom: 6px; margin: 1px 0 6px; border-bottom: 1px solid var(--line); }
+.side-pin { margin-top: -9px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }   /* -9px: 1px under Home, as a list's rows sit, past the menu's 10px gap */
 /* cal94: a Coming up card's wait is the height of its five-row table (header and five 44px rows) */
 .coming-skel { min-height: 264px; }
 /* inv96: Invest's Coming up stays a table on a phone, its cells free to wrap (the date and symbol never break), so a row is one or two lines, not a card */
