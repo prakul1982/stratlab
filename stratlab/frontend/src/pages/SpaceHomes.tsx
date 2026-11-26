@@ -358,14 +358,14 @@ function InvestComing({ region }: { region: Region }) {
       <CardHead title="Coming up" actions={<SeeCalendar to={withRegion(calHref("mine"), region)} />} />
       {/* cal94: the wait holds the five-row table's height, so the card doesn't grow under what's above it moving (LIVE12B-012's CLS check) */}
       {mine ? (
-        // three columns: each row stacks on a phone, as Money home's does, so the record date is never off the edge (ui-lint R18; as a
-        // table its columns' phone minimums made it 464px in a 344px card). Below the fold on a phone, so the taller rows move nothing seen.
-        <DataTable label="Coming up" rows={mine} rowKey={(r) => r.id} stack
+        // three columns kept as a table on a phone too: with each company named by its symbol they fit a 344px card (ui-lint R18), and a
+        // row stays one line high instead of a tall card per date, so the card fits a phone's screen (the scroll rule)
+        <div className="coming-fit"><DataTable label="Coming up" rows={mine} rowKey={(r) => r.id} stack={false}
           columns={[{ key: "d", header: "Date", cell: (r) => <span className="nowrap">{fmtDate(r.date, { weekday: true, year: false })}</span> },
             // the symbol, as the watchlist and Results today beside it name the stocks (a 382px column at 1280: three names and the record
             // date wrapped each row to three lines and the table ran 69px past its box, ui-lint R27/R29); the full name is the link's title
             { key: "c", header: "Company", rowHeader: true, cell: (r) => <Link className="link" to={r.to} title={r.name}>{r.symbol ?? r.name}</Link> },
-            { key: "w", header: "What", wrap: true, cell: (r) => r.detail || TYPE_NAME[r.type] }]} />
+            { key: "w", header: "What", wrap: true, cell: (r) => r.detail || TYPE_NAME[r.type] }]} /></div>
       ) : !got || !market ? <div className="coming-skel"><PanelSkel label="Reading your stocks' dates" lines={1} /></div> : (
         <>
           <p className="small muted" data-testid="invest-coming-why">{why}</p>

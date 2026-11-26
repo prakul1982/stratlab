@@ -228,6 +228,8 @@ a.link { margin-inline: -2px; }
 .side-cal { text-decoration: none; }
 /* cal94: a Coming up card's wait is the height of its five-row table (header and five 44px rows) */
 .coming-skel { min-height: 264px; }
+/* inv96: Invest's Coming up stays a table on a phone, its cells free to wrap (the date and symbol never break), so a row is one or two lines, not a card */
+@media (max-width: 640px) { .coming-fit .k-table :is(th, td) { white-space: normal; min-width: 0 !important; max-width: none !important; padding: 9px 6px; } }
 /* inv96: the Invest home's Coming up: "What" takes the room the date and the symbol leave, with no 160px floor (in the 382px column at 1280
    the floor pushed the table past its box) */
 .coming-mine .k-table td.k-wrap, .coming-mine .k-table th.k-wrap { min-width: 0; }
