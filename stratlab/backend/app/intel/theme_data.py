@@ -3586,6 +3586,17 @@ def work_test(checked: dict, theme: str):
     return says
 
 
+def not_of_kind(region: str, theme: str, c: dict, about: str | None = None) -> bool:
+    """deck96: whether a company of the theme's official industries is of an industry the theme's curated entry names for one kind of its
+    companies only (theme_base.industry_must) and its own words, stored and read, don't say that kind. False with no words (not checked)."""
+    from .theme_base import industry_must, key
+    if not c.get("base") or c.get("basis") == "list":
+        return False
+    rx = industry_must(region, theme).get(key(str(c.get("industry") or "").split(">")[-1].strip()))
+    text = " ".join(x for x in (str(about or ""), str(c.get("what") or "")) if x.strip())
+    return bool(rx) and bool(text.strip()) and not rx.search(text)
+
+
 def evidence_state(c: dict, words: set[str], about: str | None = None, segments=None, status: str | None = None, named: set[str] | None = None) -> str:
     """e54: what a company's place in the theme rests on (EVIDENCE_STATES), from its map record `c`. A company is "description_verified" only
     when its own words are there to show (theme_base.own_words: the same line the page shows; never an industry label) and they, a checked
@@ -4467,6 +4478,12 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     # (membership: its whole stored description and its segments read)
     named = name_words(checked, theme)          # v55: what a principal business must say to be of the theme on its own words
     every_status = {s: membership(c, words, src.about(s), lambda s=s: seg_list(s), named=named) for s, c in placed.items()}
+    # deck96 (the live Aerospace and defense deck: five recreational boat makers in "Other" on the warship builders' official industry): a
+    # company of an industry the theme's curated entry names only for one kind of its companies (theme_base.industry_must) whose own words,
+    # read, don't say that kind describes other work: listed, in no figure (missing words never remove a member: one with none stays)
+    for s, c in placed.items():
+        if every_status[s] == "core" and not_of_kind(region, theme, c, src.about(s)):
+            every_status[s] = "unverified"
     # e54: what each one's place rests on (its own words read and showing the work, its official industry alone, ...), one state each
     # e84 (LIVE20A-019): judged on the words a page may quote (theme_base.quotable) and the map's line only while they hold it, so a company
     # is description-verified only on a line the page shows (never on an encyclopedia's sentence the members table leaves out)

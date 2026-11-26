@@ -106,3 +106,33 @@ def test_a_company_with_no_figures_is_listed_after_every_company_with_figures():
     at = next(i for i, n in enumerate(names) if n.startswith(deck.clean_name(bare["name"])))
     assert "(no figures)" in names[at], names
     assert all("(no figures)" in n or "(not confirmed)" in n or "(not checked yet)" in n for n in names[at:]), names
+
+
+def test_a_theme_naming_agrochemicals_takes_the_agrochemical_industry_never_every_chemical_one():
+    # the live Fertilizers and agrochemicals deck: 284 companies, four of its eight layers chemical makers (Pidilite, SRF, Linde India) shown
+    # as adjacent participants, all from the chemicals entry its word "agrochemicals" named
+    from app.intel import theme_base as B
+    inds = ["Specialty Chemicals", "Commodity Chemicals", "Petrochemicals", "Dyes And Pigments", "Pesticides & Agrochemicals", "Industrial Gases",
+            "Fertilizers"]
+    known = {B.key(x): x for x in inds}
+    assert B.curated("IN", "Fertilizers and agrochemicals", known) == ["Fertilizers", "Pesticides & Agrochemicals"]
+    assert B.curated("IN", "Agrochemicals", known) == ["Pesticides & Agrochemicals"]
+    # a theme of chemicals keeps every chemical industry, the agrochemical one with them
+    assert B.curated("IN", "Chemicals", known) == inds[:6]
+    assert B.curated("IN", "Specialty chemicals", known) == ["Specialty Chemicals"]
+
+
+def test_a_recreational_boat_maker_is_not_confirmed_in_aerospace_and_defense_on_the_warship_builders_industry():
+    # the live Aerospace and defense deck: MasterCraft, Malibu Boats, Twin Vee PowerCats, Vision Marine and NextBoat in its "Other" group,
+    # members on the SEC's "Ship & Boat Building & Repairing", the warship builders' industry
+    from app.intel import theme_data as D
+    boat = {"ticker": "MCFT", "base": True, "basis": "industry", "industry": "Ship & Boat Building & Repairing",
+            "what": "MasterCraft designs, manufactures and markets recreational performance sport boats"}
+    navy = {**boat, "ticker": "HII", "what": "America's largest military shipbuilding company, building aircraft carriers and submarines for the U.S. Navy"}
+    assert D.not_of_kind("US", "Aerospace and defense", boat, "")
+    assert not D.not_of_kind("US", "Aerospace and defense", navy, "")
+    assert not D.not_of_kind("US", "Aerospace and defense", {**boat, "what": ""}, "")          # no words read: never removed
+    assert not D.not_of_kind("US", "Aerospace and defense", {**boat, "basis": "list"}, "")     # the theme's own list
+    assert not D.not_of_kind("US", "Shipbuilding", boat, "") and not D.not_of_kind("IN", "Defence", boat, "")
+    # its state: its own words describe other work, listed, in no figure
+    assert D.evidence_state(boat, set(), "", status="unverified") == "not_confirmed"

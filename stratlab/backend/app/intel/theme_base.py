@@ -37,7 +37,12 @@ CONCEPTS = [
      "IN": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "IN_named": ["BEML"],
      "US": ["Guided Missiles & Space Vehicles & Parts", "Ordnance & Accessories, (No Vehicles/Guided Missiles)",
             "Search, Detection, Navigation, Guidance, Aeronautical Sys", "Aircraft Engines & Engine Parts",
-            "Aircraft Parts & Auxiliary Equipment, Nec", "Ship & Boat Building & Repairing", "Aircraft"]},
+            "Aircraft Parts & Auxiliary Equipment, Nec", "Ship & Boat Building & Repairing", "Aircraft"],
+     # deck96 (the live Aerospace and defense deck: MasterCraft, Malibu Boats, Twin Vee PowerCats, Vision Marine and NextBoat, recreational
+     # boat makers, in its "Other" group on the SEC's "Ship & Boat Building & Repairing", the warship builders' industry): a company of an
+     # industry named here is of the theme only when its own words say this (industry_must)
+     "US_must": {"Ship & Boat Building & Repairing": r"\b(?:nav(?:y|al|ies)|defen[cs]e|military|warships?|submarines?|aircraft carriers?|"
+                                                     r"coast guard|combatants?|armed forces|department of (?:the navy|defense)|government)\b"}},
     {"words": {"shipbuilding", "shipyard", "shipbuilder"}, "IN": ["Ship Building & Allied Services"], "US": ["Ship & Boat Building & Repairing"]},
     {"words": {"railway", "rail", "railroad", "train", "metro"}, "IN": ["Railway Wagons"],
      "IN_named": ["RVNL", "IRCON", "IRFC", "RITES", "IRCTC", "RAILTEL", "BEML", "CONCOR", "KERNEX"],
@@ -129,11 +134,16 @@ CONCEPTS = [
             "Oil & Gas Field Machinery & Equipment", "Natural Gas Transmission", "Natural Gas Distribution", "Pipe Lines (No Natural Gas)"]},
     {"words": set(), "phrases": ("specialty chemicals", "speciality chemicals"), "IN": ["Specialty Chemicals"],
      "US": ["Industrial Organic Chemicals", "Miscellaneous Chemical Products", "Chemicals & Allied Products"]},
-    {"words": {"chemical", "agrochemical", "petrochemical"}, "unless": ("specialty chemicals", "speciality chemicals"),
+    # deck96 (the live Fertilizers and agrochemicals deck: 284 companies, four of its eight layers chemical makers shown as adjacent
+    # participants, Pidilite, SRF, Linde India among them, after the owner's reviews of R60, R62, R64, R65 and R84 each took some out): a
+    # theme naming agrochemicals takes the agrochemical industry, never every chemical industry: "agrochemical" is its own entry below
+    {"words": {"chemical", "petrochemical"}, "unless": ("specialty chemicals", "speciality chemicals"),
      "IN": ["Specialty Chemicals", "Commodity Chemicals", "Petrochemicals", "Dyes And Pigments", "Pesticides & Agrochemicals", "Industrial Gases"],
      "US": ["Industrial Organic Chemicals", "Industrial Inorganic Chemicals", "Chemicals & Allied Products",
             "Plastic Materials, Synth Resins & Nonvulcan Elastomers", "Agricultural Chemicals"]},
     {"words": {"fertiliser", "fertilizer"}, "IN": ["Fertilizers"], "US": ["Agricultural Chemicals"]},
+    {"words": {"agrochemical", "agrochem", "pesticide", "insecticide", "herbicide", "fungicide"}, "phrases": ("crop protection",),
+     "IN": ["Pesticides & Agrochemicals"], "US": ["Agricultural Chemicals"]},
     {"words": {"fmcg", "staples"}, "phrases": ("consumer staples", "packaged food", "packaged foods"),
      "IN": ["Diversified FMCG", "Personal Care", "Packaged Foods", "Household Products", "Dairy Products", "Other Food Products", "Edible Oil",
             "Tea & Coffee", "Cigarettes & Tobacco Products", "Other Beverages"],
@@ -264,6 +274,17 @@ def named_lists(region: str, theme: str) -> tuple[list[str], list[str]]:
         named += [s for s in c.get(f"{region}_named", []) if s not in named]
         out += [s for s in c.get(f"{region}_except", []) if s not in out]
     return named, [s for s in out if s not in named]
+
+
+def industry_must(region: str, theme: str) -> dict:
+    """deck96: {industry key: what a company of that industry must say in its own words to be of the theme} from the curated entries the
+    theme names (`<region>_must`): an industry of the theme's list that also holds another kind of business (recreational boat makers beside
+    the warship builders)."""
+    out: dict = {}
+    for c in concepts_of(theme):
+        for ind, rx in (c.get(f"{region}_must") or {}).items():
+            out[key(ind)] = re.compile(rx, re.I)
+    return out
 
 
 def curated(region: str, theme: str, known: dict[str, str]) -> list[str] | None:
