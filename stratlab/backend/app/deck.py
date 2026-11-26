@@ -9445,7 +9445,6 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
             tail = []               # each company's own stated amount: no median across companies of different sizes
         else:
             tail = [med_row("Median (companies)", f, keys)]
-        tail = [r_ for r_ in tail if not no_median(r_)]        # deck96: a median row with no median in it is no row
         head, every, widths, _ = drop_empty(head, body + tail, widths)
         body, tail = every[:len(body)], every[len(body):]
         one, many = SECTOR_WHO[fam]
