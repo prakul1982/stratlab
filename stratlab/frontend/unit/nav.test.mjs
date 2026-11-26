@@ -13,9 +13,10 @@ const { cleanLayout } = await import("../src/lib/mineLayout.ts");
 
 test("the map has the owner's menu entries, in order (IA-1: 42 entries became 14, each a page of tabs)", () => {
   // the Trade journal first, right under Trade home (owner, 5 Nov)
-  assert.deepEqual(NAV.trade.groups.map((g) => g.label), ["Trade journal", "Strategies", "Practise", "F&O desk", "Calendar"]);
-  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Themes", "Companies", "Find stocks", "Market today", "Market data", "Calendar", "Watchlist"]);   // (owner, 18 Nov) Themes first, above Companies
-  assert.deepEqual(NAV.money.groups.map((g) => g.label), ["Portfolio", "Tax", "Plan", "Calendar"]);
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): in no space's menu list; Invest keeps its research tables of dates
+  assert.deepEqual(NAV.trade.groups.map((g) => g.label), ["Trade journal", "Strategies", "Practise", "F&O desk"]);
+  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Themes", "Companies", "Find stocks", "Market today", "Market data", "Results & IPOs", "Watchlist"]);   // (owner, 18 Nov) Themes first, above Companies
+  assert.deepEqual(NAV.money.groups.map((g) => g.label), ["Portfolio", "Tax", "Plan"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "find-stocks").pages.map((p) => p.label), ["Figures", "Chart rules", "Filings"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-today").pages.map((p) => p.label), ["Mood", "Breadth", "Heatmap", "Movers", "Sectors", "Flows", "Today's brief"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-data").pages.map((p) => p.label), ["ETF vs NAV", "Margin funding", "Stock lending fees"]);
@@ -47,7 +48,8 @@ test("addresses find their page, including the ones that were tabs", () => {
   // the old groups' own pages open the entry that took each over
   assert.equal(locateGroup("/trade/g/build-and-test").group.id, "strategies");
   assert.equal(locateGroup("/invest/g/market-view").group.id, "market-today");
-  assert.equal(locateGroup("/invest/g/company-news").group.id, "calendar");
+  assert.equal(locateGroup("/invest/g/company-news").group.id, "company-dates");   // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar)
+  assert.equal(locateGroup("/trade/g/calendar").group.id, "calendar");
   assert.equal(locateGroup("/money/g/what-you-own").group.id, "portfolio");
 });
 

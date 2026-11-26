@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -122,7 +122,8 @@ function Month({ y, m, events, today, picked, onPick }: { y: number; m: number; 
   );
 }
 
-export function MoneyCalendarPage() {
+/** cal94: one filter of the one Calendar (its row of filters is `top`, under the title; `eyebrow` names the space it was opened in). */
+export function MoneyCalendarPage({ top, eyebrow = "Money · Calendar" }: { top?: ReactNode; eyebrow?: string } = {}) {
   const { fail, notify } = useApp();
   const [mode, setMode] = useState<"list" | "month">(() => { try { return localStorage.getItem("stratlab.moneycal.mode") === "month" ? "month" : "list"; } catch { return "list"; } });
   const [cats, setCats] = useState<Cat[]>(["tax", "holdings", "money", "custom", "market"]);
@@ -243,8 +244,11 @@ export function MoneyCalendarPage() {
   useEffect(() => { if (view?.feed) setAmounts(view.feed.amounts); }, [view?.feed]);
 
   const head = (
-    <PageHeader eyebrow="Money · Calendar" title="Money calendar" asOf={view?.as_of} asOfLabel="As of" asOfPending={!view && !error}
-      lede="Tax due dates, results and dividends for your holdings and watchlist, plus your own dates. Subscribe from any calendar app with a private link." />
+    <>
+      <PageHeader eyebrow={eyebrow} title="My money dates" asOf={view?.as_of} asOfLabel="As of" asOfPending={!view && !error}
+        lede="Tax due dates, results and dividends for your holdings and watchlist, plus your own dates. Subscribe from any calendar app with a private link." />
+      {top}
+    </>
   );
   if (!view) {
     return (

@@ -10,7 +10,7 @@ import { register } from "node:module";
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
-const { ALL_PAGES, NAV, SPACE_LIST, locate, locateGroup } = await import("../src/lib/nav.ts");
+const { ALL_PAGES, CALENDAR, NAV, SPACE_LIST, locate, locateGroup } = await import("../src/lib/nav.ts");
 const { pickExamples, exampleEyebrow } = await import("../src/lib/landingExamples.ts");
 const { graceLine } = await import("../src/lib/freeChange.ts");
 
@@ -35,7 +35,9 @@ test("every old address still opens its own page in the menu, and every old entr
   for (const to of OLD) if (!to.startsWith("/research/investor") && to !== "/trade/positioning/stocks") assert.equal(locate(to).page.to, to);
   for (const g of OLD_GROUPS) assert.ok(locateGroup(g), `${g} opens nothing`);
   // nothing removed: every page of the map is reachable from a space's menu (R61: the R59 sidebar)
-  const inMenu = new Set(SPACE_LIST.flatMap((s) => NAV[s].groups.flatMap((g) => g.pages.map((p) => p.to))));
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar's addresses are reached from its entry
+  // fixed in every space's sidebar
+  const inMenu = new Set([...SPACE_LIST.flatMap((s) => NAV[s].groups.flatMap((g) => g.pages.map((p) => p.to))), ...CALENDAR.pages.map((p) => p.to)]);
   for (const l of ALL_PAGES) assert.ok(inMenu.has(l.page.to), l.page.to);
   // the routes themselves are unchanged
   const main = read("src/main.tsx");

@@ -1,36 +1,79 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { SCOPE_OPTIONS } from "../lib/companyScope";
-import { useCompanyScope } from "../lib/useCompanyScope";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import { eyebrowOf } from "../lib/eyebrow";
+import { useApp } from "../lib/app";
+import { CAL_KEPT, CAL_SHOWS, askedShow, calDefault, calHref, keptShow, type CalKept, type CalShow } from "../lib/calendarShow";
 import { fmtDate, istToday, price } from "../lib/format";
 import { loadEvents, type EventsView } from "../lib/marketEvents";
-import { useRegion, type Region } from "../lib/research";
+import { useMenuSpace } from "../lib/menuSpace";
+import { usePersisted } from "../lib/persist";
+import { useRegion, useWatchlist, type Region } from "../lib/research";
+import { MINE_NAME, SPACES } from "../lib/spaces";
 import type { IpoList } from "../lib/ipo";
-import { TYPES, TYPE_CHIP, TYPE_NAME, ipoRows, mergeRows, type CalRow, type CalType } from "../lib/calendarRows";
+import { TYPES, TYPE_NAME, ipoRows, mergeRows, type CalRow, type CalType } from "../lib/calendarRows";
 import type { ResultRow, ResultDay } from "./ResultsPage";
 import type { ActionRow } from "./CorpActionsPage";
 import { RegionSwitch } from "../components/Research";
+import { EventsPage } from "./trade/EventsPage";
+import { MoneyCalendarPage } from "./money/MoneyCalendarPage";
 import { SIZE_NAME, type Facets } from "../components/CalendarFilters";
-import { Card, ChipSet, DataTable, ErrorState, Field, PageHeader, Seg, Select, Skeleton, type Column } from "../components/kit";
+import { Card, ChipBar, ChipSet, DataTable, ErrorState, Field, PageHeader, Select, Skeleton, type Column } from "../components/kit";
 
-/* /calendar (IA-1 item 3): the one Calendar's "All dates" tab. Every dated thing in the days the results calendar covers (this
- * week and next), in one table: results days and corporate actions (for your stocks or every company, by size and sector),
- * IPO openings, closings, allotments and listings, the market's own events (RBI, the Fed, data, expiries, holidays) and your own
- * tax and money dates. Each type's own tab (Results, Corporate actions, IPOs, Market events, My money dates) keeps its full
- * page; this one reads the same answers, so the two never disagree. Facts only. */
+/* The one Calendar (IA-1 item 3; cal94, owner 26 Nov: one Calendar, fixed in the sidebar). One row of filters switches what it shows:
+ * every date, your stocks' results and ex-dates, the market's events and F&O expiries, results days, dividends and splits, IPO dates,
+ * or the person's own money dates. It opens on the dates for where you are (lib/calendarShow); the filter is the address, and the last
+ * one picked in each space is kept on this device. The market events and money dates are those pages' own full views (reminders, your
+ * own dates, the calendar feed), at their old addresses; the others are one table of the days the results calendar covers (this week
+ * and next), read from the same answers as the research tables (Results, Corporate actions, IPOs), so the two never disagree. */
 
 type ResultsView = { weeks: { from: string; to: string; rows: ResultRow[]; days?: ResultDay[] }[]; facets: Facets; today: string };
 type CorpView = { ahead: ActionRow[] };
 type MoneyView = { events: { id: string; date: string; title: string; cat: string; detail: string }[] };
 
+// in this page's own download: loaded on their own after it, the title was drawn twice and the page moved (CLS)
+
+/** Each table filter: the kinds of date it lists, its title and line, and the research table it links to for the full picture. */
+const VIEWS: Record<Exclude<CalShow, "events" | "money">, { types: CalType[]; title: string; lede: string; full?: [string, string] }> = {
+  all: { types: TYPES, title: "All dates", lede: "Results days, corporate actions, IPO dates, the market's own events and your money dates, day by day, this week and next." },
+  mine: { types: ["results", "action"], title: "My stocks' dates", lede: "Results days, dividends, splits and other corporate actions of your holdings, watchlist, notebooks and paper sessions, this week and next." },
+  results: { types: ["results"], title: "Results days", lede: "The companies announcing results this week and next, day by day.", full: ["/research/results", "Results"] },
+  actions: { types: ["action"], title: "Dividends & splits", lede: "Dividends, bonus issues, splits and other corporate actions by ex-date, this week and next.", full: ["/research/corporate-actions", "Corporate actions"] },
+  ipos: { types: ["ipo"], title: "IPO dates", lede: "IPO openings, closings, allotments and listings, India's or the US's, this week and next.", full: ["/invest/ipos", "IPOs"] },
+};
+
 export function CalendarPage() {
+  const space = useMenuSpace();
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
+  const { me } = useApp();
+  const { items: watching } = useWatchlist();
+  const [kept, setKept] = usePersisted<CalKept>(CAL_KEPT, {});
+  const asked = askedShow(pathname, search);
+  const remembered = keptShow(kept, space);
+  // My space and Invest open on your stocks' dates when you have a watchlist or holdings: decided once the watchlist is read
+  const waiting = !asked && !remembered && space !== "trade" && space !== "money" && !me?.has_holdings && watching === null;
+  const show: CalShow | null = asked ?? remembered ?? (waiting ? null : calDefault(space, !!me?.has_holdings || !!watching?.length));
+  const pick = (v: string) => {
+    const next = v as CalShow;
+    setKept((cur) => ({ ...(cur && typeof cur === "object" ? cur : {}), [space]: next }));
+    if (next !== show || !asked) navigate(calHref(next));
+  };
+  const eyebrow = `${space === "mine" ? MINE_NAME : SPACES[space].label} · Calendar`;
+  const chips = <ChipBar label="Which dates" value={show ?? ""} onChange={pick} wrap options={CAL_SHOWS} />;
+  const row = <Card label="Which dates" className="cal-show" testId="cal-show">{chips}</Card>;
+  if (show === "events") return <EventsPage top={row} eyebrow={eyebrow} />;
+  if (show === "money") return <MoneyCalendarPage top={row} eyebrow={eyebrow} />;
+  if (!show) return <div className="k-page"><PageHeader eyebrow={eyebrow} title="Calendar" />{row}<Card><Skeleton label="Reading the calendars" /></Card></div>;
+  return <DatesTable key={show} show={show} eyebrow={eyebrow} chips={chips} />;
+}
+
+/** The table filters: one table of every dated thing of the kinds `show` lists, this week and next. */
+function DatesTable({ show, eyebrow, chips }: { show: Exclude<CalShow, "events" | "money">; eyebrow: string; chips: ReactNode }) {
+  const view = VIEWS[show];
+  const types = view.types;
+  const want = (t: CalType) => types.includes(t);
   const [region, setRegion] = useRegion();
-  const [params] = useSearchParams();
-  const [scope, setScope] = useCompanyScope();
-  const typeParam = (params.get("type") ?? "").split(",").filter((t): t is CalType => (TYPES as string[]).includes(t));
-  const [types, setTypes] = useState<CalType[]>(typeParam.length ? typeParam : TYPES);
+  const scope = show === "mine" ? "mine" : "all";
   const [size, setSize] = useState<string[]>([]);
   const [sector, setSector] = useState("");
   // AUTO-LOAD (site87, owner: no "Show all N on <day>"): a day of "every company" with more results than the first answer holds is read in
@@ -56,16 +99,18 @@ export function CalendarPage() {
     let live = true;
     setRes(null); setCorp(null); setFullDays({});
     api<ResultsView>(`/research/results?${qs()}`).then((x) => live && setRes(x)).catch(() => live && setRes("error"));
-    api<CorpView>(`/research/corp-actions?${qs()}`).then((x) => live && setCorp(x)).catch(() => live && setCorp("error"));
+    // each filter reads only its own kinds of date; the results calendar always, as it says the days the table covers
+    if (want("action")) api<CorpView>(`/research/corp-actions?${qs()}`).then((x) => live && setCorp(x)).catch(() => live && setCorp("error"));
     return () => { live = false; };
   }, [region, scope, size, sector, tries]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if (!want("ipo")) return;
     let live = true;
     setIpos(null);
     api<IpoList>(`/invest/ipos?market=${region}`).then((x) => live && setIpos(x)).catch(() => live && setIpos("error"));
     return () => { live = false; };
   }, [region, tries]);
-  useEffect(() => { let live = true; loadEvents().then((x) => live && setEv(x ?? "error")); return () => { live = false; }; }, [tries]);
+  useEffect(() => { if (!want("event")) return; let live = true; loadEvents().then((x) => live && setEv(x ?? "error")); return () => { live = false; }; }, [tries]);
   // the window: today to the last day the results calendar covers (this week and next)
   const today = res && res !== "error" ? res.today : istToday();
   const until = res && res !== "error" && res.weeks.length ? res.weeks[res.weeks.length - 1].to : fmtIso(addDays(today, 13));
@@ -73,7 +118,7 @@ export function CalendarPage() {
   // was drawn, emptied and drawn again: CLS 0.278 on a first load)
   const resReady = res !== null;
   useEffect(() => {
-    if (!resReady) return;
+    if (!resReady || !want("money")) return;
     let live = true;
     setMoney(null);
     api<MoneyView>(`/money/calendar?start=${today}&end=${until}&cats=tax,money,custom`).then((x) => live && setMoney(x)).catch(() => live && setMoney("error"));
@@ -99,7 +144,9 @@ export function CalendarPage() {
   }, [res, corp, ipos, ev, money, types, today, until, region, fullDays]);
 
   const failed = ([[res, "results"], [corp, "corporate actions"], [ipos, "IPOs"], [ev, "market events"], [money, "your money dates"]] as const).filter(([v]) => v === "error").map(([, w]) => w);
-  const loading = res === null || corp === null || ipos === null || ev === null || money === null;
+  const loading = res === null || (want("action") && corp === null) || (want("ipo") && ipos === null) || (want("event") && ev === null) || (want("money") && money === null);
+  // size and sector narrow the companies' own dates (results, corporate actions), on every company
+  const narrows = scope === "all" && (want("results") || want("action"));
   // a day of "every company" that has more results than came in this answer is read in full as the reader nears the end (DE-026)
   const cut = res && res !== "error" && scope === "all" ? res.weeks.flatMap((w) => w.days ?? []).filter((d) => d.count > d.shown && !fullDays[d.date]) : [];
   const loadDay = () => {
@@ -113,7 +160,6 @@ export function CalendarPage() {
   };
   const hiddenResults = cut.reduce((a, d) => a + d.count - d.shown, 0);
   const facets = res && res !== "error" ? res.facets : null;
-  const toggle = (t: CalType) => setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : TYPES.filter((x) => x === t || cur.includes(x))));
   const cols: Column<CalRow>[] = [
     { key: "date", header: "Day", rowHeader: true, cell: (r) => <span className="nowrap">{fmtDate(r.date, { weekday: true, year: false })}{r.date === today ? " · today" : ""}</span> },
     { key: "type", header: "Type", cell: (r) => TYPE_NAME[r.type] },
@@ -122,20 +168,15 @@ export function CalendarPage() {
   ];
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/calendar")} title="All dates"
-        lede="Results days, corporate actions, IPO dates, the market's own events and your money dates, day by day, this week and next. Each type's own tab has its full table and its filters." />
-      <Card label="What to show" className="cal-filters">
+      <PageHeader eyebrow={eyebrow} title={view.title} lede={view.lede} />
+      <Card label="Which dates" className="cal-filters" testId="cal-show">
+        {chips}
         <div className="k-toolbar">
           <RegionSwitch region={region} setRegion={(r: Region) => setRegion(r)} />
-          <Seg label="Companies" value={scope} onChange={(v) => { resetDays(); setScope(v); }} options={SCOPE_OPTIONS} />
-        </div>
-        <div className="k-field wide">
-          <span className="k-lbl">Type</span>
-          <ChipSet label="Type" options={TYPES.map((t) => ({ value: t, label: TYPE_CHIP[t] }))} on={types} onToggle={(v) => toggle(v as CalType)} />
         </div>
         {/* LIVE13A-011: the size and sector row holds its place while the first answer is out (it arrived with it and pushed the list down
             88px); disabled until then */}
-        {scope === "all" && !facets && res !== "error" && (
+        {narrows && !facets && res !== "error" && (
           <div className="k-toolbar" data-testid="cal-facets-wait" aria-busy="true">
             <div className="k-field">
               <span className="k-lbl">Company size</span>
@@ -146,7 +187,7 @@ export function CalendarPage() {
             </Field>
           </div>
         )}
-        {scope === "all" && facets && (
+        {narrows && facets && (
           <div className="k-toolbar">
             <div className="k-field">
               <span className="k-lbl">Company size</span>
@@ -162,6 +203,7 @@ export function CalendarPage() {
         <p className="k-small k-muted" data-testid="cal-count">
           {loading ? "Reading the calendars…" : `${rows.length.toLocaleString("en-IN")} date${rows.length === 1 ? "" : "s"} from ${fmtDate(today, { weekday: true, year: false })} to ${fmtDate(until, { weekday: true, year: false })}`}
           {scope === "mine" ? ". Results and corporate actions for your holdings, watchlist, notebooks and paper sessions." : "."}
+          {view.full && <> Each company's figures and every filter are on the <Link className="link" to={view.full[0]}>{view.full[1]}</Link> table.</>}
         </p>
       </Card>
       {failed.length > 0 && <ErrorState title={`Some dates couldn't be read: ${failed.join(", ")}`} action={{ label: "Try again", onClick: () => setTries((x) => x + 1) }}>The rest are below.</ErrorState>}
@@ -170,7 +212,7 @@ export function CalendarPage() {
         <Card label="Dates" testId="cal-all">
           <DataTable csv="money calendar" stack label="Every date, this week and next" columns={cols} rows={rows} rowKey={(r) => r.id}
             more={hiddenResults > 0 && types.includes("results") ? { total: rows.length + hiddenResults, load: loadDay, busy: dayBusy, noun: "dates" } : undefined}
-            empty={types.length ? "Nothing dated in these two weeks for this choice." : "Pick at least one type above."} />
+            empty={show === "mine" ? "Nothing dated for your stocks in these two weeks." : "Nothing dated in these two weeks for this choice."} />
         </Card>
       )}
     </div>

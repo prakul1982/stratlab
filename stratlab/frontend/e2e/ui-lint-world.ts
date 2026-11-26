@@ -111,7 +111,9 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
   }
   // IA-1: the one Calendar is defined once, before the spaces, and is in every menu: each tab shows its own address's space
   for (const [p, sp] of [["/calendar", "invest"], ["/research/results", "invest"], ["/research/corporate-actions", "invest"], ["/invest/ipos", "invest"], ["/trade/events", "trade"], ["/money/calendar", "money"]]) spaceOf.set(p, sp);
-  for (const space of ["trade", "invest", "money"]) { groups.push(`/${space}/g/calendar`); spaceOf.set(`/${space}/g/calendar`, space); }
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar has no entry page of its own (each
+  // space's old one opens it); the research tables are Invest's Results & IPOs, defined before the spaces too
+  groups.push("/invest/g/company-dates"); spaceOf.set("/invest/g/company-dates", "invest");
   const app: string[] = ["/", "/trade", "/invest", "/money", "/mine", "/features", ...groups, ...navPaths,
     "/new", "/trade/positioning/stocks", "/research/scan?scan=high52", "/research/filings?view=all", "/research/filings?region=US&view=all",
     "/invest/holders?region=US", "/research/corporate-actions?scope=all", "/research/corporate-actions?region=US&scope=all",

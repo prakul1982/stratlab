@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ALL_PAGES, NAV, startOf } from "../src/lib/nav";
+import { ALL_PAGES, NAV } from "../src/lib/nav";
 
 // IA-1 (owner, 29 Oct): 42 menu entries became 14, each a page of tabs, nothing removed. Every address the menu had opens its
 // page as the right tab of the right entry; the one Calendar's All dates lists every type of date with its filters, each space's
@@ -34,7 +34,8 @@ test("every page of the menu opens at its own address as the right tab of its en
     await page.goto(p.to);
     await expect(page.getByRole("heading", { level: 1 }).first(), p.to).toBeVisible({ timeout: 30_000 });
     await expect(page, `${p.to} stays at its address`).toHaveURL(new RegExp(`${p.to.replace(/[/]/g, "\\/")}(\\?.*)?$`));
-    if (group.pages.length > 1) {
+    // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar's addresses are its filters, a row inside it, not tabs
+    if (group.pages.length > 1 && !group.fixed) {
       const tabs = page.getByTestId("hub-tabs");
       await expect(tabs, p.to).toHaveAttribute("aria-label", group.label);
       // (updated on purpose, R43: a tab may carry a shorter name where its entry's name says the rest, NavPage.tab, so the row of tabs
@@ -46,48 +47,118 @@ test("every page of the menu opens at its own address as the right tab of its en
   expect(errors).toEqual([]);
 });
 
-test("each space's Calendar entry opens the one Calendar pre-filtered for that space; All dates has every type, its filters and links", async ({ page }, info) => {
+// (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): one Calendar entry in the sidebar's top part in every
+// space and none inside the spaces' menus; it opens on the dates for where you are; one row of filters inside it switches, the choice in
+// the address and remembered per space; its old addresses land on their filter; search still finds it.
+test("the one Calendar: fixed in the sidebar, opening on each space's dates; its filters are the address, kept per space; All has every type", async ({ page }, info) => {
+  test.setTimeout(180_000);
   const phone = info.project.name === "phone";
-  const errors = await open(page, "/calendar");
+  const errors = await open(page, "/trade");
+  const side = page.locator("aside.sidebar");
+  const row = page.getByRole("group", { name: "Which dates" });
+  const pressed = row.locator('[aria-pressed="true"]');
+  const menu = async () => { if (phone) await page.getByRole("button", { name: "Open menu" }).click(); };
+  // each space: one entry, fixed above the menu, none in the space's own list; it opens that space's dates
+  for (const [space, label, url, on] of [["trade", "Trade", /\/trade\/events(\?.*)?$/, /^Market events & expiries$/], ["invest", "Invest", /\/calendar$/, /^(My stocks|All)$/],
+    ["money", "Money", /\/money\/calendar(\?.*)?$/, /^My money dates$/]] as const) {
+    await page.goto(NAV[space].home);
+    await menu();
+    await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+    await expect(side.getByTestId("side-calendar")).toHaveCount(1);
+    await expect(side.locator(".side-top").getByTestId("side-calendar")).toHaveText("Calendar");
+    await expect(side.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Calendar", exact: true })).toHaveCount(0);
+    await expect(side.locator('[data-group="calendar"]')).toHaveCount(0);
+    await side.getByTestId("side-calendar").click();
+    await expect(page).toHaveURL(url);
+    await expect(pressed).toHaveText(on, { timeout: 30_000 });
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText(new RegExp(`^${label}\\s*›\\s*Calendar`));
+    await expect(page.getByTestId("hub-tabs")).toHaveCount(0);
+    await menu();
+    await expect(side.getByTestId("side-calendar")).toHaveAttribute("aria-current", "page");
+    if (phone) await page.getByRole("button", { name: "Close menu" }).click();
+  }
+  // My space too: one entry, the same place
+  await page.goto("/mine");
+  await menu();
+  await expect(side.getByTestId("side-calendar")).toHaveCount(1, { timeout: 30_000 });
+  await expect(side.getByTestId("side-calendar")).toHaveAttribute("href", "/calendar");
+  if (phone) await page.getByRole("button", { name: "Close menu" }).click();
+
+  // All: one table, a header row, every type of date the fake world has this week and next, in date order
+  await page.goto("/calendar?show=all");
   const all = page.getByTestId("cal-all");
   await expect(all.getByRole("row").nth(1)).toBeVisible({ timeout: 30_000 });
+  await expect(pressed).toHaveText("All");
   await expect(page.getByTestId("cal-count")).toContainText(/\d+ dates? from /);
-  // one table: a header row, every type of date the fake world has this week and next, in date order
   const types = phone ? null : await all.locator("tbody tr td:nth-child(2)").allInnerTexts();
   if (types) for (const t of ["Results", "Corporate action", "IPO", "Market event"]) expect(types, t).toContain(t);
-  if (!phone) {
-    const days = await all.locator("tbody tr th, tbody tr td:first-child").allInnerTexts();
-    expect(days.length).toBeGreaterThan(3);
-  }
-  // the type chips narrow it: IPOs only
-  const chips = page.getByRole("group", { name: "Type" });
-  for (const t of ["Results", "Corporate actions", "Market events", "My money dates"]) await chips.getByRole("button", { name: t }).click();
-  await expect(chips.getByRole("button", { name: "IPOs" })).toHaveAttribute("aria-pressed", "true");
+  if (!phone) expect((await all.locator("tbody tr th, tbody tr td:first-child").allInnerTexts()).length).toBeGreaterThan(3);
+  // every company: size and sector are there
+  await expect(page.getByRole("group", { name: "Company size" })).toBeVisible({ timeout: 30_000 });
+  // a filter narrows it, and is the address: IPOs only, linking to the IPOs table
+  await row.getByRole("button", { name: "IPOs", exact: true }).click();
+  await expect(page).toHaveURL(/\/calendar\?show=ipos$/);
+  await expect(page.getByRole("heading", { level: 1, name: "IPO dates" })).toBeVisible();
   if (!phone) await expect.poll(async () => [...new Set(await all.locator("tbody tr td:nth-child(2)").allInnerTexts())]).toEqual(["IPO"]);
-  // every company, the default (owner, 5 Nov): size and sector are there; "My stocks" is a click, kept in the address
-  const companies = page.getByRole("radiogroup", { name: "Companies" });
-  await expect(companies.getByRole("radio", { name: "All companies" })).toBeChecked();
-  await expect(page.getByRole("group", { name: "Company size" })).toBeVisible({ timeout: 30_000 });
-  await companies.getByRole("radio", { name: "My stocks" }).click();
-  await expect(page).toHaveURL(/scope=mine/);
-  await expect(page.getByRole("group", { name: "Company size" })).toHaveCount(0);
-  await companies.getByRole("radio", { name: "All companies" }).click();
-  await expect(page).toHaveURL(/scope=all/);
-  await expect(page.getByRole("group", { name: "Company size" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("cal-count").getByRole("link", { name: "IPOs" })).toHaveAttribute("href", "/invest/ipos");
   // a row opens its own page: an IPO's detail page
   await all.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/invest\/ipos\/[^/]+$/);
-  // each space's menu entry: Trade on the market events, Invest on every date, Money on the person's own
-  for (const [space, label] of [["trade", "Trade"], ["invest", "Invest"], ["money", "Money"]] as const) {
-    await page.goto(NAV[space].home);
-    if (phone) await page.getByRole("button", { name: "Open menu" }).click();
-    const side = page.locator("aside.sidebar");
-    await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
-    const cal = NAV[space].groups.find((g) => g.id === "calendar")!;
-    await side.getByRole("link", { name: "Calendar", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${startOf(cal, space).replace(/[/]/g, "\\/")}$`));
-    await expect(page.getByTestId("hub-tabs")).toHaveAttribute("aria-label", "Calendar");
+  await page.goBack();
+  // My stocks: your companies' dates, no size or sector
+  await row.getByRole("button", { name: "My stocks", exact: true }).click();
+  await expect(page).toHaveURL(/\/calendar\?show=mine$/);
+  await expect(page.getByRole("heading", { level: 1, name: "My stocks' dates" })).toBeVisible();
+  await expect(page.getByTestId("cal-count")).toContainText(/\d+ dates? from /, { timeout: 30_000 });
+  await expect(page.getByRole("group", { name: "Company size" })).toHaveCount(0);
+  // remembered per space: Invest's Calendar opens on My stocks now, Trade's still on the market events
+  await page.goto("/calendar");
+  await expect(pressed).toHaveText("My stocks", { timeout: 30_000 });
+  await page.goto("/invest");
+  await menu();
+  await expect(side.getByTestId("side-calendar")).toHaveAttribute("href", "/calendar?show=mine", { timeout: 30_000 });
+  if (phone) await page.getByRole("button", { name: "Close menu" }).click();
+  await page.goto("/trade");
+  await menu();
+  await expect(side.getByTestId("side-calendar")).toHaveAttribute("href", "/trade/events", { timeout: 30_000 });
+  if (phone) await page.getByRole("button", { name: "Close menu" }).click();
+  // the old addresses land on their filter
+  for (const [to, on] of [["/trade/events", "Market events & expiries"], ["/money/calendar", "My money dates"], ["/calendar?type=ipo", "IPOs"], ["/calendar?scope=all", "All"]] as const) {
+    await page.goto(to);
+    await expect(pressed, to).toHaveText(on, { timeout: 30_000 });
   }
+  // the filter stays in the address, so a link shares it
+  await page.goto("/calendar?show=actions");
+  await expect(pressed).toHaveText("Dividends & splits", { timeout: 30_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Dividends & splits" })).toBeVisible();
+  // search still finds it: "calendar", "expiry", "tax due"
+  for (const [q, name] of [["calendar", /^Calendar/], ["expiry", /Market events & expiries/], ["tax due", /My money dates/]] as const) {
+    if (!(await page.getByRole("dialog", { name: "Ask or do anything" }).count())) await page.getByRole("button", { name: phone ? "Search or ask anything" : /Ask or do anything/ }).first().click();
+    const box = page.getByRole("dialog", { name: "Ask or do anything" });
+    await box.getByLabel("Search or ask anything").fill(q);
+    await expect(box.getByRole("option", { name }).first(), q).toBeVisible({ timeout: 15_000 });
+  }
+  expect(errors).toEqual([]);
+});
+
+// cal94: each space home has a small "Coming up" card with a "See calendar" link to the Calendar on that home's filter
+test("Coming up on every home: Trade, Invest, Money and My space each link to the Calendar on their own dates", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await open(page, "/trade");
+  for (const [home, card, to] of [["/trade", "trade-coming", "/trade/events"], ["/invest", "invest-events", "/calendar"], ["/money", "money-coming", "/money/calendar"], ["/mine", "mine-coming", "/calendar"]] as const) {
+    await page.goto(home);
+    const c = page.getByTestId(card);
+    await expect(c.getByRole("heading", { name: "Coming up" }), home).toBeVisible({ timeout: 30_000 });
+    await expect(c.getByTestId("see-calendar"), home).toHaveAttribute("href", to);
+    await expect(c.getByTestId("see-calendar")).toContainText("See calendar");
+  }
+  // following Money's lands on the money dates, inside Money's menu
+  await page.getByTestId("mine-coming").getByTestId("see-calendar").click();
+  await expect(page).toHaveURL(/\/calendar$/);
+  await page.goto("/money");
+  await page.getByTestId("money-coming").getByTestId("see-calendar").click();
+  await expect(page).toHaveURL(/\/money\/calendar$/);
+  await expect(page.getByRole("group", { name: "Which dates" }).locator('[aria-pressed="true"]')).toHaveText("My money dates", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 

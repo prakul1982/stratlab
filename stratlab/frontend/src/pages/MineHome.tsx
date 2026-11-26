@@ -343,9 +343,10 @@ function MarketsCard({ later }: { later: boolean }) {
 function ComingCard({ rows }: { rows: Up[] | null }) {
   return (
     <Card testId="mine-coming">
-      <CardHead title="Coming up" actions={<Link className="btn quiet sm" to="/money/calendar" aria-label="Open the money calendar">Open</Link>} />
+      {/* cal94: "See calendar" opens the one Calendar on My space's own filter (your stocks' dates, else every date) */}
+      <CardHead title="Coming up" actions={<Link className="btn quiet sm" to="/calendar" data-testid="see-calendar">See calendar</Link>} />
       {rows === null ? <Skeleton label="Reading your calendars" lines={3} />
-        : !rows.length ? <EmptyState title="Nothing dated yet" action={{ label: "Open the money calendar", to: "/money/calendar" }}>Tax dates, results and dividends for your stocks and market events show here.</EmptyState>
+        : !rows.length ? <EmptyState title="Nothing dated yet" action={{ label: "Open the calendar", to: "/calendar" }}>Tax dates, results and dividends for your stocks and market events show here.</EmptyState>
         : (
           <ScrollList label="Coming up, every date" testId="mine-coming-list"><ul className="mine-tl">
             {rows.map((u) => {

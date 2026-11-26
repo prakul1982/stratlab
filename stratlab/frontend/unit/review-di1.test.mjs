@@ -169,7 +169,9 @@ test("DI-017, DI-018, DI-019: two kinds of alerts named apart; My space's menu h
   assert.equal(nav.pageAt("/alerts").page.was, "Stock alerts");
   assert.match(read("src/components/AlertSettings.tsx"), /title="Paper-trade alerts and the daily report"/);
   const shell = read("src/components/Shell.tsx");
-  for (const t of ['"Watchlist"', '"Calendar"', '"Settings"']) assert.ok(shell.includes(t), t);
+  for (const t of ['"Watchlist"', '"Settings"']) assert.ok(shell.includes(t), t);
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar is fixed in the sidebar's top part, in My space too
+  assert.match(shell, /data-testid="side-calendar">\s*<Calendar size=\{16\} \/><span>Calendar<\/span>/);
   assert.match(shell, /me\?\.plan_info\?\.features\?\.assistant !== false && item\("\/assistant"/);
   const crumb = read("src/components/PageBreadcrumb.tsx");
   assert.match(crumb, /"\/plans": "Plans", "\/help": "Help", "\/features": "All features"/);

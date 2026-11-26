@@ -35,7 +35,7 @@ export interface NavPage {
   part?: boolean;
   /** The name it had in the menu before IA-1, when that was another ("Screener" for Find stocks' Figures). */
   was?: string;
-  /** A tab of an entry every space shares (Calendar): the space it belongs to, which its address already says. */
+  /** A page of the entry every space shares (Calendar): the space it belongs to, which its address already says. */
   space?: SpaceId;
 }
 export interface NavGroup {
@@ -46,8 +46,10 @@ export interface NavGroup {
   pages: NavPage[];
   /** The ids of the menu groups it took over (IA-1), so an old group page (/trade/g/build-and-test) opens this one. */
   was?: string[];
-  /** In every space's menu (Calendar): where each space's entry opens it, pre-filtered for that space. */
+  /** Shared by every space (the Calendar): where it opens from each space, pre-filtered for that space. */
   start?: Partial<Record<SpaceId, string>>;
+  /** Fixed in the sidebar's top part in every space (the Calendar, cal94), so in no space's menu list. */
+  fixed?: boolean;
 }
 
 const fromData = (to: string): NavEntry | undefined =>
@@ -62,32 +64,43 @@ function page(to: string, label: string, icon: string, words: string, o: { line?
     also: o.also, flag: o.flag, part: o.part, was: o.was, space: o.space, tab: o.tab };
 }
 
-/** One Calendar (IA-1 item 3): results, corporate actions, IPO dates, market events and the person's own money dates, in
- * every space's menu. Each space opens it pre-filtered: Trade on the market events, Invest on every date, Money on the
- * person's own. An IPO's own page stays (part of the IPOs tab). */
-const CALENDAR: NavGroup = {
-  id: "calendar", label: "Calendar", icon: "calendar", was: ["company-news"],
-  blurb: "Every date that matters in one place: results days, dividends and other corporate actions, IPO dates, the RBI, the Fed and data releases, F&O expiries, and your own tax and money dates.",
+/** One Calendar (IA-1 item 3; cal94, owner 26 Nov: "one Calendar, fixed in the sidebar"): every date that matters, fixed in the sidebar's
+ * top part under "Ask or do anything" in every space, and in no space's menu list. It opens on the dates for where you are (`start`):
+ * Trade on the market events and F&O expiries, Money on the person's own money dates, anywhere else on every date (your stocks' when
+ * you have a watchlist or holdings). One row of filters inside it switches; the Calendar's two old addresses are two of them, so a link
+ * to either still opens it on that filter. The research tables (results, corporate actions, IPOs, earnings calls) are Invest's. */
+export const CALENDAR: NavGroup = {
+  id: "calendar", label: "Calendar", icon: "calendar", fixed: true,
+  // kept short, with no card texts of its own (it has no page of cards): this map is in the visitor's first download (e2e/review-r5's budget)
+  blurb: "Every date that matters: results, dividends and splits, IPOs, market events and expiries, and your money dates.",
   start: { trade: "/trade/events", invest: "/calendar", money: "/money/calendar" },
   pages: [
-    page("/calendar", "All dates", "calendar", "calendar all dates upcoming week ahead what is coming dates results dividends ex date ipo open close listing rbi fed expiry holiday tax due my stocks",
-      { line: "Results, corporate actions, IPO dates and market events, day by day, for your stocks or every company.",
-        blurb: "One table of the days ahead: results days, ex-dates, IPO openings, closings and listings, and the market's own events, narrowed by type, company size, sector or your own stocks.", space: "invest" }),
-    page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement board meeting", { line: "Results days for your stocks, or every company, week by week.", space: "invest",
-        // its card on the Calendar's page said one short line beside two of three or four: a 90px hole in it at 1280 (ui-lint R13, item 43)
+    page("/calendar", "Calendar", "calendar", "calendar all dates upcoming week ahead what is coming dates results dividends splits ex date ipo open close listing rbi fed expiry holiday tax due my stocks",
+      { line: "Every date ahead: results, dividends and splits, IPO dates, market events and expiries, and your own money dates.", space: "invest" }),
+    page("/trade/events", "Market events & expiries", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates",
+      { was: "Market events", space: "trade" }),
+    page("/money/calendar", "My money dates", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders",
+      { was: "Money calendar", space: "money" }),
+  ],
+};
+
+/** Invest's research tables of dates (cal94: they were tabs of the Calendar; the Calendar links to each and lists their dates). */
+const COMPANY_DATES: NavGroup = {
+  id: "company-dates", label: "Results & IPOs", icon: "calendar", was: ["company-news"],
+  blurb: "Results days, corporate actions, IPOs and results calls: the tables behind the Calendar.",
+  pages: [
+    page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement board meeting", { line: "Results days for your stocks, or every company, week by week.",
+        // its card on the entry's page said one short line beside two of three or four: a 90px hole in it at 1280 (ui-lint R13, item 43)
         blurb: "Each company's results day this week and next, its latest quarter's revenue and profit against a year before, and how its price moved on past results days." }),
-    page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend dividends ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company.", space: "invest",
+    page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend dividends ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company.",
         blurb: "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, with the record date, the amount or ratio and a dividend's yield at today's price." }),
     page("/invest/ipos", "IPOs", "calendar", "ipo ipos initial public offering new issue public issue drhp rhp red herring prospectus price band lot size subscription subscribed times allotment listing listing gain sme mainboard s-1 f-1 prospectus nasdaq nyse upcoming open closed recently listed",
-      { flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/, space: "invest",
+      { flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/,
         line: "India's and the US's IPOs: dates, price band, lot, bids and how a listing has traded against its issue price.",
         blurb: "Upcoming, open, closed and recently listed IPOs for India and the US, each with its price band, lot, size, bids by category and the facts in its offer document." }),
     page("/research/earnings-calls", "Earnings calls", "calendar", "earnings call calls concall con call conference call analyst meet investor meet analysts institutional investors webcast dial in transcript transcripts recording audio presentation results call schedule of meet",
-      { flag: "earnings_calls", part: true, space: "invest", tab: "Calls", line: "Results calls and analyst meets coming up, with the notice and webcast link, and transcripts after.",
+      { flag: "earnings_calls", part: true, tab: "Calls", line: "Results calls and analyst meets coming up, with the notice and webcast link, and transcripts after.",
         blurb: "Every results call and meeting with analysts or investors in India, from the companies' own notices, and US results sessions; after a call, its transcript, recording and presentation once filed." }),
-    page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { space: "trade", tab: "Events" }),
-    page("/money/calendar", "My money dates", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders",
-      { was: "Money calendar", space: "money", tab: "My dates" }),
   ],
 };
 
@@ -127,7 +140,6 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/trade/fo-changes", "F&O changes", "calendar", "f&o changes lot size lot revisions entering leaving fno list ban expiry day contract exchange circular"),
         page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day"),
       ] },
-      CALENDAR,
     ],
   },
   invest: {
@@ -180,7 +192,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/invest/margin-funding", "Margin funding", "wallet", "margin funding mtf margin trading facility borrowed money broker funding leverage loan to buy shares interest pledge exposure", { flag: "mtf" }),
         page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings"),
       ] },
-      CALENDAR,
+      COMPANY_DATES,
       { id: "watch", label: "Watchlist", icon: "pin", blurb: "The companies you follow, and a message when something happens to them.", pages: [
         // "Stocks", not "Watchlist" again under Watchlist (the trail read "Watchlist › Watchlist")
         page("/research/watchlist", "Stocks", "pin", "watchlist saved favourites companies i follow at a glance investor home dashboard checklist report card track record",
@@ -209,7 +221,6 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/money/sip-test", "Test a SIP", "pulse", "sip stock sip etf sip systematic investment plan monthly weekly daily step up dip rule lump sum xirr niftybees goldbees test", { flag: "sip_luck" }),
         page("/money/rates", "Rates", "receipt", "rates fixed income fd fixed deposit t-bill treasury bill g-sec government bond repo ppf scss ssy nsc kvp post office small savings after tax yield slab tds interest", { flag: "rates_slab" }),
       ] },
-      CALENDAR,
     ],
   },
 };
@@ -218,10 +229,9 @@ export const SPACE_LIST: SpaceId[] = ["trade", "invest", "money"];
 
 export interface Located { space: SpaceId; group: NavGroup; page: NavPage }
 
-/** Every page with where it lives, in menu order, each once: a tab of the Calendar every space shares is placed in the space
- * its own address belongs to. */
+/** Every page with where it lives: the Calendar's first (each in the space its own address belongs to), then the menus' in order, each once. */
 export const ALL_PAGES: Located[] = (() => {
-  const out: Located[] = [];
+  const out: Located[] = CALENDAR.pages.map((p) => ({ space: p.space ?? "invest", group: CALENDAR, page: p }));
   for (const space of SPACE_LIST) for (const group of NAV[space].groups) for (const p of group.pages) {
     if (out.some((l) => l.page.to === p.to)) continue;
     out.push({ space: p.space ?? space, group, page: p });
@@ -229,11 +239,11 @@ export const ALL_PAGES: Located[] = (() => {
   return out;
 })();
 
-/** Every menu entry once, with its space (the Calendar under Invest, where its own page is). */
-export const ALL_GROUPS: { space: SpaceId; group: NavGroup }[] = SPACE_LIST.flatMap((space) => NAV[space].groups
-  .filter((g) => !g.start || g.pages[0].space === space).map((group) => ({ space, group })));
+/** Every menu entry once, with its space, and the Calendar under Invest, where its own page is. */
+export const ALL_GROUPS: { space: SpaceId; group: NavGroup }[] = [...SPACE_LIST.flatMap((space) => NAV[space].groups.map((group) => ({ space, group }))),
+  { space: "invest", group: CALENDAR }];
 
-/** Where a space's menu entry opens: its first tab, or the tab that space starts the shared Calendar on. */
+/** Where a space's menu entry opens: its first tab, or the filter that space opens the shared Calendar on. */
 export const startOf = (group: NavGroup, space: SpaceId) => group.start?.[space] ?? group.pages[0].to;
 
 /** An entry's own address: the page of cards for everything in it. */
@@ -252,6 +262,8 @@ export function locateGroup(path: string): { space: SpaceId; group: NavGroup } |
   const space = m[1] as SpaceId;
   const group = NAV[space].groups.find((g) => g.id === m[2]) ?? NAV[space].groups.find((g) => g.was?.includes(m[2]));
   if (group) return { space, group };
+  // cal94: each space's old Calendar entry page opens the one Calendar, on that space's dates (GroupPage sends it on)
+  if (m[2] === CALENDAR.id) return { space, group: CALENDAR };
   // R61: an entry page only Release 60's one menu had (its More tools, at /trade|invest|money/g/more) still opens: the first entry it gathered
   const moved = MOVED[m[2]];
   const there = moved && NAV[moved[0]].groups.find((g) => g.id === moved[1]);

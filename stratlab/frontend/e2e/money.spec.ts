@@ -134,10 +134,10 @@ test("money calendar: reachable from the menu (IA-1: Money's Calendar entry open
     }).toPass({ timeout: 15_000 });
   await page.locator("aside.sidebar").getByRole("link", { name: "Calendar", exact: true }).click();
   await expect(page).toHaveURL(/\/money\/calendar$/);
-  await expect(page.getByRole("heading", { name: "Money calendar" })).toBeVisible();
-  // (updated on purpose, R43: the Calendar's seventh tab put its row on two lines at 1280; this tab's short name is "My dates", the
-  // breadcrumb and the menu still say "My money dates")
-  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "My dates" })).toHaveAttribute("aria-current", "page");
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar's filter "My money dates", picked in its row of filters (no tabs)
+  await expect(page.getByRole("heading", { name: "My money dates", level: 1 })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Which dates" }).getByRole("button", { name: "My money dates" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("hub-tabs")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

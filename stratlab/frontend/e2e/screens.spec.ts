@@ -162,13 +162,15 @@ test("the sidebar fits a short laptop, a tablet drawer and a phone drawer: slim 
     const m = await side.evaluate((aside) => {
       const h = (sel: string) => aside.querySelector(sel)!.getBoundingClientRect();
       const nav = aside.querySelector(".side-groups")!;
-      return { top: h(".side-top").height, foot: h(".side-foot").height, footBottom: h(".side-foot").bottom, nav: nav.clientHeight,
+      return { cal: h(".side-cal").height, top: h(".side-top").height, foot: h(".side-foot").height, footBottom: h(".side-foot").bottom, nav: nav.clientHeight,
         asideOverflow: aside.scrollHeight - aside.clientHeight, navSideways: nav.scrollWidth - nav.clientWidth, width: aside.getBoundingClientRect().width };
     });
-    expect(m.top, `${at}: the header stays slim`).toBeLessThanOrEqual(vp.touch ? 230 : 200);
+    // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar) the header holds one more row, the Calendar's,
+    // and gives up nothing else: the budgets below grow by exactly that row's measured height (34px, 40px on touch)
+    expect(m.top, `${at}: the header stays slim`).toBeLessThanOrEqual((vp.touch ? 230 : 200) + m.cal);
     expect(m.foot, `${at}: the footer stays slim`).toBeLessThanOrEqual(100);
     expect(m.footBottom, `${at}: the footer is on the screen`).toBeLessThanOrEqual(vp.height + 1);
-    expect(m.nav, `${at}: the menu keeps most of the height`).toBeGreaterThanOrEqual(vp.height - 340);
+    expect(m.nav, `${at}: the menu keeps most of the height`).toBeGreaterThanOrEqual(vp.height - 340 - m.cal);
     expect(m.asideOverflow, `${at}: only the menu scrolls`).toBeLessThanOrEqual(0);
     expect(m.navSideways, `${at}: nothing in the menu is cut off sideways`).toBeLessThanOrEqual(0);
     if (vp.width > 900) expect(m.width, `${at}: the sidebar's width`).toBeLessThanOrEqual(260);

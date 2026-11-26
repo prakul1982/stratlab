@@ -216,7 +216,7 @@ test("money calendar: the next 90 days in view, the past week and passed one-off
     own: [own("o1", "2026-09-20", "FD matured", "none"), own("o2", "2026-11-01", "Rent goes up", "none"), own("o3", "2026-01-10", "Insurance", "yearly")],
     own_max: 50, feed: null, reminders: { on: false, days: 3, channel: "email", cats: ["tax"] }, reminders_allowed: true, reminders_plan: "basic",
     remind_days: [1, 3, 7], notes: [] };
-  const errors = await open(page, "/money/calendar", { "/money/calendar": view }, "Money calendar");
+  const errors = await open(page, "/money/calendar", { "/money/calendar": view }, "My money dates");   // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar)
   await page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "List" }).click();
   const card = page.locator("section", { has: page.getByRole("radiogroup", { name: "View" }) });
   await expect(card.getByText("ITR due date")).toBeVisible();

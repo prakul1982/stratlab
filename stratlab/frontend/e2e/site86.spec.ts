@@ -119,7 +119,8 @@ for (const width of [1280, 1440]) {
     expect(Math.abs(b.coming.h - b.watch.h)).toBeLessThanOrEqual(2);
     expect(Math.abs(b.page - a.page), `the page was ${a.page}px with 18 stocks, ${b.page}px with 30`).toBeLessThanOrEqual(2);
     // the calendar link stays
-    await expect(page.getByTestId("mine-coming").getByRole("link", { name: "Open the money calendar", exact: true })).toHaveAttribute("href", "/money/calendar");
+    // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): "See calendar" opens the one Calendar
+    await expect(page.getByTestId("mine-coming").getByRole("link", { name: "See calendar", exact: true })).toHaveAttribute("href", "/calendar");
     await expect(page.getByTestId("mine-coming-more")).toHaveAttribute("href", "/money/calendar");
   });
 }

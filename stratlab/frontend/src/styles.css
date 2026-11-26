@@ -214,16 +214,22 @@ a.link { margin-inline: -2px; }
 .sidebar { position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column;
   background: var(--paper-2); border-right: 1px solid var(--line); font-size: 14px; }
 /* IA-2 (item 36): a little tighter, so a 1280x800 laptop shows the whole menu with one section and six notebooks open */
-.side-top { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 8px; }
+.side-top { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 6px; }   /* cal94: 4px gaps pay for the fixed Calendar row, so the menu keeps its height */
 .side-brand { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 4px 2px; }
 .side-close { display: none; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
   border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink); font: 600 13.5px var(--sans); cursor: pointer; }
 .side-new:hover { filter: brightness(1.15); }
-.search-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 10px; border: 1px solid var(--line-2);
+.search-btn, .side-cal { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 10px; border: 1px solid var(--line-2);
   border-radius: 8px; background: var(--card); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
-.search-btn:hover { color: var(--ink); border-color: var(--dash); }
-.search-btn span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-btn:hover, .side-cal:hover { color: var(--ink); border-color: var(--dash); }
+.search-btn span, .side-cal span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* cal94: the one Calendar, fixed under the search button in every space with its look, marked like a menu item while it is open */
+.side-cal { text-decoration: none; }
+/* cal94: a Coming up card's wait is the height of its five-row table (header and five 44px rows) */
+.coming-skel { min-height: 264px; }
+.side-cal.active { background: var(--side-on); box-shadow: var(--side-on-ring); border-color: transparent; color: var(--ink); font-weight: 600; }
+.side-cal.active > svg { color: var(--ink); }
 .space-switch { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 8px; background: var(--chip); }
 .space-switch button { height: 28px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font: 500 13px var(--sans); color: var(--ink-2); }
 .space-switch button:hover { color: var(--ink); }
@@ -341,7 +347,7 @@ a.link { margin-inline: -2px; }
 .acct-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* touch: rows a finger can hit */
 @media (pointer: coarse) {
-  .side-new, .search-btn { height: 40px; }
+  .side-new, .search-btn, .side-cal { height: 40px; }
   .space-switch button { height: 36px; }
   .side-list a, .side-list.side-sub a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
@@ -3244,7 +3250,7 @@ details.k-fold { display: block; }   /* the fold button's flex row (.k-fold, a s
 @media (max-width: 640px), (pointer: coarse) {
   .info-btn { --hit: 44px; }
   .brand { min-height: 44px; }
-  .side-top { padding-top: 12px; padding-bottom: 8px; }   /* the 4px the 44px logo link adds, given back so the menu keeps its height */
+  .side-top { padding-top: 12px; padding-bottom: 6px; }   /* the 4px the 44px logo link adds, given back so the menu keeps its height */
   select { min-height: 44px; }
   .k-input.sm, .k-input.k-in { height: 44px; }
   .toast button { min-height: 44px; }

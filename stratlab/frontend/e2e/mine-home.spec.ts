@@ -101,7 +101,8 @@ test("my space: the owner's net worth, holdings and sessions fill the tiles", as
   await expect(pnl).toContainText(/₹|needs live prices/);
   await expect(pnl.getByRole("link", { name: "Holdings" })).toHaveAttribute("href", "/holdings");
   // a link on every card leads to the page the figure comes from
-  await expect(page.getByTestId("mine-coming").getByRole("link", { name: "Open the money calendar", exact: true })).toHaveAttribute("href", "/money/calendar");
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): "See calendar" opens the one Calendar
+  await expect(page.getByTestId("mine-coming").getByRole("link", { name: "See calendar", exact: true })).toHaveAttribute("href", "/calendar");
   await expect(page.getByTestId("mine-watch").getByRole("link", { name: "Open the watchlist" })).toHaveAttribute("href", "/research/watchlist");
   await sane(page, errors, phone);
   if (SHOTS) {

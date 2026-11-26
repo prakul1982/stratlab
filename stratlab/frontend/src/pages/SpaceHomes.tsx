@@ -132,6 +132,8 @@ export function TradeHome() {
       {/* the checklist's first step is a first test: one guide at a time, so "Start here" waits until it's gone */}
       <NextIdea hideStart={steps} />
       <ToolStrip label="Trade tools" tools={tools} />
+      {/* cal94: the dates a trader needs next (F&O expiries, the RBI and the Fed, data releases), and the Calendar on them */}
+      <NextEvents testId="trade-coming" region="IN" calendar="/trade/events" />
       <p className="k-small k-muted" data-testid="positioning-link">FII and DII flows, futures positions, PCR and India VIX are on <Link className="link tap-link" to="/trade/positioning">Positioning</Link>.</p>
     </div>
   );
@@ -301,14 +303,16 @@ export function InvestHome() {
  * Events page, as a table. The rule is My space's (lib/marketEvents comingMarketEvents): the US tab lists the US's own (R71-004),
  * India's holidays count (R72-005), each index's next weekly expiry (DF-023), and nothing is in one "Coming up" and missing from the
  * other (LIVE3-015: this one kept a single expiry and dropped a holiday). */
-function NextEvents({ limit = 5, testId = "invest-events", region }: { limit?: number; testId?: string; region?: Region }) {
+function NextEvents({ limit = 5, testId = "invest-events", region, calendar = "/calendar" }: { limit?: number; testId?: string; region?: Region; calendar?: string }) {
   const v = useEvents();
   const next = v ? comingMarketEvents(v.events, { today: v.today, nowHm: istHm(), end: addDaysIso(v.today, 30), weekEnd: addDaysIso(v.today, 7), region }).slice(0, limit) : null;
   if (next && !next.length) return null;
   return (
     <Card testId={testId} label="Coming up">
-      <CardHead title="Coming up" actions={<Link to="/calendar" className="link small">Calendar →</Link>} />{/* IA-1: the one Calendar, every date */}
-      {next === null ? <PanelSkel label="Reading the market events" lines={1} /> : (
+      {/* cal94: "See calendar" opens the one Calendar on this home's own dates (Invest: your stocks', else every date; Trade: the market's) */}
+      <CardHead title="Coming up" actions={<SeeCalendar to={calendar} />} />
+      {/* cal94: the wait holds the five-row table's height, so the card doesn't grow under what's above it moving (LIVE12B-012's CLS check) */}
+      {next === null ? <div className={limit === 5 ? "coming-skel" : undefined}><PanelSkel label="Reading the market events" lines={1} /></div> : (
         <DataTable label="Coming up" rows={next} rowKey={(e) => e.id} stack={false}
           columns={[{ key: "d", header: "Date", cell: (e) => evWhen(e) }, { key: "e", header: "Event", rowHeader: true, wrap: true, cell: (e) => e.title }]} />
       )}
@@ -497,7 +501,41 @@ export function MoneyHome() {
         <HoldingsSummary />
         <TaxSummary />
       </div>
+      <MoneyComing />
     </div>
+  );
+}
+
+/** Every home's "Coming up" card ends its head with the way to the whole Calendar, on that home's own filter (cal94). */
+export function SeeCalendar({ to }: { to: string }) {
+  return <Link to={to} className="link small" data-testid="see-calendar">See calendar →</Link>;
+}
+
+type MoneyDates = { events: { id: string; date: string; title: string; cat: string; detail: string }[] };
+
+/** Money home's "Coming up" (cal94): the person's next tax, EMI, maturity and premium dates from the money calendar, and the Calendar
+ * on their money dates. Nothing dated in the next 60 days says so in a line, with the way to add one. */
+function MoneyComing() {
+  const [v, setV] = useState<MoneyDates | null | "error">(null);
+  useEffect(() => {
+    const today = istToday();
+    api<MoneyDates>(`/money/calendar?start=${today}&end=${addDaysIso(today, 60)}&cats=tax,money,custom`).then(setV).catch(() => setV("error"));
+  }, []);
+  const next = v && v !== "error" ? v.events.filter((e) => e.date >= istToday()).slice(0, 5) : [];
+  return (
+    <Card testId="money-coming" label="Coming up">
+      <CardHead title="Coming up" actions={<SeeCalendar to="/money/calendar" />} />
+      {v === null ? <PanelSkel label="Reading your money dates" lines={2} />
+        : v === "error" ? <p className="small muted">Your money dates couldn't be read just now. <Link className="link" to="/money/calendar">Try the Calendar</Link>.</p>
+        : !next.length ? <p className="small muted">Nothing dated in the next 60 days. Tax due dates show here, and the dates you add: an FD maturing, an EMI, a premium.</p>
+        : (
+          // three columns: each row stacks on a phone, so its detail is never off the edge (ui-lint R18)
+          <DataTable label="Coming up" rows={next} rowKey={(e) => e.id} stack
+            columns={[{ key: "d", header: "Date", cell: (e) => <span className="nowrap">{fmtDate(e.date, { weekday: true, year: false })}</span> },
+              { key: "e", header: "What", rowHeader: true, wrap: true, cell: (e) => e.title },
+              { key: "x", header: "Detail", wrap: true, cell: (e) => e.detail || <span className="k-muted">–</span> }]} />
+        )}
+    </Card>
   );
 }
 

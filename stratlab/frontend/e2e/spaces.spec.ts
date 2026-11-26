@@ -94,7 +94,8 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await expect(space.getByRole("button", { name: "Money" })).toHaveAttribute("aria-pressed", "true");
   await expect(groups(side)).toHaveText(labelsOf("money"));
   await expect(side.locator('[data-group="portfolio"] > .side-head > a')).toHaveAttribute("href", "/money/net-worth");
-  await expect(side.locator('[data-group="calendar"] > .side-head > a')).toHaveAttribute("href", "/money/calendar");          // Money opens the Calendar on its own dates
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): Money opens the Calendar on its own dates
+  await expect(side.getByTestId("side-calendar")).toHaveAttribute("href", "/money/calendar");
   expect(ALL_PAGES.filter((l) => l.space === "money").map((l) => l.page.to).sort(), "every Money feature is in the menu").toEqual(NAV_GROUPS.Money.map((e) => e.to).sort());
   await expect(side.getByRole("link", { name: "Money home" })).toHaveAttribute("href", "/money");
   // kept on the account and on this device
