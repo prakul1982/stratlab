@@ -71,3 +71,18 @@ def test_a_median_row_with_no_median_is_no_row():
     meds = [r for r in rows if deck._cell_text(r[0]).startswith("Median")]
     assert not meds, meds
     assert deck.no_median(["Median (companies)", "–", "– (2 of 4)", ""]) and not deck.no_median(["Median of 3 companies", "14.2%", "–"])
+
+
+def test_the_findings_never_lead_with_a_layer_of_adjacent_participants():
+    # the live Fertilizers and agrochemicals deck: "Specialty and fine chemicals makers brings in the most revenue of the map's own layers",
+    # a layer of adjacent participants (another kind of business than the theme's)
+    v = _view()
+    own = [b for b in v["layers"] if not b.get("official") and b.get("revenue")]
+    big = max(own, key=lambda b: b["revenue"])
+    slides, _ = deck.theme_plan(copy.deepcopy(v))
+    assert any(f"{big['layer']} brings in the most revenue" in x for x in deck.findings_lines(slides))
+    big["adjacent"] = {"kind": "glass bottle makers", "theme": "Alcoholic beverages"}
+    slides, _ = deck.theme_plan(v)
+    lines = deck.findings_lines(slides)
+    assert not any(x.startswith(big["layer"]) and "brings in the most revenue" in x for x in lines), lines
+    assert any("brings in the most revenue of the map's own layers" in x for x in lines), lines

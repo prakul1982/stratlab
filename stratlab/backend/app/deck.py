@@ -4621,7 +4621,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     from .intel.theme_data import HEADLINE_MIN, headline_ok, of_words, period_basis, rank_pair
     cards = []
     # 1. value-chain economics: only when there are layers to set side by side (R18: no card that says it can't be done)
-    own = [x for x in layers if not x.get("official") and x.get("revenue")]
+    # deck96 (the live Fertilizers and agrochemicals deck: "Specialty and fine chemicals makers brings in the most revenue of the map's own
+    # layers", a layer of adjacent participants, another kind of business than the theme's): the findings are of the theme's own layers
+    own = [x for x in layers if not x.get("official") and not x.get("adjacent") and x.get("revenue")]
     measure, mword = ("roe", "return on equity") if lender else ("ebitda", "EBITDA margin")
     if chained and chain.get("line"):
         lines = [chain["line"]]
