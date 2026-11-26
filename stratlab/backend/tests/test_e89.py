@@ -513,3 +513,26 @@ def test_every_row_printing_an_unchecked_basis_revenue_carries_the_mark():
     rows = [r for s in slides for b in s.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)
             and str(r[0]).startswith("IGL Spirits") and any("8,416" in str(x) for x in r)]          # (a row of the company's figures)
     assert rows and all("basis not confirmed" in str(r[0]) for r in rows), rows
+
+
+def test_insider_list_reads_documents_on_the_exchanges_new_archive_host():
+    """26 Nov 2026: the exchange moved to nseindia.in and its insider-trading list links documents on nsearchives.nseindia.in; every
+    filing was dropped as off-archive and the market's list read as empty for a fortnight (Admin: "Insider trades: Check")."""
+    from app.intel import filings as F
+    rows = [{"symbol": "JKCEMENT", "broadcastDateTime": "23-Nov-2026 14:33:49",
+             "xmlFileName": "https://nsearchives.nseindia.in/corporate/xbrl/IT_2371_WebXMLFile_20261123_143349724.xml",
+             "ixbrl": "https://nsearchives.nseindia.in/corporate/ixbrl/IT_2371_20261123_143349_WEB.html"}]
+    got = F.pit_filings({"data": rows})
+    assert [g["symbol"] for g in got] == ["JKCEMENT"] and got[0]["xml"].startswith("https://nsearchives.nseindia.in/")
+    assert F.pit_filings({"data": [{**rows[0], "xmlFileName": "https://example.com/x.xml"}]}) == []      # still only the exchange's archive
+
+
+def test_an_insider_list_with_rows_but_no_readable_document_is_an_error_not_an_empty_list(monkeypatch):
+    """A list of filings none of which links a readable document is a changed shape or host, never "no insider trades"."""
+    import pytest
+    from app.intel import filings as F
+    import httpx
+    src = F.NSEFilings(transport=httpx.MockTransport(lambda r: httpx.Response(404)), sleep=lambda s: None)
+    monkeypatch.setattr(src, "_get", lambda *a, **k: {"data": [{"symbol": "X", "xmlFileName": "https://elsewhere.example/x.xml"}]})
+    with pytest.raises(F.SourceError):
+        src._insider(None, 14, None)

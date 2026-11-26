@@ -98,7 +98,7 @@ test("B9: each Admin panel that reads on open shows an error with Try again, not
     assert.match(s, /ErrorState/, f);
     assert.match(s, /label: "Try again"/, f);
   }
-  assert.equal([...src("pages/admin/UsersSection.tsx").matchAll(/label: "Try again"/g)].length, 3);
+  assert.equal([...src("pages/admin/UsersSection.tsx").matchAll(/label: "Try again"/g)].length, 4);          // (changed on purpose, owner 26 Nov: the Test accounts card reads on open too, with its own Try again)
 });
 
 test("B8: the invoice form clears state and GSTIN when the country isn't India", () => {

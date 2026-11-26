@@ -61,3 +61,18 @@ test("Overview shows each automatic fix in a short history: what is being fixed,
   assert.match(page, /<DataTable label="Automatic fixes" rows=\{fixes\}/);           // a table with a header row, stacked on a phone
   assert.match(page, /Nothing needed fixing in the last 7 days\./);
 });
+
+test("owner 26 Nov: a theme's coverage and data-gap notes are the engine's work, so Needs your attention leaves them out and Quality lists them", async () => {
+  const { attention, isEngineNote } = await import("../src/pages/admin/attention.ts");
+  const note = (id, name) => ({ id, name, problem: "a note", since: null, to: "/admin", tries: 0, of: 3, next: null, action: "Open the theme's deck.", mailed: null });
+  const autofix = { trying: [], history: [], escalated: [note("theme-coverage:US:biotech", "Theme coverage: biotech (US)"),
+    note("theme-gaps:IN:real estate", "Theme data gaps: real estate (IN)"),
+    { id: "platform", name: "Feature check", problem: "1 check failing", since: null, to: "/admin/system", tries: 0, of: 3, next: null, action: "Open System.", mailed: null }] };
+  const texts = attention(ov({ autofix }), null, []).map((a) => a.text);
+  assert.ok(!texts.some((t) => t.startsWith("Theme coverage") || t.startsWith("Theme data gaps")), texts.join("\n"));
+  assert.ok(texts.some((t) => t.startsWith("Feature check: 1 check failing")));          // a manual item still shows
+  assert.equal(isEngineNote("theme-coverage:US:biotech") && isEngineNote("theme-gaps:IN:x") && !isEngineNote("platform"), true);
+  const q = read("src/pages/admin/QualitySection.tsx");
+  assert.match(q, /Theme engine notes/);
+  assert.match(q, /filter\(\(e\) => isEngineNote\(e\.id\)\)/);
+});

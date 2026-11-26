@@ -5,11 +5,13 @@ import { Badge, Card, CardHead, ConfirmDialog, EmptyState, Seg } from "../../com
 import { useAdmin, type ReportedRow } from "./AdminContext";
 import { AuditPanel, MarketAuditPanel, type Region } from "./AuditPanel";
 import { RulesPanel } from "./RulesPanel";
+import { isEngineNote } from "./attention";
 
 /** Admin → Quality: the India and US audits and whole-market check, strategies users reported, and the rates and rules. */
 export function QualitySection() {
   const { notify, fail } = useApp();
-  const { reported, reload } = useAdmin();
+  const { reported, reload, ov } = useAdmin();
+  const notes = (ov?.server.autofix?.escalated ?? []).filter((e) => isEngineNote(e.id));
   const [region, setRegion] = useState<Region>("IN");
   const [busy, setBusy] = useState<string | null>(null);
   const [asking, setAsking] = useState<ReportedRow | null>(null);
@@ -30,6 +32,13 @@ export function QualitySection() {
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} />
       </div>
       {/* the live whole-market result first (LIVE2-027): the form that runs a chosen set sits under it, not above it */}
+      {/* owner, 26 Nov: the themes' coverage and data-gap notes, out of Needs your attention (nothing to fix by hand) */}
+      <Card testId="theme-engine-notes" label="Theme engine notes">
+        <CardHead title={`Theme engine notes (${notes.length})`} info="What the theme engine noticed about a theme's coverage or its companies' missing data. The engine works on these itself; nothing here needs a manual fix." />
+        {!notes.length ? <p className="k-small k-muted">None right now.</p> : (
+          <ul className="k-small adm-list">{notes.map((n) => <li key={n.id}><b>{n.name}</b>: {n.problem ?? "noted"}</li>)}</ul>
+        )}
+      </Card>
       <MarketAuditPanel region={region} />
       <AuditPanel region={region} />
 
