@@ -528,7 +528,8 @@ function MoneyComing() {
         : v === "error" ? <p className="small muted">Your money dates couldn't be read just now. <Link className="link" to="/money/calendar">Try the Calendar</Link>.</p>
         : !next.length ? <p className="small muted">Nothing dated in the next 60 days. Tax due dates show here, and the dates you add: an FD maturing, an EMI, a premium.</p>
         : (
-          <DataTable label="Coming up" rows={next} rowKey={(e) => e.id} stack={false}
+          // three columns: each row stacks on a phone, so its detail is never off the edge (ui-lint R18)
+          <DataTable label="Coming up" rows={next} rowKey={(e) => e.id} stack
             columns={[{ key: "d", header: "Date", cell: (e) => <span className="nowrap">{fmtDate(e.date, { weekday: true, year: false })}</span> },
               { key: "e", header: "What", rowHeader: true, wrap: true, cell: (e) => e.title },
               { key: "x", header: "Detail", wrap: true, cell: (e) => e.detail || <span className="k-muted">–</span> }]} />
