@@ -15,7 +15,8 @@ const TAB_VIEWS = ["/research/investor", "/trade/positioning/stocks"];
 export function HubTabs({ at, path }: { at: Located; path: string }) {
   const { me } = useApp();
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
-  if (at.group.pages.length < 2 || (p !== at.page.to && !TAB_VIEWS.includes(p))) return null;
+  // the Calendar's views are the row of filters inside it, not tabs (cal94)
+  if (at.group.fixed || at.group.pages.length < 2 || (p !== at.page.to && !TAB_VIEWS.includes(p))) return null;
   return (
     <nav className="hub-tabs" aria-label={at.group.label} data-testid="hub-tabs" data-group={at.group.id}>
       {at.group.pages.map((t) => {

@@ -114,7 +114,6 @@ const MutualFundsPage = page(mfPage, "MutualFundsPage");
 const TaxReportPage = page(taxPage, "TaxReportPage");
 const TaxToolsPage = page(() => import("./pages/money/TaxToolsPage"), "TaxToolsPage");
 const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
-const MoneyCalendarPage = page(moneyCalendar, "MoneyCalendarPage");
 const UsTaxPage = page(() => import("./pages/money/UsTaxPage"), "UsTaxPage");
 const ItrExportPage = page(() => import("./pages/money/ItrExportPage"), "ItrExportPage");
 const SipTestPage = page(() => import("./pages/money/SipTestPage"), "SipTestPage");
@@ -146,7 +145,6 @@ const journalPage = () => import("./pages/trade/JournalPage");
 const JournalPage = page(journalPage, "JournalPage");
 const FoChangesPage = page(() => import("./pages/trade/FoChangesPage"), "FoChangesPage");
 const ClosingAuctionPage = page(() => import("./pages/trade/ClosingAuctionPage"), "ClosingAuctionPage");
-const EventsPage = page(() => import("./pages/trade/EventsPage"), "EventsPage");
 const StockFuturesPage = page(() => import("./pages/trade/StockFuturesPage"), "StockFuturesPage");
 const StockLendingPage = page(() => import("./pages/StockLendingPage"), "StockLendingPage");
 const MarginFundingPage = page(() => import("./pages/MarginFundingPage"), "MarginFundingPage");
@@ -326,7 +324,8 @@ function Routed() {
         <Route path="/trade/replay" element={<ReplayPage />} />
         <Route path="/trade/signals" element={<SignalsPage />} />
         <Route path="/trade/signals/:sid" element={<SignalsPage />} />
-        <Route path="/trade/events" element={<EventsPage />} />
+        {/* cal94: the one Calendar's two old addresses are two of its filters (lib/calendarShow) */}
+        <Route path="/trade/events" element={<CalendarPage />} />
         <Route path="/plans" element={<PlansPage />} />
         {/* the landing page's addresses, signed in: Plans is the pricing page inside the app, Help has its own page */}
         <Route path="/pricing" element={<Redirect to="/plans" />} />
@@ -347,7 +346,7 @@ function Routed() {
         <Route path="/money/net-worth" element={<NetWorthPage />} />
         <Route path="/money/mutual-funds" element={<MutualFundsPage />} />
         <Route path="/money/tax-tools" element={<TaxToolsPage />} />
-        <Route path="/money/calendar" element={<MoneyCalendarPage />} />
+        <Route path="/money/calendar" element={<CalendarPage />} />
         <Route path="/money/us-tax" element={<UsTaxPage />} />
         <Route path="/money/itr" element={<ItrExportPage />} />
         <Route path="/money/sip-test" element={<SipTestPage />} />

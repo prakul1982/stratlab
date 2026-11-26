@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { Card, CardHead, EmptyState, PageHeader, ScrollList } from "../components/kit";
 import { PageTags } from "../components/PageTags";
 import { TileGrid } from "../components/TileGrid";
-import { ALL_GROUPS, NAV, SPACE_LIST, groupPath, locateGroup, type NavPage } from "../lib/nav";
+import { ALL_GROUPS, NAV, SPACE_LIST, groupPath, locateGroup, startOf, type NavPage } from "../lib/nav";
 import { MINE_NAME } from "../lib/spaces";
 
 /* The two pages that list the menu as cards: a group's own page (/trade/g/practise, from the group's title in the sidebar)
@@ -32,6 +32,8 @@ export function GroupPage() {
   const { pathname } = useLocation();
   const g = locateGroup(pathname);
   if (!g) return <Navigate to="/features" replace />;
+  // cal94: the Calendar has no page of cards: its old entry page (/trade/g/calendar) opens it on that space's dates
+  if (g.group.fixed) return <Navigate to={startOf(g.group, g.space)} replace />;
   if (pathname.replace(/\/$/, "") !== groupPath(g.space, g.group)) return <Navigate to={groupPath(g.space, g.group)} replace />;
   return (
     <div className="stack nav-page" data-testid="group-page" data-group={g.group.id}>

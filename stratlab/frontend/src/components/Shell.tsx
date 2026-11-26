@@ -24,6 +24,8 @@ import { importWithRetry } from "../lib/lazyRetry";
 import { scrollBehavior } from "../lib/motion";
 import { setSectionUser } from "../lib/sections";
 import { callsInFlight, onIdle } from "../lib/inflight";
+import { CAL_KEPT, calEntry, type CalKept } from "../lib/calendarShow";
+import { MenuSpace } from "../lib/menuSpace";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => importWithRetry(() => import("./SearchPalette")).then((m) => ({ default: m.SearchPalette })));
@@ -139,6 +141,9 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
   // a link into another space shows that space's menu, so where you are is always in it. Mine keeps its own menu on the
   // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
   const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to) || MINE_GROUPS.includes(at.group.id));
+  // the fixed Calendar entry: where it opens from the space showing (the filter last picked there), and marked while it is open
+  const [calKept] = usePersisted<CalKept>(CAL_KEPT, {});
+  const onCalendar = !!at?.group.fixed;
   // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
   // the space of the page before this one in this visit: a page in several spaces' menus (the Calendar's tabs) opens inside it
   const lastSpace = useRef<SpaceView | null>(null);
@@ -290,7 +295,6 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
         <div className="side-list side-nav">
           {item("/news", <News />, "Today's brief", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
           {item("/research/watchlist", <Pin />, "Watchlist", at?.group.id === "watch", "Watchlist: the companies you follow, and Alerts: a message when a stock or the market does what you asked about")}
-          {item("/calendar", <Calendar />, "Calendar", at?.group.id === "calendar", "Calendar: results, corporate actions, IPOs, market events and your own money dates")}
           {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
           {item("/settings", <Gear />, "Settings", path === "/settings" && loc.hash !== "#accounts", "Notifications, what you see first, the theme and the connection check")}
           {me?.plan_info?.features?.assistant !== false && item("/assistant", <Sparkle />, "Connect an AI assistant", path === "/assistant", "Keys that let Claude or ChatGPT use your StratLab")}
@@ -334,6 +338,12 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
           <Sparkle size={16} /><span>Ask or do anything</span>{/* no keyboard shortcut on a touch screen (R50-016) */}
           {!window.matchMedia?.("(pointer: coarse)").matches && <kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>}
         </button>
+        {/* cal94 (owner, 26 Nov): the one Calendar, fixed here in every space and in no space's menu list. It opens on the dates for
+            where you are (lib/calendarShow): from Trade the market events and expiries, from Money your money dates, else every date */}
+        <Link to={calEntry(space, calKept)} className={`search-btn side-cal${onCalendar ? " active" : ""}`} aria-current={onCalendar ? "page" : undefined}
+          title="Calendar: results, dividends and splits, IPOs, market events and expiries, and your own money dates" data-testid="side-calendar">
+          <Calendar size={16} /><span>Calendar</span>
+        </Link>
       </div>
       <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>
         {/* Themes is one entry, the first of Invest's menu above Companies (owner, 18 Nov: "put it at top like above the companies"), not a
@@ -387,7 +397,7 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main" id="main" tabIndex={-1}><div className="page"><div className="crumb-row"><PageBreadcrumb mine={space === "mine"} space={space} />{at && <HubTabs at={at} path={path} />}</div>{children}</div></main>
+      <main className="main" id="main" tabIndex={-1}><div className="page"><div className="crumb-row"><PageBreadcrumb mine={space === "mine"} space={space} />{at && <HubTabs at={at} path={path} />}</div><MenuSpace.Provider value={space}>{children}</MenuSpace.Provider></div></main>
       {ask}{/* after the page (LIVE8B-004): its coming and going never moves the page, and "Skip to content" lands on the page, not on it */}
       <Suspense fallback={null}>
         {search && <SearchPalette onClose={() => setSearch(false)} />}

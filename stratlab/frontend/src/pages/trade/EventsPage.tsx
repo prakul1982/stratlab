@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -165,7 +165,8 @@ function AdminPanel({ v, reload }: { v: EventsView; reload: () => void }) {
   );
 }
 
-export function EventsPage() {
+/** cal94: one filter of the one Calendar (its row of filters is `top`, under the title; `eyebrow` names the space it was opened in). */
+export function EventsPage({ top, eyebrow = "Trade · Calendar" }: { top?: ReactNode; eyebrow?: string } = {}) {
   const { fail, me } = useApp();
   const [v, setV] = useState<EventsView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -206,10 +207,11 @@ export function EventsPage() {
 
   return (
     <div className="k-page ev-page">
-      <PageHeader eyebrow="Trade · Calendar" title="Market events"
+      <PageHeader eyebrow={eyebrow} title="Market events & expiries"
         lede="RBI policy, India's data releases, the US Fed and US data, index changes, F&O expiries and exchange holidays on one calendar. The repo rate, the Fed's range and India's CPI, IIP and GDP once published; the US reports as dates with a link. Never a forecast. Facts, not advice."
         info={v ? <span data-testid="ev-asof">{v.sources.map((s) => `${s.label} ${s.as_of ? `as of ${asOf(s.as_of)}` : "not read yet"}${s.failed ? " (couldn't be refreshed since)" : ""}`).join(" · ")}</span> : undefined}
         infoLabel="Where this comes from" />
+      {top}
       {error ? <ErrorState title="The market events couldn't be read" action={{ label: "Try again", onClick: () => { setError(null); reload(); } }}>{error}</ErrorState>
         : !v ? <Card><Skeleton label="Reading the market events" /></Card>
         : (

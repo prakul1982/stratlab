@@ -32,17 +32,19 @@ export function PageBreadcrumb({ mine = false, space: showing }: { mine?: boolea
   if (!at) return null;
   const { group, page } = at;
   const pin = { pinned: pins.has(page.to), onTogglePin: () => pins.toggle(page.to) };
-  const one = group.pages.length === 1;
+  // the Calendar is one page whatever filter it is on (cal94: its old addresses are two of its filters): "Trade › Calendar"
+  const one = group.pages.length === 1 || !!group.fixed;
+  const label = group.fixed ? group.label : page.label;
   const tabs = !one && phone ? group.pages.map((p) => ({ to: p.to, label: p.label, current: p.to === page.to })) : [];
   // opened from My space's own menu (Briefs, Watchlist, Calendar), the trail is My space's, as the menu beside it is
   // (DI-017: Briefs showed My space in the menu and "Invest › Company news" above the page)
   if (mine && (MINE_LINKED.includes(page.to) || MINE_ENTRIES.includes(group.id)))
-    return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }, ...(one || MINE_LINKED.includes(page.to) ? [] : [{ label: group.label, to: group.pages[0].to }])]} page={page.label} siblings={tabs} {...pin} />;
+    return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }, ...(one || MINE_LINKED.includes(page.to) ? [] : [{ label: group.label, to: group.pages[0].to }])]} page={label} siblings={tabs} {...pin} />;
   const space = group.start && showing && showing !== "mine" ? showing : at.space;
   return (
     <Breadcrumb
       trail={[{ label: NAV[space].label, to: NAV[space].home }, ...(one ? [] : [{ label: group.label, to: groupPath(space, group) }])]}
-      page={page.label} siblings={tabs} {...pin}
+      page={label} siblings={tabs} {...pin}
     />
   );
 }
