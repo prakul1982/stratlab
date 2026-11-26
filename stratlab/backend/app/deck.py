@@ -9672,6 +9672,11 @@ def size_mark(x: dict) -> str:
     return " (whole company)" if x.get("whole") else ""
 
 
+def once_marked(name: str, mark: str) -> str:
+    """deck96: a name with its bracketed mark added, said once: a name that already carries that mark keeps it once."""
+    return name if mark and mark.strip() in name else name + mark
+
+
 def size_note(size: dict) -> str:
     """gl52: how a company that runs other businesses too is counted in the theme's market value."""
     parts = []
@@ -9694,7 +9699,8 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         msg = (f"The three largest make up {_pc(size['top3_share'])} of the theme's market value of {cap(size.get('total_cap'))} ({_n(nv, 'company', 'companies')} with figures and a market value)"
                if size.get("top3_share") is not None else f"The theme's {_n(nv, 'company', 'companies')} with figures and a market value are worth {cap(size.get('total_cap'))} together")
         s = Slide("Size and shape", msg, eyebrow=E())
-        rows = [[name_of(x["symbol"], x["name"]) + size_mark(x), cap(x.get("cap")), _pc(x.get("share"))] for x in big]
+        # deck96 (the live Capital goods deck: "Larsen & Toubro Limited (whole company) (whole company)"): a mark is said once on a name
+        rows = [[once_marked(name_of(x["symbol"], x["name"]), size_mark(x)), cap(x.get("cap")), _pc(x.get("share"))] for x in big]
         if size.get("top3_share") is not None:          # the headline's share is a row of the table (R25)
             rows.append(["The three largest together", cap(sum(x.get("cap") or 0 for x in big[:3])), _pc(size["top3_share"])])
         rows.append([f"All {size.get('with_value', 0):,} companies with figures and a market value", cap(size.get("total_cap")), "100.0%"])
