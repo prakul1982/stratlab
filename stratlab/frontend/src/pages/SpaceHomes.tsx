@@ -311,7 +311,8 @@ function NextEvents({ limit = 5, testId = "invest-events", region, calendar = "/
     <Card testId={testId} label="Coming up">
       {/* cal94: "See calendar" opens the one Calendar on this home's own dates (Invest: your stocks', else every date; Trade: the market's) */}
       <CardHead title="Coming up" actions={<SeeCalendar to={calendar} />} />
-      {next === null ? <PanelSkel label="Reading the market events" lines={1} /> : (
+      {/* cal94: the wait holds the five-row table's height, so the card doesn't grow under what's above it moving (LIVE12B-012's CLS check) */}
+      {next === null ? <div className={limit === 5 ? "coming-skel" : undefined}><PanelSkel label="Reading the market events" lines={1} /></div> : (
         <DataTable label="Coming up" rows={next} rowKey={(e) => e.id} stack={false}
           columns={[{ key: "d", header: "Date", cell: (e) => evWhen(e) }, { key: "e", header: "Event", rowHeader: true, wrap: true, cell: (e) => e.title }]} />
       )}
