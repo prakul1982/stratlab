@@ -344,7 +344,7 @@ function ComingCard({ rows }: { rows: Up[] | null }) {
   return (
     <Card testId="mine-coming">
       {/* cal94: "See calendar" opens the one Calendar on My space's own filter (your stocks' dates, else every date) */}
-      <CardHead title="Coming up" actions={<Link className="link small" to="/calendar" data-testid="see-calendar">See calendar →</Link>} />
+      <CardHead title="Coming up" actions={<Link className="btn quiet sm" to="/calendar" data-testid="see-calendar">See calendar</Link>} />
       {rows === null ? <Skeleton label="Reading your calendars" lines={3} />
         : !rows.length ? <EmptyState title="Nothing dated yet" action={{ label: "Open the calendar", to: "/calendar" }}>Tax dates, results and dividends for your stocks and market events show here.</EmptyState>
         : (

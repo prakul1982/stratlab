@@ -45,7 +45,9 @@ test("VR1-003, VR1-004, VR1-005: My space's heading says only the market state, 
   assert.match(mine, /const firstSentence = /);
   // updated on purpose (Release 63 CI UI checker): Paper sessions' Open sits under its figure, as in its no-sessions card, since beside the
   // one-line title it ran 20px into it at 1280; the other five keep the corner link
-  assert.equal((mine.match(/className="btn quiet sm" to="[^"]+" aria-label="Open [^"]+">Open<\/Link>/g) ?? []).length, 5);   // net worth, P&L, markets, calendar, watchlist
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): Coming up's corner link is "See calendar", to the one Calendar
+  assert.equal((mine.match(/className="btn quiet sm" to="[^"]+" aria-label="Open [^"]+">Open<\/Link>/g) ?? []).length, 4);   // net worth, P&L, markets, watchlist
+  assert.match(mine, /<Link className="btn quiet sm" to="\/calendar" data-testid="see-calendar">See calendar<\/Link>/);
   assert.match(mine, /<Link className="btn quiet sm" to="\/paper">Open paper sessions<\/Link>/);
   assert.doesNotMatch(mine, /<svg viewBox="0 0 100 30"/);
   assert.match(mine, /!v\.history_allowed && <HistoryPlaceholder \/>/);

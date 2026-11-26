@@ -86,7 +86,7 @@ export const CALENDAR: NavGroup = {
 
 /** Invest's research tables of dates (cal94: they were tabs of the Calendar; the Calendar links to each and lists their dates). */
 const COMPANY_DATES: NavGroup = {
-  id: "company-dates", label: "Results & IPOs", icon: "calendar", was: ["calendar", "company-news"],
+  id: "company-dates", label: "Results & IPOs", icon: "calendar", was: ["company-news"],
   blurb: "The research tables behind the Calendar: results days with each company's latest quarter, corporate actions by ex-date, India's and the US's IPOs, and results calls.",
   pages: [
     page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement board meeting", { line: "Results days for your stocks, or every company, week by week.",
@@ -263,7 +263,7 @@ export function locateGroup(path: string): { space: SpaceId; group: NavGroup } |
   const space = m[1] as SpaceId;
   const group = NAV[space].groups.find((g) => g.id === m[2]) ?? NAV[space].groups.find((g) => g.was?.includes(m[2]));
   if (group) return { space, group };
-  // cal94: Trade's and Money's old Calendar entry pages open the one Calendar, on that space's dates (GroupPage sends them on)
+  // cal94: each space's old Calendar entry page opens the one Calendar, on that space's dates (GroupPage sends it on)
   if (m[2] === CALENDAR.id) return { space, group: CALENDAR };
   // R61: an entry page only Release 60's one menu had (its More tools, at /trade|invest|money/g/more) still opens: the first entry it gathered
   const moved = MOVED[m[2]];

@@ -8,17 +8,22 @@ import { register } from "node:module";
 
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
-const { NAV } = await import("../src/lib/nav.ts");
+const { CALENDAR, NAV } = await import("../src/lib/nav.ts");
 const { menuView, sharedPage, spaceOf, spaceParam, SPACE_IDS } = await import("../src/lib/spaces.ts");
 
 // every page address and the spaces whose menus list it
 const menus = {};
 for (const sp of SPACE_IDS) for (const g of NAV[sp].groups) for (const p of g.pages) (menus[p.to] ??= new Set()).add(sp);
+// (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): it is in every space's sidebar, so each of its pages
+// is reached from every space; the research tables it had as tabs are Invest's alone now
+for (const p of CALENDAR.pages) for (const sp of SPACE_IDS) (menus[p.to] ??= new Set()).add(sp);
 const shared = Object.keys(menus).filter((to) => menus[to].size > 1);
 
-test("the menu map's shared pages are exactly the ones sharedPage() names (today: the Calendar's six tabs)", () => {
-  assert.ok(shared.length >= 6, shared.join(", "));
-  for (const to of ["/calendar", "/research/results", "/research/corporate-actions", "/invest/ipos", "/trade/events", "/money/calendar"]) assert.ok(shared.includes(to), to);
+test("the menu map's shared pages are exactly the ones sharedPage() names (today: the Calendar's three addresses)", () => {
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar)
+  assert.ok(shared.length >= 3, shared.join(", "));
+  for (const to of ["/calendar", "/trade/events", "/money/calendar"]) assert.ok(shared.includes(to), to);
+  for (const to of ["/research/results", "/research/corporate-actions", "/invest/ipos"]) assert.ok(!shared.includes(to), to);
   for (const to of Object.keys(menus)) assert.equal(sharedPage(to), shared.includes(to), to);
 });
 

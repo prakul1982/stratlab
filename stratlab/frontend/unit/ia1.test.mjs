@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
-const { ALL_GROUPS, ALL_PAGES, NAV, locate, locateGroup, placeName, startOf } = await import("../src/lib/nav.ts");
+const { ALL_GROUPS, ALL_PAGES, CALENDAR, NAV, locate, locateGroup, placeName, startOf } = await import("../src/lib/nav.ts");
 const { match } = await import("../src/lib/features.ts");
 const { PAGE_GATES } = await import("../src/lib/gates.ts");
 const { isAppPath } = await import("../src/lib/deepLinks.ts");
@@ -17,18 +17,20 @@ const { ipoRows, mergeRows } = await import("../src/lib/calendarRows.ts");
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
 
 // every address the menu had before IA-1, with the entry and tab it opens now
+// (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the market events and money dates are two filters of the
+// one Calendar, and results, corporate actions and IPOs are Invest's "Results & IPOs"
 const MOVED = {
   "/notebooks": ["strategies", "Notebooks"], "/library": ["strategies", "Strategy library"], "/import": ["strategies", "Import"],
   "/trade/signals": ["practise", "Forward test"], "/paper": ["practise", "Paper trading"], "/options": ["practise", "Options builder"], "/trade/replay": ["practise", "Chart replay"],
   "/trade/positioning": ["fo-desk", "Positioning"], "/trade/fo-changes": ["fo-desk", "F&O changes"], "/trade/closing-auction": ["fo-desk", "Closing auction"],
-  "/trade/events": ["calendar", "Market events"], "/trade/journal": ["my-trades", "Trade journal"],
+  "/trade/events": ["calendar", "Market events & expiries"], "/trade/journal": ["my-trades", "Trade journal"],
   "/research": ["companies", "Look up a company"], "/research/compare": ["companies", "Compare"],
   "/invest/business-updates": ["companies", "Business updates"], "/invest/holders": ["companies", "Named holders"],
   "/research/screens": ["find-stocks", "Figures"], "/research/scan": ["find-stocks", "Chart rules"], "/research/filings": ["find-stocks", "Filings"],
   "/research/themes": ["themes", "Themes"],
   "/research/pulse": ["market-today", "Mood"], "/invest/breadth": ["market-today", "Breadth"], "/research/rotation": ["market-today", "Sectors"], "/news": ["market-today", "Today's brief"],
   "/invest/etf-gaps": ["market-data", "ETF vs NAV"], "/invest/margin-funding": ["market-data", "Margin funding"], "/invest/stock-lending": ["market-data", "Stock lending fees"],
-  "/research/results": ["calendar", "Results"], "/research/corporate-actions": ["calendar", "Corporate actions"], "/invest/ipos": ["calendar", "IPOs"],
+  "/research/results": ["company-dates", "Results"], "/research/corporate-actions": ["company-dates", "Corporate actions"], "/invest/ipos": ["company-dates", "IPOs"],
   "/research/watchlist": ["watch", "Stocks"], "/alerts": ["watch", "Alerts"],
   "/money/net-worth": ["portfolio", "Net worth"], "/holdings": ["portfolio", "Holdings"], "/money/mutual-funds": ["portfolio", "Mutual funds"],
   "/tax-report": ["tax", "Tax report"], "/money/tax-tools": ["tax", "Tax tools"], "/money/us-tax": ["tax", "US stocks tax"], "/money/itr": ["tax", "ITR export"],
@@ -36,7 +38,7 @@ const MOVED = {
 };
 
 test("IA-1: about 15 entries, every old address is a tab of the entry it belongs to, and none was removed", () => {
-  assert.equal(ALL_GROUPS.length, 14);
+  assert.equal(ALL_GROUPS.length, 15);          // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): plus Invest's Results & IPOs
   assert.equal(Object.keys(MOVED).length, 42);
   for (const [to, [entry, tab]] of Object.entries(MOVED)) {
     const at = locate(to);
@@ -59,14 +61,18 @@ test("IA-1: about 15 entries, every old address is a tab of the entry it belongs
   assert.match(read("src/main.tsx"), /<Route path="\/invest\/flows" element=\{<FlowsPage \/>\} \/>/);
 });
 
-test("IA-1: the one Calendar is in every space's menu, each opening it pre-filtered for that space", () => {
-  const cal = (s) => NAV[s].groups.find((g) => g.id === "calendar");
-  assert.ok(cal("trade") && cal("trade") === cal("invest") && cal("invest") === cal("money"));
-  assert.equal(startOf(cal("trade"), "trade"), "/trade/events");
-  assert.equal(startOf(cal("invest"), "invest"), "/calendar");
-  assert.equal(startOf(cal("money"), "money"), "/money/calendar");
-  // (updated on purpose, f5: the Earnings calls tab joins the Calendar, after IPOs)
-  assert.deepEqual(cal("invest").pages.map((p) => p.label), ["All dates", "Results", "Corporate actions", "IPOs", "Earnings calls", "Market events", "My money dates"]);
+// (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar is in no space's menu list; it is fixed
+// in the sidebar's top part and opens on each space's own dates. Its research tables are Invest's "Results & IPOs".
+test("IA-1: the one Calendar is fixed in the sidebar, in no space's menu, each space opening it pre-filtered for that space", () => {
+  for (const s of ["trade", "invest", "money"]) assert.ok(!NAV[s].groups.some((g) => g.id === "calendar" || g.fixed), s);
+  const cal = CALENDAR;
+  assert.ok(cal.fixed);
+  assert.equal(startOf(cal, "trade"), "/trade/events");
+  assert.equal(startOf(cal, "invest"), "/calendar");
+  assert.equal(startOf(cal, "money"), "/money/calendar");
+  assert.deepEqual(cal.pages.map((p) => p.label), ["Calendar", "Market events & expiries", "My money dates"]);
+  // (updated on purpose, f5: the Earnings calls tab joins, after IPOs)
+  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "company-dates").pages.map((p) => p.label), ["Results", "Corporate actions", "IPOs", "Earnings calls"]);
   // each tab keeps its own space, so the trail and the menu agree with its address
   assert.equal(locate("/trade/events").space, "trade");
   assert.equal(locate("/money/calendar").space, "money");
@@ -77,7 +83,7 @@ test("IA-1: the one Calendar is in every space's menu, each opening it pre-filte
 
 test("IA-1: the old group pages open the entry that took them over", () => {
   for (const [path, id] of [["/trade/g/build-and-test", "strategies"], ["/trade/g/practise", "practise"], ["/trade/g/my-trades", "my-trades"],
-    ["/invest/g/market-view", "market-today"], ["/invest/g/company-news", "calendar"], ["/invest/g/watch", "watch"], ["/money/g/what-you-own", "portfolio"], ["/money/g/plan", "plan"]]) {
+    ["/invest/g/market-view", "market-today"], ["/invest/g/company-news", "company-dates"], ["/trade/g/calendar", "calendar"], ["/money/g/calendar", "calendar"], ["/invest/g/watch", "watch"], ["/money/g/what-you-own", "portfolio"], ["/money/g/plan", "plan"]]) {
     assert.equal(locateGroup(path)?.group.id, id, path);
   }
   assert.match(read("src/pages/NavPages.tsx"), /if \(pathname\.replace\(\/\\\/\$\/, ""\) !== groupPath\(g\.space, g\.group\)\) return <Navigate to=\{groupPath\(g\.space, g\.group\)\} replace \/>;/);
@@ -139,7 +145,8 @@ test("IA-1: the menu is one short list of entries; the tabs show on each tab's p
   assert.match(read("src/styles.css"), /@media \(max-width: 640px\) \{ \.hub-tabs \{ display: none; \} \}/);          // a phone has them in the breadcrumb's menu
   assert.match(read("src/components/PageBreadcrumb.tsx"), /const tabs = !one && phone \? group\.pages\.map/);
   const tabs = read("src/components/HubTabs.tsx");
-  assert.match(tabs, /if \(at\.group\.pages\.length < 2 \|\| \(p !== at\.page\.to && !TAB_VIEWS\.includes\(p\)\)\) return null;/);
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar's filters are a row inside it, not tabs
+  assert.match(tabs, /if \(at\.group\.fixed \|\| at\.group\.pages\.length < 2 \|\| \(p !== at\.page\.to && !TAB_VIEWS\.includes\(p\)\)\) return null;/);
   // Help lists every page by its old name with where it is now; the tour has a step on the menu's entries and tabs
   const help = read("src/pages/AppGates.tsx");
   assert.match(help, /testId="help-places"/);
@@ -170,5 +177,7 @@ test("IA-1: the space homes and 'More you can do' follow the menu's entries", ()
   const homes = read("src/pages/SpaceHomes.tsx");
   // (updated on purpose, LIVE7B-014: the space homes no longer list the menu's entries again at their foot)
   assert.doesNotMatch(homes, /<Explore|<MoreTools/);
-  assert.match(homes, /<Link to="\/calendar" className="link small">Calendar →<\/Link>/);
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): each home's Coming up card says "See calendar"
+  assert.match(homes, /<Link to=\{to\} className="link small" data-testid="see-calendar">See calendar →<\/Link>/);
+  assert.match(homes, /<CardHead title="Coming up" actions=\{<SeeCalendar to=\{calendar\} \/>\} \/>/);
 });

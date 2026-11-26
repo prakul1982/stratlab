@@ -99,7 +99,9 @@ test("owner 5 Nov: the calendars, the filings page and Invest home open on every
   assert.equal(companiesPref({ prefs: { level: null } }), "all");
   assert.equal(companiesPref({ prefs: { level: null, companies: "mine" } }), "mine");
   assert.deepEqual(SCOPE_OPTIONS.map((o) => o.value), ["all", "mine"]);                       // every company first
-  for (const f of ["src/pages/ResultsPage.tsx", "src/pages/CorpActionsPage.tsx", "src/pages/CalendarPage.tsx"]) {
+  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the Calendar's "My stocks" is one of its filters, on
+  // when the person has a watchlist or holdings (lib/calendarShow calDefault); the research tables keep the account's choice
+  for (const f of ["src/pages/ResultsPage.tsx", "src/pages/CorpActionsPage.tsx"]) {
     const src = read(f);
     assert.match(src, /= useCompanyScope\(\);/, f);
     assert.match(src, /options=\{SCOPE_OPTIONS\}/, f);
