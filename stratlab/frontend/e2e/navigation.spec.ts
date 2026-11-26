@@ -127,7 +127,8 @@ test("every page has a breadcrumb: space, entry and tab; the entry's tabs are th
   for (const [path, trail] of [
     ["/trade/signals", /Trade\s*›\s*Practise\s*›\s*Forward test/], ["/trade/positioning/stocks", /Trade\s*›\s*F&O desk\s*›\s*Positioning/],
     ["/research/IN/TCS", /Invest\s*›\s*Companies\s*›\s*Look up a company/], ["/research/investor", /Invest\s*›\s*Watchlist\s*›\s*Stocks/],
-    ["/money/calendar", /^Money\s*›\s*Calendar\s*▾/],          // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar) ["/holdings", /Money\s*›\s*Portfolio\s*›\s*Holdings/], ["/notebooks", /Trade\s*›\s*Strategies\s*›\s*Notebooks/],
+    // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): /money/calendar's trail is "Money › Calendar"
+    ["/money/calendar", /^Money\s*›\s*Calendar\s*▾/], ["/holdings", /Money\s*›\s*Portfolio\s*›\s*Holdings/], ["/notebooks", /Trade\s*›\s*Strategies\s*›\s*Notebooks/],
     ["/trade/journal", /^Trade\s*›\s*Trade journal\s*▾/], ["/research/themes", /^Invest\s*›\s*Themes\s*▾/],
   ] as const) {
     await page.goto(path);
@@ -142,7 +143,8 @@ test("one row of tabs, the entry's (IA-1): the old rows are gone, and Watchlist 
   const errors = await open(page, "/research/pulse");
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible({ timeout: 30_000 });
   for (const [path, entry] of [["/research", "Companies"], ["/research/pulse", "Market today"], ["/research/scan", "Find stocks"], ["/research/screens", "Find stocks"], ["/research/rotation", "Market today"],
-    ["/research/results", "Calendar"], ["/invest/breadth", "Market today"], ["/research/watchlist", "Watchlist"], ["/trade/positioning", "F&O desk"]] as const) {
+    // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): Results is a tab of Invest's Results & IPOs
+    ["/research/results", "Results & IPOs"], ["/invest/breadth", "Market today"], ["/research/watchlist", "Watchlist"], ["/trade/positioning", "F&O desk"]] as const) {
     await page.goto(path);
     await expect(page.getByRole("navigation", { name: "Breadcrumb" }), path).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(".research-nav, .sub-seg, .pos-tabs, nav.seg"), `${path} has no old row of tabs`).toHaveCount(0);
