@@ -240,11 +240,11 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   // purpose: Themes is Invest's first entry, no pill beside the home link), with a visible focus ring
   side = await menu(page, phone);
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
-  // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): the fixed Calendar entry is the next stop after the search button
-  await page.keyboard.press("Tab");
-  await expect(side.getByTestId("side-calendar")).toBeFocused();
+  // (changed on purpose, side97, owner 26 Nov: "b looks good"): the space's home, then the Calendar pinned under it
   await page.keyboard.press("Tab");
   await expect(side.getByRole("link", { name: "Invest home" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(side.getByTestId("side-calendar")).toBeFocused();
   await page.keyboard.press("Tab");
   const first = side.locator(".side-entries > .side-entry > .side-head > a").first();
   await expect(first).toBeFocused();

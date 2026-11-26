@@ -65,8 +65,9 @@ test("the one Calendar: fixed in the sidebar, opening on each space's dates; its
     await menu();
     await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
     await expect(side.getByTestId("side-calendar")).toHaveCount(1);
-    await expect(side.locator(".side-top").getByTestId("side-calendar")).toHaveText("Calendar");
-    await expect(side.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Calendar", exact: true })).toHaveCount(0);
+    // (changed on purpose, side97, owner 26 Nov: "b looks good") the one entry is in the menu, pinned under the space's home
+    await expect(side.locator(".side-pin").getByTestId("side-calendar")).toHaveText("Calendar");
+    await expect(side.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Calendar", exact: true })).toHaveCount(1);
     await expect(side.locator('[data-group="calendar"]')).toHaveCount(0);
     await side.getByTestId("side-calendar").click();
     await expect(page).toHaveURL(url);
