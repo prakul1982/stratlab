@@ -468,10 +468,15 @@ def check_listing(page: dict | None, p: dict, nums: dict, snap: dict, listed: st
                 out.append(_issue("mismatch", LISTING, f"Market value {snap['market_cap_cr']:,.0f} cr counts the shares from before the issue; on "
                                                        f"the shares in issue now it is about {now_cap:,.0f} cr"))
     years = nums.get("years") or []
-    for key, vals in (("sales", [y.get("sales") for y in years]), ("profit", [y.get("profit") for y in years])):
+    # owner 26 Nov (VEEFIN: "from a tiny base in Mar 2021 (S) 6m"): the same years the page grows from, a first part-year report
+    # never one (deepdive.part_year), and only a rate the page shows: with its part year as the base the page shows no rate at all
+    from .deepdive import part_year
+    whole = lambda k: [None if part_year(y.get("year")) else y.get(k) for y in years]     # noqa: E731
+    shown = nums.get("growth")          # numbers from before the rates were kept with them: every rate counts as shown
+    for key, vals in (("sales", whole("sales")), ("profit", whole("profit"))):
         for n in (3, 5):
             i = tiny_base(vals, n, [y.get("sales") for y in years] if key == "profit" else None)
-            if i is not None and f"{key}_cagr_{n}y" not in (nums.get("growth_nm") or {}):
+            if i is not None and (shown is None or shown.get(f"{key}_cagr_{n}y") is not None) and f"{key}_cagr_{n}y" not in (nums.get("growth_nm") or {}):
                 out.append(_issue("mismatch", LISTING, f"A {n}-year {key} growth rate is shown from a tiny base in {years[i]['year']} instead of n/m"))
     return out
 
