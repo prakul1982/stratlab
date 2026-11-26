@@ -54,3 +54,20 @@ def test_a_layer_page_points_only_at_what_the_page_it_names_shows():
     method = next(s for s in slides if s.title.startswith(deck.METHOD_TITLE))
     flat = " ".join(" ".join(deck._cell_text(x) for x in r) for b in method.blocks for r in b.get("rows") or [] if not isinstance(r, dict))
     assert "A word in brackets after a company's" in flat and "on the theme's page in StratLab" in flat
+
+
+def test_a_median_row_with_no_median_is_no_row():
+    # the live Airlines and Hotels decks: "Median (companies)  –  –  –" under "Other airlines and travel companies", fewer than 3 companies with
+    # each figure
+    v = _view()
+    lay = next(b for b in v["layers"] if len(b.get("companies") or []) >= 4)
+    for k, st in list((lay.get("stats") or {}).items()):
+        if isinstance(st, dict) and st.get("n"):
+            lay["stats"][k] = {**st, "n": 2}
+    slides, _ = deck.theme_plan(v)
+    page = next(s for s in slides if s.title.startswith("Layer ") and s.title.endswith(lay["layer"]))
+    rows = [r for b in page.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)]
+    assert rows
+    meds = [r for r in rows if deck._cell_text(r[0]).startswith("Median")]
+    assert not meds, meds
+    assert deck.no_median(["Median (companies)", "–", "– (2 of 4)", ""]) and not deck.no_median(["Median of 3 companies", "14.2%", "–"])

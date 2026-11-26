@@ -7801,7 +7801,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                                _span(st.get(k), (lambda x: _pcw(x, lwhole)) if k == "ebitda" else col_fmt(k, True)) for k, _, _ in cols] + [""]
         head = ["Company"] + [c[1] for c in cols] + ["Year"]
         widths = [2.6] + [c[2] for c in cols] + [1.1]
-        tail = [med_row] + ([rng_row] if n_st >= MIN_BASE else [])
+        # deck96 (the live Airlines and Hotels decks: "Median (companies)  –  –  –" under a layer of fewer than 3 companies with a figure): a
+        # median row with no median in it is no row
+        tail = ([] if no_median(med_row) else [med_row]) + ([rng_row] if n_st >= MIN_BASE else [])
         # y57 (R57, the audit of the live R56 decks, MD-9, SEMI-6: "Orthopedic and surgical device makers −0.5%" while its largest earn 22-27%;
         # Fabless 7.0% beside NVIDIA and Broadcom): the layer's companies' EBITDA margin together (revenue-weighted) as a row of its own when it
         # is more than AGG_GAP points from the median, so a few micro-caps don't stand for the layer's economics unseen
@@ -9431,6 +9433,7 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
             tail = []               # each company's own stated amount: no median across companies of different sizes
         else:
             tail = [med_row("Median (companies)", f, keys)]
+        tail = [r_ for r_ in tail if not no_median(r_)]        # deck96: a median row with no median in it is no row
         head, every, widths, _ = drop_empty(head, body + tail, widths)
         body, tail = every[:len(body)], every[len(body):]
         one, many = SECTOR_WHO[fam]
@@ -9674,6 +9677,11 @@ def size_mark(x: dict) -> str:
     if x.get("segment"):
         return f" (its {x['segment']} segment, {x['segment_pct']:.1f}% of revenue)"
     return " (whole company)" if x.get("whole") else ""
+
+
+def no_median(row: list) -> bool:
+    """deck96: whether a table's median row holds no median: every cell after its label empty or a dash ("–", "– (2 of 4)")."""
+    return all(not str(_cell_text(c)).strip() or str(_cell_text(c)).strip().startswith("–") for c in row[1:])
 
 
 def once_marked(name: str, mark: str) -> str:
