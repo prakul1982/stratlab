@@ -71,12 +71,12 @@ function page(to: string, label: string, icon: string, words: string, o: { line?
  * to either still opens it on that filter. The research tables (results, corporate actions, IPOs, earnings calls) are Invest's. */
 export const CALENDAR: NavGroup = {
   id: "calendar", label: "Calendar", icon: "calendar", fixed: true,
-  blurb: "Every date that matters in one place: results days, dividends and other corporate actions, IPO dates, the RBI, the Fed and data releases, F&O expiries, and your own tax and money dates.",
+  // kept short, with no card texts of its own (it has no page of cards): this map is in the visitor's first download (e2e/review-r5's budget)
+  blurb: "Every date that matters: results, dividends and splits, IPOs, market events and expiries, and your money dates.",
   start: { trade: "/trade/events", invest: "/calendar", money: "/money/calendar" },
   pages: [
     page("/calendar", "Calendar", "calendar", "calendar all dates upcoming week ahead what is coming dates results dividends splits ex date ipo open close listing rbi fed expiry holiday tax due my stocks",
-      { line: "Every date ahead: results, dividends and splits, IPO dates, market events and expiries, and your own money dates.",
-        blurb: "One table of the days ahead: results days, ex-dates, IPO openings, closings and listings, the market's own events and your money dates, narrowed to your stocks or one kind of date.", space: "invest" }),
+      { line: "Every date ahead: results, dividends and splits, IPO dates, market events and expiries, and your own money dates.", space: "invest" }),
     page("/trade/events", "Market events & expiries", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates",
       { was: "Market events", space: "trade" }),
     page("/money/calendar", "My money dates", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders",
@@ -87,7 +87,7 @@ export const CALENDAR: NavGroup = {
 /** Invest's research tables of dates (cal94: they were tabs of the Calendar; the Calendar links to each and lists their dates). */
 const COMPANY_DATES: NavGroup = {
   id: "company-dates", label: "Results & IPOs", icon: "calendar", was: ["company-news"],
-  blurb: "The research tables behind the Calendar: results days with each company's latest quarter, corporate actions by ex-date, India's and the US's IPOs, and results calls.",
+  blurb: "Results days, corporate actions, IPOs and results calls: the tables behind the Calendar.",
   pages: [
     page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement board meeting", { line: "Results days for your stocks, or every company, week by week.",
         // its card on the entry's page said one short line beside two of three or four: a 90px hole in it at 1280 (ui-lint R13, item 43)
@@ -229,14 +229,13 @@ export const SPACE_LIST: SpaceId[] = ["trade", "invest", "money"];
 
 export interface Located { space: SpaceId; group: NavGroup; page: NavPage }
 
-/** Every page with where it lives, in menu order, each once, then the Calendar's (each in the space its own address belongs to). */
+/** Every page with where it lives: the Calendar's first (each in the space its own address belongs to), then the menus' in order, each once. */
 export const ALL_PAGES: Located[] = (() => {
-  const out: Located[] = [];
+  const out: Located[] = CALENDAR.pages.map((p) => ({ space: p.space ?? "invest", group: CALENDAR, page: p }));
   for (const space of SPACE_LIST) for (const group of NAV[space].groups) for (const p of group.pages) {
     if (out.some((l) => l.page.to === p.to)) continue;
     out.push({ space: p.space ?? space, group, page: p });
   }
-  for (const p of CALENDAR.pages) out.push({ space: p.space ?? "invest", group: CALENDAR, page: p });
   return out;
 })();
 
