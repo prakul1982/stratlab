@@ -26,7 +26,7 @@ from .intel.net import BROWSER_UA, SourceError
 
 SUM_KEY = "ipo:sum:"                  # ipo:sum:<document id> = the AI's summary of that document, once
 FACTS_KEY = "ipo:facts:"              # ipo:facts:<document id> = the facts read from it by rules
-HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "www.sebi.gov.in", "www.sec.gov")
+HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "nsearchives.nseindia.in", "archives.nseindia.in", "www.sebi.gov.in", "www.sec.gov")   # .in: the exchange moved, 26 Nov
 MAX_BYTES = 40 * 1024 * 1024          # a red herring prospectus with its annexures runs to 15 MB, a US prospectus to 60 MB of pictures
 HTML_HEAD = 3_600_000                 # the first part of a US prospectus holds everything read here (the summary, the risks, the proceeds)
 MAX_PAGES = 230                       # pages of an Indian offer document read (the summary tables, the objects and the business are in them)

@@ -116,7 +116,7 @@ def plain(fragments: list[str]) -> str:
 
 def source_of(host: str | None) -> str:
     h = (host or "").lower()
-    if h.endswith("nseindia.com"):
+    if h.endswith("nseindia.com") or h.endswith("nseindia.in"):      # .in: the exchange moved, 26 Nov
         return "NSE"
     if h.endswith("bseindia.com"):
         return "BSE"

@@ -263,6 +263,9 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   }
   for (const e of given.values()) {
     if (e.id.startsWith("job:")) continue;
+    // owner, 26 Nov ("in overview … just put things there which I need to fix manually"): a theme's coverage or data-gap note is the
+    // engine's work, not a manual fix; it is listed on Quality → Theme engine notes instead
+    if (isEngineNote(e.id)) continue;
     out.push({ text: `${e.name}: ${e.problem ?? "not working"}. ${e.tries ? `Fixed automatically ${e.tries} time${e.tries === 1 ? "" : "s"} without luck` : "Only you can fix this"}`
       + `${e.mailed ? "; you were emailed" : ""}. ${e.action ?? ""}`.trim(), to: e.to, label: PAGE[e.to] ?? "Overview", bad: true });
   }
@@ -405,4 +408,10 @@ export function fixRows(af: AutofixStatus | undefined): FixRow[] {
     tone: h.event === "fixed" ? "ok" : h.event === "escalated" ? "warn" : "plain",
     what: h.event === "fixed" ? `${h.text[0].toUpperCase()}${h.text.slice(1)}` : h.event === "escalated" ? `Couldn't fix it; ${h.text}` : `${h.text[0].toUpperCase()}${h.text.slice(1)}` }));
   return [...now, ...past];
+}
+
+/** owner, 26 Nov: the self-healing's theme notes (a theme's coverage, its companies' missing data) are the engine's to fix, never the
+ * owner's by hand: Quality lists them, Needs your attention leaves them out. */
+export function isEngineNote(id: string): boolean {
+  return id.startsWith("theme-coverage:") || id.startsWith("theme-gaps:");
 }

@@ -558,7 +558,9 @@ def bse_insider_rows(raw, symbol: str) -> list[dict]:
 PIT_LIST = "/api/corporates-pit-gg"
 PIT_OLD = "/api/corporates-pit"
 PIT_NEW_FROM = date(2026, 5, 3)      # the first filing on the new list: windows that start earlier also read the old one
-ARCHIVE_HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com")
+# 26 Nov 2026: the exchange moved to nseindia.in and its insider-trading list now links its documents on nsearchives.nseindia.in; a
+# link on a host outside this list was dropped, so every filing was, and the market's list read as empty for a fortnight
+ARCHIVE_HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "nsearchives.nseindia.in", "archives.nseindia.in")
 PIT_DOC_WORKERS = 6                  # documents read at once: the whole market's fortnight (~140) in about ten seconds
 MAX_PIT_DOC = 2_000_000              # bytes: a filing's document is a few KB, the biggest seen ~75 KB
 
@@ -1305,6 +1307,9 @@ class NSEFilings:
         if not isinstance(listed, list):
             raise SourceError(self.name, "The exchange's insider-trading list wasn't in the expected shape.")
         filings = pit_filings(listed)
+        if listed and not filings:          # rows, none with a document we can read: a changed shape or host, never "no trades"
+            raise SourceError(self.name, f"The exchange listed {len(listed)} insider-trading filings, but none links a document on its archive "
+                                         "that can be read: the list's format or the archive's address may have changed.")
         if symbol:                          # a company's own list may leave its symbol out of each row
             filings = [{**f, "symbol": f["symbol"] or symbol.upper()} for f in filings if f["symbol"] in ("", symbol.upper())]
         rows, read, busy = self._pit_docs(filings)
