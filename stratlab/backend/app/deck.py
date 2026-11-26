@@ -7752,7 +7752,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     small = [x for x in shown if x not in paged] if chained else []
     rolls: list[tuple] = []             # R35: (layer, in, left out, whether its page left a name off) of each layer with a company left out
     for i, layer in enumerate(paged):     # numbered as shown: a layer with no company leaves no gap (Layer 4, then Layer 6)
-        cos = sorted(layer.get("companies") or [], key=lambda c: (c.get("status") == "unverified", bool(c.get("model_out")), -(c.get("cap") or 0), c.get("name") or ""))
+        from .intel.theme_data import calc_of
+        # deck96 (the live Airlines deck: "Spicejet (no figures)  –  –  –  –" the second row of its layer's table, between companies with
+        # figures): a company with no figure stored is listed after every company with figures
+        cos = sorted(layer.get("companies") or [], key=lambda c: (c.get("status") == "unverified", bool(c.get("model_out")),
+                                                                  calc_of(c)["why"] == "no revenue figure", -(c.get("cap") or 0), c.get("name") or ""))
         st = layer.get("stats") or {}
         title = f"Layer {i + 1} · {layer['layer']}"
         lwide = set(layer.get("company_wide") or []) | {c["symbol"] for c in cos if c.get("company_wide")}

@@ -86,3 +86,23 @@ def test_the_findings_never_lead_with_a_layer_of_adjacent_participants():
     lines = deck.findings_lines(slides)
     assert not any(x.startswith(big["layer"]) and "brings in the most revenue" in x for x in lines), lines
     assert any("brings in the most revenue of the map's own layers" in x for x in lines), lines
+
+
+def test_a_company_with_no_figures_is_listed_after_every_company_with_figures():
+    # the live Airlines deck: "Spicejet (no figures)  –  –  –  –", the second row of its layer's table, between companies with figures
+    v = _view()
+    lay = next(b for b in v["layers"] if len(b.get("companies") or []) >= 5 and not b.get("official"))
+    cos = sorted(lay["companies"], key=lambda c: -(c.get("cap") or 0))
+    bare = cos[1]
+    for k in list(bare):
+        if k not in ("symbol", "name", "cap", "status", "evidence", "theme", "what", "industry", "official_industry", "year"):
+            bare.pop(k, None)
+    bare["year"] = None
+    bare.pop("calc", None)
+    slides, _ = deck.theme_plan(v)
+    page = next(s for s in slides if s.title.startswith("Layer ") and s.title.endswith(lay["layer"]))
+    names = [deck._cell_text(r[0]) for b in page.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)]
+    names = [n for n in names if not n.startswith(("Median", "Range", "Together"))]
+    at = next(i for i, n in enumerate(names) if n.startswith(deck.clean_name(bare["name"])))
+    assert "(no figures)" in names[at], names
+    assert all("(no figures)" in n or "(not confirmed)" in n or "(not checked yet)" in n for n in names[at:]), names
