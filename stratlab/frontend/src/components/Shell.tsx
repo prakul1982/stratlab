@@ -340,7 +340,7 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
         </button>
         {/* cal94 (owner, 26 Nov): the one Calendar, fixed here in every space and in no space's menu list. It opens on the dates for
             where you are (lib/calendarShow): from Trade the market events and expiries, from Money your money dates, else every date */}
-        <Link to={calEntry(space, calKept)} className={`search-btn side-cal${onCalendar ? " active" : ""}`} aria-current={onCalendar ? "page" : undefined}
+        <Link to={calEntry(space, calKept)} className={`side-cal${onCalendar ? " active" : ""}`} aria-current={onCalendar ? "page" : undefined}
           title="Calendar: results, dividends and splits, IPOs, market events and expiries, and your own money dates" data-testid="side-calendar">
           <Calendar size={16} /><span>Calendar</span>
         </Link>
