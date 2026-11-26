@@ -58,6 +58,7 @@ NOTE = ("India VIX is the exchange's published volatility index, worked out from
 _cache = TTLCache(max_items=50)
 _lock = threading.Lock()
 _feed = {"fn": None, "first": 0.0}
+_first = {"thread": None, "stop": None}  # the background first read still running (first_read), and the switch that ends it
 
 
 def setup(feed_fn):
@@ -65,8 +66,20 @@ def setup(feed_fn):
     _feed["fn"] = feed_fn
 
 
+class _Stopped(Exception):
+    """A first read asked to end (forget)."""
+
+
 def forget():
-    """Drop the copies in memory (between tests)."""
+    """Drop the copies in memory, and end a first read still running in the background (between tests). inv96: that read stores
+    its year in 90-day pieces 1.5 s apart; left running, its later pieces were stored in whatever database the next test had set up
+    (a flaky test saw 65 past days where it stored one)."""
+    t, stop = _first["thread"], _first["stop"]
+    if stop is not None:
+        stop.set()
+    if t is not None and t is not threading.current_thread():
+        t.join(timeout=10)
+    _first.update(thread=None, stop=None)
     _cache.clear()
     _feed["first"] = 0.0
 
@@ -556,13 +569,22 @@ def first_read(feed=None):
     if daily((today - timedelta(days=30)).isoformat(), today) or time.time() - _feed["first"] < 1800:
         return
     _feed["first"] = time.time()
+    stop = threading.Event()
+
+    def pause(s: float):
+        if stop.wait(s):                  # forget() ended it: no further piece is read or stored
+            raise _Stopped()
 
     def work():
         try:
-            fetch(today - timedelta(days=YEAR_DAYS + 5), today, feed)
+            fetch(today - timedelta(days=YEAR_DAYS + 5), today, feed, sleep=pause)
+        except _Stopped:
+            pass
         except Exception as e:
             print("india vix: first read", str(e)[:120])
-    threading.Thread(target=work, daemon=True, name="india-vix-first").start()
+    t = threading.Thread(target=work, daemon=True, name="india-vix-first")
+    _first.update(thread=t, stop=stop)
+    t.start()
 
 
 # ---------- the routes ----------
