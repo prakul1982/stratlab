@@ -52,7 +52,9 @@ test("R25-003: a period table opens at its right end, columns in the same order"
   scrollToEnd(null);
   // (updated on purpose, LIVE7B-010: the quarters also stack as blocks on a phone; on a wide screen they still open at the right end)
   assert.match(read("src/components/Research.tsx"), /<DataTable scrollEnd stack label="The last quarters/);
-  assert.match(read("src/components/kit/DataTable.tsx"), /if \(scrollEnd\) \{ scrollToEnd\(box\.current\); markScrolled\(box\.current\); \}/);   // (updated on purpose, LIVE9B-015: and marks itself scrolled)
+  // (updated on purpose, LIVE9B-015: and marks itself scrolled; changed on purpose, ui100: snapToEnd scrolls to the end and starts on a whole column)
+  assert.match(read("src/components/kit/DataTable.tsx"), /if \(scrollEnd\) \{ snapToEnd\(box\.current\); markScrolled\(box\.current\); \}/);
+  assert.match(read("src/lib/phoneFit.ts"), /export function snapToEnd\(el: HTMLElement \| null\): void \{[\s\S]{0,300}scrollToEnd\(el\);/);
 });
 
 test("R25-004: the sticky first column keeps a floor and breaks long words anywhere", () => {

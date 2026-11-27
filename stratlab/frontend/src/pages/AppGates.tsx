@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHead, DataTable, LinkCard, PageHeader, type Column } from "../components/kit";
-import { ALL_PAGES, NAV, type Located } from "../lib/nav";
+import { ALL_PAGES, NAV, placeTrail, type Located } from "../lib/nav";
 import { openTour } from "../components/Onboarding";
 import { openFeedback } from "../components/FeedbackOpen";
 import { useDocTitle } from "../lib/title";
@@ -35,7 +35,7 @@ export function HelpPage() {
   const places = ALL_PAGES.filter((l) => !t || `${l.page.label} ${l.page.was ?? ""} ${l.group.label} ${l.page.words}`.toLowerCase().includes(t));
   const placeCols: Column<Located>[] = [
     { key: "name", header: "Page", rowHeader: true, cell: (l) => l.page.was ?? l.page.label },
-    { key: "now", header: "Where it is now", wrap: true, cell: (l) => <Link className="link" to={l.page.to}>{[NAV[l.space].label, ...(l.group.pages.length > 1 ? [l.group.label] : []), l.page.label].join(" › ")}</Link> },
+    { key: "now", header: "Where it is now", wrap: true, cell: (l) => <Link className="link" to={l.page.to}>{placeTrail([NAV[l.space].label, ...(l.group.pages.length > 1 ? [l.group.label] : []), l.page.label])}</Link> },
   ];
   return (
     // the page's own width, like every other page (LIVE1B-043: a 640px column pinned to the left with 40% of the screen empty)

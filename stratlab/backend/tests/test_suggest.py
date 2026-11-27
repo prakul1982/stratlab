@@ -174,3 +174,11 @@ def test_without_us_prices_a_us_stock_counts_at_cost(w, monkeypatch):
     monkeypatch.setattr(main, "_us_find", lambda s: {"symbol": s, "name": "Apple Inc."})
     v = c.put("/holdings", headers=PRO, json={"items": [{"symbol": "AAPL", "qty": 2, "avg": 100, "market": "US"}]}).json()["holdings"]
     assert v["rows"][0]["price"] is None and v["totals"]["value"] == 200 * 80 and v["us_prices"] is False
+
+
+def test_a_us_company_is_named_as_its_company_page_names_it():
+    # ui100: search listed "RELIANCE, INC." beside "Reliance Industries Limited"
+    from app import suggest as S
+    rows = {r["symbol"]: r["name"] for r in S.us_rows([{"symbol": "RS", "name": "RELIANCE, INC."}, {"symbol": "NVDA", "name": "NVIDIA CORP"},
+                                                        {"symbol": "GOOGL", "name": "Alphabet Inc."}])}
+    assert rows == {"RS": "Reliance, Inc.", "NVDA": "NVIDIA Corp", "GOOGL": "Alphabet Inc."}

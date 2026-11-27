@@ -178,6 +178,7 @@ test("IA-1: the space homes and 'More you can do' follow the menu's entries", ()
   // (updated on purpose, LIVE7B-014: the space homes no longer list the menu's entries again at their foot)
   assert.doesNotMatch(homes, /<Explore|<MoreTools/);
   // (changed on purpose, cal94, owner 26 Nov: one Calendar fixed in the sidebar): each home's Coming up card says "See calendar"
-  assert.match(homes, /<Link to=\{to\} className="link small" data-testid="see-calendar">See calendar →<\/Link>/);
+  // (changed on purpose, ui100: the link is the size of the other cards' head links, not small)
+  assert.match(homes, /<Link to=\{to\} className="link" data-testid="see-calendar">See calendar →<\/Link>/);
   assert.match(homes, /<CardHead title="Coming up" actions=\{<SeeCalendar to=\{calendar\} \/>\} \/>/);
 });

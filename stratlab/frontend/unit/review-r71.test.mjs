@@ -38,5 +38,7 @@ test("R71-004: the Invest home's US tab lists the US's own coming events", () =>
 test("R71-009: Market events shows the newest index change open and folds the earlier ones", () => {
   const src = read("src/pages/trade/EventsPage.tsx");
   assert.match(src, /shown\.slice\(0, 1\)\.map\(\(c\) => card\(c, 0\)\)/);
-  assert.match(src, /<Disclosure summary=\{`Earlier index changes \(\$\{Math\.min\(4, shown\.length\) - 1\}\)`\} testId="ev-index-earlier">/);
+  // (changed on purpose, ui100: the fold also holds the unread notices whose day has passed; it still folds all but the newest table)
+  assert.match(src, /const earlier = Math\.max\(0, Math\.min\(4, shown\.length\) - 1\) \+ unreadPast\.length;/);
+  assert.match(src, /<Disclosure summary=\{`Earlier index changes \(\$\{earlier\}\)`\} testId="ev-index-earlier">/);
 });

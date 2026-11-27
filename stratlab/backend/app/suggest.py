@@ -99,9 +99,11 @@ def with_etfs(rows: list[dict], etfs: dict[str, dict]) -> list[dict]:
 
 
 def us_rows(companies: list[dict]) -> list[dict]:
-    """From the list of US companies ([{symbol, name}]): common shares only."""
+    """From the list of US companies ([{symbol, name}]): common shares only, each named as its company page names it
+    (stock_pages.proper_name: search listed "RELIANCE, INC." under "Reliance Industries Limited", ui100)."""
+    from .stock_pages import proper_name
     listed = {str(c.get("symbol") or "").upper() for c in companies}
-    return [_entry(t, c.get("name") or t, "US", "US") for c in companies
+    return [_entry(t, proper_name(c.get("name"), t) or c.get("name") or t, "US", "US") for c in companies
             if (t := str(c.get("symbol") or "").upper()) and us_common(t, listed)]
 
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { asOf, safeHref } from "../../lib/format";
+import { asOf, istToday, safeHref } from "../../lib/format";
 import { evDay, evWhen, failedLine, happened, istHm, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
 import { Info } from "../../components/ui";
 import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton, ScrollList } from "../../components/kit";
@@ -72,8 +72,18 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
 function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | null }) {
   const shown = rows.filter((c) => c.sections.length);
   // a notice whose stocks couldn't be read is still listed, with its link, never dropped (DC-013: 9 of 12 hidden)
-  const unread = rows.filter((c) => !c.sections.length);
-  if (!shown.length && !unread.length && !failed) return null;
+  const unreadAll = rows.filter((c) => !c.sections.length);
+  // ui100: one whose day has passed is an earlier change, under "Earlier index changes", not above the change coming up (27 Nov: three
+  // exclusions of 30 Oct to 17 Nov headed the card, over the change from 30 Nov)
+  const today = istToday();
+  const past = (c: IndexChange) => !!c.effective && c.effective < today;
+  const unread = unreadAll.filter((c) => !past(c)), unreadPast = unreadAll.filter(past);
+  if (!shown.length && !unreadAll.length && !failed) return null;
+  const notice = (c: IndexChange) => (
+    <li key={c.id} className="k-small">{c.effective ? `From ${evDay(c.effective, true)}: ` : ""}{c.title} · announced {asOf(c.announced)} ·{" "}
+      <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></li>
+  );
+  const earlier = Math.max(0, Math.min(4, shown.length) - 1) + unreadPast.length;
   const names = (list: [string, string][]) => list.length
     // each comma stays with the name before it, so a wrapped line never starts with one (R54-011)
     ? list.map(([sym, name], j) => <span key={sym}><span className="nowrap"><Link className="link tap" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link>{j < list.length - 1 ? "," : ""}</span>{j < list.length - 1 ? " " : ""}</span>)
@@ -103,10 +113,7 @@ function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | 
           <CardHead level={3} title={`Index changes in the press release (${unread.length})`} />
           {/* every notice, scrolling inside the card past a few (SCROLL, owner 21 Nov; it listed the first eight of the count in the title) */}
           <ScrollList label="Index notices not read into stocks"><ul className="k-list plain">
-            {unread.map((c) => (
-              <li key={c.id} className="k-small">{c.effective ? `From ${evDay(c.effective, true)}: ` : ""}{c.title} · announced {asOf(c.announced)} ·{" "}
-                <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></li>
-            ))}
+            {unread.map(notice)}
           </ul></ScrollList>
           {/* LIVE10A-039: what the link holds, without an excuse */}
           <p className="k-note">Each press release lists the stocks going in and out of the index.</p>
@@ -115,9 +122,14 @@ function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | 
       {shown.slice(0, 1).map((c) => card(c, 0))}
       {/* the newest announcement open; the earlier ones folded, so the page isn't three full tables long on a phone
           (R70-013, R71-009: 27,000 px) */}
-      {shown.length > 1 && (
-        <Disclosure summary={`Earlier index changes (${Math.min(4, shown.length) - 1})`} testId="ev-index-earlier">
-          <div className="k-stack">{shown.slice(1, 4).map((c, n) => card(c, n + 1))}</div>
+      {earlier > 0 && (
+        <Disclosure summary={`Earlier index changes (${earlier})`} testId="ev-index-earlier">
+          <div className="k-stack">{shown.slice(1, 4).map((c, n) => card(c, n + 1))}
+            {unreadPast.length > 0 && <div className="ev-idx-item" data-testid="ev-index-unread-past">
+              <ul className="k-list plain">{unreadPast.map(notice)}</ul>
+              <p className="k-note">Each press release lists the stocks going in and out of the index.</p>
+            </div>}
+          </div>
         </Disclosure>
       )}
       <p className="k-note">The provider's list of stocks going in and out of its main indices. No estimate of any flows.</p>

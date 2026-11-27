@@ -7,6 +7,7 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 const { perShare } = await import("../src/lib/format.ts");
 const { snapWidth } = await import("../src/lib/phoneFit.ts");
+const { placeTrail, placeName, locate } = await import("../src/lib/nav.ts");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
 
@@ -51,4 +52,17 @@ test("a card title made of parts flows as one line of words", () => {
 
 test("two charts side by side line up their plots", () => {
   assert.match(css, /\.k-two > \.pos-chart \{ justify-content: space-between; \}/);
+});
+
+test("a page's place names each part once", () => {
+  assert.equal(placeTrail(["Invest", "Calendar", "Calendar"]), "Invest › Calendar");     // Help and search said "Calendar › Calendar"
+  assert.equal(placeTrail(["Trade", "Calendar", "Market events & expiries"]), "Trade › Calendar › Market events & expiries");
+  assert.equal(placeName(locate("/calendar")), "Calendar");
+  assert.match(src("pages/AppGates.tsx"), /placeTrail\(\[NAV\[l\.space\]\.label/);
+});
+
+test("an index notice whose day has passed is an earlier change, not above the one coming up", () => {
+  const page = src("pages/trade/EventsPage.tsx");
+  assert.match(page, /const past = \(c: IndexChange\) => !!c\.effective && c\.effective < today;/);
+  assert.match(page, /const unread = unreadAll\.filter\(\(c\) => !past\(c\)\), unreadPast = unreadAll\.filter\(past\);/);
 });
