@@ -3624,7 +3624,8 @@ PRINCIPAL_KINDS = (
      r"\bpower|\belectric|\benerg|\butilit|\bcapital goods|\bequipment|\bengineering|\bindustrial|\brenewable",
      r"\bequipment|\btransformers?\b|\bswitchgear|\belectrical"),
     ("animal health", r"\banimal health\b|\bveterinar\w*|\b(?:medicines?|vaccines?|vaccinations|products)\b[^.;]{0,30}\bfor (?:pets|companion animals|animals)\b",
-     r"\banimal|\bveterinar|\bpets?\b|\blivestock|\bagri|\bfarm|\bfertili|\bagro", r"\banimal|\bveterinar|\bpets?\b|\blivestock"),
+     r"\banimal|\bveterinar|\bpets?\b|\blivestock|\bagri|\bfarm|\bfertili|\bagro|\bpharma|\bdrugs?\b|\bmedicines?\b",
+     r"\banimal|\bveterinar|\bpets?\b|\blivestock"),
     ("healthcare products", r"\bhealth ?care products\b", r"\bhealth|\bmedical|\bdevices?\b|\bhospital|\bconsumer|\bpharma",
      r"\bhealth|\bmedical|\bdevices?\b|\bconsumer"),
 )

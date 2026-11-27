@@ -43,6 +43,9 @@ def test_a_principal_business_of_another_kind_than_the_theme_is_other_work():
     assert D.other_principal("Airlines and travel", "Airlines and air charter operators", INDIGO) is None
     assert D.other_principal("Biotech", "Bioprocessing, animal health and mixed healthcare products", ZTS)["kind"] == "animal health"
     assert D.other_principal("Biotech", "Branded and generic drug portfolio makers", VRTX) is None
+    # an animal-health maker is of a Pharmaceuticals theme's own kind (vaccines and medicines for animals are drugs), never a biotech's
+    assert D.other_principal("Pharmaceuticals", "Animal health makers", "makes veterinary vaccines and medicines") is None
+    assert D.other_principal("Indian Pharma", "Export-focused generic formulation makers", ZTS) is None
 
 
 def test_a_principal_business_of_another_kind_than_the_layers_is_other_work():
