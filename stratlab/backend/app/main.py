@@ -6946,7 +6946,18 @@ def server_status() -> dict:
             # whether server errors reach Sentry (SENTRY_DSN set and the SDK started), for Admin → System's "Error alerts" line
             "sentry": error_alerts.enabled(),
             # new Help & feedback reports, for "Needs your attention"
-            "feedback_new": feedback.new_count()}
+            "feedback_new": feedback.new_count(),
+            # each outside source's last good answer and last failure, with a plain verdict (admin100: the archive's refusals had no row)
+            "sources": source_health_rows()}
+
+
+def source_health_rows() -> list:
+    from . import source_health
+    try:
+        return source_health.rows()
+    except Exception as e:                  # Overview shows the rest without it
+        print("source health rows:", str(e)[:120])
+        return []
 
 
 def calendar_status() -> dict:

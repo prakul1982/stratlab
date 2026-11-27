@@ -310,6 +310,15 @@ class RequestWaits:
             _rate_wait.reset(token)
 
 
+def _health(name: str, ok: bool, error: str | None = None) -> None:
+    """One upstream call of a research source, for Admin's Data sources card (source_health). Never raises."""
+    try:
+        from .. import source_health
+        source_health.record(name, ok, None if ok else error)
+    except Exception:
+        pass
+
+
 class Source:
     """An HTTP source with its own cache, rate limit and friendly errors."""
     name = "source"
@@ -394,8 +403,10 @@ class Source:
                 value = r.text
         except SourceError as e:
             self._failed(e.busy)
+            _health(self.name, not e.busy, str(e))      # an answer such as "nothing for that" is the source working (admin100)
             raise
         self._failed(False, ok=True)
+        _health(self.name, True)
         # parsed JSON takes several times its text size in memory; a page is held as the string it is (MEM-3: the bytes on the wire
         # understate a page with a ₹ or a curly quote in it by half, one with an emoji by three quarters)
         size = len(r.content) * 4 + 200 if kind == "json" else sys.getsizeof(value) + 200

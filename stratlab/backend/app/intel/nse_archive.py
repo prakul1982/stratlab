@@ -39,22 +39,53 @@ def mirrors(url: str) -> list[str]:
 
 
 def get(http: httpx.Client, url: str, **kw) -> httpx.Response:
-    """GET one archive file through `http`, host after host until one doesn't refuse (see the module's note)."""
+    """GET one archive file through `http`, host after host until one doesn't refuse (see the module's note). How it went is noted for
+    Admin's Data sources card (admin100): the host that served it, and what the first host said when it wasn't that one."""
     urls = mirrors(url)
     last: httpx.Response | None = None
+    first_no: str | None = None
     for i, u in enumerate(urls):
         try:
             r = http.get(u, **kw)
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            first_no = first_no or f"{_host(u)} couldn't be reached ({e.__class__.__name__})"
             if i == len(urls) - 1:
+                _note(None, last, first_no, urls)
                 if last is not None:
                     return last
                 raise
             continue
         if r.status_code not in REFUSED:
+            _note(u if i else None, r, first_no, urls)
             return r
+        first_no = first_no or f"{_host(u)} refused ({r.status_code})"
         last = r
+    _note(None, last, first_no, urls)
     return last
+
+
+def _host(u: str) -> str:
+    m = _URL.match(str(u or ""))
+    return m.group(2).lower() if m else str(u)
+
+
+def _note(served: str | None, r, first_no: str | None, urls: list[str]) -> None:
+    """One archive read for source_health: good when a host answered (a 404 is the archive's answer), else what refused it."""
+    if len(urls) < 2:                    # not an archive address
+        return
+    try:
+        from .. import source_health
+        code = getattr(r, "status_code", None)
+        if isinstance(code, int) and code >= 500:
+            source_health.record("nse-archive", False, f"the archive answered {code}")
+        elif served is not None or (isinstance(code, int) and code not in REFUSED):
+            source_health.record("nse-archive", True, via=_host(served) if served else None, refused=first_no if served else None)
+        elif isinstance(code, int):
+            source_health.record("nse-archive", False, f"every archive host refused this server ({code})")
+        else:
+            source_health.record("nse-archive", False, first_no or "no host could be reached")
+    except Exception:                     # never breaks a read
+        pass
 
 
 def after_refusal(url: str, tried) -> str | None:
