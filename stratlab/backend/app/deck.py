@@ -2294,7 +2294,7 @@ NOT_LISTED_TITLE = ROLL_TITLE + ": no longer listed"          # fix98: theme_dat
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
-from .intel.theme_data import CALC_KINDS as ROLL_WHY, f1, halves_rows, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
+from .intel.theme_data import CALC_KINDS as ROLL_WHY, f1, halves_rows, in_calc, mostly_whole, possessive      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
 # ex49 (R48): the mark on a left-out company's own row is its reason's kind (theme_data.out_reason), each with its note under the table
 MARKS_POINTER = "What the marks on its rows mean"          # deck96: the key to the marks, on the method page
 REASON_WHERE = "each company's reason is on the theme's page in StratLab"      # deck96: never said to be on a page that doesn't show it
@@ -5132,6 +5132,12 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
+def added_said(confirmed: int, added: int) -> str:
+    """How many of the companies the AI added are description-verified (deck101: "1 of the 1 added are" no more)."""
+    return (("The 1 added is description-verified" if confirmed == 1 else "The 1 added is not description-verified yet") if added == 1
+            else f"{confirmed:,} of the {added:,} added are description-verified") + (f"; {added - confirmed:,} not yet." if 1 < added and added > confirmed else ".")
+
+
 def who_companies(total: int, base_n: int, named: int, added: int, twice: int, words_n: int) -> str:
     """The notes page's companies line, its sources adding up to the companies (r62: the rest by where they came from). e77 (LIVE14A-004: "195
     companies in all, each in one layer: 199 from the exchange's official industries" in the REITs deck, the universe line's "less 4 listed
@@ -5533,7 +5539,7 @@ def intensity_note(chain: dict) -> str:
     each = "; ".join(f"{r['layer']} {r['intensity']:.2f}" for r in rows)
     # ex49 (R48): labelled as the proxy it is, never as proof that layers are comparable
     return (f"Capital for each unit of revenue ({CAPITAL_PROXY}; over the latest year's revenue, the layer's median company): {each}. "
-            f"{hi['layer']}'s is {hi['intensity'] / lo['intensity']:.1f} times {lo['layer']}'s; layers are ranked only where the highest is "
+            f"{possessive(hi['layer'])} is {hi['intensity'] / lo['intensity']:.1f} times {possessive(lo['layer'])}; layers are ranked only where the highest is "
             f"at most {INTENSITY_FACTOR:g} times the lowest, and only when they also share a way of earning and a business model.")
 
 
@@ -7769,7 +7775,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             foot.append(f"No listed company is shown for {', '.join(quiet)}: no member of the theme is placed there, and no member's own words name its work.")
         for x in none_:
             if named_by[x]:
-                foot.append(f"No company is placed in {x}; " + "; ".join(f"{nm}'s own words name its work, and it sits in “{ly}”" for nm, ly in named_by[x][:3])
+                foot.append(f"No company is placed in {x}; " + "; ".join(f"{possessive(nm)} own words name its work, and it sits in “{ly}”" for nm, ly in named_by[x][:3])
                             + (f"; and {len(named_by[x]) - 3} more" if len(named_by[x]) > 3 else "") + ".")
         if unsure_:
             foot.append(f"No slide for {', '.join(unsure_)}: none of its companies is in the theme (each one's own words describe other work).")
@@ -8509,9 +8515,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if added:
         # deck101 (the live R99 Airlines, Alcoholic beverages and Capital markets decks: "1 of the 1 added are description-verified"): the one
         # company added said as one
-        who.append(("The 1 added is description-verified" if added == confirmed == 1 else f"{confirmed:,} of the 1 added is description-verified"
-                    if added == 1 else f"{confirmed:,} of the {added:,} added are description-verified")
-                   + (f"; {added - confirmed:,} not yet." if added > confirmed else "."))
+        who.append(added_said(confirmed, added))
     unv = checks.get("unverified") or []
     if unv:
         who.append(f"{_n(len(unv), 'company', 'companies')} whose own words don't show the work, left out of every median and total: {names5(unv)}.")

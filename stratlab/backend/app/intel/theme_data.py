@@ -1910,6 +1910,13 @@ def chain_table(blocks: list[dict]) -> dict:
 _HALF_NAME = re.compile(r" \((?:larger|smaller)\)$")
 
 
+def possessive(name: str) -> str:
+    """deck101 (the live R99 Defence deck: "Explosives and missile makers's companies together earn …"): a name's possessive, a name that
+    ends in an s taking the apostrophe alone ("makers'", "Siemens'")."""
+    name = str(name or "")
+    return name + ("'" if name.endswith("s") else "'s")
+
+
 def chain_row(b: dict) -> dict:
     """One layer's row of the chain's table (_chain_table): its counts, revenue, medians and their bases, way of earning and period basis."""
     e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
@@ -2092,7 +2099,7 @@ def _chain_table(blocks: list[dict]) -> dict:
         skew = [r for r in (hi, lo) if r.get("aggregate") is not None and abs(r["ebitda"] - r["aggregate"]) >= SKEW_GAP]
         if skew:
             line += " " + " ".join(
-                f"{r['layer']}'s companies together earn {pts(r['aggregate'])} of their revenue as EBITDA, against its median company's "
+                f"{possessive(r['layer'])} companies together earn {pts(r['aggregate'])} of their revenue as EBITDA, against its median company's "
                 f"{pts(r['ebitda'])}, so its median is set by its {'smaller' if r['aggregate'] > r['ebitda'] else 'larger'} companies."
                 for i, r in enumerate(skew) if r not in skew[:i])
     return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None, "measure": measure,

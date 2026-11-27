@@ -1,0 +1,163 @@
+"""deck101 (owner, 27 Nov: "I need it to be perfect"): every live R99 theme deck read again as a sell-side reader would, each problem found
+fixed as a rule for every theme."""
+import copy
+import functools
+from statistics import median
+
+from app import deck
+from app.intel import theme_data as D
+from tests.alcobev_fixture import alco_view
+
+LARGER, SMALLER = "Spirits brand owning and bottling (larger)", "Spirits brand owning and bottling (smaller)"
+BASE = "Spirits brand owning and bottling"
+GRAIN = "Grain distilling and extra neutral alcohol"
+
+
+@functools.lru_cache(maxsize=None)
+def _alco():
+    return alco_view()
+
+
+def _view():
+    return copy.deepcopy(_alco())
+
+
+def _halves(v):
+    """The fixture's two spirits layers as the dive splits one layer into halves by market value (scale, sibling)."""
+    by = {b["layer"]: b for b in v["layers"]}
+    by[LARGER].update(scale="larger", sibling=SMALLER)
+    by[SMALLER].update(scale="smaller", sibling=LARGER)
+    for r in v["chain"]["rows"]:
+        if r["layer"] in (LARGER, SMALLER):
+            r["scale"] = "larger" if r["layer"] == LARGER else "smaller"
+    return v
+
+
+def _both_median(v):
+    cos = [c for b in v["layers"] if b["layer"] in (LARGER, SMALLER) for c in b["companies"]
+           if D.in_calc(c) and not c.get("company_wide") and c.get("ebitda") is not None]
+    return round(median(c["ebitda"] for c in cos), 1)
+
+
+def _rows(slide):
+    return [[deck._cell_text(x) for x in r] for b in slide.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)]
+
+
+def _page(slides, title):
+    return next(s for s in slides if s.title.startswith(title))
+
+
+MAKING = {"id": "manufacturing", "family": "making", "line": "They earn mainly from making and selling finished products of their own.",
+          "known": 5, "of": 5, "out": 0, "also": []}
+
+
+def _ranked(v, hi_value):
+    # each ranked layer's way of earning read, as the live dive's (a ranking of layers whose ways of earning were never read is dropped)
+    for x in v["layers"] + v["chain"]["rows"]:
+        if x["layer"] in (GRAIN, LARGER, SMALLER):
+            x["model"] = dict(MAKING)
+    grain = next(r for r in v["chain"]["rows"] if r["layer"] == GRAIN)["ebitda"]
+    v["chain"].update(highest=BASE, lowest=GRAIN, measure="ebitda", compared=[GRAIN, BASE],
+                      line=f"Median EBITDA margin is highest in {BASE} ({D.HALVES_SAID}{hi_value:.1f}%) and lowest in {GRAIN} ({grain:.1f}%), a gap of "
+                           f"{hi_value - grain:.1f} points, among the 2 layers with at least 5 companies with the figure; the \"Other\" group, outside "
+                           "the map's layers, is not ranked.")
+    return v
+
+
+def test_a_layer_split_into_halves_has_a_row_of_both_halves_so_a_ranking_of_the_whole_layer_stays():
+    # the live R99 Alcoholic beverages deck: "highest in Spirits brand owning and bottling (its larger and smaller halves together, 11.8%)"
+    # dropped from the value chain's page and the findings (11.8% on no row of any table), the page left with no headline; Airlines' "Hotels
+    # and resorts 27.9%" likewise
+    v = _halves(_view())
+    both = _both_median(v)
+    assert both not in {r.get("ebitda") for r in v["chain"]["rows"]}
+    slides, _ = deck.theme_plan(_ranked(v, both))
+    chain = _page(slides, "The value chain by layer")
+    assert chain.subtitle.startswith(f"Median EBITDA margin is highest in {BASE} ({D.HALVES_SAID}{both:.1f}%)"), chain.subtitle
+    rows = _rows(chain)
+    names = [r[0] for r in rows]
+    assert f"{BASE} (both halves together)" in names, names
+    i = names.index(f"{BASE} (both halves together)")
+    assert names[i - 1] == SMALLER and names[i - 2] == LARGER          # right after its halves
+    assert f"{both:.1f}%" in rows[i], rows[i]
+    assert any(BASE in x and f"{both:.1f}%" in x for x in deck.findings_lines(slides))
+    # a theme with no layer split into halves has no such row
+    slides, _ = deck.theme_plan(_view())
+    assert not any("both halves together" in r[0] for r in _rows(_page(slides, "The value chain by layer")))
+
+
+def test_the_contents_never_keep_the_tail_of_a_headline_whose_lead_part_was_dropped():
+    # the live R99 Alcoholic beverages deck's contents: 'The value chain | the "Other" group, outside the map's layers, is not ranked.'
+    v = _ranked(_halves(_view()), 77.7)           # a figure no table shows: the check drops the headline's lead part
+    slides, _ = deck.theme_plan(v)
+    assert _page(slides, "The value chain by layer").subtitle == ""
+    held = {r[0]: r[1] for r in _rows(_page(slides, "Contents"))}
+    assert held["The value chain"] == deck.CONTENTS_PLAIN["The value chain"], held
+    assert not any(x[:1].islower() for x in held.values()), held
+    rows = [["The value chain", 'Lead part; the "Other" group is not ranked.', "4"], ["Findings", "One; two", "3"]]
+    assert deck.contents_after(rows, {"Lead part"}) == [["The value chain", deck.CONTENTS_PLAIN["The value chain"], "4"], ["Findings", "One; two", "3"]]
+    assert deck.contents_after(rows, {"two"})[1] == ["Findings", "One", "3"]
+
+
+def test_the_most_revenue_finding_takes_a_layer_split_into_halves_as_one_and_reads_whatever_its_name():
+    # the live R99 decks: "Spirits brand owning and bottling (larger) brings in the most revenue" (the larger half, by construction), "Stock
+    # broking (larger) brings in", "Steel mills brings in"
+    v = _halves(_view())
+    by = {b["layer"]: b for b in v["layers"]}
+    total = by[LARGER]["revenue"] + by[SMALLER]["revenue"]
+    slides, _ = deck.theme_plan(v)
+    lines = deck.findings_lines(slides)
+    assert any(x.startswith(f"The most revenue of the map's own layers is in {BASE} (both halves together): ") for x in lines), lines
+    assert not any("(larger) brings in" in x or "brings in the most revenue" in x for x in lines), lines
+    assert dict(deck.revenue_layers([by[LARGER], by[SMALLER], by[GRAIN]])) == {f"{BASE} (both halves together)": total, GRAIN: by[GRAIN]["revenue"]}
+
+
+def test_one_company_is_said_as_one():
+    # the live R99 Airlines, Alcoholic beverages and Capital markets decks: "1 of the 1 added are description-verified"
+    assert deck.added_said(1, 1) == "The 1 added is description-verified."
+    assert deck.added_said(0, 1) == "The 1 added is not description-verified yet."
+    assert deck.added_said(3, 5) == "3 of the 5 added are description-verified; 2 not yet."
+    assert deck.added_said(4, 4) == "4 of the 4 added are description-verified."
+
+
+def test_a_cell_cut_to_whole_clauses_never_ends_on_a_word_that_needs_what_follows_it():
+    # the live R99 Alcoholic beverages deck: "Som Distilleries & Breweries Ltd. is one of the leading alcoholic beverages manufacturers in India
+    # engaged", with no ellipsis
+    t = ("Som Distilleries & Breweries Ltd. is one of the leading alcoholic beverages manufacturers in India engaged in the manufacturing and sale "
+         "of Beer and Indian Made Foreign Liquor (IMFL)")
+    got = deck.whole_clause(t, 110)
+    assert got == "Som Distilleries & Breweries Ltd. is one of the leading alcoholic beverages manufacturers in India", got
+    for t in ("Acme Ltd makes forged parts for engines and turbines used in the power, rail and defence sectors across many countries in the region",
+              "Beta Industries is a speciality chemicals maker primarily based in Gujarat that supplies dyes, pigments and intermediates to many buyers"):
+        got = deck.whole_clause(t, 80)
+        assert not deck._DANGLING.search(got) and not got.endswith("…"), got
+    assert deck.whole_clause("Gamma Ltd brews beer.", 110) == "Gamma Ltd brews beer."
+
+
+def test_a_percentage_of_a_thousand_or_more_sets_its_thousands_apart():
+    # the live R99 Airlines and Consumer durables decks: "+4520.4%", "−7026.0%"
+    assert deck._chg(4520.44) == "+4,520.4%"
+    assert deck._pc(-7026.0) == "−7,026.0%"
+    assert deck._pc(999.96) == "1,000.0%" and deck._pc(999.4) == "999.4%" and deck._chg(12.3) == "+12.3%"
+    assert deck._pcw(1234.0, True) == "1,234%"
+    assert D.shown_numbers(["+4,520.4%"])["pct"] == {4520.4}
+
+
+def test_layers_whose_names_state_different_operating_models_are_said_plainly():
+    # the live R99 Capital goods deck: "Their operating models differ (Cables, transformers and electrical equipment makers: equipment making
+    # (stated by the layer's own name); Industrial machinery and engines makers: not stated by its name; …)"
+    from app.intel.theme_data import OPERATING_WORDS
+    ops = list(OPERATING_WORDS)[:2]
+    rows = [{"layer": "Cable makers", "model": {"operating": ops[0]}}, {"layer": "Machinery makers", "model": {}},
+            {"layer": "Project contractors", "model": {"operating": ops[1]}}, {"layer": "Rolling stock makers", "model": None}]
+    got = D.operating_differ(rows)
+    assert got == (f"Their operating models differ by the layers' names: {OPERATING_WORDS[ops[0]]} (Cable makers); {OPERATING_WORDS[ops[1]]} "
+                   "(Project contractors); the names of Machinery makers and Rolling stock makers state none"), got
+    assert "stated by" not in got and "its name" not in got
+    assert D.operating_differ(rows[:3]).endswith("; the name of Machinery makers states none")
+
+
+def test_a_layer_name_ending_in_s_takes_the_apostrophe_alone():
+    # the live R99 Defence deck: "Explosives and missile makers's companies together earn 22.7% of their revenue as EBITDA"
+    assert D.possessive("Explosives and missile makers") == "Explosives and missile makers'"
+    assert D.possessive("Siemens") == "Siemens'" and D.possessive("Two-wheeler maker") == "Two-wheeler maker's"
