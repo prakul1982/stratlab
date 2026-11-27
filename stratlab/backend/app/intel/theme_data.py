@@ -1434,6 +1434,8 @@ def out_reason(r: dict) -> dict:
     companies), "detail": one sentence}. A different revenue model states both models, the company's and the layer's; insufficient evidence
     says what is missing; another business, that its own words describe another business than its official industry files it under."""
     if r.get("status") == "unverified":
+        if r.get("other_work"):           # map98: its own first business sentence states another principal business
+            return {"kind": "not confirmed in the theme", "label": "own words describe other work", "detail": other_work_detail(r["other_work"])}
         if r.get("evidence", "not_confirmed") != "not_confirmed":           # v55: not checked yet, said by what is missing
             return {"kind": "not confirmed in the theme", "label": "not confirmed in the theme",
                     "detail": f"{(r.get('theme') or {}).get('unchecked') or 'its membership is not checked yet'}, so it is in no figure of the theme"}
@@ -3597,6 +3599,111 @@ def not_of_kind(region: str, theme: str, c: dict, about: str | None = None) -> b
     return bool(rx) and bool(text.strip()) and not rx.search(text)
 
 
+# map98 (the deck96 audit of the 54 live theme decks: Vulcan Materials, "the nation's largest supplier of construction aggregates", and a
+# uranium miner in the Steel and metals figures; Paccar, a truck maker, among the railcar makers; Dominion Energy, a utility, among the
+# power equipment makers; an airline in Hotels and tourism; animal-health makers in Biotech, each placed there by the AI map and kept by
+# its check): kinds of business a company's own first business sentence may state as its principal business. Each: (name said on the
+# page, what its own sentence says, what a theme's name says to make the kind the theme's own, what a layer's name says to make it the
+# layer's own). A reviewed table of kinds of business, never a company's or a theme's name
+PRINCIPAL_KINDS = (
+    ("uranium mining", r"\buranium\b", r"\buranium|\bnuclear|\benerg|\bfuels?\b|\bpower|\bsmrs?\b", r"\buranium|\bnuclear|\bfuels?\b"),
+    ("construction aggregates", r"\bconstruction aggregates\b|\baggregates\b[^.;]{0,40}\b(?:crushed stone|sand|gravel)\b|\bcrushed stone\b",
+     r"\baggregat|\bbuilding|\bconstruction|\bcement|\binfrastructure", r"\baggregat|\bbuilding|\bconstruction|\bcement"),
+    ("airline", r"\b(?:passenger |cargo |low[- ]cost |regional )?airlines?\b|\bair carriers?\b|\bair transport(?:ation)? services\b",
+     r"\bairlines?\b|\baviation|\bair\b|\btravel|\btransport|\bairports?\b|\blogistic", r"\bairlines?\b|\baviation|\bair\b|\bcarriers?\b"),
+    ("electric and gas utility", r"\b(?:electric|electricity|gas|energy|power|water|public) utilit(?:y|ies)\b|\butility holding compan\w*|"
+     r"\bprovid\w*\b[^.;]{0,80}\b(?:electricity|energy|natural gas)\b(?=[^.;]{0,60}\bcustomers\b)",
+     r"\butilit|\bpower|\belectric|\benerg|\bgas\b|\bwater|\brenewable|\bnuclear|\binfrastructure",
+     r"\butilit|\bgenerat|\bpower producers?\b|\bindependent power|\btransmission|\bdistribut|\bdelivery|\bregulated|\bintegrated"),
+    ("truck making", r"\b(?:manufactur\w*|mak(?:e|es|ing|ers?)|design\w*|build\w*)\b(?:(?!\b(?:to|for|of parts|parts|components?)\b)[^.;]){0,110}\btrucks\b",
+     r"\btruck|\bvehicle|\bautomo|\bauto\b|\bmobility|\bcapital goods|\bmachinery", r"\btruck|\bvehicle|\bautomo|\bauto\b|\bmotor"),
+    ("rail equipment making", r"\brail ?cars?\b|\blocomotives?\b|\brail(?:way|road)? equipment\b|\brolling stock\b",
+     r"\brail|\btrains?\b|\bmetro|\bcapital goods|\bengineering|\bmachinery", r"\brail|\bwagons?\b|\blocomotive|\brolling stock|\btrains?\b"),
+    ("power equipment making", r"\b(?:power|electrical|grid) equipment\b|\btransformers?\b|\bswitchgear\b",
+     r"\bpower|\belectric|\benerg|\butilit|\bcapital goods|\bequipment|\bengineering|\bindustrial|\brenewable",
+     r"\bequipment|\btransformers?\b|\bswitchgear|\belectrical"),
+    ("animal health", r"\banimal health\b|\bveterinar\w*|\b(?:medicines?|vaccines?|vaccinations|products)\b[^.;]{0,30}\bfor (?:pets|companion animals|animals)\b",
+     r"\banimal|\bveterinar|\bpets?\b|\blivestock|\bagri|\bfarm|\bfertili|\bagro", r"\banimal|\bveterinar|\bpets?\b|\blivestock"),
+    ("healthcare products", r"\bhealth ?care products\b", r"\bhealth|\bmedical|\bdevices?\b|\bhospital|\bconsumer|\bpharma",
+     r"\bhealth|\bmedical|\bdevices?\b|\bconsumer"),
+)
+_KIND_PLAIN = {"and", "companies", "company", "other", "the", "india", "indian", "fast", "moving", "consumer", "goods", "power", "gas", "water"}
+
+
+# map98: a sentence's head, where it states its principal business: up to its first clause of another kind (a relative clause, a list of
+# examples, a bracket, a second verb of what it also does): "We are a leading producer of commercial aircraft" of "... and offer a family
+# of commercial jetliners designed to meet ... the requirements of airlines"
+_HEAD_END = re.compile(r"[;:(]|\s(?:which|that|who|whose|where|while|designed|including|such as|to meet|through|across|via)\b|"
+                       r",?\s+and\s+(?:also\s+)?(?:offers?|provides?|sells?|operates?|serves?|makes?|markets?)\b", re.I)
+_ASIDE = re.compile(r"\s*\([^()]{0,30}\)")              # a short bracket ("(Indigo)", "(“U.S.”)"): an aside, no clause
+_ENUM = re.compile(r"^\s*(?:\(\w{1,3}\)|\w{1,2}[.)])\s*")
+_OBJECT_OF = re.compile(r"\b(?:of|in|is|are|as|being|includes?|engaged)\b", re.I)
+_FOR_WHOM = re.compile(r"\b(?:for|to|serving|serves?|customers?|clients?|used (?:in|by|for))\s+(?:(?:the|its|our|their|a|an)\s+)?(?:[\w-]+\s+){0,2}$", re.I)
+_DOING = re.compile(r"^(?:provid|manufactur|mak|design|build|produc|develop|suppl|sell|distribut)", re.I)
+
+
+def principal_kind(line: str) -> tuple[str, re.Match] | None:
+    """map98: the kind of business (PRINCIPAL_KINDS) a company's own first business sentence states first as its principal business, with the
+    words that state it: in the sentence's head (_HEAD_END), the first thing it names there (never the last of a list: "agri-machinery,
+    construction equipment and railway equipment"), never said as whom it sells to ("equipment ... for power utilities")."""
+    t = _ASIDE.sub("", _ENUM.sub("", " ".join(str(line or "").split())))
+    head = len(t[:_HEAD_END.search(t).start()] if _HEAD_END.search(t) else t)
+    best = None
+    for name, says, _t, _l in PRINCIPAL_KINDS:
+        for m in re.finditer(says, t, re.I):
+            if m.start() >= head:
+                break
+            before = t[:m.start()]
+            obj = list(_OBJECT_OF.finditer(before))
+            listed = before[obj[-1].end():] if obj else before
+            if re.search(r",|\band\b|&", listed) or (_FOR_WHOM.search(before) and not _DOING.match(m.group(0))):
+                continue
+            if best is None or m.start() < best[1].start():
+                best = (name, m)
+            break
+    return best
+
+
+def other_principal(theme: str, layer: str, line: str) -> dict | None:
+    """map98: {"kind", "said", "of"} when a company the map placed in one of its own layers states, in its own first business sentence
+    (`line`, the one its page shows), a principal business of another kind than the theme's (the kind's words not of the theme's name, the
+    sentence saying no word of that name: "of" "theme") or, of the theme's kind, than its layer's (the layer's name states another kind of
+    PRINCIPAL_KINDS and the sentence says neither it nor a word that makes its own kind the layer's: "of" "layer"); None else, and None with
+    no sentence (missing words never remove a member)."""
+    line = " ".join(str(line or "").split())
+    got = principal_kind(line)
+    if not got:
+        return None
+    name, m = got
+    _n, _s, theme_home, layer_home = next(k for k in PRINCIPAL_KINDS if k[0] == name)
+    from .theme_base import _HALF_RX
+    th, lay = str(theme or ""), _HALF_RX.sub("", str(layer or ""))
+    said = {"kind": name, "said": m.group(0)}
+    if not re.search(theme_home, th, re.I):
+        tw = {w for w in _stems(th) if w not in _KIND_PLAIN}
+        if tw and not any(x == w or x.startswith(w) for x in _stems(line) for w in tw):
+            return {**said, "of": "theme"}
+        return None
+    if re.search(layer_home, lay, re.I):
+        return None
+    other = [k for k in PRINCIPAL_KINDS if k[0] != name and re.search(k[1], lay, re.I)]
+    if other and not any(re.search(k[1], line, re.I) for k in other):
+        return {**said, "of": "layer", "layer_kind": other[0][0]}
+    return None
+
+
+def other_work_detail(o: dict) -> str:
+    """map98: why a company of one of the map's layers is in no figure: its own first business sentence, quoted, and the kind it states."""
+    than = "the theme's" if o.get("of") == "theme" else f"its layer “{o.get('layer') or ''}”"
+    return (f"its own words describe other work (“{' '.join(str(o.get('line') or '').split())}”): a principal business of {o.get('kind')}, "
+            f"not {than}, so it is in no figure of the theme")
+
+
+def other_work_why(c: dict, o: dict) -> str:
+    """map98: a company's place in the theme when its own words describe other work than its map layer's (other_principal)."""
+    return f"the theme's map places it in “{o.get('layer') or ''}”, but {other_work_detail(o)}"
+
+
 def evidence_state(c: dict, words: set[str], about: str | None = None, segments=None, status: str | None = None, named: set[str] | None = None) -> str:
     """e54: what a company's place in the theme rests on (EVIDENCE_STATES), from its map record `c`. A company is "description_verified" only
     when its own words are there to show (theme_base.own_words: the same line the page shows; never an industry label) and they, a checked
@@ -4493,6 +4600,25 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     wt = work_test(checked, theme)          # e83 (LIVE19A-003): the theme's own work, where the AI picked its official industries
     if wt is not None:
         every_evidence = {s: work_checked(st, quoted[s][0], quoted[s][1], wt) for s, st in every_evidence.items()}
+    # map98 (the deck96 audit of the 54 live decks: Vulcan Materials, a construction aggregates supplier, and a uranium miner in the Steel and
+    # metals figures, Paccar among the railcar makers, Dominion Energy among the power equipment makers, airlines in Hotels and tourism,
+    # animal-health makers and Abbott in Biotech, each placed by the AI map in one of its own layers): a company of one of the map's own layers
+    # whose own first business sentence states a principal business of another kind than the theme's or, of the theme's kind, than its
+    # layer's (other_principal) describes other work: listed in its layer with that sentence, in no figure, median, total or ranking. Read on
+    # its own words only (the stored description's for a company the map named from another industry, never the AI's line); a company with no
+    # such sentence stays (missing words never remove a member), as does one of the theme's own list
+    map_layer = {v["layer"]: v for v in checked.get("value_chain") or [] if v.get("layer") and not v.get("official")}
+    other_kind: dict[str, dict] = {}
+    for s, c in placed.items():
+        v = map_layer.get(first.get(s) or "")
+        if v is None or every_status[s] == "unverified" or c.get("basis") == "list":
+            continue
+        qc, qa = quoted[s]
+        line = shown_words(qc if c.get("base") else {**qc, "what": ""}, qa)
+        o = other_principal(theme, v["layer"], line)
+        if o:
+            every_status[s], every_evidence[s] = "unverified", "not_confirmed"
+            other_kind[s] = {**o, "line": line, "layer": v["layer"]}
     facts = {s: src.facts(s) for s in placed}
     rows = {s: r for s, r in ((s, company_row(region, s, f)) for s, f in facts.items()) if r}
     # c54 (R53 review: "missing data must not remove a valid member"): a company of one of the map's layers with no stored page figures stays
@@ -4515,6 +4641,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             rows[s]["theme"]["evidence"] = every_evidence[s]
             if every_status[s] == "unverified" and every_evidence[s] != "not_confirmed":
                 rows[s]["theme"]["unchecked"] = unchecked_why(c, src.about(s), other_)       # v55: what is missing, never "other work"
+            if s in other_kind:          # map98: the sentence of its own words that states its other principal business, quoted
+                rows[s]["other_work"] = other_kind[s]
+                rows[s]["theme"]["why"] = other_work_why(c, other_kind[s])
             if c.get("base") and rows[s]["status"] == "core" and membership(c, words, principal=False) == "unverified":
                 where, said = principal_business(c, src.about(s), seg_list(s))
                 rows[s]["theme"]["why"] += (f"; its own words name other work, but its principal business ({PRINCIPAL_WORDS[where]}"
