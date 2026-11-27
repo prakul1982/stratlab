@@ -241,6 +241,15 @@ def fresh_settings_mirror():
     corp_actions.forget_cached()
 
 
+@pytest.fixture(autouse=True)
+def page_builds_waited_for(monkeypatch):
+    """A view of a company page due a rebuild waits for the whole build here, however busy the machine (production serves the stored copy
+    after stock_pages.BUILD_WAIT seconds: mem100); tests/test_mem100.py sets it back to check that."""
+    from app import stock_pages
+    monkeypatch.setattr(stock_pages, "BUILD_WAIT", None)
+    yield
+
+
 def _forget_overview():
     m = sys.modules.get("app.main")
     if m is not None:

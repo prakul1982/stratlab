@@ -465,10 +465,11 @@ def without_reported(rows: list[dict], past: dict[str, list[str]], today: date, 
     return out
 
 
-def lookup(region: str, symbol: str, today: date | None = None) -> dict:
-    """One company's next results date, and its latest past one in the window (with the filing, once it's out)."""
+def lookup(region: str, symbol: str, today: date | None = None, cal: dict | None = None) -> dict:
+    """One company's next results date, and its latest past one in the window (with the filing, once it's out). `cal`: the calendar as
+    load() just gave it (mem100: a company page read and parsed the whole calendar twice for one date)."""
     today = today or local_today(region)
-    rows = [r for r in load(region)["rows"] if r["symbol"] == symbol.upper()]
+    rows = [r for r in (cal if cal is not None else load(region))["rows"] if r["symbol"] == symbol.upper()]
     ahead = sorted((r for r in rows if r["date"] >= today.isoformat()), key=lambda r: r["date"])
     past = sorted((r for r in rows if r["date"] < today.isoformat()), key=lambda r: r["date"], reverse=True)
     return {"next": ahead[0] if ahead else None, "last": past[0] if past else None}

@@ -28,6 +28,7 @@ import threading
 import time
 import unicodedata
 from collections import deque
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from html import escape as e
 from pathlib import Path
@@ -142,6 +143,13 @@ def _ready(fn) -> bool:
 
 class Busy(Exception):
     """Too many fresh pages built this minute, and no stored copy to show."""
+
+
+# mem100: a person's view of a page due a rebuild waits for it at most this many seconds when a stored copy can be shown meanwhile (the build
+# goes on behind it); builds run on at most BUILDERS threads at once
+BUILD_WAIT = 2.0
+BUILDERS = 2
+_served_behind = threading.local()        # set while a request is served the stored copy of a page whose build goes on behind it
 
 
 def _setting(key: str):
@@ -1862,6 +1870,8 @@ class Pages:
         self.recent: deque = deque()
         self.lock = threading.Lock()
         self.building: dict[str, threading.Lock] = {}
+        self.inflight: dict = {}       # mem100: page key -> the Future of its build under way
+        self.pool = None               # mem100: the builders' threads, made on the first build
         self.prices_done: dict[str, str] = {}          # {region: the close every stored page's price was read at}
         self.tries: dict[str, tuple[str, dict[str, int]]] = {}    # {region: (close, {symbol: reads with no newer close})}
 
@@ -1928,38 +1938,78 @@ class Pages:
                 _mark_thin(region, symbol, True)       # a page stored before the sitemap kept track of these
             return stored.get("facts")
         with self.lock:
+            if len(self.building) > 5000:          # mem100: one lock a company ever built, never let go: the idle ones go
+                self.building = {k: v for k, v in self.building.items() if v.locked()}
             one = self.building.setdefault(key, threading.Lock())
         with one:                        # two crawlers on the same page: the second waits for the first's build
             hit = self.mem.get(key)
             if hit is not None:
                 return hit or None
-            if not self._may_build():
-                if stored:
-                    return self._as_served(region, symbol, stored.get("facts"))
-                raise Busy()
+            with self.lock:
+                fut = self.inflight.get(key)
+            if fut is None:
+                if not self._may_build():
+                    if stored:
+                        return self._as_served(region, symbol, stored.get("facts"))
+                    raise Busy()
+                fut = self._submit(key, lambda: self._build(region, symbol, co, key, stored))
+            # mem100 (live: crawled pages 2-7 s, each a rebuild of a page a day old from the sources): a person's request with a stored
+            # copy to show waits for the build at most BUILD_WAIT seconds, then is served that copy (as when the minute's builds are used
+            # up) while the build finishes behind it, for the next view; anyone else (a job, a page with nothing stored) waits for it
+            wait = BUILD_WAIT if stored and stored.get("facts") and db.in_request() else None
             try:
-                got = self.gather(region, co)
-            except Exception as ex:      # a source down: the stored copy, however old, or busy
-                print("stock page build failed:", region, symbol, str(ex)[:160])
-                if stored:
-                    f = self._as_served(region, symbol, stored.get("facts"))
-                    self.mem.set(key, f or {}, 600)
-                    return f
-                raise Busy() from None
-            if got:
-                got["symbol"] = symbol
-                if region == "US" and got.get("registrant") and got.get("name"):
-                    # e77: a page that found its reporting registrant names it for the directory and the themes too
-                    keep_reporting_names(region, {symbol: {"name": got["name"], "listed": got["registrant"]}})
-            _put(key, {"ts": time.time(), "facts": got})
-            _mark_thin(region, symbol, not indexable(got))         # nothing to show, no recent price (or a fund): not in the sitemap
-            self.mem.set(key, got or {}, 600)
-            if self.on_built:
-                try:
-                    self.on_built(region, symbol, got)   # the screens' index takes the page's figures at once (R8O-005)
-                except Exception as ex:
-                    print("stock pages: index not told of", region, symbol, str(ex)[:120])
-            return got
+                return fut.result(timeout=wait)
+            except FutureTimeout:
+                _served_behind.on = True
+                return self._as_served(region, symbol, stored.get("facts"))
+
+    def _submit(self, key: str, fn):
+        """mem100: a page's build on the builders' threads (at most BUILDERS at once: a US build reads the SEC's company facts, megabytes of
+        JSON, so builds that crawlers set off at the same moment no longer each hold their own), in the asker's context (its request's
+        deadlines, as when it was built in the request itself), shared by everyone asking for the same page meanwhile."""
+        import contextvars
+        from concurrent.futures import ThreadPoolExecutor
+        ctx = contextvars.copy_context()
+        with self.lock:
+            if self.pool is None:
+                self.pool = ThreadPoolExecutor(max_workers=BUILDERS, thread_name_prefix="page-build")
+            fut = self.inflight[key] = self.pool.submit(ctx.run, fn)
+
+        def done(_):
+            with self.lock:
+                if self.inflight.get(key) is fut:
+                    del self.inflight[key]
+        fut.add_done_callback(done)
+        return fut
+
+    def _build(self, region: str, symbol: str, co: dict, key: str, stored: dict | None) -> dict | None:
+        """One page built from the sources and kept (or, when a source is down, the stored copy kept in memory a while); Busy when a
+        source is down and nothing is stored."""
+        db._memo.set(None)               # the request's own copy of the settings is not carried past its end (a build may outlast it)
+        try:
+            got = self.gather(region, co)
+        except Exception as ex:      # a source down: the stored copy, however old, or busy
+            print("stock page build failed:", region, symbol, str(ex)[:160])
+            if stored:
+                f = self._as_served(region, symbol, stored.get("facts"))
+                self.mem.set(key, f or {}, 600)
+                return f
+            raise Busy() from None
+        if got:
+            got["symbol"] = symbol
+            if region == "US" and got.get("registrant") and got.get("name"):
+                # e77: a page that found its reporting registrant names it for the directory and the themes too
+                keep_reporting_names(region, {symbol: {"name": got["name"], "listed": got["registrant"]}})
+        _put(key, {"ts": time.time(), "facts": got})
+        _mark_thin(region, symbol, not indexable(got))         # nothing to show, no recent price (or a fund): not in the sitemap
+        self.mem.set(key, got or {}, 600)
+        self.mem.pop(f"html:{region}:{symbol}")     # mem100: a copy rendered from the stored page while this build ran is not served on
+        if self.on_built:
+            try:
+                self.on_built(region, symbol, got)   # the screens' index takes the page's figures at once (R8O-005)
+            except Exception as ex:
+                print("stock pages: index not told of", region, symbol, str(ex)[:120])
+        return got
 
     def refresh_prices(self, region: str, bars_of, analyse=None, limit: int = 200, gap: float = 1.0, sleep=time.sleep,
                        now: datetime | None = None, official=None, official_ready=None, official_range=None, ready=None) -> dict:
@@ -2098,10 +2148,12 @@ class Pages:
         key = f"html:{region}:{symbol}"
         hit = self.mem.get(key)
         if not isinstance(hit, tuple):
+            _served_behind.on = False
             f = self.get(region, symbol, co)
             hit = (render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None),
                    {k: (f or {}).get(k) for k in self.PRICE_KEYS if (f or {}).get(k) is not None})
-            self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
+            if not getattr(_served_behind, "on", False):         # mem100: a stored copy shown while its build goes on is not kept
+                self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
         return hit
 
 
@@ -2125,19 +2177,34 @@ def _row_cap(region: str, r: dict | None):
     return cap
 
 
+_SIZED: dict = {}          # mem100: region -> (the inputs it was worked out from, the list): one market's list, not one per company page
+
+
 def _sized(region: str) -> list[dict]:
     """The index's companies whose market value passed its checks, largest first. A US row must come from an index
     built after the checks existed ("cap_checked"); any row whose value fails the checks a row allows (_row_cap) is left
-    out whatever its age."""
+    out whatever its age.
+
+    mem100 (live: crawled company pages taking 2-7 s): every company page worked this out afresh, a cap check and a sort over the market's
+    whole index (13,000 rows, ~75 ms a page at production size); now once for the index and the company list as they are (the same objects,
+    neither changed since: screens.version counts every change made to the index in memory), the same list as before."""
+    from . import screens
     cos = companies(region)
+    rows = _index_rows(region)
+    mark = (screens.version(region), len(rows), len(cos))
+    hit = _SIZED.get(region)
+    if hit is not None and hit[0] is rows and hit[1] is cos and hit[2] == mark:
+        return hit[3]
     out = []
-    for r in _index_rows(region):
+    for r in rows:
         if r.get("symbol") not in cos or _row_cap(region, r) is None:
             continue
         if region == "US" and not r.get("cap_checked"):
             continue
         out.append(r)
-    return sorted(out, key=lambda r: -_num(r["market_cap"]))
+    out = sorted(out, key=lambda r: -_num(r["market_cap"]))
+    _SIZED[region] = (rows, cos, mark, out)
+    return out
 
 
 LARGE_CAP = {"US": 10_000.0, "IN": 20_000.0}       # $ million, ₹ crore: a large company, whose peers should be of its size
@@ -2944,7 +3011,7 @@ def faq_extras(region: str, symbol: str) -> dict:
     try:
         from . import results
         cal = results.load(region)
-        nxt = results.lookup(region, symbol)["next"] if cal["rows"] else None
+        nxt = results.lookup(region, symbol, cal=cal)["next"] if cal["rows"] else None
         if nxt:
             got["results"] = {"date": nxt["date"], "when": nxt.get("when"), "purpose": nxt.get("purpose"), "as_of": str(cal.get("at") or "")[:10]}
     except Exception as ex:                      # the calendar unreadable: no such question
