@@ -191,6 +191,10 @@ class TTLCache:
         if n > self.max_bytes // 4:          # one value bigger than a quarter of the cache: don't keep it
             with self._lock:
                 self._drop(key)
+            # mem100: said in the log (at most hourly a cache), so a value read again on every ask for being too big is seen
+            if time.time() - getattr(self, "_refused_said", 0.0) > 3600:
+                self._refused_said = time.time()
+                print(f"cache: not kept, too big: {str(key)[:80]} about {n / 1048576:.1f} MB in a {self.max_bytes / 1048576:.0f} MB cache")
             return
         with self._lock:
             self._drop(key)
