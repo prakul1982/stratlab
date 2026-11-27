@@ -99,3 +99,40 @@ def test_a_filed_document_refused_on_one_host_is_read_from_the_next():
     assert asked == [url, "https://nsearchives.nseindia.in/corporate/X_1.pdf", "https://archives.nseindia.com/corporate/X_1.pdf"]
     with pytest.raises(SourceError, match=r"\(403\)"):
         docs.Docs(transport=httpx.MockTransport(lambda r: httpx.Response(403)), check_host=lambda h: True)._download(url, (), 1000)
+
+
+# ---------- 2. the price refresh doesn't try Indian pages while the broker's login has ended ----------
+from tests.test_review_r7v import mem, us  # noqa: E402,F401  (the in-memory settings table and a page's facts)
+
+
+def test_the_price_refresh_asks_for_no_page_while_the_broker_login_has_ended(mem, capsys):  # noqa: F811
+    """Fails on main: "stock pages: price refresh failed: IN 544937 Indian market data is offline: the broker login has ended." was
+    logged every minute from IST midnight to the 08:00 login, one page tried (and failed) a pass, a pass a minute. Now, while the login
+    isn't valid, no page is asked for and nothing is logged; the pages wait (for the usual pass, not one a minute) and are read once the
+    login is back."""
+    import json
+    from datetime import datetime, timezone
+    from app import stock_pages
+    from app.kite_service import KiteNotReady
+    now = datetime(2026, 10, 9, 0, 30, tzinfo=timezone.utc)
+    built = now.timestamp() - 30 * 3600
+    for i, sym in enumerate(("AAA", "BBB", "CCC")):
+        mem[f"stocks:page:US:{sym}"] = json.dumps({"ts": built, "facts": us(symbol=sym, price_at="2026-10-07", market_cap=1_000.0 * (3 - i))})
+    asked, login = [], {"ok": False}
+
+    def bars(region, sym):
+        asked.append(sym)
+        if not login["ok"]:
+            raise KiteNotReady("Indian market data is offline: the broker login has ended.")
+        return [{"t": "2026-10-08T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 1.0}]
+    pages = stock_pages.Pages(lambda r, c: None)
+    got = pages.refresh_prices("US", bars, gap=0, now=now, ready=lambda: login["ok"])
+    assert asked == [] and "price refresh failed" not in capsys.readouterr().out
+    assert got["source_down"] and got["left"] == 3 and got["failed"] == 0 and "US" not in pages.prices_done
+    assert not main.price_pass_failed(got) and not main.refresh_backlog({"IN": got}) and main.refresh_wait({"IN": got}) == main.PRICE_REFRESH_EVERY
+    login["ok"] = True                                              # the morning login: read at the next pass
+    got = pages.refresh_prices("US", bars, gap=0, now=now, ready=lambda: login["ok"])
+    assert got["refreshed"] == 3 and asked == ["AAA", "BBB", "CCC"]
+    # the job hands India's pass the broker's own check
+    import inspect
+    assert '"ready": kite.ready' in inspect.getsource(main.stock_price_refresh_once)

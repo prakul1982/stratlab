@@ -132,6 +132,14 @@ def _source_down(ex: Exception) -> bool:
         return False
     return isinstance(ex, KiteNotReady)
 
+def _ready(fn) -> bool:
+    """Whether a source says it can be read; a check that itself fails counts as ready, so the reads (and their own errors) decide."""
+    try:
+        return bool(fn())
+    except Exception:
+        return True
+
+
 class Busy(Exception):
     """Too many fresh pages built this minute, and no stored copy to show."""
 
@@ -1954,13 +1962,16 @@ class Pages:
             return got
 
     def refresh_prices(self, region: str, bars_of, analyse=None, limit: int = 200, gap: float = 1.0, sleep=time.sleep,
-                       now: datetime | None = None, official=None, official_ready=None, official_range=None) -> dict:
+                       now: datetime | None = None, official=None, official_ready=None, official_range=None, ready=None) -> dict:
         """After a market's close: re-read the price of stored pages whose last close is older than the market's, the
         largest companies first, at most `limit` a run with `gap` seconds between reads (so people's pages and
         backtests keep the price sources' room). `bars_of(region, symbol)` gives a company's daily candles, read after
         the close settled. The price, its date, the year's range and the trend move to the new close; the market value
         and P/E move with the price (the share count and the profit stay what was reported); the dividend yield moves
-        against it. The reported numbers wait for the page's next full build. {"refreshed", "left", "failed"}."""
+        against it. The reported numbers wait for the page's next full build. `ready()`: whether the market's price source can be
+        read at all (India: the broker's daily login); while it can't, no page's candles are asked for and nothing is logged, the
+        pages wait for the next pass after it is back (fix98: "price refresh failed: IN 544937 Indian market data is offline: the
+        broker login has ended." every minute from IST midnight to the 08:00 login). {"refreshed", "left", "failed"}."""
         now = now or datetime.now(timezone.utc)
         day, at = last_close(region, now)
         if self.prices_done.get(region) == day.isoformat():
@@ -2018,7 +2029,11 @@ class Pages:
         behind: list[str] = []         # a few pages read with no newer close: "SYMBOL (last candle 2026-10-21)", for Admin
         stopped = 0             # pages not tried because the source is down for every one of them
         ok: set[str] = set()
-        for i, (_, symbol, raw) in enumerate(due[:limit]):
+        if due and ready is not None and not _ready(ready):
+            stopped, due_now = len(due[:limit]), []          # the source's login has ended: none asked for, none logged
+        else:
+            due_now = due[:limit]
+        for i, (_, symbol, raw) in enumerate(due_now):
             if i and gap:
                 sleep(gap)
             stored = db.json_value(raw, {}) if not isinstance(raw, dict) else raw
