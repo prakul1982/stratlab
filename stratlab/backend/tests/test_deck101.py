@@ -107,9 +107,34 @@ def test_the_most_revenue_finding_takes_a_layer_split_into_halves_as_one_and_rea
     total = by[LARGER]["revenue"] + by[SMALLER]["revenue"]
     slides, _ = deck.theme_plan(v)
     lines = deck.findings_lines(slides)
-    assert any(x.startswith(f"The most revenue of the map's own layers is in {BASE} (both halves together): ") for x in lines), lines
+    assert any(f"most revenue of the map's own layers is in {BASE} (both halves together): " in x for x in lines), lines
     assert not any("(larger) brings in" in x or "brings in the most revenue" in x for x in lines), lines
-    assert dict(deck.revenue_layers([by[LARGER], by[SMALLER], by[GRAIN]])) == {f"{BASE} (both halves together)": total, GRAIN: by[GRAIN]["revenue"]}
+    got = {t[0]: t[1] for t in deck.revenue_layers([by[LARGER], by[SMALLER], by[GRAIN]])}
+    assert got == {f"{BASE} (both halves together)": total, GRAIN: by[GRAIN]["revenue"]}
+
+
+def _layer(name, *cos, wide=()):
+    return {"layer": name, "revenue": sum(r for _, r in cos), "company_wide": list(wide),
+            "companies": [{"symbol": s, "name": s, "revenue": r, "status": "description_verified"} for s, r in cos]}
+
+
+def test_the_most_revenue_finding_never_rests_on_a_conglomerates_other_businesses():
+    # the live R99 Airlines deck: "Airport operators and conglomerates brings in the most revenue of the map's own layers, ₹1.15 lakh cr",
+    # ₹1.00 lakh cr of it Adani Enterprises' whole-company figures; Aerospace's engines layer (GE Aerospace, Honeywell), P&C insurance's
+    # "Diversified groups" (Berkshire Hathaway alone)
+    money = lambda x: deck.money(x, "₹ crore")          # noqa: E731
+    airports = _layer("Airport operators and conglomerates", ("ADANIENT", 100469), ("GMRAIRPORT", 14807), wide=("ADANIENT",))
+    airlines = _layer("Airlines and air charter operators", ("INDIGO", 84962), ("TAAL", 197), ("GVH", 521))
+    got = deck.most_revenue_line([airports, airlines], money)
+    assert got == "Ranked without whole-company figures, the most revenue of the map's own layers is in Airlines and air charter operators: ₹85,680 cr.", got
+    # a layer that leads on its own revenue too says its whole-company figures beside its total
+    cars = _layer("Passenger vehicle makers", ("MARUTI", 152000), ("M&M", 160000), wide=("M&M",))
+    got = deck.most_revenue_line([cars, airlines], money)
+    assert got.startswith("Ranked without whole-company figures, the most revenue of the map's own layers is in Passenger vehicle makers: ")
+    assert got.endswith(" with the whole-company figures of 1 company that runs other businesses too."), got
+    # no whole-company figure anywhere: plainly
+    assert deck.most_revenue_line([airlines, _layer("Tour operators", ("THOMASCOOK", 8398))], money) == \
+        "The most revenue of the map's own layers is in Airlines and air charter operators: ₹85,680 cr."
 
 
 def test_one_company_is_said_as_one():
@@ -161,3 +186,13 @@ def test_a_layer_name_ending_in_s_takes_the_apostrophe_alone():
     # the live R99 Defence deck: "Explosives and missile makers's companies together earn 22.7% of their revenue as EBITDA"
     assert D.possessive("Explosives and missile makers") == "Explosives and missile makers'"
     assert D.possessive("Siemens") == "Siemens'" and D.possessive("Two-wheeler maker") == "Two-wheeler maker's"
+
+
+def test_a_price_period_the_theme_has_no_figure_for_is_no_row():
+    # every live R99 deck's Price page: "3 years  –  –  +35.7%  –", the index's figure beside no figure of the theme's
+    v = _view()
+    assert v["prices"]["returns"]["3Y"]["theme"] is None and v["prices"]["returns"]["3Y"]["bench"] is not None
+    slides, _ = deck.theme_plan(v)
+    rows = _rows(_page(slides, "Price"))
+    periods = [r[0] for r in rows]
+    assert "1 year" in periods and "3 years" not in periods, periods

@@ -4595,9 +4595,16 @@ def growth_base_line(rows: list, amt, limit: int = 5) -> str:
             + (f"; {len(xs) - limit} more" if len(xs) > limit else "") + ".")
 
 
+def _wide_revenue(x: dict) -> tuple[float, int]:
+    """deck101: the revenue of a layer's whole-company figures (companies that run other businesses too, no segment stored), and how many."""
+    cw = set(x.get("company_wide") or [])
+    got = [c.get("revenue") or 0 for c in x.get("companies") or [] if c.get("status") != "unverified" and (c.get("symbol") in cw or c.get("company_wide"))]
+    return sum(got), len(got)
+
+
 def revenue_layers(own: list) -> list[tuple]:
-    """deck101: (name, revenue) of each layer for the findings' "most revenue": a layer split into halves by market value once, its two halves'
-    revenue together, under the name the value chain table gives it (halves_label)."""
+    """deck101: (name, revenue, whole-company revenue, whole-company count) of each layer for the findings' "most revenue": a layer split into
+    halves by market value once, its two halves' revenue together, under the name the value chain table gives it (halves_label)."""
     out, seen = [], set()
     for x in own:
         sib = next((y for y in own if y["layer"] == x.get("sibling")), None) if x.get("scale") else None
@@ -4605,10 +4612,27 @@ def revenue_layers(own: list) -> list[tuple]:
             if x["layer"] in seen:
                 continue
             seen |= {x["layer"], sib["layer"]}
-            out.append((halves_label(re.sub(r" \((?:larger|smaller)\)$", "", x["layer"])), (x["revenue"] or 0) + (sib["revenue"] or 0)))
+            (wa, na), (wb, nb) = _wide_revenue(x), _wide_revenue(sib)
+            out.append((halves_label(re.sub(r" \((?:larger|smaller)\)$", "", x["layer"])), (x["revenue"] or 0) + (sib["revenue"] or 0), wa + wb, na + nb))
         else:
-            out.append((x["layer"], x["revenue"]))
+            out.append((x["layer"], x["revenue"], *_wide_revenue(x)))
     return out
+
+
+def most_revenue_line(own: list, money_) -> str | None:
+    """deck101 (the live R99 decks: Airlines' "Airport operators and conglomerates brings in the most revenue", ₹1.00 of its ₹1.15 lakh cr
+    Adani Enterprises' whole-company figures; Aerospace's engines layer on GE Aerospace's and Honeywell's; P&C insurance's "Diversified groups",
+    Berkshire Hathaway alone): the layers ranked on their revenue apart from whole-company figures, so a conglomerate's other businesses never
+    make a layer the largest; the layer's revenue as its table prints it, and how many whole-company figures are in it."""
+    rows = revenue_layers(own)
+    if len(rows) < 2:
+        return None
+    name, rev, wide, n = max(rows, key=lambda t: (t[1] or 0) - t[2])
+    if not rev or rev - wide <= 0:
+        return None
+    lead = "Ranked without whole-company figures, the most revenue" if any(t[3] for t in rows) else "The most revenue"
+    return (f"{lead} of the map's own layers is in {name}: {money_(rev)}"
+            + (f" with the whole-company figures of {_n(n, 'company', 'companies')} that {'runs' if n == 1 else 'run'} other businesses too" if n else "") + ".")
 
 
 def findings_tiles(v: dict, cov: dict, ebm, cap, lender: bool = False) -> list[tuple]:
@@ -4675,9 +4699,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
             # deck101 (the live R99 Alcoholic beverages and Capital markets decks: "Spirits brand owning and bottling (larger) brings in the
             # most revenue", a half of a layer split by market value, the larger half by construction; and "Steel mills brings in"): a layer
             # split into halves is one layer here, its halves' revenue together, and the sentence reads whatever the layer's name
-            big = max(revenue_layers(own), key=lambda x: x[1])
-            lines.append(f"The most revenue of the map's own layers is in {big[0]}: "
-                         f"{money(big[1], v.get('unit') or ('$ million' if v.get('region') == 'US' else '₹ crore'))}.")
+            got = most_revenue_line(own, lambda x: money(x, v.get('unit') or ('$ million' if v.get('region') == 'US' else '₹ crore')))
+            if got:
+                lines.append(got)
         cards.append({"title": "Where the return sits" if chain.get("measure") == "roe" else "Where the margin sits", "lines": lines,
                       "note": "⟦The value chain by layer⟧" + (f", ⟦{COMPARE_TITLE}⟧" if chain.get("basis") else "")})
     # 2. growth beside margin (a lender's: beside its return on equity)
@@ -7843,8 +7867,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         from .intel.theme_data import calc_of
         # deck96 (the live Airlines deck: "Spicejet (no figures)  –  –  –  –" the second row of its layer's table, between companies with
         # figures): a company with no figure stored is listed after every company with figures
-        cos = sorted(layer.get("companies") or [], key=lambda c: (c.get("status") == "unverified", bool(c.get("model_out")),
-                                                                  calc_of(c)["why"] == "no revenue figure", -(c.get("cap") or 0), c.get("name") or ""))
+        # deck101 (8 live R99 decks: "Travels & Rentals Ltd (no figures)  –  –  –" above "Mach Travel Solutions Ltd (insufficient evidence)
+        # ₹230 cr …"): after every company with figures, those left out of the layer's figures included
+        cos = sorted(layer.get("companies") or [], key=lambda c: (calc_of(c)["why"] == "no revenue figure", c.get("status") == "unverified",
+                                                                  bool(c.get("model_out")), -(c.get("cap") or 0), c.get("name") or ""))
         st = layer.get("stats") or {}
         title = f"Layer {i + 1} · {layer['layer']}"
         lwide = set(layer.get("company_wide") or []) | {c["symbol"] for c in cos if c.get("company_wide")}
@@ -10079,6 +10105,9 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             bench = prices.get("benchmark") or "Index"
             rows = [[lbl, _chg(((prices.get("median") or {}).get(k) or {}).get("median")), _chg((ret.get(k) or {}).get("theme")), _chg((ret.get(k) or {}).get("bench")),
                      str(((prices.get("median") or {}).get(k) or {}).get("n", "–"))] for k, lbl in (("1M", "1 month"), ("3M", "3 months"), ("1Y", "1 year"), ("3Y", "3 years"))]
+            # deck101 (every live R99 deck: "3 years  –  –  +35.7%  –", the theme's companies with no three years of closes): a period the
+            # theme has no figure for is no row; the index's figure alone compares nothing
+            rows = [r for r in rows if not (r[1] == "–" and r[2] == "–")] or rows
             lw = 6.6
             # LIVE6-002: calendar periods to one last close, said in the table's head
             over = f"Over, to {_day(prices['returns_to'])}" if prices.get("returns_to") else "Over"
