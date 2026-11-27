@@ -250,3 +250,12 @@ def test_lead_lets_the_caches_warm(monkeypatch):
     monkeypatch.setattr(main, "_jobs_started", True)
     main.lead()
     assert main._alone.is_set()
+
+
+def test_each_theme_of_the_recheck_ends_with_the_memory_guards_whole_release(monkeypatch):
+    from app import memguard
+    from app.intel import theme_recheck
+    called = []
+    monkeypatch.setattr(memguard, "release_memory", lambda force=False, full=True: called.append(force) or {"rss_after_mb": 1})
+    theme_recheck.release()
+    assert called == [True]
