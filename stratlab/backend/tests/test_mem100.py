@@ -208,3 +208,14 @@ def test_the_caches_are_brought_under_their_budget_when_they_pass_it_by_a_quarte
     assert a.bytes > 1_000_000 * 0.9
     b.set("big", "y" * 400_000, 60)                          # 1.4 MB in all: back under the budget at once
     assert a.bytes + b.bytes <= 1_000_000 and b.get("big") is not None
+
+
+def test_a_rendered_page_is_kept_as_utf8_and_served_as_the_same_text(w):
+    from app import main
+    first = w["client"].get("/stocks/in/TCS")
+    kept = main.stock_page_store.mem.get("html:IN:TCS")
+    text = kept[0].decode("utf-8")
+    assert isinstance(kept[0], bytes) and any(ord(ch) > 255 for ch in text)      # a page with a "₹", "–" or "·" in it
+    assert len(kept[0]) < sys.getsizeof(text) * 0.6          # about half the memory of the same page as text
+    again = w["client"].get("/stocks/in/TCS")
+    assert again.text == first.text and again.headers["cache-control"] == first.headers["cache-control"]

@@ -2147,14 +2147,17 @@ class Pages:
         since" was sent with no facts to go on, and so with the day-long header instead of a minute's)."""
         key = f"html:{region}:{symbol}"
         hit = self.mem.get(key)
-        if not isinstance(hit, tuple):
-            _served_behind.on = False
-            f = self.get(region, symbol, co)
-            hit = (render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None),
-                   {k: (f or {}).get(k) for k in self.PRICE_KEYS if (f or {}).get(k) is not None})
-            if not getattr(_served_behind, "on", False):         # mem100: a stored copy shown while its build goes on is not kept
-                self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
-        return hit
+        if isinstance(hit, tuple):
+            return hit[0].decode("utf-8"), hit[1]
+        _served_behind.on = False
+        f = self.get(region, symbol, co)
+        page = render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None)
+        facts = {k: (f or {}).get(k) for k in self.PRICE_KEYS if (f or {}).get(k) is not None}
+        if not getattr(_served_behind, "on", False):         # mem100: a stored copy shown while its build goes on is not kept
+            # mem100: kept as UTF-8 (a page with one "₹" is two bytes a character as text: 82 KB a page, 41 KB as bytes), so the same memory
+            # keeps twice the pages; never served past the next close's settle point (R13-006)
+            self.mem.set(key, (page.encode("utf-8"), facts), html_ttl(region))
+        return page, facts
 
 
 # ---------- companies in the same industry ----------
