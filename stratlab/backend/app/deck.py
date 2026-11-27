@@ -7300,6 +7300,12 @@ def tab_whole(head: list, rows: list, widths: list, w: float) -> bool:
     return all(isinstance(r, dict) or [_cell_text(x) for x in r] == [_cell_text(x) for x in r0] for r, r0 in zip(lay["rows"], rows))
 
 
+def names_whole(b: dict) -> bool:
+    """deck101: whether a table block prints every row's first cell (a company's name) without cutting it ("Chambal Fertilizers…")."""
+    lay = table_layout(b, b["box"][2], 99)
+    return all(isinstance(r, dict) or not _cell_text(r[0]).endswith("…") or _cell_text(r0[0]).endswith("…") for r, r0 in zip(lay["rows"], b["rows"]))
+
+
 def joined(slides: list, title: str = RECORDS_TITLE):
     """deck89: every page of a run ("Method and coverage (1 of 3)", ...) read as one slide, its blocks together (for reading, never drawn);
     None when the deck has no such page."""
@@ -8185,14 +8191,6 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             head, widths = head[:j_] + head[j_ + 1:], widths[:j_] + widths[j_ + 1:]
             body, tail = [r_[:j_] + r_[j_ + 1:] for r_ in body], [r_[:j_] + r_[j_ + 1:] for r_ in tail]
             k_fit = fits(tw)
-        if "Industry" in head and not tab_whole(head, body[:max(k_fit, 1)] + tail, widths, tw):
-            # deck101 (the live R99 Fertilizers deck: "Chambal Fertilizers…", "Rashtriya Chemicals…", "Fertilizers & Chemicals…", the names cut
-            # beside a chart to keep an industry column that says "Fertilizers" on most rows): a company's name is never cut to keep the
-            # industry column (the appendix and the theme's page keep it)
-            j_ = head.index("Industry")
-            head, widths = head[:j_] + head[j_ + 1:], widths[:j_] + widths[j_ + 1:]
-            body, tail = [r_[:j_] + r_[j_ + 1:] for r_ in body], [r_[:j_] + r_[j_ + 1:] for r_ in tail]
-            k_fit = fits(tw)
         if k_fit < want and card:
             # the card's words as a paragraph at the notes' size above the table (what the layer does, in two lines of whole sentences
             # where they fit, who wrote it, and what its companies have in common)
@@ -8299,6 +8297,18 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         # the page's height, its rows a little taller
         s.add("table", (M, below, tw, tall_ if under else th), head=head, rows=body[:k_fit] + tail, widths=widths, strong=list(range(k_fit, k_fit + len(tail))),
               tight=bool(under or k_fit < len(body)), compact=True)
+        if "Industry" in head and not names_whole(s.blocks[-1]):
+            # deck101 (the live R99 Fertilizers deck: "Chambal Fertilizers…", "Rashtriya Chemicals…", "Fertilizers & Chemicals…", the names
+            # cut beside the chart to keep an industry column that says "Fertilizers" on most rows): a company's name is never cut to keep the
+            # industry column (the appendix and the theme's page keep it); its width goes to the other columns
+            tb = s.blocks[-1]
+            j_ = tb["head"].index("Industry")
+            tb["head"] = tb["head"][:j_] + tb["head"][j_ + 1:]
+            tb["widths"] = tb["widths"][:j_] + tb["widths"][j_ + 1:]
+            tb["rows"] = [r_ if isinstance(r_, dict) else r_[:j_] + r_[j_ + 1:] for r_ in tb["rows"]]
+            if tb.get("numeric"):
+                tb["numeric"] = tb["numeric"][:j_] + tb["numeric"][j_ + 1:]
+            head = tb["head"]
         if chart:
             c = dict(chart)
             s.add(c.pop("kind"), (M + tw + 0.4, below, CW - tw - 0.4, room), **c)
