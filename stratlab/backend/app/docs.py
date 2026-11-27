@@ -9,9 +9,10 @@ from urllib.parse import urlparse
 import httpx
 
 from .http_retry import real_transport
+from .intel import nse_archive
 from .intel.net import BROWSER_UA, SourceError, TTLCache
 
-ALLOWED_HOSTS = {"nsearchives.nseindia.com", "archives.nseindia.com", "www.nseindia.com", "www.bseindia.com"}
+ALLOWED_HOSTS = {*nse_archive.HOSTS, "www.nseindia.com", "www.bseindia.com"}     # the archive on each of its hosts, .in too (fix98)
 MAX_BYTES = 30 * 1024 * 1024        # large investor decks run to 20 MB
 MAX_PAGES = 80
 _cache = TTLCache(max_items=300)
@@ -173,9 +174,9 @@ class Docs:
     def _download(self, url: str, extra_hosts: tuple[str, ...], limit: int) -> bytes:
         """The body at `url`, following up to three redirects that stay on the allowed hosts, every host checked to be
         on the public internet."""
-        target = url
+        target, tried = url, {url}
         try:
-            for _ in range(4):
+            for _ in range(4 + len(nse_archive.MIRRORS)):
                 host = urlparse(target).hostname or ""
                 if host not in ALLOWED_HOSTS and not self.check_host(host):
                     raise SourceError("the exchange", "That website isn't reachable from here.")
@@ -187,6 +188,10 @@ class Docs:
                         if not _host_ok(urlparse(nxt).hostname, extra_hosts) or urlparse(nxt).scheme != "https":
                             raise SourceError("the exchange", "The document moved off the company's site; it wasn't followed.")
                         target = nxt
+                        continue
+                    if r.status_code in nse_archive.REFUSED and (alt := nse_archive.after_refusal(target, tried)):
+                        target = alt                # the same file on the archive's next host (fix98)
+                        tried.add(alt)
                         continue
                     if r.status_code >= 400:
                         raise SourceError("the exchange", f"The document couldn't be downloaded ({r.status_code}).", busy=r.status_code >= 500)

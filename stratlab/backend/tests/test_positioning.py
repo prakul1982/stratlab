@@ -176,9 +176,13 @@ def test_feed_reads_a_day_and_says_when_it_isnt_published():
 
 def test_feed_falls_back_to_the_older_host_and_skips_another_days_file():
     d = date(2026, 10, 1)
-    f, _ = feed([(r"nsearchives.*oi_01102026", httpx.Response(200, text=FP.participant_csv(d - timedelta(days=1)))),
+    # (changed on purpose, fix98: every archive host is asked in turn by nse_archive, the .in host first, and only a refusal moves
+    # on, so the older host is reached when the others turn the server away, and another day's file under the name reads as none)
+    f, _ = feed([(r"nsearchives.*oi_01102026", httpx.Response(403)),
                  (r"archives\.nseindia.*oi_01102026", httpx.Response(200, text=FP.participant_csv(d)))])
     assert f.participants("oi", d)["as_of"] == "2026-10-01"
+    f, _ = feed([(r"oi_01102026", httpx.Response(200, text=FP.participant_csv(d - timedelta(days=1))))])
+    assert f.participants("oi", d) is None
     f, _ = feed([(r"oi_01102026", httpx.Response(200, text="<html>please wait</html>"))])
     assert f.participants("oi", d) is None                # a page instead of the file reads as not there
 
@@ -189,7 +193,8 @@ def test_feed_retries_a_bot_guard_with_fresh_cookies_then_gives_up():
 
     def guard(r):
         tries.append(1)
-        return httpx.Response(403) if len(tries) == 1 else httpx.Response(200, text=FP.participant_csv(d))
+        # (changed on purpose, fix98: the guard refuses on every archive host, which nse_archive asks in turn, before cookies help)
+        return httpx.Response(403) if len(tries) <= 3 else httpx.Response(200, text=FP.participant_csv(d))
     sleeps = []
     f, c = feed([(r"oi_01102026", guard)], sleeps)
     assert f.participants("oi", d) is not None and sleeps == [2.0]

@@ -1974,7 +1974,7 @@ DOC_NAMES = {"RHP": "Red herring prospectus (RHP)", "DRHP": "Draft red herring p
              "F-1/A": "Amended registration statement (F-1/A)", "424B4": "Final prospectus (424B4)", "424B1": "Final prospectus (424B1)",
              "424B3": "Prospectus (424B3)", "424B5": "Prospectus (424B5)"}
 SOURCE_NAMES = {"sebi": "SEBI", "nse": "NSE, ZIP", "sec": "SEC"}
-LINK_HOSTS = ("https://www.sebi.gov.in/", "https://nsearchives.nseindia.com/", "https://www.sec.gov/")
+LINK_HOSTS = ("https://www.sebi.gov.in/", *(f"https://{h}/" for h in D.nse_archive.HOSTS), "https://www.sec.gov/")   # every archive host (fix98)
 
 
 def doc_links(row: dict) -> list[dict]:

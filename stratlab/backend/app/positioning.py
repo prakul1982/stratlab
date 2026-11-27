@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from . import db, memguard
+from .intel import nse_archive
 from .intel.net import SourceError, TTLCache, num
 from .data.expiries import cycle as expiry_cycle, fits as expiry_fits
 from .newsletter import job as news_job
@@ -50,9 +51,9 @@ COLUMNS = {
     "total long contracts": "total_long", "total short contracts": "total_short",
 }
 KINDS = ("oi", "vol")
-# each file at its address on the archive host, then the older host the exchange still answers on
-FILE_URLS = ("https://nsearchives.nseindia.com/content/nsccl/fao_participant_{kind}_{d}.csv",
-             "https://archives.nseindia.com/content/nsccl/fao_participant_{kind}_{d}.csv")
+# each file at its address on the archive; every archive host is asked in turn (nse_archive, fix98), so the older host the exchange
+# still answers on is no longer listed as an address of its own
+FILE_URLS = ("https://nsearchives.nseindia.com/content/nsccl/fao_participant_{kind}_{d}.csv",)
 CASH_PATHS = ("/api/fiidiiTradeReact", "/api/fiidiiTradeNse")
 CASH_PAGE = "https://www.nseindia.com/reports/fii-dii"
 PUBLISH_FROM, PUBLISH_UNTIL = "18:40", "21:30"     # the job's window, India time: the files usually land 18:30-20:00
@@ -204,7 +205,7 @@ class Feed:
             pass
         for attempt in range(2):
             try:
-                r = self.nse.http.get(url, headers={"Accept": "text/csv,text/plain,*/*", "Referer": "https://www.nseindia.com/"})
+                r = nse_archive.get(self.nse.http, url, headers={"Accept": "text/csv,text/plain,*/*", "Referer": "https://www.nseindia.com/"})
             except httpx.HTTPError as e:
                 self._outage()
                 raise SourceError(self.name, f"Couldn't reach the exchange's files ({e.__class__.__name__}).", busy=True) from None

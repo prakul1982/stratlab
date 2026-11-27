@@ -1753,9 +1753,27 @@ def sources(region: str, theme: str, fresh: bool = False):
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
         metrics=sector_metrics.reader(region, fresh),           # R23: filed sector figures, read once and kept for everyone
         about=kept_about(region),                               # R35: the stored descriptions only (nothing is read from a page)
-        passages=sector_ops.passages_reader(region, today=today))   # m53: sector operating measures from the stored filings index only
+        passages=sector_ops.passages_reader(region, today=today),   # m53: sector operating measures from the stored filings index only
+        listed=listed_reader(region, today))                    # fix98: the market's current list of companies (members no longer listed)
     src.pieces = pieces
     return src
+
+
+def listed_reader(region: str, today):
+    """fix98: the market's current list of companies for a dive (theme_listed.reader): the SEC's tickers the SEC feed keeps a day (US), the
+    company pages' day's list with the BSE-only companies' trading symbols (India). Nothing is read here but what the app keeps."""
+    from . import theme_listed
+
+    def sec_tickers():                   # the copy the SEC feed keeps (read by the daily list of companies and the filings): never read here
+        from .. import main
+        return main.sec_feed.cache.get("tickers")
+
+    def kept():
+        return db.json_value(db.get_setting(f"stocks:list:{region}"), {})
+
+    def bse():
+        return db.json_value(db.get_setting("audit:bse-only"), {})
+    return theme_listed.reader(region, today, sec_tickers=sec_tickers, kept=kept, bse=bse)
 
 
 def removal_words(region: str) -> dict:

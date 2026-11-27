@@ -5714,7 +5714,8 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
     for region, (limit, gap) in PRICE_REFRESH.items():
         # India: a page read at the close before the exchange's official close was out takes it once it is (R7O-004)
         extra = {"official": lambda s, d: official_close.official(s, d, use_quote=False),
-                 "official_ready": official_close.settled, "official_range": official_close.day_range} if region == "IN" else {}
+                 "official_ready": official_close.settled, "official_range": official_close.day_range,
+                 "ready": kite.ready} if region == "IN" else {}      # fix98: no Indian page tried while the broker's login has ended
         before = price_refresh_status.get(region) if isinstance(price_refresh_status.get(region), dict) else {}
         try:
             price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep, **extra)
@@ -5741,8 +5742,9 @@ def price_pass_failed(x: dict | None) -> bool:
 
 
 def refresh_backlog(status: dict) -> bool:
-    """Whether a pass left pages it had no room for."""
-    return any(isinstance(s, dict) and s.get("left") for s in (status.get(r) for r in PRICE_REFRESH))
+    """Whether a pass left pages it had no room for. Pages left because their source is down (India's broker before the morning
+    login) aren't: they wait for the usual pass, not one a minute (fix98)."""
+    return any(isinstance(s, dict) and s.get("left") and not s.get("source_down") for s in (status.get(r) for r in PRICE_REFRESH))
 
 
 def refresh_wait(status: dict) -> int:

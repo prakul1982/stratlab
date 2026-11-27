@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
+import { lazy, Suspense, use, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Link } from "react-router-dom";
 import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../lib/currency";
 import { cardPrice, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
@@ -23,7 +23,7 @@ import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeU
 import type { LibEntry } from "../components/LibraryBits";
 import { exampleEyebrow, pickExamples } from "../lib/landingExamples";
 import { importWithRetry } from "../lib/lazyRetry";
-import { emailFormNow, loadEmailForm } from "../lib/emailForm";
+import { emailFormNow, emailFormSettled, loadEmailForm } from "../lib/emailForm";
 import { adsLive } from "../lib/ads";
 import { CONFIG } from "../lib/adsConfig";
 
@@ -280,6 +280,10 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
   // LIVE7B-008: /login and /signup are one sign-in panel: the heading, one line, one Google button and what signing in reads (a dialog
   // with the same heading and button over the page, and a second band with a third button, said it all three times)
   const login = slim === "login";
+  // fix98: opened for its email form (#email) before the form's code is here (a cold /login#email, or a press whose wait ran out), the
+  // whole page waits for it (the Suspense around the page keeps what was on screen; a failed download still draws the page), so the sign-in
+  // page never draws a frame without its form
+  if (login && location.hash === "#email" && !emailFormNow()) use(emailFormSettled());
   const EmailNow = emailFormNow()?.EmailSignIn;     // the email form's code, once here (LIVE17B-002: a plan card asks for it before it opens this page)
   const signup = login && location.pathname === "/signup";   // LIVE10B-003: "Sign up for StratLab" over "Sign in with…" lines
   // LIVE17B-002: the sign-in panel opened from another page (a plan card at /plans' foot) starts at its top, not at that page's scroll

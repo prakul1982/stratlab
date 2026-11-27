@@ -53,7 +53,7 @@ test("LIVE16B-001: a plan card's email button carries its plan to the sign-in pa
   assert.match(src, /return plan \? `\/login\?plan=\$\{plan\}#email` : EMAIL_SIGNIN_PATH;/);
   const way = read("src/components/EmailWay.tsx");
   assert.match(way, /href=\{emailSignInPath\(next\)\}/);
-  assert.match(way, /startEmailSignIn\(next, \(u\) => navigate\(u\)\)/);
+  assert.match(way, /startEmailSignIn\(next, \(u\) => flushSync\(\(\) => navigate\(u\)\)\)/);      // (changed on purpose, fix98: in one go with the page)
   assert.match(read("src/pages/Login.tsx"), /if \(plan === "basic" \|\| plan === "pro"\) rememberNext\(`\/plans\?plan=\$\{plan\}`\);/);
   assert.match(read("src/pages/PlansPage.tsx"), /data-testid="plan-picked"/);
 });

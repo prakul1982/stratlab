@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from . import db, leader, memguard
 from .auth import current_profile
+from .intel import nse_archive
 from .intel.net import SourceError, TTLCache
 from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 from .responses import err, ok
@@ -39,7 +40,7 @@ KEEP_QUARTERS = 4
 MIN_PCT = 1.0                   # the filing names public holders above 1%; promoter-group members below it are left out
 LIST_PATH = "/api/corporate-share-holdings-master"
 REFERER = "https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern"
-XBRL_HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "www.nseindia.com")
+XBRL_HOSTS = (*nse_archive.HOSTS, "www.nseindia.com")      # the archive on each of its hosts (fix98)
 MAX_XBRL = 8 * 1024 * 1024
 LIST_DAYS = 10                  # the daily read looks this far back (late and revised filings)
 BACKFILL_DAYS = 200             # the first read: about two filing seasons, so each company has two quarters
@@ -360,7 +361,7 @@ def fetch_xbrl(nse, url: str) -> bytes:
     if not _xbrl_ok(url):
         raise SourceError("the exchange", "That isn't a filing on the exchange's archive.")
     try:
-        r = nse.http.get(url, headers={"Accept": "application/xml,text/xml,*/*"})
+        r = nse_archive.get(nse.http, url, headers={"Accept": "application/xml,text/xml,*/*"})   # each archive host in turn (fix98)
     except httpx.HTTPError as e:
         raise SourceError("the exchange", f"Couldn't reach the exchange's archive ({e.__class__.__name__}).", busy=True) from None
     if r.status_code in (401, 403, 429) or r.status_code >= 500:

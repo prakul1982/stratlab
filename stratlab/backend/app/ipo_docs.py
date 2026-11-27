@@ -22,11 +22,12 @@ from . import docs
 from .ai_providers import complete, extract_json
 from .http_retry import real_transport
 from .intel.ipo_sources import SEC_UA, nse_zip_pdf
+from .intel import nse_archive
 from .intel.net import BROWSER_UA, SourceError
 
 SUM_KEY = "ipo:sum:"                  # ipo:sum:<document id> = the AI's summary of that document, once
 FACTS_KEY = "ipo:facts:"              # ipo:facts:<document id> = the facts read from it by rules
-HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "nsearchives.nseindia.in", "archives.nseindia.in", "www.sebi.gov.in", "www.sec.gov")   # .in: the exchange moved, 26 Nov
+HOSTS = (*nse_archive.HOSTS, "www.sebi.gov.in", "www.sec.gov")   # .in: the exchange moved, 26 Nov (every archive host: nse_archive, fix98)
 MAX_BYTES = 40 * 1024 * 1024          # a red herring prospectus with its annexures runs to 15 MB, a US prospectus to 60 MB of pictures
 HTML_HEAD = 3_600_000                 # the first part of a US prospectus holds everything read here (the summary, the risks, the proceeds)
 MAX_PAGES = 230                       # pages of an Indian offer document read (the summary tables, the objects and the business are in them)
@@ -50,10 +51,10 @@ def _client(transport=None) -> httpx.Client:
 def download(url: str, limit: int = MAX_BYTES, head: int | None = None, transport=None) -> bytes:
     """The body at `url` (an exchange's, SEBI's or the SEC's own host only), following redirects that stay on those hosts.
     `head`: only its first bytes (a US prospectus is read from its start)."""
-    target = url
+    target, tried = url, {url}
     try:
         with _client(transport) as http:
-            for _ in range(4):
+            for _ in range(4 + len(nse_archive.MIRRORS)):
                 u = httpx.URL(target)
                 if u.scheme != "https" or u.host not in HOSTS:
                     raise SourceError("the document's site", "That document isn't on an exchange's, SEBI's or the SEC's own site.")
@@ -62,6 +63,10 @@ def download(url: str, limit: int = MAX_BYTES, head: int | None = None, transpor
                 with http.stream("GET", target, headers=headers) as r:
                     if 300 <= r.status_code < 400:
                         target = str(httpx.URL(target).join(r.headers.get("location", "")))
+                        continue
+                    if r.status_code in nse_archive.REFUSED and (alt := nse_archive.after_refusal(target, tried)):
+                        target = alt                # the same file on the archive's next host (fix98)
+                        tried.add(alt)
                         continue
                     if r.status_code >= 400:
                         raise SourceError("the document's site", f"The document couldn't be downloaded ({r.status_code}).", busy=r.status_code >= 500 or r.status_code == 429)

@@ -122,6 +122,9 @@ test("a phone's cards sort by a small Sort by select", async ({ page }, info) =>
   const select = card.getByTestId("k-sort-by");
   await expect(select).toBeVisible();
   await select.selectOption({ label: "Stake, high to low" });
+  // the cards re-sort on the next render: wait for the largest stake (TEST6's 9%) at the top before reading the order (CI read the old
+  // order straight after the pick, Release 98's run)
+  await expect(card.locator("tbody tr td[data-label='Stake']").first()).toHaveText(/^9(\.0+)?%$/);
   const stakes = await card.locator("tbody tr td[data-label='Stake']").allInnerTexts();
   ordered(stakes, num, true);
   await select.selectOption({ label: "Company, Z to A" });
