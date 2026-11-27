@@ -173,11 +173,13 @@ def test_the_price_band_file_is_read_from_its_other_addresses_when_one_is_turned
 
     def handler(r):
         asked.append(str(r.url))
-        if str(r.url) == F.SEC_LIST:
+        if r.url.host.startswith("nsearchives.") and r.url.path == "/content/equities/sec_list.csv":
             return httpx.Response(403)
         return httpx.Response(200, text=good) if "archives.nseindia.com/content/equities/sec_list.csv" in str(r.url) else httpx.Response(404)
     feed = F.NSEFilings(transport=httpx.MockTransport(handler))
-    assert len(feed.security_bands()) == 400 and asked[:2] == [F.SEC_LIST, F.SEC_LIST_URLS[1]]
+    # (changed on purpose, fix98: the older host is no longer an address of its own; nse_archive asks every archive host in turn, .in first)
+    assert len(feed.security_bands()) == 400 and asked[:3] == [F.SEC_LIST.replace(".com/", ".in/"), F.SEC_LIST,
+                                                                "https://archives.nseindia.com/content/equities/sec_list.csv"]
     # turned away everywhere: said as the exchange's side, and the feature check says "source refused", not a failure of ours
     feed = F.NSEFilings(transport=httpx.MockTransport(lambda r: httpx.Response(403)))
     with pytest.raises(SourceError, match="a fault on the exchange's side") as e:

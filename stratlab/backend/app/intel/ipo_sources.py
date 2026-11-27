@@ -17,6 +17,7 @@ from datetime import date, datetime
 
 import httpx
 
+from . import nse_archive
 from .net import BROWSER_UA, Source, SourceError, num, rate_wait
 
 SEC_UA = "StratLab research (contact@stratlab.studio)"      # the SEC asks automated users to say who they are
@@ -396,7 +397,7 @@ def nse_detail(raw) -> dict:
     out["registrar"] = info.get("name of the registrar") or None
     docs = []
     for title, value in info.items():
-        if re.search(r"prospectus|offer document|abridged", title) and re.match(r"https://nsearchives\.nseindia\.com/\S+", value):
+        if re.search(r"prospectus|offer document|abridged", title) and nse_archive.is_archive(value.split()[0] if value.split() else ""):
             kind = "DRHP" if "draft" in title else "RHP" if "red herring" in title else "Prospectus"
             docs.append({"kind": kind, "label": title.title(), "url": value.split()[0]})
     out["docs"] = docs

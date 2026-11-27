@@ -17,6 +17,7 @@ import httpx
 
 from .. import db, leader, run_marks
 from ..http_retry import real_transport
+from . import nse_archive
 from .net import BROWSER_UA, SourceError, TTLCache, RateLimit
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -560,7 +561,7 @@ PIT_OLD = "/api/corporates-pit"
 PIT_NEW_FROM = date(2026, 5, 3)      # the first filing on the new list: windows that start earlier also read the old one
 # 26 Nov 2026: the exchange moved to nseindia.in and its insider-trading list now links its documents on nsearchives.nseindia.in; a
 # link on a host outside this list was dropped, so every filing was, and the market's list read as empty for a fortnight
-ARCHIVE_HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "nsearchives.nseindia.in", "archives.nseindia.in")
+ARCHIVE_HOSTS = nse_archive.HOSTS
 PIT_DOC_WORKERS = 6                  # documents read at once: the whole market's fortnight (~140) in about ten seconds
 MAX_PIT_DOC = 2_000_000              # bytes: a filing's document is a few KB, the biggest seen ~75 KB
 
@@ -703,10 +704,10 @@ SURV_PAGES = {                       # where the exchange publishes each list, f
 }
 SEC_LIST = "https://nsearchives.nseindia.com/content/equities/sec_list.csv"
 # the price-band file's other addresses, tried in turn when one is turned away (LIVE4-023: "refused (403)" from this server while the
-# file answered elsewhere): the older archive host, then the day-stamped copies (sec_list_05112026.csv) of the last few days
-SEC_LIST_URLS = (SEC_LIST, "https://archives.nseindia.com/content/equities/sec_list.csv")
-SEC_LIST_DAILY = ("https://nsearchives.nseindia.com/content/equities/sec_list_{d}.csv",
-                  "https://archives.nseindia.com/content/equities/sec_list_{d}.csv")
+# file answered elsewhere): the day-stamped copies (sec_list_05112026.csv) of the last few days. Each is asked on every archive host
+# in turn (nse_archive: fix98), so the older host is no longer listed here as an address of its own
+SEC_LIST_URLS = (SEC_LIST,)
+SEC_LIST_DAILY = ("https://nsearchives.nseindia.com/content/equities/sec_list_{d}.csv",)
 SEC_LIST_DAYS = 3
 REFUSED_BANDS = ("The exchange turned this server away at every address of its price-band file ({code}): a fault on the exchange's "
                  "side, not ours; the badges keep the last list read until it answers.")
@@ -1116,7 +1117,7 @@ class NSEFilings:
         if not name:
             raise SourceError(self.name, f"No constituent file is known for {index}.")
         try:
-            r = self.http.get(self.INDEX_URL + name, headers={"Accept": "text/csv,*/*"})
+            r = nse_archive.get(self.http, self.INDEX_URL + name, headers={"Accept": "text/csv,*/*"})
         except httpx.HTTPError as e:
             raise SourceError(self.name, f"Couldn't reach the exchange's list for {index} ({e.__class__.__name__}).", busy=True) from None
         if r.status_code >= 400:
@@ -1164,7 +1165,8 @@ class NSEFilings:
         import csv
         import io
         try:
-            r = self.http.get(self.EQUITY_LIST, headers={"Accept": "text/csv,*/*"})
+            # every archive host in turn (fix98: production's address was turned away on the .com host from 26 Nov 19:51 UTC)
+            r = nse_archive.get(self.http, self.EQUITY_LIST, headers={"Accept": "text/csv,*/*"})
         except httpx.HTTPError as e:
             raise SourceError(self.name, f"Couldn't reach the exchange's list of companies ({e.__class__.__name__}).", busy=True) from None
         if r.status_code >= 400:
@@ -1412,7 +1414,7 @@ class NSEFilings:
         busy = True
         try:
             try:
-                r = self.http.get(url, headers={"Accept": accept})
+                r = nse_archive.get(self.http, url, headers={"Accept": accept})
             except httpx.HTTPError as e:
                 raise SourceError(self.name, f"Couldn't reach the exchange's files ({e.__class__.__name__}).", busy=True) from None
             busy = r.status_code == 429 or r.status_code >= 500

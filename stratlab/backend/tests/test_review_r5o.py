@@ -354,7 +354,9 @@ def test_index_members_come_from_the_archive_file_when_the_live_api_turns_us_awa
     feed = NSEFilings(transport=httpx.MockTransport(handler), sleep=lambda s: None)
     got = feed.index_members("NIFTY 500")
     assert len(got) == 500 and got[0] == "360ONE"
-    assert asked == ["nsearchives.nseindia.com/content/indices/ind_nifty500list.csv"]   # the live API wasn't needed
+    # (changed on purpose, fix98: the archive's .in host is asked first; refused there, the file is read from the .com host)
+    assert asked == ["nsearchives.nseindia.in/content/indices/ind_nifty500list.csv",
+                     "nsearchives.nseindia.com/content/indices/ind_nifty500list.csv"]   # the live API wasn't needed
     assert feed.INDEX_FILES["NIFTY MIDCAP 150"] == "ind_niftymidcap150list.csv"
     assert feed.INDEX_FILES["NIFTY SMALLCAP 250"] == "ind_niftysmallcap250list.csv"
 
