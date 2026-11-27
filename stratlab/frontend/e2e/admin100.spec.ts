@@ -43,7 +43,7 @@ test("admin100 Overview: only the owner's fixes need attention; the rest is apar
   await expect(page.getByTestId("sources-summary")).toHaveText(/^\d+ [A-Z][\w ]+( · \d+ [A-Z][\w ]+)*$/);
   const ok = page.getByTestId("sources-ok");
   if (await ok.count()) await ok.locator("summary").click();
-  for (const name of ["Exchange file archive (NSE)", "Exchange announcements (NSE)", "BSE", "The SEC (EDGAR)", "Email service", "Razorpay"]) {
+  for (const name of ["Zerodha (broker data)", "Exchange file archive (NSE)", "Exchange announcements (NSE)", "BSE", "The SEC (EDGAR)", "Email service", "Razorpay"]) {
     await expect(sources.getByText(name, { exact: true })).toBeVisible();
   }
   // nothing pushes the page sideways (phone)

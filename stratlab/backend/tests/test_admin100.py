@@ -69,7 +69,7 @@ def test_a_source_not_answering_is_retrying_then_a_check_then_down_never_the_own
 
 def test_every_known_source_has_a_row_even_before_it_is_asked():
     keys = [r["key"] for r in H.rows(NOW)]
-    assert keys[:6] == ["nse-archive", "nse-feed", "bse", "sec", "mail", "payments"]
+    assert keys[:7] == ["broker", "nse-archive", "nse-feed", "bse", "sec", "mail", "payments"]
     r = row("sec")
     assert r["state"] == "ok" and r["word"] == "Not asked yet" and r["last_ok"] is None
 
@@ -232,3 +232,27 @@ def test_a_feature_check_failing_on_its_sources_side_is_not_the_owners_fix():
     assert issue.problem == "1 check failing after a retry: Prices: FX (1 candle of EUR/USD on 2 Nov is off)"
     only_sources = {**out, "checks": out["checks"][:2] + out["checks"][3:]}
     assert main.platform_issue(only_sources, before).problem is None
+
+
+def test_the_brokers_reads_are_noted_and_a_cancelled_login_says_so():
+    from kiteconnect.exceptions import NetworkException, TokenException
+    from app.kite_service import _Guarded
+
+    class Inner:
+        def quote(self, keys):
+            return {"NSE:X": {}}
+
+        def ltp(self, keys):
+            raise NetworkException("Gateway timed out", 504)
+
+        def margins(self):
+            raise TokenException("Incorrect api_key or access_token")
+    g = _Guarded(Inner(), lambda e: None)
+    g.quote(["NSE:X"])
+    assert row("broker", time.time())["word"] == "OK"
+    with pytest.raises(NetworkException):
+        g.ltp(["NSE:X"])
+    assert "Gateway timed out" in row("broker", time.time())["error"]
+    with pytest.raises(TokenException):
+        g.margins()
+    assert row("broker", time.time())["error"] == "Zerodha cancelled the day's login"

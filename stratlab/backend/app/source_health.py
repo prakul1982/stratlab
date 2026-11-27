@@ -36,6 +36,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 # key: (label, what it feeds, whether only the owner can fix it, Admin page)
 KNOWN: dict[str, tuple[str, str, bool, str]] = {
+    # the day's login itself is the Broker data light's (Services), with the owner's step when it is needed; this row is its reads
+    "broker": ("Zerodha (broker data)", "Indian prices, candles and the option chains", False, "/admin/data"),
     "nse-archive": ("Exchange file archive (NSE)", "the list of companies, official closes, F&O, ban, lot-size, participant and lending files",
                     False, "/admin/data"),
     "nse-feed": ("Exchange announcements (NSE)", "company filings, insider trades and deals", False, "/admin/data"),
