@@ -133,9 +133,12 @@ def test_a_truck_maker_in_the_railcar_makers_layer_is_in_none_of_its_figures():
                  [("RAIL", "FreightCar America Inc", rail, 300), ("TRN", "Trinity Industries Inc", rail, 2500),
                   ("GBX", "Greenbrier Companies Inc", rail, 1500), ("PCAR", "Paccar Inc", "Motor Vehicles & Passenger Car Bodies", 55000)], what)
     p = _row(dive, "PCAR")
-    assert p["status"] == "unverified" and p["evidence"] == "not_confirmed" and p["calc"]["in"] is False, (p["status"], p["evidence"], p["calc"])
-    assert p["other_work"]["of"] == "layer" and p["other_work"]["kind"] == "truck making"
+    # (changed on purpose, deck99: a company of the theme's own kind whose sentence states another kind than its layer's is a member of the
+    # theme out of that layer's figures, as another business than the layer's, its evidence its own, never "own words describe other work")
+    assert p["status"] != "unverified" and p["evidence"] == "description_verified" and p["calc"]["in"] is False, (p["status"], p["evidence"], p["calc"])
+    assert p["layer_other"]["of"] == "layer" and p["layer_other"]["kind"] == "truck making" and "other_work" not in p
     assert "commercial trucks" in p["theme"]["why"] and "Railcar and rail equipment suppliers and lessors" in p["theme"]["why"]
-    assert p["calc"]["label"].startswith("not confirmed in the theme")
+    assert p["calc"]["label"] == "another business than the layer's" and "a different kind of business than its layer" in p["calc"]["detail"]
+    assert "describe other work" not in p["theme"]["why"] + p["calc"]["detail"]
     for s in ("RAIL", "TRN", "GBX"):          # (guard) the railcar makers stay
         assert _row(dive, s)["status"] != "unverified" and _row(dive, s)["calc"]["in"], s
