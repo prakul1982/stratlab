@@ -192,7 +192,7 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
 });
 
 test("Admin's 'Needs your attention' lists feeds on Check and each AI provider that can't answer, with its reason (R5O-016)", async () => {
-  const { attention, aiUp } = await import("../src/pages/admin/attention.ts");
+  const { attention, selfFixing, aiUp } = await import("../src/pages/admin/attention.ts");
   const ai = [
     { label: "Groq", configured: true, in_use: true, model: "m", last_error: null, answering: true, state_text: "Working." },
     { label: "OpenRouter", configured: true, in_use: true, model: "m", last_error: "rate limited (429: slow down)", answering: true, state_text: "Working; rate limited" },
@@ -210,8 +210,9 @@ test("Admin's 'Needs your attention' lists feeds on Check and each AI provider t
     { id: "etf", name: "ETF", schedule: "x", last_run: "2026-10-08T09:00:00Z", error: null, state: "ok" },
   ];
   const items = attention(ov, null, jobs).map((a) => a.text);
-  // each feed's words as Data and jobs writes them, not lowercased (DJ-007)
-  assert.ok(items.includes("2 data feeds on Check: Positioning (Not run yet); Corporate actions (Not run yet)."), items.join("\n"));
+  // each feed's words as Data and jobs writes them, not lowercased (DJ-007); listed apart, as nothing to do (changed on purpose, admin100, Release 93 rule: Needs your attention holds only the owner's manual fixes; the rest is listed apart as nothing to do)
+  assert.ok(selfFixing(ov, null, jobs).map((a) => a.text).includes("2 data feeds on Check: Positioning (Not run yet); Corporate actions (Not run yet)."));
+  assert.ok(!items.some((t) => /data feeds? on Check/.test(t)), items.join("\n"));
   assert.ok(items.some((t) => t.startsWith("AI, Vercel AI Gateway: The key was rejected: the account needs a payment method on file (403:")), items.join("\n"));
   assert.ok(!items.some((t) => t.includes("OpenRouter")));
 });

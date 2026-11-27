@@ -170,6 +170,11 @@ def _span(seconds: float) -> str:
     return f"{h} h" if h < 48 else f"{h // 24} days"
 
 
+def _bare(error: str | None) -> str:
+    """An error as a clause inside a sentence: no full stop of its own."""
+    return (error or "no answer").rstrip(". ") or "no answer"
+
+
 def owner_action(k: str, error: str | None) -> str:
     """What the owner does about an owner-fixed source that keeps failing, by what it said."""
     e = (error or "").lower()
@@ -197,7 +202,9 @@ def judge(k: str, row: dict, now: float | None = None) -> dict:
             "error": row.get("error") if fail_at else None, "fails": fails, "before_restart": bool(row.get("before_restart")),
             "owner": False, "action": None}
     if not ok_at and not fail_at:
-        return {**base, "state": "ok", "word": "Not asked yet", "detail": "Not asked since the server started; it is read when a page or job needs it."}
+        idle = {"mail": "No email sent since the server started.",
+                "payments": "Not read since the server started: Money's lists, the setup check and Razorpay's payment events read it."}
+        return {**base, "state": "ok", "word": "Not asked yet", "detail": idle.get(k, "Not asked since the server started; it is read when a page or job needs it.")}
     failing = bool(fail_at) and (not ok_at or fail_at > ok_at) and fails > 0
     if not failing:
         notes = []
@@ -205,12 +212,12 @@ def judge(k: str, row: dict, now: float | None = None) -> dict:
             notes.append(f"Served by {row['via']}" + (f" after {row['refused']}" if row.get("refused") else " after the first host refused")
                          + ": the same files come from the other host, so nothing to do.")
         if fail_at and now - fail_at <= NOTE_FOR:
-            notes.append(f"A read failed at {_clock(fail_at)} ({row.get('error') or 'no answer'}); the next one worked.")
+            notes.append(f"A read failed at {_clock(fail_at)} ({_bare(row.get('error'))}); the next one worked.")
         return {**base, "state": "ok", "word": "OK",
                 "detail": " ".join([f"Last good answer {_span(now - ok_at)} ago ({_clock(ok_at)})."] + notes)}
     since = row.get("since") or fail_at
     good = f" Last good answer {_span(now - ok_at)} ago ({_clock(ok_at)})." if ok_at else " No good answer on record."
-    why = row.get("error") or "no answer"
+    why = _bare(row.get("error"))
     if owner_fix:
         if fails >= OWNER_FAILS:
             action = owner_action(k, why)

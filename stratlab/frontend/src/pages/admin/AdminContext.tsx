@@ -43,6 +43,8 @@ export interface Overview {
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
     /** the self-healing (owner, 4 Nov): what it is retrying, what it gave up on and emailed you about, and its short history */
     autofix?: AutofixStatus;
+    /** each outside source's last good answer and last failure, with a plain verdict (admin100; older servers don't send it) */
+    sources?: SourceRow[];
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; signups_today: number; experiments_month: number; ai_month: number; ai_reads_month?: number;
     /** paid plans with a subscription behind them, and those the owner gave by hand (older servers send neither) */
@@ -60,6 +62,11 @@ export interface Overview {
     /** when these counts were read (the server keeps them 45 s; admin90) */
     counted_at?: string };
 }
+
+/** One outside source (admin100): `state` and `word` its light ("OK", "Retrying", "Not answering", "Down", "Fix", "Not asked yet"),
+ * `detail` what is true in words, `owner` whether only the owner can fix it (then `action` says how). */
+export type SourceRow = { key: string; label: string; what: string; to: string; state: "ok" | "warn" | "bad"; word: string; detail: string;
+  last_ok: string | null; last_fail: string | null; error: string | null; fails: number; owner: boolean; action: string | null; before_restart?: boolean };
 
 export type AutofixIssue = { id: string; name: string; problem: string | null; since: string | null; to: string; tries: number; of: number; next: string | null;
   action?: string | null; mailed?: string | null; held?: boolean };

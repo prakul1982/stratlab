@@ -63,7 +63,7 @@ test("LIVE3-018: one rule for a ratio and one for big money, on every page", asy
 });
 
 test("LIVE3-006/007: every job stuck or failing is under Needs your attention, with how long it has run", async () => {
-  const { attention, runningFor } = await import("../src/pages/admin/attention.ts");
+  const { attention, selfFixing, runningFor } = await import("../src/pages/admin/attention.ts");
   const sv = { server: { kite_ready: true, kite_token_day: null, feed_connected: false, live_sessions: 0, india_sessions: 0,
     auto_login: { at: null, ok: true, message: "ok" }, auto_login_configured: true, billing_enabled: true, ai: [], research: { finnhub: true },
     recent_errors: [], server_started_at: "2026-10-09T01:00:00+05:30" }, stats: {} };
@@ -78,7 +78,9 @@ test("LIVE3-006/007: every job stuck or failing is under Needs your attention, w
   ];
   const said = attention(sv, null, jobs).map((a) => a.text).join("\n");
   assert.match(said, /Market breadth: Stuck: running for 15 h/);
-  assert.match(said, /IPOs \(Offer documents: no summary written today/);
+  // a stall (Check) is listed apart, as one the job's next run reads again (changed on purpose, admin100, Release 93 rule: Needs your attention holds only the owner's manual fixes; the rest is listed apart as nothing to do)
+  assert.match(selfFixing(sv, null, jobs).map((a) => a.text).join("\n"), /IPOs \(Offer documents: no summary written today/);
+  assert.doesNotMatch(said, /IPOs \(Offer documents/);
   assert.match(said, /Any other job: It failed\./);
   assert.equal(runningFor({ running: true, running_since: ago(12) }), "Running for 12 min");
   assert.equal(runningFor({ running: true, running_since: null }), "Running");

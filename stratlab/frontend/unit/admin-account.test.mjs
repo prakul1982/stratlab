@@ -8,7 +8,7 @@ import { register } from "node:module";
 // the app's files import each other without an extension (the bundler adds it); Node needs a hint to find the .ts
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
-const { attention, lights, paidUsers, service, services } = await import("../src/pages/admin/attention.ts");
+const { attention, lights, paidUsers, selfFixing, service, services } = await import("../src/pages/admin/attention.ts");
 
 test("Overview counts paying users apart from plans the owner gave", () => {
   const st = { users: 305, plans: { free: 102, basic: 101, pro: 102 }, new_7d: 4, experiments_month: 0, ai_month: 0 };
@@ -62,9 +62,11 @@ test("the live price feed: idle without India sessions, even with other markets'
   // a server that sends only the total still reads the same way
   const old = ov({ live_sessions: 1 }); delete old.server.india_sessions;
   assert.equal(service(old, "feed").state, "warn");
-  // Overview's attention list names it, in the same words
-  const todo = attention(ov({ live_sessions: 1, india_sessions: 1 }), null, []);
-  assert.ok(todo.some((t) => t.text === "Live price feed: Not connected, with 1 India paper session running."));
+  // Overview names it, in the same words, among what fixes itself: the feed reconnects once the broker is logged in
+  // (changed on purpose, admin100, Release 93 rule: Needs your attention holds only the owner's manual fixes; the rest is listed apart as nothing to do)
+  const auto = selfFixing(ov({ live_sessions: 1, india_sessions: 1 }), null, []);
+  assert.ok(auto.some((t) => t.text === "Live price feed: Not connected, with 1 India paper session running."));
+  assert.ok(!attention(ov({ live_sessions: 1, india_sessions: 1 }), null, []).some((t) => t.text.startsWith("Live price feed")));
 });
 
 test("alert email: one wording everywhere, naming the service in use or every way to set one up", () => {
