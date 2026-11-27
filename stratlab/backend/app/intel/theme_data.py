@@ -3747,37 +3747,37 @@ def layer_other_out(r: dict, v: dict) -> dict:
     return {"model_out": "other", "out_why": "unfit", "unfit_why": o["detail"]}
 
 
-def kind_layers(kind: str, layers, own: str) -> list[str]:
-    """deck99: the theme's layers of a kind of business (PRINCIPAL_KINDS: a layer's name that makes the kind its own), other than `own` and
-    the "Other" group, the halves of a split layer once: those whose name says a word of the kind's own name first, then the map's order."""
+def kind_layers(kind: str, said: dict, own: str) -> list[tuple[str, int]]:
+    """deck99: the theme's layer of a kind of business (PRINCIPAL_KINDS), other than `own` and the "Other" group, as the layers' own
+    companies say it: `said` {layer: Counter of the kinds its companies' own first business sentences state (principal_kind)}; the layer
+    the most of whose companies state `kind` (the map's order on a tie, the halves of a split layer one layer), with how many: [(layer, n)],
+    or [] where none does. Never a layer's name alone ("Asset-based truckload carriers" is no truck maker's layer)."""
     from .theme_base import _HALF_RX
-    k = next((x for x in PRINCIPAL_KINDS if x[0] == kind), None)
-    if k is None:
-        return []
     own_ = _HALF_RX.sub("", str(own or ""))
-    names: list[str] = []
-    for v in layers or []:
-        n = _HALF_RX.sub("", str((v or {}).get("layer") or ""))
-        if n and n != own_ and not n.startswith("Other ") and n not in names and re.search(k[3], n, re.I):
-            names.append(n)
-    kw = {w for w in _stems(kind) if w not in _KIND_PLAIN}
-    return sorted(names, key=lambda n: not any(x[:5] == w[:5] for x in _stems(n) for w in kw))
+    tally: dict[str, int] = {}
+    for lay, kinds in (said or {}).items():
+        n_ = _HALF_RX.sub("", str(lay or ""))
+        if n_ and n_ != own_ and not n_.startswith("Other ") and kinds.get(kind):
+            tally[n_] = tally.get(n_, 0) + kinds[kind]
+    if not tally:
+        return []
+    top = max(tally.values())
+    return [next((n_, k_) for n_, k_ in tally.items() if k_ == top)]
 
 
-def layer_other_detail(o: dict, homes: list[str] | None = None) -> str:
+def layer_other_detail(o: dict, homes: list | None = None) -> str:
     """deck99 (the deck96 audit: Dominion Energy, a utility and a member of Electric utilities, placed by the map among "Grid and power
     equipment makers", read as "its own words describe other work"): why a company of the theme's own kind is out of its map layer's figures,
     its own sentence quoted: a different kind of business than the layer's, never other work than the theme's; the theme's layer of its kind
-    named where there is one."""
+    named where its companies' own words state that kind (kind_layers)."""
     from .theme_base import _HALF_RX
     lk = f" ({o['layer_kind']})" if o.get("layer_kind") else ""
     out = (f"its own words (“{' '.join(str(o.get('line') or '').split())}”) state a principal business of {o.get('kind')}, a different kind of "
            f"business than its layer “{_HALF_RX.sub('', str(o.get('layer') or ''))}”{lk}, so it is out of that layer's figures")
-    homes = list(homes or [])
-    if len(homes) == 1:
-        out += f"; the theme's layer “{homes[0]}” is of its kind"
-    elif homes:
-        out += f"; the theme's layers “{homes[0]}” and {len(homes) - 1} more are of its kind"
+    if homes:
+        lay, n_ = homes[0]
+        out += (f"; the theme's layer “{lay}” is of its kind ({n_} of its companies' own words state {o.get('kind')})" if n_ > 1 else
+                f"; the theme's layer “{lay}” is of its kind (one of its companies' own words state {o.get('kind')})")
     return out
 
 
@@ -4687,19 +4687,28 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     map_layer = {v["layer"]: v for v in checked.get("value_chain") or [] if v.get("layer") and not v.get("official")}
     other_kind: dict[str, dict] = {}
     layer_kind: dict[str, dict] = {}         # deck99: of the theme's kind, of another kind than its layer's
+    lines_: dict[str, str] = {}
+    said_kinds: dict[str, Counter] = {}      # deck99: each layer's companies' principal kinds, as their own sentences state them
+    for s, c in placed.items():
+        if every_status[s] == "unverified" or not first.get(s):
+            continue
+        qc, qa = quoted[s]
+        lines_[s] = shown_words(qc if c.get("base") else {**qc, "what": ""}, qa)
+        k_ = principal_kind(lines_[s])
+        if k_:
+            said_kinds.setdefault(first[s], Counter())[k_[0]] += 1
     for s, c in placed.items():
         v = map_layer.get(first.get(s) or "")
         if v is None or every_status[s] == "unverified" or c.get("basis") == "list":
             continue
-        qc, qa = quoted[s]
-        line = shown_words(qc if c.get("base") else {**qc, "what": ""}, qa)
+        line = lines_.get(s) or ""
         o = other_principal(theme, v["layer"], line)
         if o and o.get("of") == "layer":
             # deck99 (the deck96 audit: Dominion Energy, a utility in Electric utilities, among "Grid and power equipment makers"): a
             # company of the theme's own kind whose sentence states another kind than its layer's is a member of the theme, out of that
             # layer's figures as another business than the layer's (its evidence stays its own), never "own words describe other work"
             o = {**o, "line": line, "layer": v["layer"]}
-            homes = kind_layers(o["kind"], checked.get("value_chain") or [], v["layer"])
+            homes = kind_layers(o["kind"], said_kinds, v["layer"])
             layer_kind[s] = {**o, **({"homes": homes} if homes else {}), "detail": layer_other_detail(o, homes)}
         elif o:
             every_status[s], every_evidence[s] = "unverified", "not_confirmed"

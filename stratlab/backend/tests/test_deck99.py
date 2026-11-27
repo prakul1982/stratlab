@@ -102,7 +102,8 @@ def test_a_member_in_a_layer_of_another_kind_is_out_of_that_layers_figures_never
     assert "describe other work" not in said and "not confirmed" not in said, said
     assert "a different kind of business than its layer “Grid and power equipment makers” (power equipment making)" in d["calc"]["detail"]
     assert "so it is out of that layer's figures" in d["calc"]["detail"] and "powers its customers every day" in d["calc"]["detail"]
-    assert "the theme's layer “Regulated vertically integrated utilities” is of its kind" in d["calc"]["detail"], d["calc"]["detail"]
+    assert "; the theme's layer “Regulated vertically integrated utilities” is of its kind (" in d["calc"]["detail"], d["calc"]["detail"]
+    assert d["calc"]["detail"].endswith(" of its companies' own words state electric and gas utility)"), d["calc"]["detail"]
     lay = next(v for v in dive["layers"] if v["layer"] == "Grid and power equipment makers")
     assert "D" in lay["model_out"] and "D" not in lay["unverified"]
     assert "D" not in [x for xs in (lay.get("in_stats") or {}).values() for x in xs]
@@ -114,17 +115,21 @@ def test_a_member_in_a_layer_of_another_kind_is_out_of_that_layers_figures_never
         assert _get(dive, s)["calc"]["in"], (s, _get(dive, s)["calc"], _get(dive, s).get("status"), _get(dive, s).get("adjacent"))
 
 
-def test_the_layers_of_a_kind_are_named_by_the_kinds_own_words_first():
-    vc = [{"layer": x} for x in ("Independent power producers and generators", "Regulated vertically integrated utilities",
-                                 "Regulated grid and delivery utilities", "Grid and power equipment makers", "Other electric utility companies")]
-    got = D.kind_layers("electric and gas utility", vc, "Grid and power equipment makers")
-    assert got[:2] == ["Regulated vertically integrated utilities", "Regulated grid and delivery utilities"], got
-    assert "Grid and power equipment makers" not in got and "Other electric utility companies" not in got
+def test_the_layer_of_a_kind_is_the_one_whose_companies_words_state_it_never_a_name_alone():
+    from collections import Counter
+    said = {"Independent power producers and generators": Counter({"electric and gas utility": 1}),
+            "Regulated vertically integrated utilities": Counter({"electric and gas utility": 3}),
+            "Grid and power equipment makers": Counter({"power equipment making": 2, "electric and gas utility": 1}),
+            "Other electric utility companies": Counter({"electric and gas utility": 5})}
+    assert D.kind_layers("electric and gas utility", said, "Grid and power equipment makers") == [("Regulated vertically integrated utilities", 3)]
+    # Paccar among the railcar makers: the truckload carriers' layer is named for trucks but its companies are carriers, so no layer is named
+    assert D.kind_layers("truck making", {"Asset-based truckload carriers": Counter(), "Railcar and rail equipment suppliers and lessors":
+                                          Counter({"rail equipment making": 3, "truck making": 1})}, "Railcar and rail equipment suppliers and lessors") == []
     o = {"kind": "truck making", "layer": "Railcar and rail equipment suppliers and lessors (larger)", "layer_kind": "rail equipment making",
          "line": "The Truck segment includes the design and manufacture of trucks"}
-    said = D.layer_other_detail(o, [])
-    assert "its layer “Railcar and rail equipment suppliers and lessors” (rail equipment making)" in said and "of its kind" not in said
-    assert D.layer_other_detail(o, ["A", "B", "C"]).endswith("the theme's layers “A” and 2 more are of its kind")
+    said_ = D.layer_other_detail(o, [])
+    assert "its layer “Railcar and rail equipment suppliers and lessors” (rail equipment making)" in said_ and "of its kind" not in said_
+    assert D.layer_other_detail(o, [("Truck makers", 2)]).endswith("the theme's layer “Truck makers” is of its kind (2 of its companies' own words state truck making)")
 
 
 def test_a_film_industry_company_whose_words_say_no_work_of_the_media_is_not_of_media_and_entertainment():
