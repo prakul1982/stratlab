@@ -1246,9 +1246,13 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 .space-next { display: flex; flex-direction: column; gap: 14px; }
 .space-next .how li { background: var(--paper); }
 .space-recent { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }   /* wraps to two, then one, on a tablet instead of squeezing each card (R34-003) */
-.space-recent-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 56px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; }
+/* ui100: the name, its line and the verdict one under another, the verdict at the foot: beside the verdict the name was cut at a third of the
+   card ("Reliance RSI 3…") and the date broke over two lines ("11 / Nov 2026"); the name may take two lines, the cards keep one height */
+.space-recent-row { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 8px; min-height: 56px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; }
+.space-recent-row .tiny.muted { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.space-recent-row .space-recent-text { width: 100%; }
 .space-recent-row:hover { border-color: var(--ink-2); color: var(--ink); }
-.space-recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.space-recent-name { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .space-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 12px; }      /* two rows of two on a phone end level: a longer line in one card no longer makes its row taller */
 /* Trade home's market figures (DC-001): laid out as the tool strip, but its own class (the strip is the tools' row) */
 .trade-market { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -1388,6 +1392,9 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
   padding: 6px 10px; font-size: 12.5px; pointer-events: none; white-space: nowrap; box-shadow: var(--shadow); z-index: 2; }
 .key-line { width: 12px; height: 2px; display: inline-block; border-radius: 1px; }
 .pos-chart { min-width: 0; }
+/* ui100: two charts side by side end level: the title stays at the top and the chart sits at the foot, so the two plots line up even when one
+   chart's range chips take two rows (Positioning's India VIX card at 1440: the year chart's plot started ~90px below the day chart's) */
+.k-two > .pos-chart { justify-content: space-between; }
 .pos-source { margin-top: -6px; }   /* VR2-022: the intro runs the card's width (it was held to 80ch, 60% of a wide card, with the right 40% empty) */
 /* long against short: the long side dark, the short side the line colour; the shares are written out beside it */
 .pos-split { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
@@ -1682,6 +1689,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (max-width: 640px) { .k-card { padding: var(--s4); } }
 .k-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; min-height: 36px; }
 .k-card-title { display: inline-flex; align-items: center; gap: var(--s2); font-family: var(--serif); font-size: var(--t-card); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.k-card-title-text { min-width: 0; }   /* ui100: a title of several parts, one flow of words (kit/Card.tsx) */
 /* a title with its (i): the button sits after the heading element, on the same line */
 .k-card-titlerow { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
 /* LIVE13A-019 (LIVE12A-016): on a phone a title that wraps keeps its (i) after its last word, not floating at the right edge of the title's
@@ -3428,6 +3436,7 @@ details.k-fold { display: block; }   /* the fold button's flex row (.k-fold, a s
 @media (min-width: 641px) {
   .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { white-space: normal; padding-left: 8px; padding-right: 8px; }   /* site83: 8px (was 10), so a fit table keeps ~40px of room at 1280 in the centred column on CI's wider fonts */
   .k-tbl-wrap.k-fit .k-table td.k-num { white-space: nowrap; }
+  .k-tbl-wrap.k-fit .k-table :is(td, th)[data-keep] { white-space: nowrap; }   /* ui100: a column of short words ("Mar 2026") stays on one line */
   .k-tbl-wrap.k-fit .k-table td.k-num .k-sub-line { white-space: normal; }   /* the figure on one line; the note under it may take two (the US sales' "$300.67 at ₹99.80 (28 Feb 2023)" in the centred column) */
   .k-tbl-wrap.k-fit .k-table td.k-wrap, .k-tbl-wrap.k-fit .k-table th.k-wrap { min-width: 7rem; }
   .k-tbl-wrap.k-fit .k-table td.k-act .k-row { flex-wrap: wrap; justify-content: flex-end; }

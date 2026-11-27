@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { price, safeHref, fmtDate } from "../lib/format";
+import { perShare, price, safeHref, fmtDate } from "../lib/format";
 import type { Region } from "../lib/research";
 import { Badge, DataTable, ErrorState, Skeleton } from "./kit";
 
@@ -27,7 +27,7 @@ export function exDay(iso: string, year = false) {
 
 /** The figure of an action for its own column: a dividend's amount, a bonus's or rights issue's ratio, a split's factor, a buyback's price. */
 export function ActionFigure({ a, cur }: { a: CorpAction; cur: string }) {
-  if (a.kind === "dividend") return a.amount ? <>{price(a.amount, cur, a.amount < 1 ? 4 : 2)}<span className="k-note k-muted"> a {/unit/i.test(a.text) ? "unit" : "share"}</span></> : <span className="k-muted">Not stated</span>;
+  if (a.kind === "dividend") return a.amount ? <>{perShare(a.amount, cur)}<span className="k-note k-muted"> a {/unit/i.test(a.text) ? "unit" : "share"}</span></> : <span className="k-muted">Not stated</span>;
   if ((a.kind === "bonus" || a.kind === "rights") && a.ratio) return <>{a.ratio[0]}:{a.ratio[1]}</>;
   if (a.kind === "split" && a.factor) return a.factor >= 1 ? <>{+a.factor.toFixed(2)} for 1</> : <>1 for {+(1 / a.factor).toFixed(2)}</>;
   if (a.kind === "buyback" && a.amount) return <>{price(a.amount, cur)}<span className="k-note k-muted"> a share</span></>;
@@ -71,7 +71,7 @@ export function actionAmount(a: Pick<CorpAction, "amount" | "label" | "text" | "
   const rest = a.text.toLowerCase().startsWith(a.label.toLowerCase()) ? a.text.slice(a.label.length).replace(/^[\s:·-]+/, "") : a.text === a.label ? "" : a.text;
   const m = rest.match(/^(.+?) a (?:share|unit)\b[\s:·-]*(.*)$/);
   if (m) return { amount: m[1], more: m[2] };
-  if (a.amount != null && (a.kind === "dividend" || a.kind === "buyback")) return { amount: price(a.amount, a.currency && a.currency.length === 3 ? a.currency : ccy), more: "" };
+  if (a.amount != null && (a.kind === "dividend" || a.kind === "buyback")) return { amount: perShare(a.amount, a.currency && a.currency.length === 3 ? a.currency : ccy), more: "" };
   if (a.kind === "bonus") return { amount: "–", more: "" };            // its ratio is in the type ("Bonus 1:1"); the words only say it again
   return { amount: rest || "–", more: "" };
 }

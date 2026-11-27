@@ -253,3 +253,16 @@ def test_no_advice_words_in_what_the_tables_say():
     v = T.statements_view(page(), "IN", "OWNCO", {"full": False, "export": False}, ["consolidated"])
     words += [v["locked"]["message"]]
     assert not [x for x in words if ADVICE.search(x)]
+
+
+def test_a_us_peer_is_named_as_the_company_page_names_it():
+    # ui100: "NVIDIA CORP" beside "Apple Inc." in Apple's peers
+    us = {"rows": [{**row("AAPL", "Technology Hardware", 5000000), "name": "Apple Inc."},
+                   {**row("NVDA", "Technology Hardware", 3600000), "name": "NVIDIA CORP"},
+                   {**row("IBM", "Technology Hardware", 300000), "name": "INTERNATIONAL BUSINESS MACHINES CORP"}]}
+    v = T.peers_view("US", "AAPL", us["rows"], None, {"full": True, "export": True})
+    names = {x["symbol"]: x["name"] for x in v["rows"]}
+    assert names["NVDA"] == "NVIDIA Corp"
+    assert names["IBM"] == "International Business Machines Corp"
+    # India's names stay as the exchange writes them
+    assert T.peers_view("IN", "OWNCO", INDEX["rows"], None, {"full": True, "export": True})["rows"][0]["name"].endswith(" Ltd")

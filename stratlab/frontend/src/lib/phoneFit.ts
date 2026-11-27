@@ -29,6 +29,37 @@ export function scrollToEnd(el: { scrollLeft: number; scrollWidth: number; clien
   if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = el.scrollWidth - el.clientWidth;
 }
 
+/** ui100: how much wider a period grid's pinned first column must be for the grid, scrolled to its end, to start on a whole column: the
+ *  width of the column the pinned one half covers that is still in view (0 when the view starts on a column's edge). `starts` are the
+ *  period columns' left edges in the table, `pinned` the pinned column's width, `left` how far the grid is scrolled. */
+export function snapWidth(starts: number[], pinned: number, left: number): number {
+  const edge = left + pinned;
+  const next = starts.find((x) => x >= edge - 1);
+  const prev = [...starts].reverse().find((x) => x < edge - 1);
+  return next === undefined || prev === undefined ? 0 : Math.max(0, Math.round(next - edge));
+}
+
+/** A grid read across, opened on its latest periods (scrollToEnd), with its pinned first column (the row names) widened just enough that
+ *  the first period in view is a whole one: never the faded ends of figures ("¦4", "%") of a column half under the names (ui100, the
+ *  company page's statements at 1440). */
+export function snapToEnd(el: HTMLElement | null): void {
+  if (!el) return;
+  const head = el.querySelector<HTMLElement>("thead th:first-child");
+  const pinned = !!head && getComputedStyle(head).position === "sticky";
+  if (head) head.style.minWidth = "";
+  scrollToEnd(el);
+  if (!head || !pinned || el.scrollWidth <= el.clientWidth) return;
+  for (let i = 0; i < 3; i++) {
+    const cells = [...(head.parentElement?.children ?? [])].slice(1) as HTMLElement[];
+    const w = head.getBoundingClientRect().width;
+    const d = snapWidth(cells.map((c) => c.offsetLeft), w, el.scrollLeft);
+    if (d < 2) return;
+    head.style.minWidth = `${w + d}px`;
+    head.style.boxSizing = "border-box";
+    scrollToEnd(el);
+  }
+}
+
 /** Where a chart note goes: starting at `x`, `width` wide, inside [left, right]. It starts at `x` when it fits, else it
  * ends at the right edge. */
 export function clampNote(x: number, width: number, left: number, right: number): { x: number; anchor: "start" | "end" } {

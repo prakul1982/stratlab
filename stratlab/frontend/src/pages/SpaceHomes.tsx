@@ -565,9 +565,10 @@ export function MoneyHome() {
   );
 }
 
-/** Every home's "Coming up" card ends its head with the way to the whole Calendar, on that home's own filter (cal94). */
+/** Every home's "Coming up" card ends its head with the way to the whole Calendar, on that home's own filter (cal94); the same size as
+ *  the other cards' head links on the page (ui100: it alone was small beside "At a glance →", "Tax report →"). */
 export function SeeCalendar({ to }: { to: string }) {
-  return <Link to={to} className="link small" data-testid="see-calendar">See calendar →</Link>;
+  return <Link to={to} className="link" data-testid="see-calendar">See calendar →</Link>;
 }
 
 type MoneyDates = { events: { id: string; date: string; title: string; cat: string; detail: string }[] };

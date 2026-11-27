@@ -1,6 +1,6 @@
 /* The one Calendar's "All dates" rows (IA-1 item 3), worked out here, apart from the page, so the unit tests can read them:
  * each source's dated things as one kind of row, and the order they are listed in. */
-import { fmtDate, price } from "./format";
+import { fmtDate, perShare, price } from "./format";
 import type { IpoRow } from "./ipo";
 
 export type CalType = "results" | "action" | "ipo" | "event" | "money";
@@ -50,7 +50,7 @@ export function resultRows(rows: ResultIn[], today: string): CalRow[] {
 export function actionRows(rows: ActionIn[], until: string): CalRow[] {
   return rows.filter((a) => a.ex_date <= until).map((a) => ({
     id: `act:${a.id}`, date: a.ex_date.slice(0, 10), type: "action" as const, name: a.name ?? a.symbol, symbol: a.symbol, mine: a.mine, to: companyTo(a.region, a.symbol),
-    detail: [`Ex-date: ${a.label}`, a.kind === "dividend" && a.amount ? `${price(a.amount, a.currency, a.amount < 1 ? 4 : 2)} a share` : null,
+    detail: [`Ex-date: ${a.label}`, a.kind === "dividend" && a.amount ? `${perShare(a.amount, a.currency)} a share` : null,
       a.record_date ? `record date ${fmtDate(a.record_date.slice(0, 10), { year: false })}` : null].filter(Boolean).join(" · ") }));
 }
 

@@ -92,7 +92,9 @@ def row(region: str, symbol: str, day: date, purpose: str, *, name=None, when=No
             "purpose": purpose[:160], "url": url if str(url or "").startswith("https://") else None, "src": src, "period": period}
 
 
-GENERIC = re.compile(r"^(?:board meeting(?: intimation)?|intimation|prior intimation)?$", re.I)
+# ui100: "Other business matters" says nothing either: a meeting listed under it whose notice is about the results is named from the notice
+# (NDR InvIT Trust's 28 Nov meeting was on the Calendar as a results day reading "Other business matters")
+GENERIC = re.compile(r"^(?:board meeting(?: intimation)?|intimation|prior intimation|other business matters?)?$", re.I)
 
 
 def purpose_of(purpose: str, desc: str) -> str:

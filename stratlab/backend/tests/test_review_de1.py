@@ -556,3 +556,12 @@ def test_a_sector_too_small_for_the_table_is_named(monkeypatch):
         "Diversified": {"a": [2] * 23, "n": [4] * 23}, "Energy": {"a": [10] * 23, "n": [20] * 23}}})
     t = breadth.sector_table("nifty500")
     assert [r["sector"] for r in t["rows"]] == ["Energy"] and t["small"] == [{"sector": "Diversified", "stocks": 4}] and t["min_stocks"] == 5
+
+
+def test_a_results_meeting_listed_under_other_business_matters_is_named_for_its_results():
+    # ui100: the Calendar listed NDR InvIT Trust's results meeting as "Results · Other business matters"
+    raw = [{"bm_symbol": "NDRINVIT", "bm_date": "28-Nov-2026", "bm_purpose": "Other business matters",
+            "bm_desc": "To consider and approve the unaudited financial results for the half year ended September 30, 2026"},
+           {"bm_symbol": "NOTRES", "bm_date": "28-Nov-2026", "bm_purpose": "Other business matters", "bm_desc": "To appoint an auditor"}]
+    rows = {r["symbol"]: r for r in R.india_rows(raw)}
+    assert set(rows) == {"NDRINVIT"} and rows["NDRINVIT"]["purpose"] == "Financial Results"

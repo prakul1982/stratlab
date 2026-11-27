@@ -198,6 +198,12 @@ def peers_view(region: str, symbol: str, rows: list[dict], facts: dict | None, s
     own, peers, basis = peer_set(rows, symbol)
     lender = is_lender(own, facts)
     all_rows = [peer_row(r, lender) for r in peers]
+    if region == "US":
+        # ui100: a US peer's name as the company header writes it (stock_pages.proper_name), not the filing's capitals: "NVIDIA CORP" sat
+        # under "Apple Inc." on Apple's page
+        from .stock_pages import proper_name
+        for x in all_rows:
+            x["name"] = proper_name(x["name"], x["symbol"]) or x["name"]
     shown = all_rows if see["full"] else all_rows[:PEERS_FREE]
     hidden = len(all_rows) - len(shown)
     out = {"symbol": symbol, "region": region, "basis": basis, "basis_words": BASIS_WORDS[basis], "lender": lender,

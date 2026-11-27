@@ -11,7 +11,7 @@ import { useSection } from "./Section";
 import { Info } from "../ui";
 import { textOf } from "./Card";
 import { istToday, minusNode } from "../../lib/format";
-import { scrollToEnd } from "../../lib/phoneFit";
+import { snapToEnd } from "../../lib/phoneFit";
 import { columnOf, csvName, type CsvValue } from "../../lib/csv";
 import { downloadCsv } from "../../lib/csvDownload";
 import { Download } from "../Icons";
@@ -134,6 +134,20 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
 /** A table box's rows, for its scroll height (useScrollRows). */
 const bodyRows = (el: HTMLElement): HTMLElement[] => Array.from(el.querySelectorAll<HTMLElement>(":scope > table > tbody > tr"));
 
+/** ui100: marks the cells of each column whose every body cell is short (`SHORT_CELL` characters or fewer) with data-keep, which a fit
+ *  table keeps on one line. Read from the drawn table, after the render, as the fit itself is. */
+const SHORT_CELL = 12;
+function keepShort(b: HTMLElement) {
+  const rows = [...b.querySelectorAll<HTMLTableRowElement>(":scope > table > tbody > tr")].filter((r) => !r.querySelector(":scope > [colspan]"));
+  if (!rows.length) return;
+  const n = rows[0].children.length;
+  for (let i = 0; i < n; i++) {
+    const cells = rows.map((r) => r.children[i] as HTMLElement | undefined);
+    const short = cells.every((c) => !!c && !c.classList.contains("k-wrap") && (c.textContent ?? "").trim().length <= SHORT_CELL);
+    for (const c of cells) if (c) c.toggleAttribute("data-keep", short);
+  }
+}
+
 export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, scrollEnd, csv, csvInMenu, more, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
@@ -202,7 +216,6 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   }, [phone, spill, stackProp, grid, scrollEnd, pinHead, allRows.length, columns.length]);
   // a grid scrolled off its first period says so (data-scrolled): the column half under the row names fades beside them (LIVE9B-015)
   const markScrolled = (el: HTMLElement | null) => { if (el) el.toggleAttribute("data-scrolled", el.scrollLeft > 1); };
-  useLayoutEffect(() => { if (scrollEnd) { scrollToEnd(box.current); markScrolled(box.current); } }, [scrollEnd, columns.length, allRows.length]);
   // LIVE5-002 (globally): a list table wider than its box on a desktop (a 1280 screen, a narrow Admin column) lets its words wrap and its
   // cells' padding narrow (`k-fit`), so every column is in view without sideways scrolling; figures stay on one line. Measured again when
   // the box's width changes. A grid read across on purpose (an option chain, periods) keeps its scroll.
@@ -214,9 +227,13 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
     return watchSize(b, () => setBoxW((w) => (Math.abs(w - b.clientWidth) > 1 ? b.clientWidth : w)));      // a frame later (R7T-014)
   }, []);
   useLayoutEffect(() => { setFit(false); }, [boxW, columns.length, allRows.length]);
+  useLayoutEffect(() => { if (scrollEnd) { snapToEnd(box.current); markScrolled(box.current); } }, [scrollEnd, columns.length, allRows.length, boxW]);
   useLayoutEffect(() => {
     const b = box.current;
     if (!fit && !phone && !grid && !scrollEnd && b && b.scrollWidth > b.clientWidth + 1) setFit(true);      // site87: 2px over is over (ui-lint R29 counts it)
+    // ui100: a fit table's short words stay on one line: a column whose every cell is a few characters (a year "Mar 2026", a date, a code)
+    // keeps them whole while the long words beside it wrap (the theme page's Year column broke "Mar / 2026" at 1440)
+    if (fit && b) keepShort(b);
   });
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });

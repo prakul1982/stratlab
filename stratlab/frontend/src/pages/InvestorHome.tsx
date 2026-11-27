@@ -111,7 +111,7 @@ export function InvestorHomePage() {
               <div className="inv-stat-cells">
                 <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{trendBadge(r.stage, r.signal) && <> · <Badge tone="plain" dot={false}>{trendBadge(r.stage, r.signal)}</Badge></>}</>}</Cell>
                 <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <Badge tone="plain" dot={false}>{QUAD[r.sector.quadrant]}</Badge></>}</> : "–"}</Cell>
-                {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span>{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>}
+                {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span>{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · share issue to raise money filed" : ""}</Cell>}
                 <Cell label="Checklist">{r.checks ? checkCountsLine(r.checks) : "–"}</Cell>
                 <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : "Not checked yet"}</Cell>
               </div>

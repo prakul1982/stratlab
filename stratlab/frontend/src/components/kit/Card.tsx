@@ -43,12 +43,15 @@ export function CardHead({ title, info, infoLabel, actions, sub, level = 2 }: { 
     setHeadingId(hid);
     return () => { setTitle(""); setHeadingId(null); };
   }, [mine, words, hid, setTitle, setHeadingId]);
+  // ui100: a title made of parts ("Layer 2 · " and the layer's name; "Tax, " and the year) flows as one line of words: in the heading's flex row
+  // each part was its own item, so on a phone "Layer / 2 ·" stacked in a column beside the name, and "Tax,   FY 2025-26" had a gap in it
+  const text = typeof title === "string" || typeof title === "number" ? title : <span className="k-card-title-text">{title}</span>;
   const heading = info ? (
     <div className="k-card-titlerow">
-      <H className="k-card-title" id={mine ? hid : undefined}>{title}</H>
+      <H className="k-card-title" id={mine ? hid : undefined}>{text}</H>
       <Info label={infoLabel ?? (words ? `About ${words}` : "About this card")}>{info}</Info>
     </div>
-  ) : <H className="k-card-title" id={mine ? hid : undefined}>{title}</H>;
+  ) : <H className="k-card-title" id={mine ? hid : undefined}>{text}</H>;
   return (
     <div className="k-card-head">
       {/* `sub`: a line under the title, beside the controls (R17-004: the cards that drew their own h2 for it had no section frame) */}

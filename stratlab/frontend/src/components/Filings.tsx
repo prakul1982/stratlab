@@ -32,7 +32,9 @@ export function SummaryLine({ s, to, rowsHaveFundRaise, bare }: { s: FilingSumma
   // a list of lines says the window once above them and leaves "Last 90 days:" off each (VR2-021)
   const since = bare ? null : <>Last {s.days} days: </>;
   // the rows listed under it already show the fund raise and its date: not said twice (VR1-100)
-  const raise = s.fund_raise ? (rowsHaveFundRaise ? null : <b>Fund raise filed on {day(s.fund_raise_last!)}.</b>) : <span className="k-muted">No fund raise filed.</span>;
+  // ui100: a fund raise here is new shares (a QIP, preferential, rights issue or warrants): borrowing is the "Debt raise" flag, so "No fund raise
+  // filed" read wrong under two "Debt raise (NCDs or bonds)" rows (Reliance, 27 Nov)
+  const raise = s.fund_raise ? (rowsHaveFundRaise ? null : <b>Share issue to raise money filed on {day(s.fund_raise_last!)}.</b>) : <span className="k-muted">No share issue to raise money filed.</span>;
   if (s.total == null) return (
     <span className="k-small">
       {since}<b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, from the evening's read of every company's filings.{" "}
