@@ -8185,6 +8185,14 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             head, widths = head[:j_] + head[j_ + 1:], widths[:j_] + widths[j_ + 1:]
             body, tail = [r_[:j_] + r_[j_ + 1:] for r_ in body], [r_[:j_] + r_[j_ + 1:] for r_ in tail]
             k_fit = fits(tw)
+        if "Industry" in head and not tab_whole(head, body[:max(k_fit, 1)] + tail, widths, tw):
+            # deck101 (the live R99 Fertilizers deck: "Chambal Fertilizers…", "Rashtriya Chemicals…", "Fertilizers & Chemicals…", the names cut
+            # beside a chart to keep an industry column that says "Fertilizers" on most rows): a company's name is never cut to keep the
+            # industry column (the appendix and the theme's page keep it)
+            j_ = head.index("Industry")
+            head, widths = head[:j_] + head[j_ + 1:], widths[:j_] + widths[j_ + 1:]
+            body, tail = [r_[:j_] + r_[j_ + 1:] for r_ in body], [r_[:j_] + r_[j_ + 1:] for r_ in tail]
+            k_fit = fits(tw)
         if k_fit < want and card:
             # the card's words as a paragraph at the notes' size above the table (what the layer does, in two lines of whole sentences
             # where they fit, who wrote it, and what its companies have in common)

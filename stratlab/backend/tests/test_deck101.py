@@ -237,3 +237,21 @@ def test_a_fund_is_said_to_track_the_theme_only_when_its_name_says_the_themes_wo
     v["etfs"] = alco
     slides, _ = deck.theme_plan(v)
     assert "Funds that track the theme" not in " ".join(" ".join(r) for r in _rows(_page(slides, deck.METHOD_TITLE)))
+
+
+def test_a_companys_name_is_never_cut_to_keep_the_industry_column():
+    # the live R99 Fertilizers deck: "Chambal Fertilizers…", "Rashtriya Chemicals…", "Fertilizers & Chemicals…" beside the market-value chart,
+    # to keep an industry column that says "Fertilizers" on most rows
+    v = _view()
+    lay = next(b for b in v["layers"] if b["layer"] == GRAIN)
+    long_ = ["Gujarat Narmada Valley Fertilizers and Chemicals Limited", "Rashtriya Chemicals and Fertilizers Limited",
+             "Chambal Fertilizers and Chemicals Limited", "Fertilizers and Chemicals Travancore Limited", "Southern Petrochemical Industries Corporation",
+             "Madhya Bharat Agro Products Limited"]
+    for c, nm, ind in zip(lay["companies"], long_, ["Fertilizers", "Commodity Chemicals", "Fertilizers", "Fertilizers", "Fertilizers", "Fertilizers"]):
+        c["name"], c["official_industry"] = nm, ind
+    slides, _ = deck.theme_plan(v)
+    page = next(s for s in slides if s.title.endswith(GRAIN))
+    table = next(b for b in page.blocks if b["kind"] == "table")
+    shown = [deck._cell_text(r[0]) for r in deck.table_layout(table, table["box"][2], 99)["rows"] if not isinstance(r, dict)]
+    names = [n for n in shown if not n.startswith(("Median", "Range", "Together"))]
+    assert len(names) == 6 and not any(n.endswith("…") for n in names), names          # as the page prints them
