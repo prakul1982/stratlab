@@ -160,6 +160,12 @@ CONCEPTS = [
     {"words": {"media", "entertainment", "broadcasting", "film"},
      "IN": ["Media & Entertainment", "TV Broadcasting & Software Production", "Film Production, Distribution & Exhibition", "Digital Entertainment",
             "Electronic Media", "Print Media"],
+     # deck99 (the deck96 audit of the live Media and entertainment deck: Purple Agrotech, "currently engaged in the business of
+     # agro-technology", in its "Other" group on the exchange's film industry): a company of the film industry is of the theme only when its
+     # own words say film, cinema, content or another work of the media (industry_must); the replay on the 54 live dives moved it alone
+     "IN_must": {"Film Production, Distribution & Exhibition": r"\b(?:films?|movies?|motion pictures?|cinemas?|entertainment|content|media|"
+                                                               r"televisions?|tv|ott|music|animation|exhibition|theat(?:re|er)s?|screens?|"
+                                                               r"broadcast\w*|studios?)\b"},
      "US": ["Cable & Other Pay Television Services", "Television Broadcasting Stations", "Services-Motion Picture & Video Tape Production"]},
     {"words": {"water"}, "IN": ["Water Supply & Management"], "US": ["Water Supply"]},
 ]
