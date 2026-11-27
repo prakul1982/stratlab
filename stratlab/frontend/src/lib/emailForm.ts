@@ -23,3 +23,15 @@ export function loadEmailForm(): Promise<Mod> {
 /** Wait for the form's code at most `ms` (a slow network still opens the page, the form then filling its slot as before). */
 export const emailFormWithin = (ms: number): Promise<unknown> =>
   Promise.race([loadEmailForm().catch(() => undefined), new Promise((ok) => setTimeout(ok, ms))]);
+
+let settled: Promise<unknown> | null = null;
+/** One promise, the same at every call until it settles, that settles once the form's code has arrived or its download has failed
+ * (never rejects): what the sign-in page waits on when it is opened for its email form before the code is here (fix98). */
+export function emailFormSettled(): Promise<unknown> {
+  if (!settled) {
+    const p: Promise<unknown> = loadEmailForm().then(() => undefined, () => undefined);
+    settled = p;
+    void p.then(() => { if (settled === p) settled = null; });
+  }
+  return settled;
+}

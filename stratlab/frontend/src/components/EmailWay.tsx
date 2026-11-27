@@ -1,9 +1,14 @@
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { emailSignInOn, emailSignInPath, startEmailSignIn } from "../lib/signin";
 import { emailFormWithin, loadEmailForm } from "../lib/emailForm";
 
-/** The longest a press waits for the sign-in page's email form before opening the page anyway (LIVE17B-002). */
-export const EMAIL_FORM_WAIT_MS = 1500;
+/** The longest a press waits for the sign-in page's email form before opening the page anyway (LIVE17B-002). fix98: 1.5 s let a slow
+ * phone open /login before the form's code was here, a frame without the form (CI's site80 on a phone); the press now waits for the code
+ * itself, the button showing it is busy, and only a download stuck this long opens the page, which then waits for the form as a whole
+ * page (pages/Login.tsx), never drawn with an empty band. */
+export const EMAIL_FORM_WAIT_MS = 15000;
 const warm = () => { loadEmailForm().catch(() => undefined); };
 
 /* R61 (owner, on Release 60: "there is no option to sign in with email on the homepage"): the email way in beside a visitor's Continue with
@@ -21,14 +26,25 @@ const Mail = () => (
  * button's "Continue with Google to get Basic", not a bare sign-in). */
 export function EmailWay({ next, className, small = false, label = "Sign in with email" }: { next?: string | null; className?: string; small?: boolean; label?: string }) {
   const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const going = useRef(false);            // one press opens the page once, however often it is pressed while the form's code comes
   if (!emailSignInOn()) return null;
   // LIVE16B-001: a plan card's choice goes along (/login?plan=basic#email), and the sign-in page opens in place, not by loading the site again
   return (
     // LIVE17B-002: the sign-in page's email form is asked for as the pointer or focus reaches the button, and the page opens once it is here
     // (at most EMAIL_FORM_WAIT_MS), so it is drawn with the form in place, never an empty band where the form goes
+    // fix98: pressed, it shows it is busy (aria-busy, the pressed look) until the form's code is here, then opens the page
     <a className={`btn outline${small ? " sm" : ""} email-way${className ? ` ${className}` : ""}`} href={emailSignInPath(next)} data-testid="email-way"
-      onPointerEnter={warm} onFocus={warm} onTouchStart={warm}
-      onClick={(e) => { e.preventDefault(); void emailFormWithin(EMAIL_FORM_WAIT_MS).then(() => startEmailSignIn(next, (u) => navigate(u))); }}>
+      aria-busy={busy || undefined} onPointerEnter={warm} onFocus={warm} onTouchStart={warm}
+      onClick={(e) => {
+        e.preventDefault();
+        if (going.current) return;
+        going.current = true;
+        setBusy(true);
+        // the address and the sign-in page change in one go (flushSync): a navigation from a promise is rendered in a later task, and a
+        // slow phone painted a frame at /login still showing /plans, without the form (CI's site80 on a phone, fix98)
+        void emailFormWithin(EMAIL_FORM_WAIT_MS).then(() => { going.current = false; setBusy(false); startEmailSignIn(next, (u) => flushSync(() => navigate(u))); });
+      }}>
       <Mail />{label}
     </a>
   );

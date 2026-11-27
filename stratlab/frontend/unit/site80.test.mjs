@@ -31,7 +31,9 @@ test("LIVE17B-001: the sign-in frame's script is read from the head, first and a
 test("LIVE17B-002: a plan card's email button has the form's code before it opens the sign-in page, which lands at the form", () => {
   const way = read("src/components/EmailWay.tsx");
   assert.match(way, /onPointerEnter=\{warm\} onFocus=\{warm\} onTouchStart=\{warm\}/);
-  assert.match(way, /emailFormWithin\(EMAIL_FORM_WAIT_MS\)\.then\(\(\) => startEmailSignIn\(next, \(u\) => navigate\(u\)\)\)/);
+  // (changed on purpose, fix98: the press shows it is busy while it waits, and opens the page once, after the wait, the address and the
+  // page changing in one go)
+  assert.match(way, /emailFormWithin\(EMAIL_FORM_WAIT_MS\)\.then\(\(\) => \{ going\.current = false; setBusy\(false\); startEmailSignIn\(next, \(u\) => flushSync\(\(\) => navigate\(u\)\)\); \}\)/);
   assert.match(read("src/pages/Login.tsx"), /const EmailNow = emailFormNow\(\)\?\.EmailSignIn;/);
   // at its box before the first paint, not after (a phone showed /plans' footer, then jumped)
   assert.match(read("src/components/EmailSignIn.tsx"), /useLayoutEffect\(\(\) => \{\n    if \(location\.hash !== "#email" \|\| !box\.current\) return;\n    box\.current\.scrollIntoView\(\{ block: "center", behavior: "instant" \}\);/);
