@@ -3490,10 +3490,9 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 /* R61: "or sign in with email" beside a visitor's Continue with Google button (components/EmailWay.tsx), only while email sign-in is on */
 /* R64 (owner: "make it proper"): a real outlined button, the Google button's height, its mail mark the Google mark's size */
 .email-way { display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; white-space: nowrap; }
-.email-way > svg { flex: none; }
+.email-way > svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .email-way.sm { gap: 8px; }
 /* fix98: pressed, it waits for the sign-in page's email form before opening the page: it looks pressed and busy meanwhile */
-.email-way[aria-busy="true"] { cursor: progress; background: var(--line); }
 .lp-plan-ways { display: flex; flex-direction: column; gap: 8px; }        /* LIVE11B-001: one subgrid row holding both ways in */
 .lp-plan-ways > .btn { width: 100%; }
 .lp-final-ways { justify-content: center; }

@@ -22,9 +22,10 @@ const frames = (page: Page) => page.evaluate(() => {
 });
 
 // CI's site80 on a phone (flaky): the press waited at most 1.5 s for the form's code, then opened /login anyway, a frame without the form.
-// The form's code is held back 3 s here (longer than that cap): the button shows it is busy, and the sign-in page, when it opens, has its
+// The form's code is held back 3 s here (longer than that cap): the button waits (no busy state: the landing page's code budget,
+// review-r5 R5V-020; changed on purpose, fix98 in Release 98), and the sign-in page, when it opens, has its
 // form from its first frame, at one scroll position.
-test("a plan card's email button on a slow device: busy until the form's code is here, then the sign-in page with its form in every frame", async ({ page }) => {
+test("a plan card's email button on a slow device: waits until the form's code is here, then the sign-in page with its form in every frame", async ({ page }) => {
   await withConfig(page, { EMAIL_SIGNIN: "on" });
   await page.route(`${API}/pricing`, async (r: Route) => {
     const res = await r.fetch(); const j = await res.json();
@@ -37,7 +38,6 @@ test("a plan card's email button on a slow device: busy until the form's code is
   await way.scrollIntoViewIfNeeded();
   await frames(page);
   await way.click();
-  await expect(way).toHaveAttribute("aria-busy", "true");
   expect(new URL(page.url()).pathname).toBe("/plans");                    // still here while the form's code comes
   await expect(page).toHaveURL(/\/login\?plan=basic#email$/, { timeout: 30_000 });
   await expect(page.getByLabel("Sign in with email")).toBeFocused({ timeout: 30_000 });
