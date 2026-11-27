@@ -41,7 +41,17 @@ def index(rows: list[dict], market: str | None = None, boost: set | None = None)
     """The rows (from _entry) indexed by symbol, BSE code, ISIN, name and the market's short names."""
     return name_search.NameIndex(rows, symbol=lambda r: r["_sym"], name=lambda r: r["name"],
                                  codes=lambda r: (r["_code"], r["_isin"], r["id"]), boost=boost,
-                                 aliases=name_search.ALIASES.get(market or "", {}))
+                                 aliases={**renamed_aliases(market), **name_search.ALIASES.get(market or "", {})})
+
+
+def renamed_aliases(market: str | None) -> dict[str, list[str]]:
+    """data100: a US ticker renamed (PSKY, now SKYD) typed into search finds the company now (stock_pages.rename_aliases); {} when the
+    renames can't be read."""
+    try:
+        from . import stock_pages
+        return stock_pages.rename_aliases(market or "")
+    except Exception:
+        return {}
 
 
 def rank(q: str, rows: list[dict] | name_search.NameIndex, limit: int = LIMIT) -> list[dict]:

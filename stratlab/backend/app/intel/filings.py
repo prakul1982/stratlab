@@ -1964,7 +1964,8 @@ def watchlist_symbols(uid: str, region: str = "IN") -> list[str]:
         items = json.loads(db.get_setting(f"watchlist:{uid}") or "{}").get("items") or []
     except (ValueError, TypeError):
         items = []
-    return [i["symbol"] for i in items if i.get("region") == region and i.get("symbol")][:MAX_SYMBOLS]
+    from .routes import current_items              # data100: a renamed US ticker as its page has it now
+    return [i["symbol"] for i in current_items(items) if isinstance(i, dict) and i.get("region") == region and i.get("symbol")][:MAX_SYMBOLS]
 
 
 def followed_symbols(uid: str) -> list[str]:

@@ -99,6 +99,9 @@ def _research_key(uid: str) -> str:
 def _research_items(uid: str) -> list[dict]:
     raw = db.json_value(db.get_setting(_research_key(uid)), {})
     items = raw.get("items") if isinstance(raw, dict) else None
+    if isinstance(items, list):
+        from .intel.routes import current_items          # data100: a renamed US ticker as its page has it now
+        items = current_items(items)
     out = []
     for i in items if isinstance(items, list) else []:
         if isinstance(i, dict):

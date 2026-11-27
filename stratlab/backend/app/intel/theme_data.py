@@ -3079,6 +3079,31 @@ def parents_of(symbols: list[str], names: dict, src) -> dict:
     return out
 
 
+def filed_in(rows: dict, facts: dict, lst: dict | None, now_as: dict | None = None) -> dict:
+    """data100: {member: {"parent", "parent_name", "pct": 100.0, "quarter": "", "by": "report"}} for each US member whose stored page says
+    it files its annual report in another registrant's combined report (facts' "filed_with": {"cik", "name"}) when that registrant is a
+    member too, found by its SEC number on the SEC's current list. {} with no list."""
+    from . import theme_listed
+    if not lst or not lst.get("ciks"):
+        return {}
+    by_cik = {}
+    for s in rows:
+        cik = theme_listed.registrant_of((now_as or {}).get(s, s), lst)
+        if cik is not None:
+            by_cik.setdefault(cik, s)
+    out = {}
+    for s in rows:
+        fw = (facts.get(s) or {}).get("filed_with") if isinstance(facts.get(s), dict) else None
+        try:
+            par = by_cik.get(int((fw or {}).get("cik"))) if isinstance(fw, dict) else None
+        except (TypeError, ValueError):
+            par = None
+        if par and par != s:
+            out[s] = {"parent": par, "parent_name": (rows.get(par) or {}).get("name") or fw.get("name") or par, "pct": 100.0, "quarter": "",
+                      "by": "report"}
+    return out
+
+
 # ---------- stored events, holdings and cards ----------
 def ownership_section(symbols: list[str], names: dict, src) -> dict:
     """The promoter group's stake (the sum of the named promoter holders' stakes in the exchange's shareholding filing) in the latest
@@ -4831,10 +4856,17 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 rows[s]["adjacent"] = {"kind": FOREIGN_KIND, "theme": "companies based in the US", "where": "filing",
                                        "text": f"files its annual report with the SEC on Form {form}, a foreign issuer's report"}
     # d53 (R53): one company under two symbols with the same filed figures, merged before any median, total or list (same_company)
+    # data100 (the deck audits: Bright Horizon Energy kept under Black Hills "by description"): members the SEC's current list names under one
+    # registrant are one company, merged first and said so ("by": "registrant"), under the ticker the SEC lists first for it
+    reg_dups = theme_listed.same_registrant(region, list(rows), lst, now_as)
+    dup_rows = [{"symbol": s, "name": rows[s]["name"], "kept": k, "kept_name": rows[k]["name"], "by": "registrant"} for s, k in sorted(reg_dups.items())]
+    for s in reg_dups:
+        rows.pop(s, None)
     dups = same_company(list(rows.values()), about=src.about)
-    dup_rows = [{"symbol": s, "name": rows[s]["name"], "kept": k, "kept_name": rows[k]["name"],
-                 **({"by": "family"} if same_family(rows[s], rows[k]) else {} if _one_name(rows[s]["name"], rows[k]["name"]) else {"by": "description"})}
-                for s, k in sorted(dups.items())]
+    dup_rows += [{"symbol": s, "name": rows[s]["name"], "kept": k, "kept_name": rows[k]["name"],
+                  **({"by": "family"} if same_family(rows[s], rows[k]) else {} if _one_name(rows[s]["name"], rows[k]["name"]) else {"by": "description"})}
+                 for s, k in sorted(dups.items())]
+    dup_rows.sort(key=lambda x: x["symbol"])
     for s in dups:
         rows.pop(s, None)
 
@@ -4892,6 +4924,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     market = [m for m in (src.index_rows() or []) if isinstance(m, dict)]
     # gl50: each listed subsidiary of another company of the theme, from the stored shareholding filings (parents_of)
     parents = parents_of(sorted(s for s, r in rows.items() if r.get("status") != "unverified"), names, src)
+    # data100: a US member that files its annual report in another member's combined report (sec.SEC.filed_with: Connecticut Light & Power
+    # in Eversource's) is that member's subsidiary: its own figures are in the parent's consolidated ones, so a total adding both leaves it
+    # out (gl50, consolidated_in; holding_across), as a stored shareholding filing does in India
+    parents.update({s: p for s, p in filed_in(rows, facts, lst, now_as).items() if s not in parents})
     for s, p in parents.items():
         rows[s]["parent"] = p
     holding_across(rows, parents, first, wide, theme)
@@ -5146,7 +5182,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     # gl50: the parent and listed subsidiary pairs, and whether the parent's stored figures are consolidated (its basis) or the whole company's
     out["parents"] = [{"symbol": s, "name": rows[s]["name"], "parent": p["parent"], "parent_name": rows[p["parent"]]["name"] if p["parent"] in rows else p["parent_name"],
                        "pct": p["pct"], "quarter": p["quarter"], "basis": (rows.get(p["parent"]) or {}).get("basis") or "",
-                       "parent_wide": p["parent"] in wide, "same_layer": layer_of.get(s) == layer_of.get(p["parent"])}
+                       "parent_wide": p["parent"] in wide, "same_layer": layer_of.get(s) == layer_of.get(p["parent"]),
+                       **({"by": p["by"]} if p.get("by") else {})}          # data100: "report", found by a combined annual report (filed_in)
                       for s, p in sorted(parents.items()) if s in layer_of and p["parent"] in layer_of]
     out["sections"]["margin_drivers"] = margin_drivers(out["sections"]["margins"], rows, layer_of)
     out["sections"]["quarter"] = quarter_section(members, out["sections"]["events"].get("results_filed"))

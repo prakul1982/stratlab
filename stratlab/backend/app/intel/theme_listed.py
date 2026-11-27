@@ -49,10 +49,44 @@ def from_sec(tickers: dict, day: str) -> dict | None:
     if not isinstance(tickers, dict) or len(tickers) < 1000:          # the real list has some ten thousand: fewer is a broken answer
         return None
     names: dict[str, dict[int, list[str]]] = {}
+    ciks: dict[str, int] = {}
+    titles: dict[int, str] = {}
     for t, v in tickers.items():
         if isinstance(v, dict) and v.get("cik") is not None:
             names.setdefault(name_key(v.get("name")), {}).setdefault(int(v["cik"]), []).append(str(t).upper())
-    return {"day": day, "symbols": {str(t).upper() for t in tickers}, "names": names}
+            ciks[str(t).upper()] = int(v["cik"])          # data100: each ticker's registrant, in the SEC's order (its main ticker first)
+            titles.setdefault(int(v["cik"]), str(v.get("name") or ""))
+    return {"day": day, "symbols": {str(t).upper() for t in tickers}, "names": names, "ciks": ciks, "titles": titles}
+
+
+def registrant_of(sym: str, lst: dict | None) -> int | None:
+    """data100: the SEC number of the registrant the SEC's list names a ticker under (any way of writing a share class); None off the list."""
+    ciks = (lst or {}).get("ciks") or {}
+    return next((ciks[f] for f in _forms("US", sym) if f in ciks), None)
+
+
+def same_registrant(region: str, syms, lst: dict | None, now_as: dict | None = None) -> dict[str, str]:
+    """data100 (the deck audits' Electric utilities: Bright Horizon Energy kept under Black Hills, two rows of one company): {symbol left out:
+    symbol kept} for members the SEC's current list names under one registrant (one SEC number: Black Hills Corp renamed itself Bright
+    Horizon Energy Corp and the SEC lists it as HZN and BKH; a company's two classes of common stock). They are one company, kept once
+    under the ticker the SEC lists first for it (its main one); a member read by its ticker now (`now_as`, renamed) counts as that one. {}
+    for India or with no list (nobody is merged on a guess)."""
+    if region != "US" or not lst or not lst.get("ciks"):
+        return {}
+    order = {t: i for i, t in enumerate(lst["ciks"])}
+    groups: dict[int, list[str]] = {}
+    for s in syms:
+        cik = registrant_of((now_as or {}).get(s, s), lst)
+        if cik is not None:
+            groups.setdefault(cik, []).append(s)
+    out = {}
+    for cik, ss in groups.items():
+        if len(ss) < 2:
+            continue
+        rank = lambda s: min((order.get(f, len(order)) for f in _forms("US", (now_as or {}).get(s, s))), default=len(order))   # noqa: E731
+        keep = min(ss, key=lambda s: (rank(s), s))
+        out.update({s: keep for s in ss if s != keep})
+    return out
 
 
 def from_kept(kept: dict | None, bse: dict | None, today: date) -> dict | None:

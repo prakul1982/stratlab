@@ -405,9 +405,121 @@ def _rename_of(region: str, symbol: str) -> str | None:
         into = (MERGED.get(symbol) or {}).get("into_symbol") or Screener.RENAMED.get(symbol)
         if into:
             return into
+    if region == "US":
+        hit = us_renamed(symbol)
+        if hit:
+            return hit
     from . import name_search
     one = name_search.ALIASES.get(region, {}).get(symbol) or []
     return one[0] if len(one) == 1 else None
+
+
+# ---------- data100: a US ticker renamed (fix98's replay: PSKY is SKYD now, TCBI is TXCP, SKK is RNTZ; production's /stocks/us/PSKY a 404) ----------
+# The SEC's list names each registrant (its SEC number) under its tickers now; a ticker that left it while its registrant stayed was renamed.
+# Two places say which registrant an old ticker was: the daily list's tickers kept from the day before (stocks:ciks:US, compared each day:
+# stocks:renamed:US), and the old ticker's own stored page (its SEC number, or the SEC addresses of its filings for a page stored before it
+# kept the number). The registrant's page is found now (us_page_of_cik), so a ticker renamed twice lands on the current page.
+CIKS_KEY = "stocks:ciks:US"
+RENAMED_KEY = "stocks:renamed:US"
+RENAMED_MAX = 3000                 # old tickers kept, newest first: years of the SEC list's changes
+_CIK_IN_URL = re.compile(r"/Archives/edgar/data/(\d+)/")
+us_page_of_cik = None              # (SEC number) -> the page symbol of that registrant on the SEC's list now, or None (set by main)
+_renames_memo: dict = {}           # old ticker -> (time, page symbol or None), bounded
+
+
+def ticker_changes(before: dict, now: dict) -> dict[str, int]:
+    """{old ticker: its registrant's SEC number} for each ticker of yesterday's list ({ticker: SEC number}) that today's doesn't hold while
+    its registrant is still on it under another ticker. A registrant gone from the list (taken private, merged away) renamed nothing."""
+    live = set(now.values())
+    return {t: int(c) for t, c in (before or {}).items() if t not in now and c in live}
+
+
+def keep_us_tickers(names: dict, today: date | None = None) -> dict[str, int]:
+    """The daily US list's read: today's {ticker: SEC number} kept, and each ticker renamed since the last kept list added to the renames
+    (ticker_changes). Returns what was added. A list too short to be the SEC's whole one (a broken answer) changes nothing."""
+    now = {str(t).upper(): int(v["cik"]) for t, v in (names or {}).items() if isinstance(v, dict) and str(v.get("cik") or "").isdigit()}
+    if len(now) < 1000:
+        return {}
+    before = ((_setting(CIKS_KEY) or {}).get("rows")) or {}
+    changed = ticker_changes(before, now) if isinstance(before, dict) and len(before) >= 1000 else {}
+    _put(CIKS_KEY, {"at": datetime.now(timezone.utc).isoformat(), "rows": now})
+    if changed:
+        day = (today or date.today()).isoformat()
+        rows = dict(((_setting(RENAMED_KEY) or {}).get("rows")) or {})
+        rows.update({t: {"cik": c, "at": day} for t, c in changed.items()})
+        for t in [t for t in now if t in rows]:            # a ticker listed again (given to another company) is no old one
+            rows.pop(t, None)
+        rows = dict(sorted(rows.items(), key=lambda kv: str(kv[1].get("at") or ""), reverse=True)[:RENAMED_MAX])
+        _put(RENAMED_KEY, {"at": datetime.now(timezone.utc).isoformat(), "rows": rows})
+        _renames_memo.clear()
+    return changed
+
+
+def stored_cik(symbol: str) -> int | None:
+    """The SEC number a US ticker's stored page names: its own (pages built since data100), else the one in its filings' SEC addresses."""
+    f = ((_setting(f"stocks:page:US:{symbol}") or {}).get("facts")) or {}
+    if not isinstance(f, dict):
+        return None
+    if str(f.get("cik") or "").isdigit():
+        return int(f["cik"])
+    for x in f.get("filings") or []:
+        m = _CIK_IN_URL.search(str((x or {}).get("url") or "")) if isinstance(x, dict) else None
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def us_renamed(symbol: str) -> str | None:
+    """The page symbol of the registrant an old US ticker was (see above), or None. Kept an hour a ticker (a crawler's 404s read storage once)."""
+    s = (symbol or "").strip().upper()
+    if not s or not callable(us_page_of_cik):
+        return None
+    hit = _renames_memo.get(s)
+    if hit and time.time() - hit[0] < 3600:
+        return hit[1]
+    cik = None
+    row = (((_setting(RENAMED_KEY) or {}).get("rows")) or {}).get(s)
+    if isinstance(row, dict) and str(row.get("cik") or "").isdigit():
+        cik = int(row["cik"])
+    if cik is None:
+        cik = stored_cik(s)
+    try:
+        page = us_page_of_cik(cik) if cik is not None else None
+    except Exception:
+        page = None
+    page = page if page and page != s else None
+    if len(_renames_memo) >= 2000:
+        _renames_memo.pop(next(iter(_renames_memo)))
+    _renames_memo[s] = (time.time(), page)
+    return page
+
+
+def rename_aliases(region: str) -> dict[str, list[str]]:
+    """{old ticker: [its page symbol now]} of the renames kept (US), for search to take a renamed ticker typed to the company now."""
+    if region != "US" or not callable(us_page_of_cik):
+        return {}
+    out = {}
+    for t, row in ((((_setting(RENAMED_KEY) or {}).get("rows")) or {}).items()):
+        try:
+            page = us_page_of_cik(int(row["cik"])) if isinstance(row, dict) else None
+        except Exception:
+            page = None
+        if page and page != t:
+            out[t] = [page]
+    return out
+
+
+def current_symbol(region: str, symbol: str) -> str:
+    """A symbol as its page has it now: itself when it has a page (or nothing says otherwise), else the page it was renamed to (renamed_to)."""
+    s = (symbol or "").strip().upper()
+    if not s or region not in REGIONS.values():
+        return symbol
+    try:
+        if find(region, s):
+            return symbol
+        return renamed_to(region, s) or symbol
+    except Exception:
+        return symbol
 
 
 def renamed_to(region: str, symbol: str) -> str | None:
@@ -1060,6 +1172,8 @@ def cap_problem(f: dict | None) -> str | None:
         return "not a company"
     if f.get("cap_unverified"):
         return "depositary share ratio unknown"
+    if f.get("shares_apart"):          # data100: a share count every count of the company's own accounts puts far apart (sec.build)
+        return SHARES_APART
     if cap > CAP_CEILING.get(region, float("inf")):
         return "above any company's value"
     if region == "US" and foreign_filer(f):
@@ -1097,6 +1211,9 @@ def cap_problem(f: dict | None) -> str | None:
         elif not str(f.get("unit") or "$").startswith("$") and (_num(f.get("pe")) or 0) > PE_MAX:
             return "out of line with profit"
     return None
+
+
+SHARES_APART = "share count out of line with the accounts"
 
 
 CAP_UNAVAILABLE = ("Market cap unavailable: the value worked out from the share count and the price doesn't agree with the "
@@ -1349,7 +1466,7 @@ def cap_missing_reason(f: dict | None) -> str | None:
         return None
     if f.get("no_numbers"):
         return "no_numbers"
-    return "shares" if f.get("cap_why") == "shares" else "unknown"
+    return f["cap_why"] if f.get("cap_why") in ("shares", "subsidiary") else "unknown"
 
 
 def pe_label(f: dict | None) -> str:
@@ -1569,9 +1686,12 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis", "registrant", "cap_rule")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis", "registrant", "cap_rule",
+                                                      "filed_with", "shares_apart")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
+        # data100: a US company's SEC number, so an old ticker of it that has no page of its own finds its page now (renamed_to)
+        **({"cik": int(p["cik"])} if region == "US" and str(p.get("cik") or "").isdigit() else {}),
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
         "currency": "USD" if region == "US" else "INR", "unit": nums.get("unit") or ("$ million" if region == "US" else "₹ crore"),
         # the currency the figures are reported in and today's dollar rate for it (R22: a theme converts every money figure to one currency)
@@ -3323,6 +3443,10 @@ def _notes(f: dict) -> list[str]:
         out.append('<p class="note warn" data-cap-check>Market cap unavailable: the value worked out from the share count and '
                    "the price doesn't agree with the company's reported figures, so it isn't shown, nor is P/E, and the "
                    "company is left out of lists ranked by size.</p>")
+    elif cap_problem(f) == SHARES_APART:
+        out.append('<p class="note warn" data-cap-check>Market cap unavailable: the share count it would be worked out on is more than '
+                   "three times apart from every count of the company's own accounts (the year's average shares, the year-end count, "
+                   "a later report's), so it isn't shown, nor is P/E, and the company is left out of lists ranked by size.</p>")
     elif cap_problem(f):
         out.append('<p class="note warn" data-cap-check>The market value worked out from the share count and the price '
                    "doesn't agree with the company's own reported figures (it may count ordinary shares against a "
@@ -3332,6 +3456,12 @@ def _notes(f: dict) -> list[str]:
     if why == "shares":
         out.append('<p class="note" data-cap-missing>Market cap isn\'t shown: the number of shares in issue couldn\'t be read from '
                    "this company's filings, so the price can't be multiplied by it.</p>")
+    elif why == "subsidiary":
+        parent = public_text(str((f.get("filed_with") or {}).get("name") or "")) or "its parent"
+        out.append(f'<p class="note" data-cap-missing>Market cap isn\'t shown: the company files its annual report in {e(parent)}\'s combined '
+                   f"report, whose cover lists no symbol for its common shares: its symbol trades another of its securities (a preferred share "
+                   "or a note), so that price times its common shares is no market value. Its figures here are its own, as that report gives "
+                   "them.</p>")
     elif why == "no_numbers":
         out.append(f'<p class="note" data-cap-missing>Market cap and reported figures aren\'t shown: {e(public_text(str(f.get("no_numbers"))))}</p>')
     elif why == "unknown":

@@ -646,6 +646,15 @@ def annual_report_text(sec_client, cik: int) -> str:
 def read_us(symbol: str, sec_client) -> dict:
     cik = sec_client.cik(symbol)
     facts = sec_client._json(f"/api/xbrl/companyfacts/CIK{cik:010d}.json")
+    # data100: the SEC's facts named for another registrant are a combined report's main registrant's (NSTAR Electric's are Eversource's):
+    # none of them is this company's
+    from . import sec
+    try:
+        own = sec.own_name(facts, sec_client.submissions(cik))
+    except Exception:
+        own = True
+    if not own:
+        return {"family": "us", "metrics": {}, "end": None, "none": "the SEC's company facts are another registrant's (a combined report)"}
     got = us_figures(facts or {})
     end = got.pop("_end", None)
     if isinstance(got.get("ffo"), dict):          # e81: a property owner: the FFO it reports first

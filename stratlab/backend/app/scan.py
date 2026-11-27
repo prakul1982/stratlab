@@ -377,7 +377,8 @@ def watchlist_members(uid: str, region: str) -> list[dict]:
         items = json.loads(db.get_setting(f"watchlist:{uid}") or "{}").get("items") or []
     except (ValueError, TypeError):
         items = []
-    return [{"symbol": i["symbol"]} for i in items if i.get("region") == region and i.get("symbol")]
+    from .intel.routes import current_items          # data100: a renamed US ticker as its page has it now
+    return [{"symbol": i["symbol"]} for i in current_items(items) if isinstance(i, dict) and i.get("region") == region and i.get("symbol")]
 
 
 def _told(uid: str, market: str) -> dict:

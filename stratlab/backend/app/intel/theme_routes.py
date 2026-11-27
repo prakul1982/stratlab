@@ -1605,10 +1605,38 @@ def restated_since(region: str, sym: str, f: dict | None, index: dict | None = N
         return False
     i = (index if index is not None else _index_sales(region)).get(sym)
     years = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM"]
-    if not i or not years:
+    if not i:
         return False
+    # data100 (the deck audits: SpiceJet and Tata Elxsi rows of dashes, "no figures", while their pages show five years): a piece kept from a
+    # page built before it had a year of revenue (R56: the stale consolidated page picked), or whose newest year is older than the page's
+    # newest now, is behind its page, rebuilt since: taken again
+    sold = [y for y in years if theme_data.num(y.get("sales")) is not None]
+    if not sold or newer_year(i[1], sold[-1].get("year")):
+        return True
     y = years[-1]
     return str(y.get("year") or "")[:20] == i[1] and (f.get("unit") or None) == i[2] and _apart(theme_data.num(y.get("sales")), i[0])
+
+
+_MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), 1)}
+
+
+def newer_year(a, b) -> bool:
+    """data100: whether year label `a` ("Mar 2026") ends after year label `b` ("Mar 2025"); False when either can't be read."""
+    def at(label):
+        m = re.match(r"^\s*([A-Za-z]{3})[a-z]*\.?\s+(\d{4})\b", str(label or ""))
+        return (int(m.group(2)), _MONTHS.get(m.group(1).lower(), 0)) if m and m.group(1).lower() in _MONTHS else None
+    x, y = at(a), at(b)
+    return bool(x and y and x > y)
+
+
+def recent_year(label, today=None) -> bool:
+    """data100: whether a year label ends within the 15 months a row's figures are shown for (stock_pages.figures_stale's window)."""
+    from datetime import date as _d
+    t = today or _d.today()
+    m = t.month - 15
+    y = t.year + (m - 1) // 12
+    m = (m - 1) % 12 + 1
+    return newer_year(label, f"{('jan feb mar apr may jun jul aug sep oct nov dec'.split())[m - 1].title()} {y}")
 
 
 def pages_restated(region: str, dive: dict) -> list[str]:
@@ -1621,6 +1649,10 @@ def pages_restated(region: str, dive: dict) -> list[str]:
         for c in b.get("companies") or []:
             i = idx.get(c.get("symbol")) if isinstance(c, dict) else None
             if i and not c.get("fx") and c.get("unit") == i[2] and str(c.get("year") or "")[:20] == i[1] and _apart(c.get("revenue"), i[0]):
+                out.append(c["symbol"])
+            # data100: a row with no revenue, or an older newest year, whose page has a newer year of revenue now (restated_since)
+            elif i and not c.get("delisted") and (c.get("revenue") is None and not c.get("year") and recent_year(i[1])
+                                                  or newer_year(i[1], c.get("year"))):
                 out.append(c["symbol"])
     return sorted(set(out))
 

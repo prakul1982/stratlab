@@ -3437,10 +3437,15 @@ def parents_row(v: dict) -> list[str] | None:
     ps = [p for p in v.get("parents") or [] if isinstance(p, dict)]
     if not ps:
         if v.get("region") == "US":
-            return [PARENTS_LABEL, "No shareholding filing is read for US companies, so a parent and its listed subsidiary are not detected; "
-                                   "a total that adds both would count the subsidiary twice.", "Not checked."]
+            # data100: a subsidiary filing its annual report in its parent's combined report is detected (theme_data.filed_in)
+            return [PARENTS_LABEL, "No shareholding filing is read for US companies, so a parent and its listed subsidiary are detected only "
+                                   "where the subsidiary files its annual report in its parent's combined report, and none here does; a "
+                                   "total that adds both would count the subsidiary twice.", "Not checked beyond combined reports."]
         return None
-    each = "; ".join(f"{clean_name(p['name'])} is {p['pct']:g}% held by {clean_name(p['parent_name'])} (promoter, {p['quarter']} filing)"
+    # data100: one found by a combined annual report (a US utility's subsidiary filing in its parent's report) said as that
+    each = "; ".join((f"{clean_name(p['name'])} files its annual report in {clean_name(p['parent_name'])}'s combined report, as its subsidiary"
+                      if p.get("by") == "report" else
+                      f"{clean_name(p['name'])} is {p['pct']:g}% held by {clean_name(p['parent_name'])} (promoter, {p['quarter']} filing)")
                      + (", whose figures are its consolidated ones" if p.get("basis") == "consolidated" else ", whose figures are the whole company's"
                         if p.get("parent_wide") else "") for p in ps)
     # x57 (RC10): across layers too: the parent's layer's revenue has the subsidiary's taken out, and a parent whose figures are the whole
@@ -3720,10 +3725,13 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False, most:
                                   (f"{clean_name(x['name'])} under two symbols ({x.get('symbol')} and {x.get('kept')})"
                                    if clean_name(x["name"]) == clean_name(x["kept_name"]) else f"{clean_name(x['name'])} is {clean_name(x['kept_name'])}")
                                   + (" (the same latest year, revenue and net profit)" if fam else "")
-                                  + (f" (its stored description is {clean_name(x['kept_name'])}'s)" if x.get("by") == "description" else ""))
+                                  + (f" (its stored description is {clean_name(x['kept_name'])}'s)" if x.get("by") == "description" else "")
+                                  # data100: one SEC registrant under two symbols (a company renamed, two classes of its stock)
+                                  + (" (one registrant under two symbols on the SEC's list)" if x.get("by") == "registrant" else ""))
                                  for x in ds[:4]) + (f"; and {len(ds) - 4} more" if len(ds) > 4 else "") + ".",
                      "Kept once, under the symbol with a market value" + (" or the company its description names" if any(x.get("by") == "description" for x in ds) else "")
                      + (" (another listing of one issuer: under the listing with the larger latest revenue)" if fam else "")
+                     + (" (one registrant: under the symbol the SEC lists first for it)" if any(x.get("by") == "registrant" for x in ds) else "")
                      + ", before any median, total or list."])
     if v.get("adjacent") or v.get("population_change"):          # d53: adjacent participants apart from the theme's core members; r68e: who moved
         rows.append(adjacent_row(v))

@@ -1262,9 +1262,25 @@ def watchlist_facts(region: str = "IN", symbols: str = "", profile=Depends(curre
 def get_watchlist(profile=Depends(current_profile)):
     raw = db.get_setting(_watch_key(profile))
     try:
-        return {"items": json.loads(raw)["items"] if raw else []}
+        items = json.loads(raw)["items"] if raw else []
     except (ValueError, KeyError, TypeError):
         return {"items": []}
+    return {"items": current_items(items)}
+
+
+def current_items(items) -> list:
+    """data100 (fix98's replay: PSKY is SKYD now, TCBI is TXCP): each US watchlist item as its company's page has it now: a renamed ticker
+    (stock_pages.current_symbol) is given as the new one, the old kept as "was", so the list shows the company and its prices, not a row
+    for a ticker no one quotes; the list keeps the new ticker at its next save. Anything else as it was."""
+    from .. import stock_pages
+    out = []
+    for i in items if isinstance(items, list) else []:
+        if isinstance(i, dict) and i.get("region") == "US" and i.get("symbol"):
+            now = stock_pages.current_symbol("US", str(i["symbol"]))
+            if now and now.upper() != str(i["symbol"]).upper():
+                i = {**i, "symbol": now, "was": i["symbol"], "name": (stock_pages.companies("US").get(now) or {}).get("name") or i.get("name")}
+        out.append(i)
+    return out
 
 
 @router.put("/watchlist")

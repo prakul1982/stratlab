@@ -295,8 +295,9 @@ def test_a_new_filings_missing_data_file_is_asked_for_again_within_the_hour_an_o
     assert s.filing_data(1159508, {"form": "20-F", "accn": "0000000000-26-000099", "filed": today, "doc": "x.htm"}) == {}
     assert s.filing_data(1159508, {"form": "20-F", "accn": "0000000000-24-000099", "filed": "2024-03-01", "doc": "x.htm"}) == {}
     import time
-    fresh = s.cache._d[("instance", "0000000000-26-000099")][0] - time.time()
-    stale = s.cache._d[("instance", "0000000000-24-000099")][0] - time.time()
+    # (changed on purpose, data100: a combined report is read for each of its registrants apart, so the key names the company too)
+    fresh = s.cache._d[("instance", "0000000000-26-000099", 1159508)][0] - time.time()
+    stale = s.cache._d[("instance", "0000000000-24-000099", 1159508)][0] - time.time()
     assert 3000 < fresh <= 3600 and stale > 20 * 86400
 
 

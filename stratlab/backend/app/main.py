@@ -3686,6 +3686,10 @@ def _us_find(sym: str) -> dict | None:
     hit = suggester.find(sym, "US")
     if hit:
         return hit
+    new = _quiet(stock_pages.renamed_to, "US", sym)       # data100: a renamed ticker (PSKY) is its company's now (SKYD)
+    hit = suggester.find(new, "US") if new else None
+    if hit:
+        return hit
     if not suggest.us_common(sym, set()):
         return None
     q = _quiet(research_hub.quotes, "US", [sym]) or {}
@@ -5038,7 +5042,13 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     if region == "US":
         checks.update(us_cap_checks(p, sym))
         if p.get("shares") is None and not p.get("no_numbers"):
-            checks["cap_why"] = "shares"            # no market value can be worked out: the page says so (R10V-004)
+            # no market value can be worked out: the page says so (R10V-004); data100: a subsidiary filing in its parent's combined report,
+            # whose common shares its parent holds, says that instead
+            checks["cap_why"] = p.get("cap_why") or "shares"
+        if p.get("filed_with"):
+            checks["filed_with"] = p["filed_with"]      # data100: the parent whose combined report it files in ({"cik", "name"})
+        if p.get("shares_apart"):
+            checks["shares_apart"] = True               # data100: a share count every count of its accounts puts far apart (cap_problem)
         if p.get("annual_filed"):
             checks["annual_filed"] = p["annual_filed"]      # when its newest annual report was filed (stock_pages.annual_behind)
             if p.get("annual_form"):
@@ -5257,18 +5267,35 @@ def us_share_class_page(symbol: str) -> str | None:
     names = sec_feed.cache.get("tickers")               # the list the daily company list read; never a read of its own
     if not names:
         return None
-    if _class_pages["names"] is not names:              # the list is read once a day: the map is built once per list
+    hit = names.get(s) or names.get(s.replace("-", "."))
+    return _us_pages_by_cik(names).get(hit["cik"]) if hit else None
+
+
+def _us_pages_by_cik(names: dict) -> dict:
+    """{SEC number: the registrant's ticker that has a page} for one SEC list (built once per list: it is read once a day)."""
+    if _class_pages["names"] is not names:
         cos = stock_pages.companies("US")
         by_cik: dict = {}
         for t, v in names.items():
             if t in cos and not sec.non_common(t):
                 by_cik.setdefault(v["cik"], t)
         _class_pages.update(names=names, by_cik=by_cik)
-    hit = names.get(s) or names.get(s.replace("-", "."))
-    return _class_pages["by_cik"].get(hit["cik"]) if hit else None
+    return _class_pages["by_cik"]
 
 
 stock_pages.share_class_page = us_share_class_page
+
+
+def us_page_of_cik(cik: int) -> str | None:
+    """data100: the page symbol of a registrant (its SEC number) on the SEC's list now, for an old ticker of it (stock_pages.us_renamed);
+    from the list the daily company list read, never a read of its own. None for a registrant off the list or with no page."""
+    names = sec_feed.cache.get("tickers")
+    if not names or cik is None:
+        return None
+    return _us_pages_by_cik(names).get(int(cik))
+
+
+stock_pages.us_page_of_cik = us_page_of_cik
 def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | None:
     """A stored page built before the facts a page shows now, served as it is while no rebuild is allowed (a burst of
     crawlers past the build ration, a source down): an Indian page's dividend yield is worked out again from the
@@ -5354,6 +5381,10 @@ def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
             continue
         if region == "US":
             us_reporting_names()
+            try:                    # data100: today's tickers kept, and the tickers renamed since the last list (stock_pages.us_renamed)
+                stock_pages.keep_us_tickers(sec_feed.tickers())
+            except Exception as e:
+                print("stock list US: renamed tickers not kept:", str(e)[:160])
     return failed
 
 

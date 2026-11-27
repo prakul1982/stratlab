@@ -1271,18 +1271,29 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
         thousandfold = implied > 0 and any(abs(shares[1] / implied / k - 1) < 0.1 or abs(implied / shares[1] / k - 1) < 0.1
                                            for k in SCALE_SLIP)
         agrees = agrees or (not thousandfold and any(0.5 <= shares[1] / h <= 2 for h in later))
+        # data100 (the deck audits' US Homebuilders: OneConstruction's $0.19 m market value beside $49 m of revenue, a ROCE of −1,061%): the
+        # year's own average count, which the earnings per share are worked out on, agrees with the cover's count while the earnings per
+        # share don't agree with either: the earnings per share are the mistyped figure, never the count (its 2026 20-F tags −84 a share
+        # for a $13.2 m loss on 15.7 million shares, −0.84; read as the count, 157,274 shares, a hundredth of its 16 million)
+        agrees = agrees or (not thousandfold and avg is not None and avg > 0 and 0.5 <= shares[1] / avg <= 2
+                            and not 1 / 3 <= avg / implied <= 3)
         if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3 and not agrees:
             # (dated by the annual report that gave the earnings per share: they are restated for a split before it was filed)
             filed = max((f.get("filed") or "" for c in ("EarningsPerShareBasic", "BasicEarningsLossPerShare")
                          for f in _facts(facts, c, f"{cur}/shares") if f.get("end") == last and f.get("form") in ANNUAL), default="")
             shares = (filed or last, float(round(implied)))
             from_cover = False
+    # data100: no figure is built on a share count that every count of the company's own accounts puts more than three times apart (the
+    # year's average, its year-end count, a later report's): the page shows no market value then, and says why (stock_pages.cap_problem)
+    counts = [c for c in [avg or 0.0, *year_end_held, *later] if c and c > 0]
+    shares_apart = bool(shares and counts and not any(1 / 3 <= shares[1] / c <= 3 for c in counts))
     out = {"name": subs.get("name") or facts_json.get("entityName") or "", "ratios": {}, "growth": {}, "pros": [], "cons": [],
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million" if cur == "USD" else f"{cur} million", "currency": cur, "region": "US",
            "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "shares_at": shares[0] if shares else None,
            "fiscal_year_end": subs.get("fiscalYearEnd"),
            "shares_from": "cover" if shares and from_cover else None, "avg_shares": avg, "no_cover_count": no_cover_count,
+           **({"shares_apart": True} if shares_apart else {}),
            # the periods the latest figures run to, and earnings per share for the P/E (R7V-002, R7V-003)
            "year_end": ends[-1], "ttm_end": max(rev_q) if has_ttm else None, "eps": eps_ttm(facts, cur, ends[-1], eps_a),
            # each quarter's diluted EPS from the filings ({quarter end: EPS}), to check and date the results-versus-estimates
@@ -1512,7 +1523,8 @@ class SEC(Source):
                         recent[k] = list(recent.get(k) or []) + list(more.get(k) or [""] * n)
                 except SourceError:
                     pass                          # the recent list alone, rather than nothing
-            hit = {**{k: hit.get(k) for k in ("cik", "name", "sic", "sicDescription", "fiscalYearEnd", "website", "tickers")},
+            # (data100: and its former names, so facts named for an earlier name of its own are its own: own_name)
+            hit = {**{k: hit.get(k) for k in ("cik", "name", "sic", "sicDescription", "fiscalYearEnd", "website", "tickers", "formerNames")},
                    "foreign": foreign_filer(hit), "filings": {"recent": {k: recent.get(k) for k in keep}}}
             self.cache.set(key, hit, 6 * 3600)
         return hit
@@ -1726,7 +1738,7 @@ class SEC(Source):
         filing's own XBRL instance ({"form", "accn", "filed", "doc"}), cached a month by filing; {} when the filing has
         none, None when it can't be read right now (the rate limit, the SEC down)."""
         acc, doc = filing["accn"], filing["doc"]
-        key = ("instance", acc)
+        key = ("instance", acc, int(cik))          # data100: one combined report is read for each of its registrants apart
         hit = self.cache.get(key)
         if hit is not None:
             return hit
@@ -1753,8 +1765,13 @@ class SEC(Source):
         except (httpx.HTTPError, SourceError, ValueError) as e:
             print("SEC filing data:", acc, str(e)[:120])
             return None
-        out = {"facts": instance_facts(inst, filing["form"], filing["filed"], acc), "classes": class_shares(inst),
-               "cover_shares": cover_shares(inst)}
+        member, reg = own_member(inst, cik)
+        out = {"facts": instance_facts(inst, filing["form"], filing["filed"], acc, cik), "classes": {} if member is not None else class_shares(inst),
+               "cover_shares": cover_shares(inst, cik)}
+        if member is not None:
+            # data100: a registrant filed in another company's combined report: whose report it is, and the symbols its own cover lists
+            out["filed_with"] = {"cik": int(reg["main"]), "name": reg["names"].get(reg["main"]) or "",
+                                 "listed": sorted(set(reg["symbols"].get(int(cik)) or [])), "own": bool(member)}
         self.cache.set(key, out, 30 * 86400)
         return out
 
@@ -1773,6 +1790,29 @@ class SEC(Source):
         if not got.get("facts"):
             return facts_json
         return merge_facts({"facts": got["facts"]}, facts_json)
+
+    def filed_with(self, cik: int, subs: dict, facts_json: dict | None) -> tuple[dict | None, dict | None]:
+        """data100 (the deck audits: Connecticut Light & Power's and NSTAR Electric's pages, and every theme reading them, showed Eversource's
+        revenue, profit and balance sheet, and a market value of a preferred share's price times Eversource's 375 million shares): (the
+        facts to build a company from, {"cik", "name", "listed", "own"} of the combined report it files in, or None). A subsidiary filing its
+        annual report in its parent's combined report has no figures of its own in the SEC's company facts: they hold nothing, or the
+        parent's figures and cover (NSTAR Electric's name there is "EVERSOURCE ENERGY", its share count Eversource's). Such a company is
+        built from its own figures in its reports alone, those under its LegalEntityAxis member in the latest annual report and the
+        quarterly report after it. Asked only when the company facts lack the latest annual report or carry another registrant's name,
+        so a company whose facts are its own costs no read."""
+        filing = latest_filing(subs, ANNUAL_FORMS)
+        if not filing or facts_json is not None and has_filing(facts_json, filing["accn"]) and own_name(facts_json, subs):
+            return facts_json, None
+        got = self.filing_data(cik, filing)
+        if not got or not got.get("filed_with"):
+            return facts_json, None
+        facts = {"facts": got.get("facts") or {}}
+        q = latest_filing(subs, ("10-Q",))
+        if facts["facts"] and q and q["filed"] > filing["filed"]:
+            gq = self.filing_data(cik, q)
+            if gq and gq.get("filed_with") and gq.get("facts"):
+                facts = merge_facts(facts, {"facts": gq["facts"]})
+        return {"cik": cik, "entityName": subs.get("name") or "", "facts": facts["facts"]}, got["filed_with"]
 
     def classes(self, cik: int, subs: dict) -> dict[str, float]:
         """{ticker: shares counted in that ticker's class} for a company with several classes of common stock, from
@@ -1817,10 +1857,21 @@ class SEC(Source):
                 except SourceError as e:
                     if e.busy:
                         raise
+            # data100: a subsidiary filing in its parent's combined report is built from its own figures alone (filed_with)
+            facts, filed_with = (facts, None) if before else self.filed_with(cik, subs, facts)
             if facts is None:                     # no figures filed as data at all
                 raise NoNumbers(self.name, no_results(subs, None, symbol))
-            facts = self.with_latest_annual(cik, subs, facts)
+            if filed_with and not facts.get("facts"):
+                raise NoNumbers(self.name, f"Its annual report is filed in {proper(filed_with['name']) or 'another company'}'s combined report, "
+                                           "which gives no figures of its own.")
+            facts = facts if filed_with else self.with_latest_annual(cik, subs, facts)
             p = build(facts, subs, symbol=symbol.upper())
+            if filed_with:
+                p["filed_with"] = {"cik": filed_with["cik"], "name": proper(filed_with["name"])}
+                if not filed_with.get("listed"):
+                    # its common shares aren't listed (its report's cover names no trading symbol of its own: its parent holds them), so
+                    # the price of what its symbol trades (a preferred share, a note) times them is no market value of it
+                    p.update(shares=None, shares_from=None, cap_why="subsidiary")
             if reporting_name:
                 p["name"], p["registrant"] = reporting_name, p.get("name") or ""
             if facts.get("annual_unread"):
@@ -1829,7 +1880,7 @@ class SEC(Source):
             if latest:
                 p["annual_filed"] = latest["filed"]       # the page tells a table a year behind its newest report (annual_behind)
                 p["annual_form"] = latest["form"]         # R46: and which report it is (10-K, 20-F, 40-F), for a theme's figure source record
-            if p.get("shares") is None and latest:
+            if p.get("shares") is None and latest and not filed_with:
                 # no share count in the SEC's facts (a cover page that gives one per class or per kind of security, which
                 # the facts leave out): the count on the newest annual report's cover page (R10V-004: Baidu, BP)
                 got = self.filing_data(cik, latest)
@@ -1898,6 +1949,28 @@ class SEC(Source):
 
 
 ANNUAL_FORMS = ("10-K", "20-F", "40-F")
+
+
+def own_name(facts_json: dict | None, subs: dict | None) -> bool:
+    """data100: whether the company facts are named for the company itself: their entityName is its name or one of its former names
+    (legal forms and the SEC's state suffix aside). The SEC names a co-registrant's facts after the combined report's main registrant
+    (NSTAR Electric's: "EVERSOURCE ENERGY"). No name in either: taken as its own."""
+    from .theme_listed import name_key
+    have = name_key((facts_json or {}).get("entityName"))
+    own = {name_key((subs or {}).get("name"))} | {name_key(x.get("name")) for x in (subs or {}).get("formerNames") or [] if isinstance(x, dict)}
+    own.discard("")
+    return not have or not own or have in own
+
+
+def proper(name) -> str:
+    """A registrant's name as the SEC's capitals write it, in proper case ("EVERSOURCE ENERGY" -> "Eversource Energy"); a name already in
+    mixed case as it is."""
+    t = " ".join(str(name or "").split())
+    if not t or t != t.upper():
+        return t
+    return " ".join(w if len(w) <= 3 and w.isalpha() and w not in ("THE", "AND", "CO", "INC", "NEW") else w.capitalize() for w in t.split())
+
+
 UNREAD_RETRY = 15 * 60         # seconds a company built without its latest annual report (unreadable just then) is kept
 
 # depositary-share ratios an annual report states wrongly, by the company's SEC number: ordinary shares per ADS.
@@ -2639,10 +2712,63 @@ def consolidated_only(dims: dict) -> bool:
     return axis in CONSOLIDATED_AXES and bool(re.match(r"consolidated", member, re.I)) and not re.search(r"separate|parent", member, re.I)
 
 
-def instance_facts(inst: dict, form: str, filed: str, accn: str) -> dict:
+ENTITY_AXIS = "LegalEntityAxis"
+
+
+def registrants(inst: dict) -> dict:
+    """data100 (the deck audits' Electric utilities: Connecticut Light & Power and NSTAR Electric showing Eversource's $13.5 bn revenue, its
+    net profit and a $19.1 bn and $27.9 bn market value): who a report is filed for. A combined report (a utility holding company and the
+    subsidiaries that file their own reports in it) gives its main registrant's figures without dimensions and each other registrant's
+    under LegalEntityAxis, its cover's EntityCentralIndexKey naming each. {"main": the main registrant's SEC number or None, "members":
+    {SEC number: its LegalEntityAxis member}, "names": {SEC number: its registrant name}, "symbols": {SEC number: [its cover's trading
+    symbols]}}."""
+    ctx = inst["contexts"]
+    main, members, names, symbols, by_member = None, {}, {}, {}, {}
+    for ns, concept, cid, unit, text in inst["facts"]:
+        if ns != "dei" or concept != "EntityCentralIndexKey" or cid not in ctx:
+            continue
+        try:
+            cik = int(str(text).strip())
+        except ValueError:
+            continue
+        dims = ctx[cid]["dims"]
+        if not dims:
+            main = main or cik
+        elif set(dims) == {ENTITY_AXIS}:
+            members.setdefault(cik, dims[ENTITY_AXIS])
+            by_member.setdefault(dims[ENTITY_AXIS], cik)
+    for ns, concept, cid, unit, text in inst["facts"]:
+        if ns != "dei" or concept not in ("EntityRegistrantName", "TradingSymbol") or cid not in ctx or not str(text).strip():
+            continue
+        dims = ctx[cid]["dims"]
+        who = main if ENTITY_AXIS not in dims else by_member.get(dims[ENTITY_AXIS])
+        if who is None or (concept == "EntityRegistrantName" and set(dims) - {ENTITY_AXIS}):
+            continue
+        if concept == "EntityRegistrantName":
+            names.setdefault(who, " ".join(str(text).split()))
+        else:
+            symbols.setdefault(who, []).append(price_symbol(str(text).strip()))
+    return {"main": main, "members": members, "names": names, "symbols": symbols}
+
+
+def own_member(inst: dict, cik: int | None) -> tuple[str | None, dict]:
+    """(the LegalEntityAxis member a report gives a registrant's own figures under, registrants(inst)) for a registrant filed in another
+    company's combined report; (None, ...) when the report is its own (it is the main registrant, or the report names no registrant)."""
+    reg = registrants(inst)
+    if not cik or not reg["main"] or int(reg["main"]) == int(cik):
+        return None, reg
+    return reg["members"].get(int(cik)) or "", reg
+
+
+def instance_facts(inst: dict, form: str, filed: str, accn: str, cik: int | None = None) -> dict:
     """A filing's figures without dimensions in the company facts' shape ({namespace: {concept: {"units": {unit:
     [rows]}}}}), so they merge with the SEC's own (see merge_facts). A figure given only for the consolidated entity
-    (see consolidated_only) counts as the plain one, and the plain one wins where both are given."""
+    (see consolidated_only) counts as the plain one, and the plain one wins where both are given.
+    data100: read for `cik`, a registrant filed in another company's combined report (own_member): its own figures, those under its
+    LegalEntityAxis member, are its plain ones, and the main registrant's are never its; {} when the report gives none of its own."""
+    member, _ = own_member(inst, cik)
+    if member == "":
+        return {}
     out: dict = {}
     seen = set()
     for pass_ in (0, 1):                  # the plain facts first, then the consolidated entity's where they gave none
@@ -2651,7 +2777,10 @@ def instance_facts(inst: dict, form: str, filed: str, accn: str) -> dict:
             val = _x_num(text) if unit else None
             if not ctx or val is None or not ctx["end"]:
                 continue
-            if bool(ctx["dims"]) != bool(pass_) or (ctx["dims"] and not consolidated_only(ctx["dims"])):
+            if member:
+                if pass_ or ctx["dims"] != {ENTITY_AXIS: member}:
+                    continue
+            elif bool(ctx["dims"]) != bool(pass_) or (ctx["dims"] and not consolidated_only(ctx["dims"])):
                 continue
             key = (ns, concept, unit, ctx["start"], ctx["end"])
             if key in seen:
@@ -2667,18 +2796,27 @@ def instance_facts(inst: dict, form: str, filed: str, accn: str) -> dict:
 NOT_ORDINARY = re.compile(r"prefer|debt|note|bond|warrant|unit|right|deposit|adr|ads|trust|capital", re.I)
 
 
-def cover_shares(inst: dict) -> dict | None:
+def cover_shares(inst: dict, cik: int | None = None) -> dict | None:
     """The shares outstanding a report's cover page gives for the company's own ordinary (common) shares, every class
     together, when the SEC's company facts leave them out because the cover page gives them per class or per kind of
     security (R10V-004: Baidu's Class A and Class B ordinary shares, BP's ordinary and preference shares): {"value",
     "end", "classes"}, at the latest date given. Preference shares, notes and depositary receipts are not counted.
-    None without."""
+    None without. data100: for `cik` filed in another company's combined report, its own count (under its LegalEntityAxis
+    member), never the main registrant's."""
     ctx = inst["contexts"]
+    entity, _ = own_member(inst, cik)
+    if entity == "":
+        return None
     by_end: dict[str, dict[str, float]] = {}
     for ns, concept, cid, unit, text in inst["facts"]:
         if concept != "EntityCommonStockSharesOutstanding" or unit != "shares" or cid not in ctx:
             continue
-        dims = ctx[cid]["dims"]
+        dims = dict(ctx[cid]["dims"])
+        if entity:
+            if dims.pop(ENTITY_AXIS, None) != entity:
+                continue
+        elif ENTITY_AXIS in dims:
+            continue
         member = next(iter(dims.values())) if dims else ""
         if len(dims) > 1 or member == "typed" or NOT_ORDINARY.search(member):
             continue
