@@ -221,3 +221,32 @@ def test_a_rendered_page_is_kept_as_utf8_and_served_as_the_same_text(w, monkeypa
     assert len(kept[0]) < sys.getsizeof(text) * 0.6          # about half the memory of the same page as text
     again = w["client"].get("/stocks/in/TCS")
     assert again.text == first.text and again.headers["cache-control"] == first.headers["cache-control"]
+
+
+def test_a_new_container_warms_its_caches_once_the_old_one_has_given_up_the_lease(monkeypatch):
+    """Live R99 (1.97 GB in the deploy's minute): the new container read every stored page and filled its caches while the old one, with its
+    whole day of caches, still ran beside it. Now it warms once it leads (the old one released the lease on stopping), or after a wait."""
+    from app import main
+    warmed = []
+    monkeypatch.setattr(main, "warm_caches", lambda: warmed.append(time.monotonic()))
+    monkeypatch.setattr(main, "_alone", threading.Event())
+    t = threading.Thread(target=main.warm_when_alone, args=(10,))
+    t.start()
+    time.sleep(0.3)
+    assert warmed == []                                     # beside the old container: not yet
+    main._alone.set()                                       # lead(): the lease is this container's
+    t.join(5)
+    assert len(warmed) == 1
+    warmed.clear()
+    monkeypatch.setattr(main, "_alone", threading.Event())
+    main.warm_when_alone(0.05)                              # nobody gives the lease up: warmed after the wait all the same
+    assert len(warmed) == 1
+
+
+def test_lead_lets_the_caches_warm(monkeypatch):
+    from app import main
+    monkeypatch.setattr(main, "_alone", threading.Event())
+    monkeypatch.setattr(main.db, "reload_mirror", lambda: None)
+    monkeypatch.setattr(main, "_jobs_started", True)
+    main.lead()
+    assert main._alone.is_set()

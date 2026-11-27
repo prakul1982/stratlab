@@ -348,7 +348,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print("startup: Kite not ready:", e)
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
-    threading.Thread(target=warm_caches, daemon=True).start()
+    threading.Thread(target=warm_when_alone, daemon=True, name="warm-caches").start()
     # every container serves requests; only the lease's holder runs the jobs and live sessions (a deploy overlaps two)
     leader.current.start(on_gain=lead, on_lose=follow)
     yield
@@ -361,6 +361,18 @@ async def lifespan(app: FastAPI):
 
 
 _jobs_started = False
+# mem100 (live R99, 27 Nov 17:45 UTC: 1.97 GB of the 2.0 GB limit in the deploy's minute, 1.0 GB an hour later with the theme re-check still
+# running): a deploy runs the new container beside the old one until the old stops (17:45:11 started, 17:45:24 the old one stopped), and
+# Railway counts both. The new one read every stored company page and filled its price caches (warm_caches) in that overlap, on top of the
+# old one's whole day of caches. Now it warms once it holds the lease (the old container gave it up on stopping), or after WARM_ALONE_WAIT
+# seconds without it (another container keeps it); it serves requests meanwhile, as it did while warming
+WARM_ALONE_WAIT = 120.0
+_alone = threading.Event()
+
+
+def warm_when_alone(wait: float | None = None) -> None:
+    _alone.wait(WARM_ALONE_WAIT if wait is None else wait)
+    warm_caches()
 
 
 def lead():
@@ -368,6 +380,7 @@ def lead():
     global _jobs_started
     db.reload_mirror()           # the settings the old container wrote since this one booted (read in the background,
                                  # the copy there is served meanwhile)
+    _alone.set()                 # mem100: the old container is gone: the caches are warmed now (warm_when_alone), the pages read once
     try:                         # ...among them today's Kite token, when it logged in after this one booted
         if kite.token_day != kite_today():      # (a token of today's that was cancelled stays off)
             kite.load_saved_token()
