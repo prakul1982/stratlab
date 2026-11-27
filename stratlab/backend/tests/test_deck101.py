@@ -196,3 +196,44 @@ def test_a_price_period_the_theme_has_no_figure_for_is_no_row():
     rows = _rows(_page(slides, "Price"))
     periods = [r[0] for r in rows]
     assert "1 year" in periods and "3 years" not in periods, periods
+
+
+def test_a_sentence_that_turns_from_or_adds_to_one_before_it_is_no_line_of_a_companys_own_words():
+    # the live R99 decks: TAAL Tech description-verified in Airlines on "However, after an aircraft accident, company is not operating
+    # aircrafts"; Orange on "Furthermore, in the retail markets, …"; Finolex Cables on "Besides manufacturing a wide variety of wires and cables"
+    from app.intel.theme_base import own_words
+    for t in ("However, after an aircraft accident, company is not operating aircrafts",
+              "Furthermore, in the retail markets, the number of new mobile customers for telecommunications services is generally high",
+              "Besides manufacturing a wide variety of wires and cables", "Moreover the company sells cement in bags"):
+        assert own_words(t) == "", t
+    for t in ("Sun TV Network Limited operates television channels in India", "Thus Ltd makes forgings for engines"):
+        assert own_words(t) == t, t
+
+
+def test_a_fund_is_said_to_track_the_theme_only_when_its_name_says_the_themes_work():
+    # the live R99 decks: Alcoholic beverages' "Funds that track the theme: NIFTYBEES, CONSUMBEES, MAFANG" (the Nifty 50, a consumption fund, a
+    # NYSE FANG+ fund), Airlines' CPSE ETF and Nifty Midcap 100, Insurance's and Utilities' BANKBEES, Medical devices' IBB and PPH
+    fund = lambda t, n: {"ticker": t, "name": n}          # noqa: E731
+    alco = [fund("NIFTYBEES", "NIPPON INDIA ETF NIFTY 50 BEES"), fund("CONSUMBEES", "NIPPON NIFTY INDIA CONSUMPTION ETF"),
+            fund("MAFANG", "MIRAE ASSET NYSE FANG ETF")]
+    assert deck.theme_funds(alco, "Alcoholic beverages") == []
+    keep = lambda etfs, sector: [e["ticker"] for e in deck.theme_funds(etfs, sector)]          # noqa: E731
+    assert keep([fund("AUTOBEES", "NIPPON INDIA NIFTY AUTO ETF"), fund("CPSEETF", "CPSE ETF")], "Automotive") == ["AUTOBEES"]
+    assert keep([fund("FMCGIETF", "ICICI PRUDENTIAL NIFTY FMCG ETF"), fund("CONSUMBEES", "NIPPON NIFTY INDIA CONSUMPTION ETF"),
+                 fund("NIFTYBEES", "NIPPON INDIA ETF NIFTY 50 BEES")], "FMCG (Fast Moving Consumer Goods)") == ["FMCGIETF", "CONSUMBEES"]
+    assert keep([fund("BANKBEES", "NIPPON INDIA NIFTY BANK BEES ETF"), fund("FINIETF", "ICICI PRUDENTIAL NIFTY FINANCIAL SERVICES EX-BANK ETF")],
+                "Insurance") == ["FINIETF"]
+    assert keep([fund("BANKBEES", "NIPPON INDIA NIFTY BANK BEES ETF"), fund("BFSI", "MIRAE ASSET NIFTY FINANCIAL SERVICES ETF")],
+                "Non-bank lenders (NBFCs and housing finance companies)") == ["BFSI"]
+    assert keep([fund("ITBEES", "NIPPON INDIA ETF NIFTY IT")], "IT services") == ["ITBEES"]
+    assert keep([fund("IHI", "iShares U.S. Medical Devices ETF"), fund("IBB", "ISHARES BIOTECHNOLOGY ETF"), fund("PPH", "VanEck Pharmaceutical ETF")],
+                "Medical devices") == ["IHI"]
+    assert keep([fund("URA", "Global X Uranium ETF"), fund("NLR", "VANECK URANI & NUCLR ETF-USD")], "Nuclear and SMRs") == ["URA", "NLR"]
+    assert keep([fund("IYT", "iShares U.S. Transportation ETF"), fund("JETS", "US GLOBAL JETS ETF")], "Railroads and trucking") == ["IYT"]
+    assert keep([fund("SCHH", "SCHWAB US REIT ETF")], "Real estate investment trusts") == ["SCHH"]
+    assert keep([fund("MOCAPITAL", "MOTILAL OSWAL NIFTY CAPITAL MARKET ETF")], "Capital goods (India)") == []
+    # the method page says only the funds kept, and no line at all when none is
+    v = _view()
+    v["etfs"] = alco
+    slides, _ = deck.theme_plan(v)
+    assert "Funds that track the theme" not in " ".join(" ".join(r) for r in _rows(_page(slides, deck.METHOD_TITLE)))

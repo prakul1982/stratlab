@@ -17,7 +17,9 @@ def full_view() -> dict:
     """The fixture theme with every part of the page filled: the parts the page reads on its own (news, listings, prices, business
     updates) and the sections the fixture's stored pages leave empty (ownership, events, management, the latest quarter)."""
     v = copy.deepcopy(view())
-    v.update(core="ore turned into cells", etfs=[{"ticker": "BATT", "name": "A battery fund"}],
+    # (changed on purpose, deck101 …: a fund is said to track the theme only when its name says the theme's work; this "Test theme"'s fund
+    # says it)
+    v.update(core="ore turned into cells", etfs=[{"ticker": "BATT", "name": "A test battery fund"}],
              news=[{"at": "2026-10-04", "headline": "Mine A ships record ore", "company": "Mine A", "source": "Exchange filing", "url": "https://example.com/n/1"}],
              listings=[{"id": "i1", "name": "New Cells Ltd", "symbol": "NEWC", "stage": "open", "open": "2026-10-10", "close": None, "listing": None,
                         "groups": ["Cells"], "what": "makes lithium cells"}],

@@ -7534,6 +7534,56 @@ def money_fmt(us: bool) -> str:
     return "usd" if us else "inr"
 
 
+# deck101 (the live R99 decks' "Funds that track the theme": Alcoholic beverages' NIFTYBEES (the Nifty 50), CONSUMBEES and MAFANG (a NYSE FANG+
+# fund), Airlines' CPSE ETF and Nifty Midcap 100, Media's MAFANG, Insurance's and Utilities' BANKBEES, Hotels and casinos' JETS (airlines),
+# Medical devices' IBB and PPH (biotech, pharma)): the AI names funds, and the lookup finds whatever listed fund its words come nearest; a fund
+# is said to track the theme only when its own name says the theme's work: a word of the theme's name, or a word of a kind of fund that holds
+# such companies (FUND_KINDS: a fund word, then the theme words it stands for)
+FUND_HOUSE = frozenset("""nippon india indian etf etfs bees nifty ishares spdr state street ss vanguard invesco global first trust fidelity msci motilal
+    oswal mirae asset icici prudential hdfc kotak axis groww amplify direxion daily bull bear shares share ark vaneck schwab sprott us usa u s nyse
+    arca nasdaq bse new age ex the and of fund index select sector innovation revolution sp x lt capital""".split())
+THEME_STOP = frozenset("and companies company other makers maker services service producers producer operators operator owners owner firms the of "
+                       "for larger smaller theme india us".split())
+FUND_KINDS = (({"health", "healthcare"}, {"hospital", "hospitals", "pharma", "pharmaceutical", "medical", "biotech"}),
+              ({"realty", "reit", "reits", "property", "real", "estate"}, {"realty", "real", "estate", "reit", "property"}),
+              ({"uranium"}, {"nuclear"}),
+              ({"transport", "transportation"}, {"railroad", "railroads", "trucking", "freight", "logistic", "logistics", "shipping", "airline", "port", "ports"}),
+              ({"energy"}, {"oil", "gas", "coal", "power", "renewable", "utility", "utilities"}),
+              ({"leisure", "entertainment"}, {"hotel", "hotels", "casino", "casinos", "tourism", "media", "entertainment"}),
+              ({"infra", "infrastructure"}, {"cement", "construction", "building", "port", "ports"}),
+              ({"consumption"}, {"consumer", "fmcg", "durable", "durables", "retail"}),
+              ({"financial", "financials", "finance"}, {"lender", "lenders", "insurance", "insurer", "insurers", "nbfc", "nbfcs", "fintech"}))
+
+
+def _fund_words(text: str, stop) -> set:
+    t = re.sub(r"\b([Nn]on)[- ]", r"\1", str(text or ""))
+    words = {w for w in re.findall(r"[a-z]+", t.lower()) if w not in stop and len(w) >= 3}
+    return words | {w.lower() for w in re.findall(r"\b[A-Z]{2}\b", t) if w.lower() not in stop}       # "IT"
+
+
+def _same_word(a: str, b: str) -> bool:
+    """One word's forms: the same word, or the same first five letters (four when one is that short): "auto" and "automotive"."""
+    if a == b:
+        return True
+    n = min(len(a), len(b), 5)
+    return n >= 4 and a[:n] == b[:n]
+
+
+def theme_funds(etfs: list, sector: str) -> list:
+    """deck101: the funds the map names whose own name says the theme's work (see FUND_KINDS); a broad market or another sector's fund is left
+    out, never said to track the theme."""
+    theme = _fund_words(sector, THEME_STOP)
+    out = []
+    for e in etfs or []:
+        if not isinstance(e, dict):
+            continue
+        words = _fund_words(e.get("name") or "", FUND_HOUSE)
+        if any(_same_word(w, t) for w in words for t in theme) or any(
+                any(_same_word(w, f) for w in words for f in fs) and any(_same_word(t, x) for t in theme for x in ts) for fs, ts in FUND_KINDS):
+            out.append(e)
+    return out
+
+
 def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     """A theme deep dive's slides, one for each part of the page and in its order (DECK, 5 Nov: "it doesn't contain everything there is on
     the page about the theme"): the cover (the overview and the core), the theme at a glance (how its companies got in, the funds that track
@@ -7648,7 +7698,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     top3 = size.get("top3_share")
     msg = f"{membership_words(v, total)}; {_n(len(shown), 'layer')}; {cov['line']}"
     s = Slide("The theme at a glance", msg, eyebrow=eb("Overview"))
-    etfs = v.get("etfs") or []
+    etfs = theme_funds(v.get("etfs") or [], str(v.get("sector") or ""))
     lw = CW if not etfs else 7.4
     tally = evidence_tally(v, total)
     # e54 (R54): what the checked companies' places rest on, one state each, the counts the universe line and the coverage say

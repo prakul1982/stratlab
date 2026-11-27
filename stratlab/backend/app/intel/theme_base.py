@@ -6748,7 +6748,12 @@ _ENCYCLOPEDIA = re.compile(r"^[^.]{0,160}?\b(?:is|was)\s+(?:an?|the)\s+(?:[\w&'-
                            r"Italian|Spanish|Belgian|Australian|Singaporean|Brazilian|Mexican|Argentine|Bermudian|Luxembourgish|Greek|Cypriot|"
                            r"multinational|publicly[\s-]traded)\b|^[^.]{0,80}?,\s+(?:commonly|also|formerly|better)\s+known\s+as\b", re.I)
 _ABBR_DOT = re.compile(r"\b(inc|corp|co|ltd|plc|l\.p|n\.v|s\.a|bhd|pty|ltda|st)\.", re.I)      # "Inc." doesn't end the opening clause
-_ADDS = re.compile(r"^(?:in\s+addition\b|additionally\b|also\b|(?:we|it|they|the\s+company)\s+also\b)", re.I)
+# deck101 (the live R99 decks: TAAL Tech in Airlines on "However, after an aircraft accident, company is not operating aircrafts", Orange on
+# "Furthermore, in the retail markets, the number of new mobile customers … is generally high", Finolex Cables on "Besides manufacturing a wide
+# variety of wires and cables"): a sentence that opens by turning from or adding to one before it is no line of its own words either
+_ADDS = re.compile(r"^(?:in\s+addition\b|additionally\b|also\b|(?:we|it|they|the\s+company)\s+also\b|"
+                   r"(?:[Hh]owever|[Mm]oreover|[Ff]urthermore|[Ff]urther|[Bb]esides|[Nn]evertheless|[Nn]onetheless|[Hh]ence|[Tt]hus|[Tt]herefore|"
+                   r"[Cc]onsequently|[Mm]eanwhile|[Aa]ccordingly)(?:\s*,|\s+(?-i:[a-z])))", re.I)
 # r62 (LIVE10A-004, the live review of R61: quotes printed as a company's own words on the app, the CSV and the public blog: Ambuja "is among the
 # leading cement companies in India", Shree "…is ** one of the lowest cost producers", Intel's "third-largest ... Fortune 500", ASML's "…industry
 # and", Arteris "particularl”", TOYO Co. quoted with Toyo Tire's words): a line whose subject was cut off (it starts with an ellipsis or a bare
