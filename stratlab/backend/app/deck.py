@@ -7547,7 +7547,8 @@ def money_fmt(us: bool) -> str:
 # such companies (FUND_KINDS: a fund word, then the theme words it stands for)
 FUND_HOUSE = frozenset("""nippon india indian etf etfs bees nifty ishares spdr state street ss vanguard invesco global first trust fidelity msci motilal
     oswal mirae asset icici prudential hdfc kotak axis groww amplify direxion daily bull bear shares share ark vaneck schwab sprott us usa u s nyse
-    arca nasdaq bse new age ex the and of fund index select sector innovation revolution sp x lt capital""".split())
+    arca nasdaq bse new age ex the and of fund index select sector innovation revolution sp x lt capital powershares proshares wisdomtree
+    xtrackers franklin goldman sachs jpmorgan dimensional nuveen principal""".split())
 THEME_STOP = frozenset("and companies company other makers maker services service producers producer operators operator owners owner firms the of "
                        "for larger smaller theme india us".split())
 FUND_KINDS = (({"health", "healthcare"}, {"hospital", "hospitals", "pharma", "pharmaceutical", "medical", "biotech"}),
