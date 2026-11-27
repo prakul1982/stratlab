@@ -176,6 +176,9 @@ class Settings:
     # optional usage analytics: the PostHog project key (phc_…) sends "payment completed" from the server
     POSTHOG_KEY = _env("POSTHOG_KEY")
     POSTHOG_HOST = _env("POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
+    # conv101 (T2): more of StratLab's own accounts to leave out of analytics, comma-separated, beside the ADMIN_EMAILS addresses and the
+    # admins' "+sl-" test accounts, which are left out without being listed (optional)
+    ANALYTICS_INTERNAL_EMAILS = _env("ANALYTICS_INTERNAL_EMAILS")
 
 
 settings = Settings()

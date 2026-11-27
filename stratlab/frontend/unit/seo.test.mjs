@@ -314,7 +314,7 @@ test("the landing page: one tagline, sample labels, no old pricing variant, no v
   assert.doesNotMatch(login, /Start free|Sign up free/);
   // (updated on purpose, NAV3, CX-1: one promise, not three jobs; it is a question the four checks answer, no promise of a result)
   assert.equal(seo.TAGLINE, "Is your trading idea skill or luck?");
-  assert.match(read("index.html"), /<title>StratLab<\/title>/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
+  assert.match(read("index.html"), /<title>Backtest trading ideas on Indian and US stocks · StratLab<\/title>/);      // (changed on purpose, conv101 P9: what StratLab is, in the owner's "Page · StratLab" pattern)
 });
 
 test("the Privacy page lists every AI provider the code can use, says what the browser keeps before sign-in, and no longer says 'such as'", () => {
@@ -353,7 +353,9 @@ test("Do Not Track and Global Privacy Control both switch analytics off", async 
   set({});
   assert.equal(doNotTrack(), false);
   const src = read("src/lib/analytics.ts");
-  assert.match(src, /if \(!cfg \|\| doNotTrack\(\)\) return Promise\.resolve\(null\)/, "the library isn't even downloaded");
+  // (changed on purpose, conv101 T2: Do Not Track is one of the reasons analyticsOff gives, beside robots and StratLab's own devices)
+  assert.match(src, /if \(!cfg \|\| analyticsOff\(\)\) return Promise\.resolve\(null\)/, "the library isn't even downloaded");
+  assert.match(read("src/lib/analyticsGate.ts"), /return doNotTrack\(\) \|\| automated\(\) \|\| internalDevice\(\) \|\| accountInternal;/);
   assert.match(src, /respect_dnt: true/);
 });
 

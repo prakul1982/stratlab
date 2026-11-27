@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -36,6 +36,8 @@ from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, instrument_kinds, money_calendar, quote_share, tax_export, tax_lots, tax_total
 from . import autofix
+from . import product_analytics  # noqa: E402  (conv101: sign-up and checkout events from the server)
+from . import guest_try  # noqa: E402  (conv101: try one idea without signing in)
 from . import money_mf
 from . import money_mf_nav
 from . import money_mf_ter
@@ -687,7 +689,7 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
-HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|themes(?:/.*)?|r/[^/]+|embed/.+|status|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
+HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|themes(?:/.*)?|r/[^/]+|embed/.+|status|sample-deck|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
 
 
 class HeadAsGet:
@@ -1059,6 +1061,8 @@ def me(profile=Depends(current_profile)):
     reads_cap = research_routes.ai_cap(profile)
     return ok({
         "id": profile["id"], "email": profile.get("email"),
+        # conv101 (T2): one of StratLab's own accounts (an admin or a test account): the browser then sends no analytics, and marks the device
+        "internal": product_analytics.internal(profile),
         "plan": plan, "plan_info": info, "paid_plan": seen or profile.get("_paid_plan", plan),
         "view_as": seen,
         "promo": {"until": until.isoformat()} if not seen and (until := promo_until()) and promo_active() else None,
@@ -5485,6 +5489,29 @@ def stock_chart_js():
                     headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
 
 
+class GuestTryReq(BaseModel):
+    idea: str = Field(max_length=20)
+    instrument: str = Field(max_length=30)
+
+
+@app.get("/public/try")
+def guest_try_options():
+    """conv101 (P1): what a visitor can try without signing in: a few of the library's rule sets and a few instruments."""
+    return guest_try.options()
+
+
+@app.post("/public/try")
+def guest_try_run(req: GuestTryReq, request: Request):
+    """conv101 (P1): one backtest and verdict for a visitor, no sign-in: nothing stored, a few a day per address (guest_try)."""
+    return guest_try.run(markets, compute.run, req.idea, req.instrument, caller_address(request.scope))
+
+
+@app.get("/stocks/pv.js", include_in_schema=False)
+def stock_pv_js():
+    """conv101 (T1): the pageview beacon of the pages the server draws (backend/app/pv.js), addressed by its hash in the page."""
+    return Response(stock_pages.PV_JS, media_type="text/javascript", headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
+
+
 @app.get("/stocks/{region}/{symbol}/prices.json", include_in_schema=False)
 def stock_prices(region: str, symbol: str, request: Request):
     """A listed company's daily closes for its page's chart, {"currency", "t": [days since 1970-01-01], "c": [closes]}: every
@@ -6727,7 +6754,7 @@ def not_viewing(profile) -> None:
 
 
 @app.post("/billing/subscribe")
-def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
+def subscribe(req: SubscribeReq, profile=Depends(current_profile), x_analytics: str | None = Header(None)):
     not_viewing(profile)
     if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
@@ -6735,7 +6762,7 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     throttle(profile, "subscribe", 5, 60, "That's a lot of checkouts in a minute. Try again in a minute.")
     throttle(profile, "subscribe_day", 20, 86400, "You've started a lot of checkouts today. Try again tomorrow.")
     try:
-        return billing.create_subscription(profile, req.plan, req.period, req.currency)
+        out = billing.create_subscription(profile, req.plan, req.period, req.currency)
     except ValueError as e:
         err(503, "billing_offline", str(e))
     except rz_errors.BadRequestError as e:
@@ -6747,6 +6774,39 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     except (rz_errors.ServerError, rz_errors.GatewayError) as e:
         print("razorpay subscribe failed:", e)
         err(502, "billing_unavailable", "The payment service didn't answer. Try again in a minute.")
+    if not product_analytics.off(x_analytics):
+        product_analytics.checkout(profile, "started", req.plan, req.period)     # conv101 (T3): the payment window opens next
+    return out
+
+
+class CheckoutEventReq(BaseModel):
+    event: str = Field(max_length=20)
+    plan: str = Field(max_length=10)
+    period: str = Field(max_length=10)
+
+
+@app.post("/billing/checkout-event")
+def checkout_event(req: CheckoutEventReq, profile=Depends(current_profile), x_analytics: str | None = Header(None)):
+    """conv101 (T3): the payment window was closed, or a payment in it failed (the page tells the server, which records it for analytics:
+    plan and period only). Nothing changes on the account."""
+    if req.event not in ("dismissed", "failed"):
+        err(400, "bad_event", "Unknown checkout event.")
+    throttle(profile, "checkout_event", 20, 3600, "Too many checkout events this hour.")
+    sent = not product_analytics.off(x_analytics) and product_analytics.checkout(profile, req.event, req.plan, req.period)
+    return {"recorded": bool(sent)}
+
+
+class SignupReq(BaseModel):
+    source: str | None = Field(default=None, max_length=24, alias="from")
+
+
+@app.post("/analytics/signup")
+def analytics_signup(req: SignupReq, profile=Depends(current_profile), x_analytics: str | None = Header(None)):
+    """conv101 (T3): a new account's first sign-in in a browser: "signed up" is recorded once per account, from the server, with where the visit
+    came from. `first`: this call sent it (the page then tells the Meta Pixel, if the visitor allowed it)."""
+    if product_analytics.off(x_analytics):
+        return {"first": False}
+    return {"first": bool(product_analytics.signed_up(profile, req.source))}
 
 
 @app.post("/billing/verify")

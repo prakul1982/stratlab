@@ -1,6 +1,7 @@
 import { AuthClient } from "@supabase/auth-js";
 import { fieldWords, invalidField, invalidText, serverProblems } from "./validate";
 import { CFG, sessionKey } from "./config";
+import { analyticsOff } from "./analyticsGate";
 import { ApiError, NO_BACKEND_MESSAGE } from "./http";
 import { viewAsHeaders } from "./viewAs";
 import { hasSavedSession } from "./entry";
@@ -92,7 +93,10 @@ async function send<T = any>(path: string, { method = "GET", body, raw = false, 
     const early = takeEarlyMe(path, method, token);
     r = early ? await early : await fetch(CFG.API_BASE + path, {
       method,
-      headers: { "Content-Type": file ? "application/octet-stream" : "application/json", ...(token ? { Authorization: `Bearer ${token}`, ...viewAsHeaders() } : {}) },
+      // conv101 (T3): a browser left out of analytics (Do Not Track, a robot, StratLab's own device) says so, and the server then records no
+      // event of its own for the call either (a sign-up, a checkout step)
+      headers: { "Content-Type": file ? "application/octet-stream" : "application/json", ...(token ? { Authorization: `Bearer ${token}`, ...viewAsHeaders() } : {}),
+        ...(analyticsOff() ? { "X-Analytics": "off" } : {}) },
       body: file ?? (body === undefined ? undefined : JSON.stringify(body)),
       signal,
     });

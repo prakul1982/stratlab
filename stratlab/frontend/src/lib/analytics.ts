@@ -11,6 +11,7 @@
 import type { PostHog } from "posthog-js/dist/module.slim.no-external";
 
 import { markSignup } from "./track";
+import { analyticsOff, doNotTrack, readInternalSwitch, rememberFrom, setAccountInternal, signupFrom } from "./analyticsGate";
 
 type Value = string | number | boolean | null | undefined;
 export type Props = Record<string, Value>;
@@ -70,15 +71,16 @@ function analyticsConfig(): Cfg | null {
 export function analyticsDashboard(): string | null {
   const c = analyticsConfig();
   if (!c) return null;
-  return /us\.i\.posthog\.com/.test(c.host) ? "https://us.posthog.com" : /eu\.i\.posthog\.com/.test(c.host) ? "https://eu.posthog.com" : c.host;
+  // the site's own address that forwards to PostHog (vercel.json /ingest, T4) is the US project's
+  return /us\.i\.posthog\.com/.test(c.host) || c.host.startsWith("/") ? "https://us.posthog.com" : /eu\.i\.posthog\.com/.test(c.host) ? "https://eu.posthog.com" : c.host;
 }
 
-/** The browser asks not to be tracked (Do Not Track, or Global Privacy Control). */
-export function doNotTrack(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const n = navigator as Navigator & { msDoNotTrack?: string; globalPrivacyControl?: boolean };
-  const w = typeof window === "undefined" ? undefined : (window as Window & { doNotTrack?: string });
-  return [n.doNotTrack, n.msDoNotTrack, w?.doNotTrack].some((v) => v === "1" || v === "yes") || n.globalPrivacyControl === true;
+export { doNotTrack };
+
+// conv101 (T2): ?internal=1 marks this device as StratLab's own (left out of analytics from now on), ?internal=0 undoes it; ?from=… on a
+// link from a page the server draws is kept for the sign-up (lib/analyticsGate.ts)
+if (typeof window !== "undefined") {
+  try { readInternalSwitch(); rememberFrom(); } catch { /* analytics never breaks the page */ }
 }
 
 /* ---------- the client, loaded once on demand ---------- */
@@ -103,7 +105,7 @@ function scrub<T extends { properties?: Record<string, unknown>; $set?: Record<s
 
 function load(): Promise<PostHog | null> {
   const cfg = analyticsConfig();
-  if (!cfg || doNotTrack()) return Promise.resolve(null);
+  if (!cfg || analyticsOff()) return Promise.resolve(null);
   loading ??= new Promise<void>((ok) => {
     // after the first paint, when the browser is idle: analytics never slows the page down
     const idle = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
@@ -119,7 +121,8 @@ function load(): Promise<PostHog | null> {
       disable_compression: true,          // plain JSON, so what is sent can be read in the browser's network panel
       respect_dnt: true, mask_personal_data_properties: true, mask_all_text: true, mask_all_element_attributes: true,
       person_profiles: "identified_only", persistence: "localStorage",
-      before_send: (ev) => scrub(ev),
+      // an account the server marks as StratLab's own can sign in after the library loaded: nothing more is sent from then on
+      before_send: (ev) => (analyticsOff() ? null : scrub(ev)),
     });
     ph = posthog;
     queue.splice(0).forEach((f) => { try { f(posthog); } catch { /* one bad call doesn't stop the rest */ } });
@@ -132,7 +135,7 @@ function load(): Promise<PostHog | null> {
 function withClient(f: (p: PostHog) => void) {
   try {
     if (ph) { f(ph); return; }
-    if (!analyticsConfig() || doNotTrack()) return;
+    if (!analyticsConfig() || analyticsOff()) return;
     if (queue.length < 100) queue.push(f);
     void load();
   } catch { /* analytics never breaks the app */ }
@@ -152,8 +155,9 @@ export function pageview(path: string) {
 
 /** Tie this browser's events to the signed-in account, by its internal id only. The plan rides along on every event.
  *  `backtests` (this month) and `createdAt` stay in this file, to tell a first backtest from the rest. */
-export function identify(userId: string, o: { plan?: string | null; backtests?: number; createdAt?: string | null } = {}) {
+export function identify(userId: string, o: { plan?: string | null; backtests?: number; createdAt?: string | null; internal?: boolean } = {}) {
   if (!userId) return;
+  if (o.internal) { setAccountInternal(true); return; }     // StratLab's own account (the server says so): nothing is sent, ever
   const age = o.createdAt ? Date.now() - new Date(o.createdAt).getTime() : NaN;
   context = { backtests: o.backtests, newAccount: age < 31 * 86_400_000 };
   withClient((p) => {
@@ -215,11 +219,15 @@ export function trackBacktest(source: string) {
   track("backtest run", { source });
 }
 
-/** Signed in for the first time a few minutes after the account was made: a sign-up. Sent once per browser. */
-export function trackSignup(userId: string, createdAt?: string | null) {
-  if (!createdAt || Date.now() - new Date(createdAt).getTime() > 15 * 60_000) return;
+/** A new account's first sign-in on this browser (made in the last day): the server records "signed up" once per account (T3: our own API,
+ *  which an ad blocker doesn't drop, with where the visit came from: ?from=stock|theme|blog…), and the Meta Pixel's CompleteRegistration
+ *  follows when the server says this was the account's first. Nothing at all when this browser is left out of analytics. */
+export function trackSignup(userId: string, createdAt: string | null | undefined, report: (from: string | null) => Promise<{ first?: boolean } | null | undefined>) {
+  if (!createdAt || Date.now() - new Date(createdAt).getTime() > 86_400_000 || analyticsOff()) return;
   const key = "stratlab.signedup";
-  try { if (localStorage.getItem(key) === userId) return; localStorage.setItem(key, userId); } catch { /* storage off */ }
-  track("signed up");
-  markSignup();          // the Meta Pixel's CompleteRegistration, if the visitor allowed it (lib/track.ts)
+  try { if (localStorage.getItem(key) === userId) return; } catch { /* storage off */ }
+  void report(signupFrom()).then((r) => {
+    try { localStorage.setItem(key, userId); } catch { /* storage off */ }
+    if (r?.first) markSignup();          // the Meta Pixel's CompleteRegistration, if the visitor allowed it (lib/track.ts)
+  }).catch(() => undefined);
 }

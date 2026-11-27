@@ -10,11 +10,13 @@ only then a current deck whose gate failed an item; when none is kept, 404 (the 
 GET /pricing/sample-deck/info).
 """
 import base64
+from urllib.parse import quote
 
 from fastapi import APIRouter
 from fastapi.responses import Response
 
 from . import computed
+from .config import settings
 from .responses import err
 
 router = APIRouter()
@@ -121,3 +123,78 @@ def sample_deck(id: str | None = None):
     return Response(body, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{file_name(_name(r["label"]))}"',
                              "Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/sample-deck.pdf")
+def sample_deck_pdf(id: str | None = None):
+    """conv101: the same PDF at the site's own stable address (stratlab.studio/sample-deck.pdf; vercel.json forwards it here)."""
+    return sample_deck(id)
+
+
+# ---------- the sample deck's own page (conv101: a link people can share, with a preview, that leads to the PDF) ----------
+WHAT_IT_HOLDS = (
+    "The theme at a glance: how its companies were found and checked, and the funds that track it",
+    "The value chain by layer, as a chart and a table",
+    "Each layer's companies with their figures: market value, revenue, margins, the median and range",
+    "Tailwinds and risks, each with its source and date",
+    "Recent headlines, new listings and the method behind every number",
+)
+
+
+def page_html() -> tuple[str, int]:
+    """The sample deck's page: what it is, what a theme deck holds, the download, and how to get decks of any theme. The page's Open Graph
+    tags give a shared link its title, description and picture. (html, status): 200 with a deck to give, else a short page kept out of search."""
+    import html as _html
+    from . import plans, stock_pages
+    from .titles import page_title
+    e = _html.escape
+    site = settings.PUBLIC_SITE_URL
+    r = chosen()
+    theme = _name(r["label"]) if r else ""
+    canonical = site + "/sample-deck"
+    if not r:
+        head = stock_pages._head(page_title("Sample deck"), "There's no sample deck to download right now.", canonical, robots="noindex,follow")
+        body = ('<h1>Sample theme deck</h1><p class="muted">There\'s no sample deck to download right now. Please look again later.</p>'
+                f'<div class="ctas"><a class="btn ghost" href="{e(site)}/themes">See the themes</a><a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div>')
+        return stock_pages._page(head, None, body, src="sample-deck"), 200
+    title = page_title(f"Sample theme deck: {theme}")
+    desc = (f"A real StratLab theme deck, free to download as a PDF with no sign-in: {theme}, its listed companies by layer, their figures, "
+            "tailwinds and risks with sources. Facts from filings, not advice.")
+    pdf = f"{site}/sample-deck.pdf?id={quote(str(r.get('id') or ''), safe='')}"
+    ld = stock_pages._ld({"@context": "https://schema.org", "@type": "DigitalDocument", "name": f"StratLab sample theme deck: {theme}",
+                          "description": desc, "url": canonical, "encodingFormat": "application/pdf", "isAccessibleForFree": True,
+                          "publisher": {"@type": "Organization", "name": "StratLab", "url": site}})
+    head = stock_pages._head(title, desc, canonical, extra=ld, og_type="article")
+    region = r.get("region") if r.get("region") in ("IN", "US") else None
+    theme_link = ""
+    if region:
+        try:
+            from . import public_themes
+            from .intel import theme_library
+            name = theme_library.normalise(theme, region)
+            hit = next((x for x in public_themes.entries(region) if public_themes.slug(x["name"]) == public_themes.slug(name)), None)
+            if hit:
+                theme_link = f'<p><a class="link" href="{e(public_themes.path(region, hit["slug"]))}">See the {e(public_themes.short_label(hit["label"]))} theme\'s companies on the site</a></p>'
+        except Exception as ex:
+            print("sample deck theme link failed:", str(ex)[:160])
+    basic, pro = plans.PLANS["basic"]["decks_per_month"], plans.PLANS["pro"]["decks_per_month"]
+    per = lambda n: "unlimited" if n is None else f"{n} a month"      # noqa: E731
+    holds = "".join(f"<li>{e(x)}</li>" for x in WHAT_IT_HOLDS)
+    body = (f'<h1>Sample theme deck <span class="muted">{e(theme)}</span></h1>'
+            '<p class="muted">A real deck StratLab made from its theme map, as it was made: free to download, no sign-in, nothing to fill in.</p>'
+            f'<div class="ctas" data-sample-download><a class="btn" href="{e(pdf)}" download>Download the sample deck (PDF)</a>'
+            f'<a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div>'
+            f'<section class="card"><h2>What a theme deck holds</h2><ul class="plain">{holds}</ul></section>'
+            f'<section class="card"><h2>Decks of any theme or company</h2><p>Slide decks are on Basic ({e(per(basic))}) and Pro ({e(per(pro))}), '
+            f'as PowerPoint or PDF. Free accounts get this sample. <a class="link" href="{e(site)}/pricing">Plans and prices</a>.</p></section>'
+            + theme_link +
+            '<p class="note">StratLab gives facts, not investment advice, and is not a SEBI-registered investment adviser or research analyst. '
+            'Figures come from companies\' reported results and filings (NSE, BSE and the SEC) and market prices.</p>')
+    return stock_pages._page(head, None, body, src="sample-deck"), 200
+
+
+@router.get("/sample-deck")
+def sample_deck_page():
+    from fastapi.responses import HTMLResponse
+    page, status = page_html()
+    return HTMLResponse(page, status_code=status, headers={"Cache-Control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=600"})

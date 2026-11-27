@@ -135,7 +135,8 @@ export function pricingIntro(o: Offer | null | undefined, _pro: Record<string, u
 /** What a plan card's button does on the landing page: sign in (every button says it goes to Google), or nothing to sell yet (a note). */
 export function landingAction(o: Offer | null | undefined, plan: PlanId): { label: string; buy: boolean } | { note: string } {
   if (plan === "free") return { label: "Continue with Google", buy: false };
-  if (offerMode(o) === "unknown") return { label: "Continue with Google to see plans", buy: true };
+  // conv101 (P7, funnel: "…to see plans" read as if the plans were hidden): the plan the button is for, while the offer is still being read too
+  if (offerMode(o) === "unknown") return { label: `Continue with Google to get ${plan === "pro" ? "Pro" : "Basic"}`, buy: true };
   if (!canBuy(o)) return { note: "Opens soon" };
   return { label: `Continue with Google to get ${plan === "pro" ? "Pro" : "Basic"}`, buy: true };
 }

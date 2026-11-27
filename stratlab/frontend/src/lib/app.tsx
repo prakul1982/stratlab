@@ -17,6 +17,8 @@ import { emailLinkIn, hasSavedSession, hasSignInCode, withoutEmailLink, withoutS
 import { useLiveRefresh } from "./liveRefresh";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 import { toastMs } from "./toastTime";
+import { markNudge, nudgeFor, nudgeSeen } from "./upgradeNudge";
+import { LIMITS } from "./planCore";
 
 const ME_RETRY_MS = 1500;
 const SESSION_RETRY_MS = [2000, 5000];
@@ -241,9 +243,22 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   // usage analytics: this account by its id only, with its plan (does nothing without a key)
   useEffect(() => {
     if (!me?.id || !session) return;
-    identify(me.id, { plan: me.plan, backtests: me.usage?.backtests_used, createdAt: session.user?.created_at });
-    trackSignup(me.id, session.user?.created_at);
+    identify(me.id, { plan: me.plan, backtests: me.usage?.backtests_used, createdAt: session.user?.created_at, internal: me.internal === true });
+    // a new account: "signed up" recorded by the server, once per account, with where the visit came from (conv101, T3)
+    trackSignup(me.id, session.user?.created_at, (from) => api<{ first: boolean }>("/analytics/signup", { method: "POST", body: { from } }));
   }, [me?.id, me?.plan]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // conv101 (P8): a Free account that has used 3 of its 5 backtests or AI builds this month is told so once, with what Basic gives (lib/upgradeNudge)
+  useEffect(() => {
+    if (!me) return;
+    const n = nudgeFor({ plan: me.plan, viewAs: me.view_as, usage: me.usage, seen: nudgeSeen,
+      basic: { backtests: LIMITS.basic.backtests_per_month, ai: LIMITS.basic.ai_builds_per_month } });
+    if (!n) return;
+    markNudge(n.key);
+    track("upgrade prompt shown", { kind: n.kind });
+    if (plansCall(me.offer, false).kind === "see") notify(n.text, { label: "See plans", run: () => { track("upgrade clicked", { source: "nudge", kind: n.kind }); plans.current(); } });
+    else notify(n.text, { label: JOIN_LABEL, run: () => void joinInterest("limit").then(() => notify(JOINED)).catch(() => notify("Something went wrong. Try again.")) });
+  }, [me?.usage?.backtests_used, me?.usage?.ai_used, me?.plan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the choice is kept on this device; an account that isn't the owner's can't use it, so a stale one is dropped
   useEffect(() => { if (me && !me.is_admin && readViewAs()) writeViewAs(null); }, [me]);

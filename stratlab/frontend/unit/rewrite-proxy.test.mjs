@@ -18,8 +18,10 @@ test("the forwarded paths are exactly vercel.json's rewrites to the API", () => 
   // /status: the public data status page, a page of the API like the company pages (updated on purpose: the page is new)
   // (updated on purpose, bet 3) /r/<token>: a research share link's page; /themes: the public theme pages; /embed: the charts other sites frame
   // (updated on purpose, AS1) /themes on its own: the site forwarded it as /themes/, which the API answered with a redirect to its own host
-  assert.deepEqual(forwardedPaths().sort(), ["/blog/:path*", "/c/:token", "/email/confirm", "/embed/:path*", "/money/calendar/feed/:token", "/news-link/:issue/:n", "/r/:token", "/sitemap.xml", "/sitemaps/:path*", "/status", "/stocks/:path*", "/themes", "/themes/:path*", "/unsubscribe", "/v/:token"]);
-  assert.deepEqual(forwardedPaths(), vercel.rewrites.filter(external).map((r) => r.source));
+  // (changed on purpose, conv101) /sample-deck, /sample-deck.pdf and /pricing/sample-deck: the sample deck's page and PDF at the site's own address;
+  // /ingest (PostHog through the site's own address) is not the API's, so a local copy doesn't forward it
+  assert.deepEqual(forwardedPaths().sort(), ["/blog/:path*", "/c/:token", "/email/confirm", "/embed/:path*", "/money/calendar/feed/:token", "/news-link/:issue/:n", "/pricing/sample-deck", "/r/:token", "/sample-deck", "/sample-deck.pdf", "/sitemap.xml", "/sitemaps/:path*", "/status", "/stocks/:path*", "/themes", "/themes/:path*", "/unsubscribe", "/v/:token"]);
+  assert.deepEqual(forwardedPaths(), vercel.rewrites.filter((r) => external(r) && !/posthog\.com/.test(r.destination)).map((r) => r.source));
   // the only other rewrite is the app's own catch-all
   assert.deepEqual(vercel.rewrites.filter((r) => !external(r)).map((r) => r.destination), ["/index.html"]);
 });

@@ -23,10 +23,10 @@ export const TAGLINE = "Is your trading idea skill or luck?";
 export const BROWSE_COMPANIES: [string, string][] = [["/stocks/in", "India A–Z"], ["/stocks/us", "US A–Z"],
   ["/stocks/in/index/nifty-50", "NIFTY 50"], ["/stocks/us/index/sp-500", "S&P 500"]];
 // the words people search for, not only the tagline (DK-013: "test it, research it, track it" names no keyword)
-// the brand alone (owner, 18 Nov: every tab is "Page · StratLab", the landing page "StratLab"); the search words are in the
-// description and the page's heading (DK-013 put them in the title before)
-export const HOME_TITLE = withBrand();
-export const HOME_DESCRIPTION = "Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.";
+// conv101 (P9, funnel 27 Nov: the home page's title was the brand alone, "StratLab", which says nothing in a search result or a shared link):
+// what StratLab does, in the owner's one tab-title pattern; the description says it in a sentence (index.html carries the same words)
+export const HOME_TITLE = withBrand("Backtest trading ideas on Indian and US stocks");     // the owner's one pattern (18 Nov), "Page · StratLab"
+export const HOME_DESCRIPTION = "Backtest trading ideas, written in plain words, on years of real Indian and US prices after every charge, and see if it's skill or luck. Research companies too.";
 
 export type PageMeta = {
   /** the address the page lives at */

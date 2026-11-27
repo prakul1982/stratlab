@@ -58,7 +58,9 @@ test("the landing page has no teaser counts and one public header, the same list
   void PUBLIC_MENU;
   // one promise in the hero, who it is for, and a real result anyone can open without signing in
   assert.match(login, /<h1 className="serif lp-h1">Is your trading idea <em>skill<\/em> or luck\?<\/h1>/);
-  assert.match(login, /<Link className="btn quiet lp-cta-2" to="\/library">See real results, no sign-in<\/Link>/);
+  // (changed on purpose, conv101 P4: the real result opened is one that held up, explained on its own page, else the library)
+  assert.match(login, /<Link className="btn quiet lp-cta-2" to=\{to\} data-testid="hero-proof">See a verdict that held up, no sign-in<\/Link>/);
+  assert.match(login, /const \[to, setTo\] = useState\("\/library"\);/);
   assert.doesNotMatch(read("src/styles.css"), /\.lp-cta-2 \{ display: none; \}|, \.lp-cta-2 \{ display: none; \}/, "a phone keeps the way to a real result");
   // the hero's samples start with one that held up
   assert.ok(login.indexOf('tab: "Bitcoin"') < login.indexOf('tab: "NIFTY 50"'));

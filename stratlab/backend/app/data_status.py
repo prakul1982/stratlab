@@ -406,4 +406,4 @@ def page_html(v: dict) -> str:
              ".ds td:nth-of-type(1)::before{content:'Last updated: ';color:var(--muted)}.ds td:nth-of-type(2)::before{content:'Next due: ';color:var(--muted)}}</style>")
     head = sp._head(page_title("Data status"), "When each StratLab dataset was last updated and when it is next due: prices, breadth, filings, "
                     "results, flows, briefs and more.", f"{site}/status", style)
-    return sp._page(head, None, "".join(body))
+    return sp._page(head, None, "".join(body), src="status")

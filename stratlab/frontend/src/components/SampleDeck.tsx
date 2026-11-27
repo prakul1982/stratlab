@@ -31,3 +31,11 @@ export function SampleDeckLink({ label = "Download a sample deck (PDF)", classNa
       title={theme ? `A real theme deck: ${theme}` : undefined}>{label}{theme ? `: ${theme}` : ""}</a>
   );
 }
+
+/** conv101 (coordinator, 27 Nov: the sample deck had no link of its own to share): the sample deck's page on the site (stratlab.studio/sample-deck,
+ * drawn by the server with a preview for a shared link: backend app/sample_deck.py page_html), drawn only when there is a sample to give. */
+export function SampleDeckPageLink({ label = "What a theme deck holds" }: { label?: string }) {
+  const s = useSampleDeck();
+  if (!s) return null;
+  return <> · <a className="link" href="/sample-deck" data-testid="sample-deck-page">{label}</a></>;
+}

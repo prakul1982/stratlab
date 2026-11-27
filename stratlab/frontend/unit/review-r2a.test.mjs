@@ -44,7 +44,7 @@ test("signed-out tab titles say what they wait for (R2A-025)", async () => {
   assert.equal(signedOutTitle("/holdings").startsWith("Sign in: "), true);
   assert.equal(signedOutTitle("/pricing"), "Plans · StratLab");
   assert.equal(signedOutTitle("/plans"), "Plans · StratLab");
-  assert.equal(signedOutTitle("/"), "StratLab");     // the brand alone on the landing page (updated on purpose, owner 18 Nov)
+  assert.equal(signedOutTitle("/"), "Backtest trading ideas on Indian and US stocks · StratLab");     // (changed on purpose, conv101 P9: what StratLab is, in the owner's "Page · StratLab" pattern)
 });
 
 test("the closing auction says closed before the open, not continuous trading (R2A-006)", async () => {

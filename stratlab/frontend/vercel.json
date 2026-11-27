@@ -176,6 +176,15 @@
       ]
     },
     {
+      "source": "/sample-deck",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "1"
+        }
+      ]
+    },
+    {
       "source": "/sw.js",
       "headers": [
         {
@@ -186,6 +195,26 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/ingest/static/:path*",
+      "destination": "https://us-assets.i.posthog.com/static/:path*"
+    },
+    {
+      "source": "/ingest/:path*",
+      "destination": "https://us.i.posthog.com/:path*"
+    },
+    {
+      "source": "/sample-deck",
+      "destination": "https://stratlab-production-ca25.up.railway.app/sample-deck"
+    },
+    {
+      "source": "/sample-deck.pdf",
+      "destination": "https://stratlab-production-ca25.up.railway.app/sample-deck.pdf"
+    },
+    {
+      "source": "/pricing/sample-deck",
+      "destination": "https://stratlab-production-ca25.up.railway.app/pricing/sample-deck"
+    },
     {
       "source": "/v/:token",
       "destination": "https://stratlab-production-ca25.up.railway.app/v/:token"
