@@ -80,12 +80,14 @@ def test_the_findings_never_lead_with_a_layer_of_adjacent_participants():
     own = [b for b in v["layers"] if not b.get("official") and b.get("revenue")]
     big = max(own, key=lambda b: b["revenue"])
     slides, _ = deck.theme_plan(copy.deepcopy(v))
-    assert any(f"{big['layer']} brings in the most revenue" in x for x in deck.findings_lines(slides))
+    # (changed on purpose, deck101 …: the sentence reads "The most revenue of the map's own layers is in <layer>: <amount>", whatever the
+    # layer's name, "Steel mills brings in" no more)
+    assert any(f"The most revenue of the map's own layers is in {big['layer']}:" in x for x in deck.findings_lines(slides))
     big["adjacent"] = {"kind": "glass bottle makers", "theme": "Alcoholic beverages"}
     slides, _ = deck.theme_plan(v)
     lines = deck.findings_lines(slides)
-    assert not any(x.startswith(big["layer"]) and "brings in the most revenue" in x for x in lines), lines
-    assert any("brings in the most revenue of the map's own layers" in x for x in lines), lines
+    assert not any(f"layers is in {big['layer']}:" in x for x in lines), lines          # (changed on purpose, deck101 …)
+    assert any(x.startswith("The most revenue of the map's own layers is in ") for x in lines), lines          # (changed on purpose, deck101 …)
 
 
 def test_a_company_with_no_figures_is_listed_after_every_company_with_figures():

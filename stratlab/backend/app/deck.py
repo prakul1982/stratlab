@@ -210,6 +210,10 @@ def whole_clause(text: str, limit: int) -> str:
         t = _no_joiner(t)
         while t.count("(") > t.count(")"):               # a bracket the cut left open goes with the clause it opened
             t = _no_joiner(t[:t.rfind("(")])
+        # deck101 (the live R99 Alcoholic beverages deck: "… one of the leading alcoholic beverages manufacturers in India engaged", the
+        # sentence cut after a word that needs what follows it, and no ellipsis): such a word goes with the clause it opened
+        while _DANGLING.search(t) and len(_DANGLING.sub("", t)) >= 24:
+            t = _no_joiner(_DANGLING.sub("", t))
         return t.rstrip(" ,;:-–—(")
     least = max(24, int(limit * 0.4))
     for at in sorted({m.start() for rx in (_CLAUSE_END, _CLAUSE_LEAD) for m in rx.finditer(cut)}, reverse=True):
@@ -221,6 +225,8 @@ def whole_clause(text: str, limit: int) -> str:
     return closed(got[:-1])
 
 
+_DANGLING = re.compile(r"\s+(?:engaged|involved|focused|located|based|headquartered|used|known|specialis(?:ed|ing)|specializ(?:ed|ing)|primarily|"
+                       r"mainly|principally|predominantly|largely|operating|is|are|was|were|being|has|have|which|that|who)$", re.I)
 _JOINER = re.compile(r"[\s,;:(–-]+(?:and|or|of|the|a|an|for|in|to|with|by|on|at|from|its|their|&)$", re.I)
 
 
@@ -295,7 +301,11 @@ def _pc(v, signed=False) -> str:
     # one rounding for every figure, a half up as the sentences' (theme_data.f1), never Python's half-to-even of the float
     text = f1(abs(v))
     neg = v < 0 and float(text) != 0
-    return f"{MINUS if neg else '+' if signed and float(text) != 0 else ''}{text}%"
+    sign = MINUS if neg else '+' if signed and float(text) != 0 else ''
+    if float(text) >= 1000:          # deck101 (the live R99 decks: "+4520.4%", "−7026.0%"): thousands set apart, as every other figure's are
+        whole, _, dec = text.partition(".")
+        text = f"{int(whole):,}" + (f".{dec}" if dec else "")
+    return f"{sign}{text}%"
 
 
 _SCALE_WORDS = (("lakh cr", "lakh crore"), ("tn", "trillion"), ("bn", "billion"), ("cr", "crore"), ("m", "million"))
@@ -2284,7 +2294,7 @@ NOT_LISTED_TITLE = ROLL_TITLE + ": no longer listed"          # fix98: theme_dat
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
-from .intel.theme_data import CALC_KINDS as ROLL_WHY, f1, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
+from .intel.theme_data import CALC_KINDS as ROLL_WHY, f1, halves_rows, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
 # ex49 (R48): the mark on a left-out company's own row is its reason's kind (theme_data.out_reason), each with its note under the table
 MARKS_POINTER = "What the marks on its rows mean"          # deck96: the key to the marks, on the method page
 REASON_WHERE = "each company's reason is on the theme's page in StratLab"      # deck96: never said to be on a page that doesn't show it
@@ -3521,6 +3531,11 @@ def population(v: dict) -> dict:
     return {"core": core, "adjacent": side, "adjacent_layers": [b["layer"] for b in v.get("layers") or [] if b.get("adjacent") and b.get("layer")]}
 
 
+def halves_label(name: str) -> str:
+    """deck101: the value chain table's row of a layer split into halves by market value, its halves' companies together."""
+    return f"{name} (both halves together)"
+
+
 def adjacent_label(name: str, adjacent) -> str:
     """e54: a layer's name in a table or chart of layers, marked when it is an adjacent layer (shown, in no theme total, median or ranking)."""
     return f"{name} (adjacent)" if adjacent else name
@@ -4580,6 +4595,22 @@ def growth_base_line(rows: list, amt, limit: int = 5) -> str:
             + (f"; {len(xs) - limit} more" if len(xs) > limit else "") + ".")
 
 
+def revenue_layers(own: list) -> list[tuple]:
+    """deck101: (name, revenue) of each layer for the findings' "most revenue": a layer split into halves by market value once, its two halves'
+    revenue together, under the name the value chain table gives it (halves_label)."""
+    out, seen = [], set()
+    for x in own:
+        sib = next((y for y in own if y["layer"] == x.get("sibling")), None) if x.get("scale") else None
+        if sib is not None:
+            if x["layer"] in seen:
+                continue
+            seen |= {x["layer"], sib["layer"]}
+            out.append((halves_label(re.sub(r" \((?:larger|smaller)\)$", "", x["layer"])), (x["revenue"] or 0) + (sib["revenue"] or 0)))
+        else:
+            out.append((x["layer"], x["revenue"]))
+    return out
+
+
 def findings_tiles(v: dict, cov: dict, ebm, cap, lender: bool = False) -> list[tuple]:
     """deck89: the key findings' big numbers, each with one plain sentence and no page reference: the theme's market value, its median
     margin (a lender's ROE), its revenue growth and its median P/E (else the latest quarter), each the figure a page's table shows. A figure
@@ -4641,8 +4672,12 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
             lines = [f"A partial map, of the {part.split(': ', 1)[1].split(' companies were checked')[0]} companies checked: {chain['line']}"]
         tot = sum(x["revenue"] for x in own)
         if own and tot and len(own) >= 2:
-            big = max(own, key=lambda x: x["revenue"])
-            lines.append(f"{big['layer']} brings in the most revenue of the map's own layers, {money(big['revenue'], v.get('unit') or ('$ million' if v.get('region') == 'US' else '₹ crore'))}.")
+            # deck101 (the live R99 Alcoholic beverages and Capital markets decks: "Spirits brand owning and bottling (larger) brings in the
+            # most revenue", a half of a layer split by market value, the larger half by construction; and "Steel mills brings in"): a layer
+            # split into halves is one layer here, its halves' revenue together, and the sentence reads whatever the layer's name
+            big = max(revenue_layers(own), key=lambda x: x[1])
+            lines.append(f"The most revenue of the map's own layers is in {big[0]}: "
+                         f"{money(big[1], v.get('unit') or ('$ million' if v.get('region') == 'US' else '₹ crore'))}.")
         cards.append({"title": "Where the return sits" if chain.get("measure") == "roe" else "Where the margin sits", "lines": lines,
                       "note": "⟦The value chain by layer⟧" + (f", ⟦{COMPARE_TITLE}⟧" if chain.get("basis") else "")})
     # 2. growth beside margin (a lender's: beside its return on equity)
@@ -5930,6 +5965,28 @@ def tidy_deck(slides: list, repair=None) -> list[dict]:
     return done
 
 
+# deck101 (the live R99 Alcoholic beverages deck: its contents row for the value chain read 'the "Other" group, outside the map's layers, is
+# not ranked.', the tail of a headline whose lead part a check had dropped, the page itself left with no headline): what a part holds when the
+# headline it repeated has gone, plainly
+CONTENTS_PLAIN = {"The value chain": "Each layer's companies, their revenue added together, and the layer's median margins and returns.",
+                  "Industry economics": "Each layer's margins, returns, growth and valuation side by side, and what moved the aggregate margin.",
+                  "The theme in numbers": "Valuation, the latest quarter and price."}
+
+
+def contents_after(rows: list, gone: set) -> list:
+    """The contents' rows once headline parts are dropped (check_deck, _sweep): a row keeps the parts left only while its lead part is
+    left, as the page's headline does (a headline that loses its lead part says nothing); else it says plainly what the part holds."""
+    out = []
+    for r in rows:
+        if isinstance(r, dict):
+            out.append(r)
+            continue
+        parts = str(r[1]).split("; ")
+        keep = [p for p in parts if p not in gone]
+        out.append([r[0], "; ".join(keep) if keep and keep[0] == parts[0] else CONTENTS_PLAIN.get(r[0], r[0]), *r[2:]])
+    return out
+
+
 def check_deck(slides: list) -> list[dict]:
     """The consistency check before a deck is stored (R25): every percentage, multiple, gap in points and count that a headline (a slide's
     subtitle), a finding or a question states is looked for among the figures the deck's own tables, charts and tiles show, the rows they all
@@ -5982,8 +6039,7 @@ def check_deck(slides: list) -> list[dict]:
     for s in slides:                         # the contents repeat a part's headline: a dropped one goes there too
         for b in s.blocks:
             if s.title == "Contents" and b["kind"] == "table":
-                b["rows"] = [r if isinstance(r, dict) else [r[0], "; ".join(p for p in str(r[1]).split("; ") if p not in gone) or r[0], *r[2:]]
-                             for r in b["rows"]]
+                b["rows"] = contents_after(b["rows"], gone)
     for d in dropped:
         log.warning("deck check: dropped a sentence on %r whose figures %s no table shows: %s", d["slide"], d["figures"], d["text"])
     return dropped
@@ -6323,8 +6379,7 @@ def _sweep(slides: list, judge, rule: str, claims_only: bool = False, text: bool
         if s.title == "Contents":
             for b in s.blocks:
                 if b["kind"] == "table":
-                    b["rows"] = [r if isinstance(r, dict) else [r[0], "; ".join(p for p in str(r[1]).split("; ") if p not in gone) or r[0], *r[2:]]
-                                 for r in b["rows"]]
+                    b["rows"] = contents_after(b["rows"], gone)
     return out
 
 
@@ -7651,8 +7706,19 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             return got + (f" ({r['ffo_basis']})" if k in ("ffo_share", "p_ffo") and r.get("ffo_basis") and r.get(k) is not None else "")
         head, widths = ["Layer"] + [c[1] for c in cols], [2.9] + [c[2] for c in cols]
         rows = [[adjacent_label(r["layer"], r.get("adjacent"))] + [cell(r, k) for k, _, _ in cols] for r in rows_c]
+        # deck101 (the live R99 Alcoholic beverages deck: its ranking "highest in Spirits brand owning and bottling (its larger and smaller
+        # halves together, 11.8%)" dropped from the value chain's page and the findings, 11.8% on no row of the table, the page left with no
+        # headline; Airlines' "Hotels and resorts 27.9%" likewise): a layer split into halves by market value has a row of its own, its two
+        # halves' companies together, right after its halves, so the figure every ranking of the whole layer states is on the table
+        whole_rows = {w["of"][-1]: w for w in halves_rows([x for x in layers if x["layer"] in names_shown])
+                      if all(h in {r["layer"] for r in rows_c} for h in w["of"])}
+        for i in range(len(rows_c) - 1, -1, -1):
+            w = whole_rows.get(rows_c[i]["layer"])
+            if w:
+                rows.insert(i + 1, [halves_label(w["layer"])] + [cell(w, k) for k, _, _ in cols])
         head, rows, widths, _ = drop_empty(head, rows, widths)
         mark = {chain.get("highest"): UP, chain.get("lowest"): DOWN}
+        mark.update({halves_label(w["layer"]): mark[w["layer"]] for w in whole_rows.values() if w["layer"] in mark})
         key = chain.get("measure") or "ebitda"
         # deck89 (owner, 25 Nov): the value chain's chart is its revenue by layer, beside a narrow table or under a wide one; the layers'
         # medians side by side are charted on "Layers side by side"
@@ -7859,7 +7925,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         rc_ = rest_count(v) if layer.get("basis") == "rest" else None
         if rc_ and rc_[0] > len(cos):       # d1: one count of "Other" on every page: the group's whole count, and why this page lists fewer
             msg += (f"; {rc_[0]:,} in this group in all" + (f" ({rc_[3]:,} not placed yet)" if rc_[3] else "")
-                    + f", the other {rc_[0] - len(cos):,} smaller companies whose figures the deck doesn't work out")
+                    # deck101 (the live R99 Airlines deck: "the other 1 smaller companies whose figures ..."): one company said as one
+                    + f", the other {_n(rc_[0] - len(cos), 'smaller company', 'smaller companies')} whose figures the deck doesn't work out")
         if layer.get("line"):
             msg += ". " + str(layer["line"]).strip()
             msg = msg.rstrip(".") + "."
@@ -8440,7 +8507,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     who = [who_companies(total, base_n, named, added, len([x for x in p.get("same_company") or [] if isinstance(x, dict)]),
                          sum(1 for m_ in members if m_.get("source") == "words"))]
     if added:
-        who.append(f"{confirmed:,} of the {added:,} added are description-verified" + (f"; {added - confirmed:,} not yet." if added > confirmed else "."))
+        # deck101 (the live R99 Airlines, Alcoholic beverages and Capital markets decks: "1 of the 1 added are description-verified"): the one
+        # company added said as one
+        who.append(("The 1 added is description-verified" if added == confirmed == 1 else f"{confirmed:,} of the 1 added is description-verified"
+                    if added == 1 else f"{confirmed:,} of the {added:,} added are description-verified")
+                   + (f"; {added - confirmed:,} not yet." if added > confirmed else "."))
     unv = checks.get("unverified") or []
     if unv:
         who.append(f"{_n(len(unv), 'company', 'companies')} whose own words don't show the work, left out of every median and total: {names5(unv)}.")

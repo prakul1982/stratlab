@@ -1910,34 +1910,43 @@ def chain_table(blocks: list[dict]) -> dict:
 _HALF_NAME = re.compile(r" \((?:larger|smaller)\)$")
 
 
-def _chain_table(blocks: list[dict]) -> dict:
-    """The whole chain in one table: a row per layer, with the layer that has the highest median EBITDA margin and the one with the
-    lowest named. The table's order is the chain's."""
-    rows = []
+def chain_row(b: dict) -> dict:
+    """One layer's row of the chain's table (_chain_table): its counts, revenue, medians and their bases, way of earning and period basis."""
+    e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
+    return {"layer": b["layer"], "n": b["n"], "listed": b.get("listed") or len(b.get("companies") or []), "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
+                 "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")), "rest": b.get("basis") == "rest",
+                 **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
+                 **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
+                 **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN},
+            "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"]),
+            **({"scale": b["scale"]} if b.get("scale") else {}), **({"adjacent": True} if b.get("adjacent") else {}),
+            **({"abroad": True} if isinstance(b.get("adjacent"), dict) and b["adjacent"].get("kind") == FOREIGN_KIND else {}),
+            "aggregate": b.get("aggregate"), **({"ffo_basis": b["ffo_basis"]} if b.get("ffo_basis") else {})}
 
-    def row_of(b):
-        e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
-        return {"layer": b["layer"], "n": b["n"], "listed": b.get("listed") or len(b.get("companies") or []), "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
-                     "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")), "rest": b.get("basis") == "rest",
-                     **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
-                     **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
-                     **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN},
-                "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"]),
-                **({"scale": b["scale"]} if b.get("scale") else {}), **({"adjacent": True} if b.get("adjacent") else {}),
-                **({"abroad": True} if isinstance(b.get("adjacent"), dict) and b["adjacent"].get("kind") == FOREIGN_KIND else {}),
-                "aggregate": b.get("aggregate"), **({"ffo_basis": b["ffo_basis"]} if b.get("ffo_basis") else {})}
-    rows = [row_of(b) for b in blocks]
-    # gl52 (R52, the rotating review of Release 51: Cement's "Regional cement makers" and Airlines' "Hotels and resorts", each split into
-    # halves by market value, left those themes with no ranking at all): the two halves of a layer split by market value are one layer, ranked
-    # as one against the others (its companies together); the halves stay in the table as detail, never ranked on their own
-    wholes = []
+
+def halves_rows(blocks: list[dict]) -> list[dict]:
+    """gl52: each layer split into halves by market value as one layer, its two halves' companies together, a row of the chain's table
+    ("halves": True, "of": [the larger half, the smaller half]); only halves of one way of earning are one layer. deck101: the deck's value
+    chain table shows the same row, so a ranking of the whole layer is of a figure the table shows."""
+    out = []
     for b in blocks:
         sib = next((x for x in blocks if b.get("scale") == "larger" and x.get("scale") == "smaller" and x["layer"] == b.get("sibling")), None)
         if sib is not None and model_family_of(b.get("model")) == model_family_of(sib.get("model")):
             both = layer_block(_HALF_NAME.sub("", b["layer"]), [{k: x for k, x in r.items() if k != "calc"} for r in b["companies"] + sib["companies"]],
                                set(b.get("company_wide") or []) | set(sib.get("company_wide") or []))
-            wholes.append({**row_of({**both, "model": b.get("model"), "official": b.get("official"), "basis": b.get("basis"), "adjacent": b.get("adjacent")}),
-                           "halves": True})
+            out.append({**chain_row({**both, "model": b.get("model"), "official": b.get("official"), "basis": b.get("basis"), "adjacent": b.get("adjacent")}),
+                        "halves": True, "of": [b["layer"], sib["layer"]]})
+    return out
+
+
+def _chain_table(blocks: list[dict]) -> dict:
+    """The whole chain in one table: a row per layer, with the layer that has the highest median EBITDA margin and the one with the
+    lowest named. The table's order is the chain's."""
+    rows = [chain_row(b) for b in blocks]
+    # gl52 (R52, the rotating review of Release 51: Cement's "Regional cement makers" and Airlines' "Hotels and resorts", each split into
+    # halves by market value, left those themes with no ranking at all): the two halves of a layer split by market value are one layer, ranked
+    # as one against the others (its companies together); the halves stay in the table as detail, never ranked on their own
+    wholes = halves_rows(blocks)
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_BASE companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
     # the "Other ..." group (companies that fit none of the map's layers) is never compared (R22)
@@ -1986,9 +1995,7 @@ def _chain_table(blocks: list[dict]) -> dict:
         # most, are described, each with its own figure, never ranked, whatever their capital figures
         whole = whole_points([c for b in blocks for c in b["companies"]])
         each = [f"{r['layer']} {pts(r['ebitda'], whole)}" + (f" ({w[2:]})" if (w := few(r["ebitda_n"], r["n"])) else "") for r in have]
-        line = ("Median EBITDA margin by layer: " + "; ".join(each) + ". Their operating models differ ("
-                + "; ".join(f"{r['layer']}: {operating_words(r['model']) or 'not stated by its name'}" for r in have)
-                + "), so these layers are not ranked.")
+        line = ("Median EBITDA margin by layer: " + "; ".join(each) + ". " + operating_differ(have) + ", so these layers are not ranked.")
         return {"rows": rows, "line": line, "highest": None, "lowest": None, "measure": "ebitda", "compared": [], "gap": None,
                 "not_ranked": [r["layer"] for r in have]}
     have = one_operating(have, lambda r: r["model"])
@@ -2490,6 +2497,20 @@ def one_operating(rows: list, model) -> list:
     if c[0][1] == c[1][1]:
         return []
     return [r for r, o in zip(rows, ops) if o in ("", c[0][0])]
+
+
+def operating_differ(rows: list) -> str:
+    """deck101 (the live R99 Capital goods deck's headline: "Their operating models differ (Cables, transformers and electrical equipment
+    makers: equipment making (stated by the layer's own name); Industrial machinery and engines makers: not stated by its name; …)"): the
+    layers' operating models said plainly, each model once with the layers whose names state it, then those whose names state none."""
+    by: dict = {}
+    for r in rows:
+        by.setdefault(operating_of(r["model"]), []).append(r["layer"])
+    said = [f"{OPERATING_WORDS[o]} ({', '.join(ls)})" for o, ls in by.items() if o in OPERATING_WORDS]
+    none_ = [x for o, ls in by.items() if o not in OPERATING_WORDS for x in ls]
+    return ("Their operating models differ by the layers' names: " + "; ".join(said)
+            + (f"; {'the name of ' + none_[0] + ' states' if len(none_) == 1 else 'the names of ' + ', '.join(none_[:-1]) + ' and ' + none_[-1] + ' state'} none"
+               if none_ else ""))
 
 
 def operating_words(model) -> str:
