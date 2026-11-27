@@ -210,8 +210,10 @@ def test_the_caches_are_brought_under_their_budget_when_they_pass_it_by_a_quarte
     assert a.bytes + b.bytes <= 1_000_000 and b.get("big") is not None
 
 
-def test_a_rendered_page_is_kept_as_utf8_and_served_as_the_same_text(w):
+def test_a_rendered_page_is_kept_as_utf8_and_served_as_the_same_text(w, monkeypatch):
     from app import main
+    from app.intel import net
+    monkeypatch.setattr(net, "BUDGET", 0)                    # the caches other tests filled in this process don't push the page out here
     first = w["client"].get("/stocks/in/TCS")
     kept = main.stock_page_store.mem.get("html:IN:TCS")
     text = kept[0].decode("utf-8")
