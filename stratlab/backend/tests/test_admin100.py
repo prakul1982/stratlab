@@ -216,3 +216,19 @@ def test_overview_carries_every_sources_row(monkeypatch):
         assert {"nse-feed", "bse", "sec", "mail", "payments"} <= set(got)
     finally:
         w["close"]()
+
+
+def test_a_feature_check_failing_on_its_sources_side_is_not_the_owners_fix():
+    """The daily feature check escalated every failure at once as "Only you can fix this" (owner_only), its own action saying a source's
+    fault clears by itself: an exchange refusing the server reached the owner as a Fix and a mail."""
+    from app import platform_check as pc
+    out = {"at": "2026-11-27T11:20:00+00:00", "checks": [
+        pc._result("Exchange filings", "Research", "fail", "The exchange feed refused the request (403). Try again later."),
+        pc._result("SEC company", "Research", "fail", "The SEC is having trouble (503)."),
+        pc._result("Prices: FX", "Prices", "fail", "1 candle of EUR/USD on 2 Nov is off"),
+        pc._result("Fine", "Research", "pass", "ok")]}
+    before = ["Exchange filings", "SEC company", "Prices: FX"]
+    issue = main.platform_issue(out, before)
+    assert issue.problem == "1 check failing after a retry: Prices: FX (1 candle of EUR/USD on 2 Nov is off)"
+    only_sources = {**out, "checks": out["checks"][:2] + out["checks"][3:]}
+    assert main.platform_issue(only_sources, before).problem is None

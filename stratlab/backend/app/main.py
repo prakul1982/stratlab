@@ -7917,6 +7917,15 @@ def platform_before(out: dict | None) -> list[str] | None:
     return list(earlier[-1].get("failed") or []) if earlier else None
 
 
+SOURCE_FAULT = re.compile(r"refused|\b(?:401|403|429|50\d)\b|timed out|time ?out|couldn't (?:be )?reach|isn't answering|not answering|blocking us|"
+                          r"page instead of data|is busy|having trouble|rate limit|ConnectError|ConnectTimeout|ReadTimeout|RemoteProtocolError", re.I)
+
+
+def source_fault(detail) -> bool:
+    """Whether a feature check's failure is its outside source's own (a refusal, a timeout, a busy or broken reply), not StratLab's."""
+    return bool(SOURCE_FAULT.search(str(detail or "")))
+
+
 def platform_issue(out: dict | None, before: list[str] | None = None) -> "autofix.Check":
     """The feature check's failures as one self-healing issue: it has retried each failing check already, so what still fails goes to
     the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov). A check that
@@ -7927,7 +7936,9 @@ def platform_issue(out: dict | None, before: list[str] | None = None) -> "autofi
     failing = [r for r in rows if r.get("state") == "fail"]
     counts = {r["name"]: 2 if r["name"] in set(before or ()) else 1 for r in failing}
     keep = set(autofix.lasting([r["name"] for r in failing], counts, len(rows)))
-    bad = [r for r in failing if r["name"] in keep]
+    # a check failing because its outside source turned the server away or didn't answer is the source's side: System lists it as Fail and
+    # Overview's Data sources card says since when, but it is not the owner's to fix, so it is neither mailed nor listed as a Fix (admin100)
+    bad = [r for r in failing if r["name"] in keep and not source_fault(r.get("detail"))]
     problem = (f"{len(bad)} check{'s' if len(bad) > 1 else ''} failing after a retry: "
                + "; ".join(f"{r['name']} ({str(r.get('detail') or '')[:140]})" for r in bad[:6])) if bad else None
     return autofix.Check(id="platform", name="Feature check", problem=problem, owner_only=True, to="/admin/system",
