@@ -65,18 +65,22 @@ def registrant_of(sym: str, lst: dict | None) -> int | None:
     return next((ciks[f] for f in _forms("US", sym) if f in ciks), None)
 
 
-def same_registrant(region: str, syms, lst: dict | None, now_as: dict | None = None) -> dict[str, str]:
+def same_registrant(region: str, syms, lst: dict | None, now_as: dict | None = None, page_ciks: dict | None = None) -> dict[str, str]:
     """data100 (the deck audits' Electric utilities: Bright Horizon Energy kept under Black Hills, two rows of one company): {symbol left out:
     symbol kept} for members the SEC's current list names under one registrant (one SEC number: Black Hills Corp renamed itself Bright
     Horizon Energy Corp and the SEC lists it as HZN and BKH; a company's two classes of common stock). They are one company, kept once
-    under the ticker the SEC lists first for it (its main one); a member read by its ticker now (`now_as`, renamed) counts as that one. {}
+    under the ticker the SEC lists first for it (its main one); a member read by its ticker now (`now_as`, renamed) counts as that one, and
+    one off the list counts as the registrant its stored page names (`page_ciks`: SKK, Rantizo's old ticker), after every listed ticker. {}
     for India or with no list (nobody is merged on a guess)."""
     if region != "US" or not lst or not lst.get("ciks"):
         return {}
     order = {t: i for i, t in enumerate(lst["ciks"])}
     groups: dict[int, list[str]] = {}
+    live = set(lst["ciks"].values()) if page_ciks else set()
     for s in syms:
         cik = registrant_of((now_as or {}).get(s, s), lst)
+        if cik is None and (page_ciks or {}).get(s) in live:
+            cik = int(page_ciks[s])
         if cik is not None:
             groups.setdefault(cik, []).append(s)
     out = {}
@@ -128,12 +132,35 @@ def _forms(region: str, sym: str) -> set[str]:
     return out
 
 
-def renamed(region: str, sym: str, names, lst: dict | None, taken=()) -> str | None:
+_CIK_IN_URL = re.compile(r"/Archives/edgar/data/(\d+)/")
+
+
+def page_cik(f: dict | None) -> int | None:
+    """data100: the SEC number a US company's stored page names: its own (pages built since data100 keep it), else the one in its filings'
+    SEC addresses; None for a page that names none."""
+    if not isinstance(f, dict):
+        return None
+    if str(f.get("cik") or "").isdigit():
+        return int(f["cik"])
+    for x in f.get("filings") or []:
+        m = _CIK_IN_URL.search(str(x.get("url") or "")) if isinstance(x, dict) else None
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def renamed(region: str, sym: str, names, lst: dict | None, taken=(), cik: int | None = None) -> str | None:
     """The ticker the market's list names a member by now, when its own isn't on the list but its name is that of exactly one registrant
-    (US: PSKY, the SEC now listing Skydance Corp under SKYD); None otherwise, or when that ticker is another member's (`taken`)."""
+    (US: PSKY, the SEC now listing Skydance Corp under SKYD); None otherwise, or when that ticker is another member's (`taken`).
+    data100: or when its stored page names a registrant (`cik`, page_cik) the list holds under another ticker (SKK, Rantizo's old ticker:
+    SKK Holdings renamed itself Rantizo, a name no list of names matches)."""
     if not lst or region != "US" or _forms(region, sym) & lst["symbols"]:
         return None
     from .sec import non_common
+    if cik is not None:
+        mine = [t for t, c in (lst.get("ciks") or {}).items() if c == int(cik) and not non_common(t)]
+        if mine and mine[0] not in taken:
+            return mine[0]
     for n in names or ():
         k = name_key(n)
         hit = (lst.get("names") or {}).get(k) if k else None

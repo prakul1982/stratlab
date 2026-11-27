@@ -389,3 +389,30 @@ def test_sector_figures_are_never_read_from_another_registrants_facts():
             return SUBS[NST]
     got = sm.read_us("NSARO", C())
     assert got["metrics"] == {} and "another registrant" in got["none"]
+
+
+def test_an_old_ticker_whose_page_names_a_listed_registrant_is_that_company():
+    """SKK Holdings renamed itself Rantizo (CIK 1991261; the SEC lists only RNTZ): no list of names matches, but SKK's stored page names the
+    registrant in its filings' SEC addresses. With RNTZ a member too it is the same company, kept once under RNTZ ("by": "registrant"),
+    never "no longer listed"; alone it is read by RNTZ's page (renamed)."""
+    tickers = {f"T{i}": {"cik": 10_000 + i, "name": f"Other Co {i}"} for i in range(1200)}
+    tickers["RNTZ"] = {"cik": 1991261, "name": "Rantizo"}
+    lst = TL.from_sec(tickers, "2026-11-27")
+    page = {"symbol": "SKK", "filings": [{"url": "https://www.sec.gov/Archives/edgar/data/1991261/000199126126000031/skk-20f.htm"}]}
+    assert TL.page_cik(page) == 1991261 and TL.page_cik({"cik": 7}) == 7 and TL.page_cik({}) is None
+    assert TL.same_registrant("US", ["SKK", "RNTZ"], lst, page_ciks={"SKK": 1991261}) == {"SKK": "RNTZ"}
+    assert TL.same_registrant("US", ["SKK", "RNTZ"], lst) == {}                       # nothing names its registrant: not guessed
+    assert TL.renamed("US", "SKK", ["SKK Holdings Ltd"], lst, cik=1991261) == "RNTZ"
+    assert TL.renamed("US", "SKK", ["SKK Holdings Ltd"], lst) is None
+
+
+def test_a_subsidiarys_preferred_share_on_its_cover_is_no_listing_of_its_common_stock():
+    """Guard: a combined report's cover listing a subsidiary's preferred share (PG&E's report lists Pacific Gas and Electric's first preferred
+    stock) gives it no listed common stock, so no market value is made of that price and its common shares; its own common's symbol does."""
+    xml = combined_report().replace(
+        '<dei:TradingSymbol contextRef="c0">ES</dei:TradingSymbol>',
+        '<dei:TradingSymbol contextRef="c0">ES</dei:TradingSymbol><dei:TradingSymbol contextRef="c1">CNTHP</dei:TradingSymbol>'
+        '<dei:Security12bTitle contextRef="c1">Preferred Stock, $50 par value</dei:Security12bTitle>'
+        '<dei:TradingSymbol contextRef="c2">NSTX</dei:TradingSymbol><dei:Security12bTitle contextRef="c2">Common Stock</dei:Security12bTitle>')
+    reg = sec.registrants(sec.instance(xml))
+    assert reg["symbols"].get(CLP) is None and reg["symbols"][NST] == ["NSTX"] and reg["symbols"][ES] == ["ES"]

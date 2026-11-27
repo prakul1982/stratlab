@@ -2737,6 +2737,7 @@ def registrants(inst: dict) -> dict:
         elif set(dims) == {ENTITY_AXIS}:
             members.setdefault(cik, dims[ENTITY_AXIS])
             by_member.setdefault(dims[ENTITY_AXIS], cik)
+    titles = {cid: str(text) for ns, concept, cid, unit, text in inst["facts"] if ns == "dei" and concept == "Security12bTitle"}
     for ns, concept, cid, unit, text in inst["facts"]:
         if ns != "dei" or concept not in ("EntityRegistrantName", "TradingSymbol") or cid not in ctx or not str(text).strip():
             continue
@@ -2746,7 +2747,9 @@ def registrants(inst: dict) -> dict:
             continue
         if concept == "EntityRegistrantName":
             names.setdefault(who, " ".join(str(text).split()))
-        else:
+        elif not non_common(price_symbol(str(text).strip())) and not NOT_ORDINARY.search(titles.get(cid, "")):
+            # its common stock's symbols only: a preferred share or a note the cover lists (Pacific Gas and Electric's first preferred
+            # stock in PG&E's report) is no listing of the shares the report counts
             symbols.setdefault(who, []).append(price_symbol(str(text).strip()))
     return {"main": main, "members": members, "names": names, "symbols": symbols}
 
