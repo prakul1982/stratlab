@@ -111,19 +111,22 @@ test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV each save
   expect(errors).toEqual([]);
 });
 
-// (updated on purpose, FREE-TIER: Free has no slide decks of its own now; a Free account's deck button is locked, says where decks are and
-// sits beside the sample deck, instead of a first deck and a stopped second one)
-test("a Free account's theme deck button is locked and says decks are on Basic", async ({ page }, info) => {
+// (changed on purpose, price102: the owner's GTM P2, 28 Nov: Free makes one theme deck a month as a PDF, every page marked "Made with
+// StratLab · stratlab.studio" with the theme's link; PowerPoint stays on Basic, so its button is locked and says where it is)
+test("a Free account's theme deck is a PDF, and its PowerPoint button is locked and says it is on Basic", async ({ page }, info) => {
   test.setTimeout(180_000);
   const i = 20 + (info.project.name === "phone" ? 1 : 0);
   const who = sessionAs(`export-${i}`, `u-export-${i}`, `export${i}@example.com`);
   const errors = await open(page, THEME, "The whole chain in one table", who);
   const box = page.getByTestId("theme-downloads");
-  const lock = box.getByTestId("deck-locked");
-  await expect(lock).toHaveText("🔒 Slides: on Basic", { timeout: 30_000 });
+  const lock = box.getByTestId("pptx-locked");
+  await expect(lock).toHaveText("🔒 PowerPoint: on Basic", { timeout: 30_000 });
   await expect(lock).toHaveAttribute("href", "/plans");
-  await expect(lock).toHaveAttribute("title", "Slide decks are on Basic: 5 a month. The sample deck on the Plans page shows what one holds.");
-  await expect(box.getByRole("button", { name: "Slides (PDF)" })).toHaveCount(0);
+  await expect(lock).toHaveAttribute("title", /^PowerPoint decks are on Basic: 5 a month\. Free makes 1 theme deck a month as a PDF, each page marked "Made with StratLab · stratlab\.studio"/);
+  await expect(box.getByTestId("deck-locked")).toHaveCount(0);
+  await expect(box.getByTestId("decks-left")).toContainText("Decks this month: 0 of 1");
+  const [pdf] = await Promise.all([page.waitForEvent("download", { timeout: 120_000 }), box.getByRole("button", { name: "Slides (PDF)" }).click()]);
+  expect(pdf.suggestedFilename()).toMatch(/\.pdf$/);
   // (updated on purpose, Release 43: the companies' CSV is a download, so Basic and up; the server answers 402 for Free) the button says so
   // with the plan note, and no file is made
   let asked = 0;

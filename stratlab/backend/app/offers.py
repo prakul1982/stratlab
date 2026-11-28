@@ -168,8 +168,26 @@ def founding_public(now: datetime | None = None) -> dict | None:
     if not founding_open(now):
         return None
     from .plans import PLANS
+    was = {p: PLANS[p]["price_year"] for p in FOUNDING_PRICE}
     return {"open": True, "until": FOUNDING_UNTIL.astimezone(timezone.utc).isoformat(), "seats": FOUNDING_SEATS,
-            "prices": dict(FOUNDING_PRICE), "was": {p: PLANS[p]["price_year"] for p in FOUNDING_PRICE}}
+            "prices": dict(FOUNDING_PRICE), "was": was, **founding_words(was)}
+
+
+def _rupees(v: int) -> str:
+    return f"₹{v:,}"           # the prices are under a lakh, where Indian and Western grouping agree
+
+
+def founding_words(was: dict) -> dict:
+    """The offer in words, once, for every page (the landing page's JavaScript budget is too tight to carry them): the deadline, the line
+    above the plan cards, a yearly card's note and a lock's yearly price. Facts only."""
+    day = f"{FOUNDING_UNTIL.day} {FOUNDING_UNTIL:%b %Y}, 11:59 pm IST"
+    seats, p = FOUNDING_SEATS, FOUNDING_PRICE
+    return {"deadline": day,
+            "line": (f"Founding-member prices for the first {seats} members, until {day}: Basic {_rupees(p['basic'])} a year (was {_rupees(was['basic'])}), "
+                     f"Pro {_rupees(p['pro'])} a year (was {_rupees(was['pro'])}). The price stays the same for as long as you renew. Monthly prices don't change."),
+            "note": {k: f"Founding-member price for the first {seats} members, until {day}. Renews at {_rupees(p[k])} a year for as long as you keep it."
+                     for k in p},
+            "year": {k: f"{_rupees(p[k])} a year (founding-member price until {day}, for the first {seats} members; was {_rupees(was[k])})" for k in p}}
 
 
 # ---------- students ----------

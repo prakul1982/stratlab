@@ -1,7 +1,7 @@
 import { lazy, Suspense, use, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Link } from "react-router-dom";
 import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../lib/currency";
-import { foundingCardNote, foundingLine, foundingOf } from "../lib/founding";
+import { FOUNDING_YEARLY, foundingOf } from "../lib/founding";
 import { cardPrice, checkoutCur, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
 import { CurrencySwitch } from "../components/CurrencySwitch";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, YEARLY_SHORT, yearlySaving } from "../lib/offer";
@@ -617,13 +617,13 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         <div className="lp-period">
           {showYear && !loading ? (
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
-              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL, short: YEARLY_SHORT }]} />
+              options={[{ value: "month", label: "Monthly" }, { value: "year", label: founding ? FOUNDING_YEARLY : YEARLY_LABEL, short: YEARLY_SHORT }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
           {/* LIVE18B-003: the currency switch's place is held while the prices come (on a phone it is a second row: the cards moved 62px) */}
           {loading && <span className="lp-skel lp-skel-cur" />}
           {!loading && usd && <CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} />}
         </div>
-        {founding && !loading && <p className="small lp-center lp-founding" data-testid="founding-banner">{foundingLine(founding)}{period === "month" && showYear ? <>{" "}<button type="button" className="link" onClick={() => setPeriod("year")}>See yearly prices</button></> : null}</p>}
+        {founding && !loading && <p className="small lp-center lp-founding" data-testid="founding-banner">{founding.line}</p>}
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
             const year = showYear && period === "year" && p !== "free";
@@ -633,7 +633,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
             const offerPrice = foundingOn && year ? founding!.prices[p] : null;
             const inr = offerPrice ?? PRICE[p][year ? 1 : 0];
             const price = p === "free" ? null : cardPrice({ plan: p, period: year ? "year" : "month", cur, inr, usd, checkoutOn: usdOn, aboutUsd: (v) => aboutUsd(v, rate) });
-            const about = price?.about ?? null;
+            // price102: beside an offer's rupee price, its own dollar figure, not the standard plan's US price
+            const about = offerPrice != null && !price?.usdShown ? aboutUsd(offerPrice, rate) : price?.about ?? null;
             // a year's saving in the currency shown (in rupees with its dollar figure)
             const save = p !== "free" && year ? (price?.usdShown && usd ? yearlySaving(usd[p], usd[`${p}_year`]) : yearlySaving(PRICE[p][0], inr)) : null;
             const saveText = save == null ? "" : price?.usdShown ? dollarText(save) : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
@@ -658,7 +659,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                     <span className="small lp-price-note">
                       {gst && price?.chargedCur !== "USD" ? "incl. GST" : ""}
                       {save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
-                      {offerPrice != null && <span className="lp-offer-note" data-testid={`founding-${p}`}>{foundingCardNote(founding!, p)}</span>}
+                      {offerPrice != null && <span className="lp-offer-note" data-testid={`founding-${p}`}>{founding!.note[p]}</span>}
                     </span>
                   )}
                 </div>

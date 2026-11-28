@@ -2,7 +2,7 @@
 import type { CurrencyRow, Pricing } from "./currency";
 import { chargedInUsd, dollarText, rupeeText, usdRowOf, usPriceText, type PriceCur } from "./priceCurrency";
 import { inrWithUsd, usdRate } from "./usdAbout";
-import { foundingOf, foundingYear } from "./founding";
+import { foundingOf } from "./founding";
 
 export function money(row: CurrencyRow | undefined, v: number, code: string): string {
   if (!row) return `₹${v.toLocaleString("en-IN")}`;
@@ -33,7 +33,7 @@ export function planPriceLine(plan: "basic" | "pro", p: Pricing, cur: PriceCur =
   // beside the rupee prices, StratLab's own US prices when it has them, never the rupees converted (LIVE11B: "₹6,999 a year (about $75)"
   // against a US yearly price of $80)
   const us = usdRowOf(p);
-  if (f && yearly) return `${name} is ${us ? `${rupeeText(inr[plan])} a month (${usPriceText(us[plan])})` : inrWithUsd(inr[plan], rate, "month")} or ${foundingYear(f, plan)}.`;
+  if (f && yearly) return `${name} is ${us ? `${rupeeText(inr[plan])} a month (${usPriceText(us[plan])})` : inrWithUsd(inr[plan], rate, "month")} or ${f.year[plan]}.`;
   if (us) return `${name} is ${rupeeText(inr[plan])} a month (${usPriceText(us[plan])})${yearly ? ` or ${rupeeText(inr[`${plan}_year`])} a year (${usPriceText(us[`${plan}_year`])})` : ""}.`;
   return `${name} is ${inrWithUsd(inr[plan], rate, "month")}${yearly ? ` or ${inrWithUsd(inr[`${plan}_year`], rate, "year")}` : ""}.`;
 }

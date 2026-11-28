@@ -48,8 +48,16 @@ def test_the_founding_offer_ends_exactly_at_the_deadline(store):
     assert not offers.founding_open(DEADLINE + timedelta(days=1))
     # what the pages are told while it runs, and nothing after
     pub = offers.founding_public(DEADLINE - timedelta(minutes=1))
-    assert pub == {"open": True, "until": "2026-12-31T18:29:00+00:00", "seats": 100, "prices": {"basic": 4999, "pro": 14999},
-                   "was": {"basic": 6999, "pro": 19999}}
+    assert {k: pub[k] for k in ("open", "until", "seats", "prices", "was")} == {"open": True, "until": "2026-12-31T18:29:00+00:00", "seats": 100,
+                                                                              "prices": {"basic": 4999, "pro": 14999}, "was": {"basic": 6999, "pro": 19999}}
+    # the words every page shows, facts only: the prices, what they replace, the deadline, the first 100 members
+    assert pub["deadline"] == "31 Dec 2026, 11:59 pm IST"
+    assert pub["line"] == ("Founding-member prices for the first 100 members, until 31 Dec 2026, 11:59 pm IST: Basic ₹4,999 a year (was ₹6,999), "
+                           "Pro ₹14,999 a year (was ₹19,999). The price stays the same for as long as you renew. Monthly prices don't change.")
+    assert pub["note"]["pro"] == ("Founding-member price for the first 100 members, until 31 Dec 2026, 11:59 pm IST. Renews at ₹14,999 a year "
+                                  "for as long as you keep it.")
+    assert pub["year"]["basic"] == "₹4,999 a year (founding-member price until 31 Dec 2026, 11:59 pm IST, for the first 100 members; was ₹6,999)"
+    assert not any(w in pub["line"].lower() for w in ("hurry", "only", "last chance", "buy", "sell"))
     assert offers.founding_public(DEADLINE) is None
     assert plans.offer_state(DEADLINE - timedelta(minutes=1))["founding"] == pub
     assert plans.offer_state(DEADLINE)["founding"] is None

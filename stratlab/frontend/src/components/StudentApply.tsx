@@ -3,8 +3,14 @@ import { Dialog, Field, FormActions, FormGrid } from "./kit";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { STUDENT_PRICE, studentLine } from "../lib/founding";
 import type { StudentState } from "../lib/types";
+
+/** The student price (the server's offers.STUDENT_PRICE) and its line on Plans; here, not in lib/founding.ts, so the landing page doesn't carry
+ * them (review-r5's 450 KB). */
+export const STUDENT_PRICE = 2499;
+export function studentLine(price = STUDENT_PRICE): string {
+  return `Student? Basic is ₹${price.toLocaleString("en-IN")} a year for students, approved by hand: send your college email or a note about your student ID.`;
+}
 
 /** price102 (owner, 28 Nov, GTM P3): "Student? Apply" on Plans. The request goes to the owner (Admin → Users, Student requests), who checks
  * the college email or the ID note by hand and approves Basic at the student price, or gives Basic for a year. Signed in only. */

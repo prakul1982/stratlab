@@ -16,7 +16,7 @@ import { PlanCompare } from "../components/PlanCompare";
 import { SampleDeckLink, SampleDeckPageLink } from "../components/SampleDeck";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { StudentApply } from "../components/StudentApply";
-import { foundingCardNote, foundingLine, foundingOf } from "../lib/founding";
+import { FOUNDING_YEARLY, foundingOf } from "../lib/founding";
 import { track } from "../lib/analytics";
 import { LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { KEY } from "../lib/planKeys";
@@ -75,7 +75,8 @@ export function PlansPage() {
   const priceOf = (p: PlanId, per: string) => {
     if (p === "free") return { shown: freePrice(cur, usd), inr: false, about: null };
     const c = paidPrice(p, per);
-    return { shown: c.shown, inr: c.chargedCur === "INR", about: c.about };
+    // price102: beside an offer's rupee price, its own dollar figure ("about $57"), not the standard plan's US price
+    return { shown: c.shown, inr: c.chargedCur === "INR", about: offerFor(p, per) && !c.usdShown ? aboutUsd(charge(p, per), rate) : c.about };
   };
   /** What a year saves against twelve months, in the currency shown (rupees with their dollar figure). */
   const savingOf = (p: "basic" | "pro") => {
@@ -182,7 +183,7 @@ export function PlansPage() {
         <div className="k-plan-opts"><FormGrid label="Price options">
           {billing && yearlyOk && <FieldGroup label="Billed">
             <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
-              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL, short: YEARLY_SHORT }]} />
+              options={[{ value: "month", label: "Monthly" }, { value: "year", label: founding ? FOUNDING_YEARLY : YEARLY_LABEL, short: YEARLY_SHORT }]} />
           </FieldGroup>}
           {(usd || pricingStatus === "loading") && <FieldGroup label="Prices in"><CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} /></FieldGroup>}
         </FormGrid></div>
@@ -190,7 +191,7 @@ export function PlansPage() {
       {/* price102 (GTM P1): the founding-member prices, said once above the cards with the deadline and the seats; the yearly cards show them */}
       {founding && billing && (
         <div data-testid="founding-banner"><Notice label="Founding-member prices" actions={!yearly && yearlyOk ? <button type="button" className="btn sm" onClick={() => setYearly(true)}>See yearly prices</button> : undefined}>
-          {foundingLine(founding)}
+          {founding.line}
         </Notice></div>
       )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
@@ -209,7 +210,7 @@ export function PlansPage() {
                   {/* price102: the yearly price it replaces, struck through, beside an offer's price shown in rupees */}
                   {offerFor(p, period) && !paidPrice(p as "basic" | "pro", period).usdShown && <s className="k-plan-was" data-testid={`was-${p}`} aria-label={`was ₹${rupees(p, period).toLocaleString("en-IN")}`}>₹{rupees(p, period).toLocaleString("en-IN")}</s>}</div>
                 {price.about && <span className="k-note" data-testid={`about-${p}`}>{price.about}</span>}
-                {offerFor(p, period) === "founding" && founding && p !== "free" && <span className="k-note k-plan-offer" data-testid={`founding-${p}`}>{foundingCardNote(founding, p)}</span>}
+                {offerFor(p, period) === "founding" && founding && p !== "free" && <span className="k-note k-plan-offer" data-testid={`founding-${p}`}>{founding.note[p]}</span>}
                 {offerFor(p, period) === "student" && <span className="k-note k-plan-offer" data-testid={`student-${p}`}>Your approved student price, yearly.</span>}
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}

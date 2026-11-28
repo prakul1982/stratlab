@@ -117,7 +117,7 @@ test("LIVE21B-003: /mine lists the watchlist in its own order, and Coming up has
 });
 
 test("owner, 20 Nov: the phone's billing choice reads \"Yearly\", the saving on each yearly card", () => {
-  for (const f of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) assert.match(read(f), /\{ value: "year", label: YEARLY_LABEL, short: YEARLY_SHORT \}/, f);
+  for (const f of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) assert.match(read(f), /\{ value: "year", label: founding \? FOUNDING_YEARLY : YEARLY_LABEL, short: YEARLY_SHORT \}/, f);     // (changed on purpose, price102: a founding year is more than 2 months free)
   assert.match(read("src/lib/offer.ts"), /export const YEARLY_SHORT = "Yearly";/);
 });
 

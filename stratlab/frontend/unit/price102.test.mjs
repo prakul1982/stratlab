@@ -7,12 +7,20 @@ import { readFileSync } from "node:fs";
 
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
-const { foundingCardNote, foundingDeadline, foundingLine, foundingOf, foundingYear, studentLine } = await import("../src/lib/founding.ts");
+const { FOUNDING_YEARLY, foundingOf } = await import("../src/lib/founding.ts");
+const studentLine = (p = 2499) => `Student? Basic is ₹${p.toLocaleString("en-IN")} a year for students, approved by hand: send your college email or a note about your student ID.`;
 const { planPriceLine } = await import("../src/lib/planPrice.ts");
 const { companyDeckLock, deepDiveLimitLine, pptxLock } = await import("../src/lib/account.ts");
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
 
-const F = { open: true, until: "2026-12-31T18:29:00+00:00", seats: 100, prices: { basic: 4999, pro: 14999 }, was: { basic: 6999, pro: 19999 } };
+// the server's words (backend offers.founding_words, tested in tests/test_price102.py)
+const F = { open: true, until: "2026-12-31T18:29:00+00:00", seats: 100, prices: { basic: 4999, pro: 14999 }, was: { basic: 6999, pro: 19999 },
+  deadline: "31 Dec 2026, 11:59 pm IST",
+  line: "Founding-member prices for the first 100 members, until 31 Dec 2026, 11:59 pm IST: Basic ₹4,999 a year (was ₹6,999), Pro ₹14,999 a year (was ₹19,999). The price stays the same for as long as you renew. Monthly prices don't change.",
+  note: { basic: "Founding-member price for the first 100 members, until 31 Dec 2026, 11:59 pm IST. Renews at ₹4,999 a year for as long as you keep it.",
+    pro: "Founding-member price for the first 100 members, until 31 Dec 2026, 11:59 pm IST. Renews at ₹14,999 a year for as long as you keep it." },
+  year: { basic: "₹4,999 a year (founding-member price until 31 Dec 2026, 11:59 pm IST, for the first 100 members; was ₹6,999)",
+    pro: "₹14,999 a year (founding-member price until 31 Dec 2026, 11:59 pm IST, for the first 100 members; was ₹19,999)" } };
 const INR = { symbol: "₹", name: "Indian rupee", basic: 699, pro: 1999, basic_year: 6999, pro_year: 19999, charged_in: "INR", yearly_charged_in: "INR" };
 
 test("the founding offer runs while the server says so and not past its end on this page's clock", () => {
@@ -23,14 +31,17 @@ test("the founding offer runs while the server says so and not past its end on t
   assert.equal(foundingOf(null), null);
 });
 
-test("the words say the prices, the old prices, the deadline and the first 100 members, facts only", () => {
-  assert.equal(foundingDeadline(F), "31 Dec 2026, 11:59 pm IST");
-  assert.equal(foundingLine(F), "Founding-member prices for the first 100 members, until 31 Dec 2026, 11:59 pm IST: Basic ₹4,999 a year (was ₹6,999), "
-    + "Pro ₹14,999 a year (was ₹19,999). The price stays the same for as long as you renew. Monthly prices don't change.");
-  assert.equal(foundingCardNote(F, "pro"), "Founding-member price for the first 100 members, until 31 Dec 2026, 11:59 pm IST. Renews at ₹14,999 a year for as long as you keep it.");
-  assert.equal(foundingYear(F, "basic"), "₹4,999 a year (founding-member price until 31 Dec 2026, 11:59 pm IST, for the first 100 members; was ₹6,999)");
+test("the pages show the server's words, and the yearly label says founding prices, facts only", () => {
+  assert.equal(FOUNDING_YEARLY, "Yearly · founding-member prices");
   assert.match(studentLine(), /^Student\? Basic is ₹2,499 a year for students, approved by hand/);
-  for (const t of [foundingLine(F), foundingCardNote(F, "basic"), studentLine()]) assert.doesNotMatch(t, /\b(hurry|only|last chance|buy|sell)\b/i);
+  assert.doesNotMatch(studentLine(), /\b(hurry|only|last chance|buy|sell)\b/i);
+  for (const f of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) {
+    const src = read(f);
+    assert.match(src, /\{founding\.line\}/, f);
+    assert.match(src, /founding!?\.note\[p\]/, f);
+    assert.match(src, /label: founding \? FOUNDING_YEARLY : YEARLY_LABEL/, f);
+  }
+  assert.equal(foundingOf({ founding: { ...F, note: undefined } }), null);          // an older server's answer without the words: nothing shown
 });
 
 test("a lock's price line gives the founding year while it runs, and the standard one after", () => {

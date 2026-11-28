@@ -208,7 +208,9 @@ export interface Offer {
 }
 
 /** price102 (GTM P1): Basic and Pro yearly at founding-member prices until `until` or the first `seats` paying customers, kept on renewal. */
-export interface Founding { open: boolean; until: string; seats: number; prices: { basic: number; pro: number }; was: { basic: number; pro: number } }
+export interface Founding { open: boolean; until: string; seats: number; prices: { basic: number; pro: number }; was: { basic: number; pro: number };
+  /** the server's words: "31 Dec 2026, 11:59 pm IST", the line above the plan cards, a yearly card's note and a lock's yearly price per plan */
+  deadline: string; line: string; note: { basic: string; pro: string }; year: { basic: string; pro: string } }
 
 /** price102 (GTM P3): the person's student request; `price` is set once approved at the student price (their Basic yearly checkout). */
 export interface StudentState { status: "pending" | "approved" | "rejected"; mode: "price" | "grant" | null; at: string | null; decided_at: string | null; price: number | null }

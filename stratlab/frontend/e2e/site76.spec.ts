@@ -89,7 +89,7 @@ test("LIVE14B-007: a visitor's /plans has the sample deck link its table promise
   await page.goto("/plans");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const line = page.getByTestId("sample-deck-line");
-  await expect(line).toContainText("Slide decks are on Basic and Pro.");
+  await expect(line).toContainText('Free makes one theme deck a month as a PDF, marked "Made with StratLab"');      // (changed on purpose, price102)
   const info = await page.request.get(`${API}/pricing/sample-deck/info`).then((r) => r.json());
   if (info.available) await expect(line.getByTestId("sample-deck")).toHaveAttribute("href", /\/pricing\/sample-deck/);
 });

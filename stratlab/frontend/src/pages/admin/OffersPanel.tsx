@@ -17,6 +17,8 @@ export type OffersView = { plans: OfferPlan[]; student_price: number; students: 
     closed: "date" | "seats" | null; open: boolean } };
 
 const rupee = (v: number) => `₹${v.toLocaleString("en-IN")}`;
+/** A plan box's label on one line (the amount goes under the box). */
+const SHORT: Record<string, string> = { founding_basic_year: "Founding Basic plan ID", founding_pro_year: "Founding Pro plan ID", student_basic_year: "Student Basic plan ID" };
 
 /** Why the founding prices are or aren't on the pages, in one line. */
 export function foundingState(f: OffersView["founding"]): { tone: "ok" | "warn"; text: string } {
@@ -67,7 +69,7 @@ export function OffersPanel() {
         {f.paying != null && ` Paying customers so far: ${f.paying} of ${f.seats}.`}</p>
       <FormGrid label="Offer plan IDs">
         {v.plans.map((p) => (
-          <Field key={p.field} label={`${p.label} (${rupee(p.amount)} a year)`} value={edit[p.field] ?? p.id ?? ""} placeholder="plan_…"
+          <Field key={p.field} label={SHORT[p.field] ?? p.label} hint={`${rupee(p.amount)} a year, in rupees`} value={edit[p.field] ?? p.id ?? ""} placeholder="plan_…"
             onChange={(e) => setEdit((x) => ({ ...x, [p.field]: e.target.value }))} />
         ))}
       </FormGrid>

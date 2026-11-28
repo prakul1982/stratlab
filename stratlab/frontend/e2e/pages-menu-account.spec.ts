@@ -33,12 +33,13 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   // R11: five short lines a card (lib/plans.ts KEY), the long lists in the table below
   // (updated on purpose, FREE-TIER: Free's card says its smaller counts, and a deep dive and its daily AI reads in place of a deck)
   for (const line of ["Everything in Free, with no ads", "Everything in Basic", "5 backtests and 5 AI strategy builds a month",
-    "1 company deep dive a month, 5 fresh AI reads a day", "Indian F&O in notebooks, and options on your own rules' signals"]) {
+    "1 deep dive and 1 theme deck (PDF) a month, 5 AI reads a day", "Indian F&O in notebooks, and options on your own rules' signals"]) {
     await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBe(5);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
-  await expect(page.getByTestId("sample-deck-line")).toContainText("Slide decks are on Basic and Pro.");      // FREE-TIER: and the sample deck
+  // (changed on purpose, price102: Free makes one theme deck a month as a marked PDF; and the sample deck)
+  await expect(page.getByTestId("sample-deck-line")).toContainText('Free makes one theme deck a month as a PDF, marked "Made with StratLab"');
   const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   // (updated on purpose, FREE-TIER: Free's 5 backtests, 1 deep dive, no decks but the sample deck, and 1 new theme a month)
