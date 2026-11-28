@@ -2,7 +2,7 @@ import type { HealthState } from "../../components/kit";
 import { IST, ago, dateOnly, fmtDate, istToday, quoteAt } from "../../lib/format";
 import { aiCountText } from "../../lib/connection";
 import { reconnectAt } from "../../lib/dataBack";
-import type { AIRow, AutofixStatus, InvoiceSeller, JobRow, Overview, Reported, SourceRow } from "./AdminContext";
+import type { AIRow, AutofixStatus, InvoiceSeller, JobRow, Overview, Reported, SocialRow, SourceRow } from "./AdminContext";
 
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
  * jobs and on System all come from services() below, so two pages can never tell the same fact two ways. */
@@ -242,7 +242,8 @@ export function needsOwner(a: AIRow): boolean {
 }
 
 /** Where an Admin path is, in the menu's words. */
-const PAGE: Record<string, string> = { "/admin/data": "Data and jobs", "/admin/system": "System", "/admin/quality": "Quality", "/admin/money": "Money", "/admin/users": "Users and growth" };
+const PAGE: Record<string, string> = { "/admin/data": "Data and jobs", "/admin/system": "System", "/admin/quality": "Quality", "/admin/money": "Money", "/admin/users": "Users and growth",
+  "/admin/social": "Social" };
 
 /** One source's row from the server (admin100), by its key. */
 export const sourceRow = (sv: Overview["server"], key: string): SourceRow | undefined => (sv.sources ?? []).find((r) => r.key === key);
@@ -335,12 +336,36 @@ export function triage(ov: Overview | null, reported: Reported | null, jobs: Job
     auto.push({ text: `${r.label}: ${r.word} (${r.error ?? "no answer"}). StratLab keeps asking and uses its last good copy meanwhile.`,
       to: r.to, label: PAGE[r.to] ?? "Data and jobs", bad: false });
   }
+  out.push(...socialItems(sv.social));
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
   if (sv.billing_enabled && s.pay.state === "warn") out.push({ text: `Payments: ${s.pay.detail}.`, to: "/admin/money", label: "Money", bad: false });
   if (sv.billing_enabled && s.pay.state === "bad") out.push({ text: `Payments: ${s.pay.fix ?? s.pay.detail}`, to: "/admin/money", label: "Money", bad: true });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });
   return { owner: out.sort((x, y) => Number(y.bad) - Number(x.bad)), auto };
+}
+
+/** social103: the daily post's items for Needs your attention, each only the owner's to do. LinkedIn's sign-in lasts about 60 days with no
+ * renewal: "reconnect within N days" from LINKEDIN_WARN_DAYS before it ends; a network switched on whose sign-in was turned down; a post that
+ * failed both tries, or may not have gone out. A network never connected or switched off asks for nothing. */
+export const LINKEDIN_WARN_DAYS = 7;
+export function socialItems(rows: SocialRow[] | undefined): Attention[] {
+  const out: Attention[] = [];
+  for (const r of rows ?? []) {
+    const at = { to: "/admin/social", label: "Social" };
+    if (r.key === "linkedin" && r.connected && r.days_left !== null && r.days_left <= LINKEDIN_WARN_DAYS) {
+      const end = r.expires_at ? fmtDate(r.expires_at, { tz: IST }) : null;
+      out.push(r.days_left < 0
+        ? { text: `LinkedIn's sign-in has ended${end ? ` (${end})` : ""}: the daily post there waits until you press Reconnect LinkedIn.`, ...at, bad: r.enabled }
+        : { text: `Reconnect LinkedIn within ${r.days_left <= 0 ? "a day" : plural(r.days_left, "day")}: its sign-in ends${end ? ` on ${end}` : ""} (LinkedIn gives 60 days and no renewal).`, ...at, bad: false });
+    }
+    if (r.enabled && r.problem) out.push({ text: `${r.name} daily post: ${oneLine(r.problem).text}`, ...at, bad: true });
+    else if (r.enabled && r.failed) {
+      const why = oneLine(r.failed.error ?? "no answer").text;
+      out.push({ text: r.failed.status === "unknown" ? `${r.name} daily post may not have gone out: ${why}` : `${r.name} daily post failed twice: ${why}`, ...at, bad: r.failed.status !== "unknown" });
+    }
+  }
+  return out;
 }
 
 /** What needs the owner, worst first: only what only the owner can fix (Release 93; triage). */

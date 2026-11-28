@@ -98,3 +98,8 @@
 /* admin90: a figure typed in a numeric column (Prices outside India) sits under its right-aligned header, with its note under it, not at the
    cell's left edge 60px short of the header's words */
 .adm-main td.k-num > .k-stack { align-items: flex-end; text-align: right; }
+
+/* Admin → Social (social103): the two networks side by side, one above the other on a phone; each next post as the network shows it */
+.adm-social { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4); align-items: start; }
+.adm-post { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--chip); }
+.adm-post-t { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--t-small, 14px); }

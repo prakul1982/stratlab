@@ -46,8 +46,8 @@ async function shot(page: Page, name: string, info: { project: { name: string } 
   await page.screenshot({ path: `${SHOTS}/${name}-${phone ? "400-light" : "1300-dark"}.png`, fullPage: true });
 }
 
-// Feedback added (owner, 4 Nov: the Help & feedback inbox)
-const SECTIONS = ["Overview", "Users and growth", "Money", "Data and jobs", "Quality", "System", "Library", "Feedback", "Email previews"];
+// Feedback added (owner, 4 Nov: the Help & feedback inbox); Social added (changed on purpose, social103: the daily X and LinkedIn post)
+const SECTIONS = ["Overview", "Users and growth", "Money", "Data and jobs", "Quality", "System", "Library", "Feedback", "Social", "Email previews"];
 
 test("admin: a left menu with nine sections (R19: Library), each its own address, and the old tab links still land", async ({ page }) => {
   const errors = await open(page, "/admin", "Needs your attention");
@@ -55,7 +55,7 @@ test("admin: a left menu with nine sections (R19: Library), each its own address
   await expect(menu.getByRole("link")).toHaveText(SECTIONS.map((s) => new RegExp(`^${s}`)));
   await expect(menu.getByRole("link", { name: /^Overview/ })).toHaveAttribute("aria-current", "page");
   for (const [name, path, heading] of [["Users and growth", "/admin/users", "Paper trading now"], ["Money", "/admin/money", "Prices outside India"], ["Data and jobs", "/admin/data", "Background jobs"],
-    ["Quality", "/admin/quality", "Rates and rules"], ["System", "/admin/system", "Check every feature"], ["Library", "/admin/library", "Kept for everyone"], ["Feedback", "/admin/feedback", "Feedback ("], ["Email previews", "/admin/emails", "Confirm your email"]] as const) {
+    ["Quality", "/admin/quality", "Rates and rules"], ["System", "/admin/system", "Check every feature"], ["Library", "/admin/library", "Kept for everyone"], ["Feedback", "/admin/feedback", "Feedback ("], ["Social", "/admin/social", "Last posts"], ["Email previews", "/admin/emails", "Confirm your email"]] as const) {
     await menu.getByRole("link", { name }).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();

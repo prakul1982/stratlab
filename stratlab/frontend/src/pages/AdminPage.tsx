@@ -17,6 +17,7 @@ const QualitySection = lazy(() => importWithRetry(() => import("./admin/QualityS
 const SystemSection = lazy(() => importWithRetry(() => import("./admin/SystemSection")).then((m) => ({ default: m.SystemSection })));
 const LibrarySection = lazy(() => importWithRetry(() => import("./admin/LibrarySection")).then((m) => ({ default: m.LibrarySection })));
 const FeedbackSection = lazy(() => importWithRetry(() => import("./admin/FeedbackSection")).then((m) => ({ default: m.FeedbackSection })));
+const SocialSection = lazy(() => importWithRetry(() => import("./admin/SocialSection")).then((m) => ({ default: m.SocialSection })));
 const EmailSection = lazy(() => importWithRetry(() => import("./admin/EmailSection")).then((m) => ({ default: m.EmailSection })));
 
 /** Old links: /admin?tab=services and the like open the section that took over from that tab. */
@@ -65,6 +66,7 @@ function Frame() {
             <Route path="system" element={<SystemSection />} />
             <Route path="library" element={<LibrarySection />} />
             <Route path="feedback" element={<FeedbackSection />} />
+            <Route path="social" element={<SocialSection />} />
             <Route path="emails" element={<EmailSection />} />
             <Route path="emails/:kind" element={<EmailSection />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
