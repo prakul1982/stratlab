@@ -35,7 +35,8 @@ def _deps(dep) -> list:
 
 
 # the broker's login redirect lands here without a session; the signed `state` it carries is checked instead
-CALLBACKS = {"/admin/kite/callback"}
+CALLBACKS = {"/admin/kite/callback",
+             "/admin/social/x/callback", "/admin/social/linkedin/callback"}   # (changed on purpose, social103) the networks send the owner back here; one-time state-checked
 
 
 def _routes(routes) -> list:
