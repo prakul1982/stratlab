@@ -76,8 +76,8 @@ def test_a_layer_split_into_halves_has_a_row_of_both_halves_so_a_ranking_of_the_
     assert chain.subtitle.startswith(f"Median EBITDA margin is highest in {BASE} ({D.HALVES_SAID}{both:.1f}%)"), chain.subtitle
     rows = _rows(chain)
     names = [r[0] for r in rows]
-    assert f"{BASE} (both halves together)" in names, names
-    i = names.index(f"{BASE} (both halves together)")
+    assert f"{BASE} (both halves)" in names, names
+    i = names.index(f"{BASE} (both halves)")
     assert names[i - 1] == SMALLER and names[i - 2] == LARGER          # right after its halves
     assert f"{both:.1f}%" in rows[i], rows[i]
     assert any(BASE in x and f"{both:.1f}%" in x for x in deck.findings_lines(slides))
@@ -107,10 +107,10 @@ def test_the_most_revenue_finding_takes_a_layer_split_into_halves_as_one_and_rea
     total = by[LARGER]["revenue"] + by[SMALLER]["revenue"]
     slides, _ = deck.theme_plan(v)
     lines = deck.findings_lines(slides)
-    assert any(f"most revenue of the map's own layers is in {BASE} (both halves together): " in x for x in lines), lines
+    assert any(f"most revenue of the map's own layers is in {BASE} (both halves): " in x for x in lines), lines
     assert not any("(larger) brings in" in x or "brings in the most revenue" in x for x in lines), lines
     got = {t[0]: t[1] for t in deck.revenue_layers([by[LARGER], by[SMALLER], by[GRAIN]])}
-    assert got == {f"{BASE} (both halves together)": total, GRAIN: by[GRAIN]["revenue"]}
+    assert got == {f"{BASE} (both halves)": total, GRAIN: by[GRAIN]["revenue"]}
 
 
 def _layer(name, *cos, wide=()):

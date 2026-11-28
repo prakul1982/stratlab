@@ -3533,7 +3533,7 @@ def population(v: dict) -> dict:
 
 def halves_label(name: str) -> str:
     """deck101: the value chain table's row of a layer split into halves by market value, its halves' companies together."""
-    return f"{name} (both halves together)"
+    return f"{name} (both halves)"
 
 
 def adjacent_label(name: str, adjacent) -> str:
@@ -7873,7 +7873,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s = Slide("The value chain by layer" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
                       chain.get("line") or f"Each layer's companies, their revenue added together ({unit}), and the layer's median margins",
                       eyebrow=eb("The value chain"))
-            need_ = max(1.7, 0.24 * len(charted) + 0.45)
+            # deck101: a layer's both-halves row takes no more than its share of a bar's room from the charts under the table
+            need_ = max(1.7, 0.24 * len(charted) + 0.45 - 0.24 * len(whole_rows))
             tall, close_ = table_height(head, chunk, widths, tw), False
             if th - tall - 0.3 < need_:          # set close (11 pt) only when the chart needs the room
                 tall, close_ = sum(table_layout({"head": head, "rows": chunk, "widths": widths, "tight": True, "compact": True}, tw, 99)["heights"]), True
