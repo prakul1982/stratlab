@@ -1686,8 +1686,8 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis", "registrant", "cap_rule",
-                                                      "filed_with", "shares_apart")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis", "registrant", "filed_with",
+                                                      "shares_apart", "cap_rule")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         # data100: a US company's SEC number, so an old ticker of it that has no page of its own finds its page now (renamed_to)

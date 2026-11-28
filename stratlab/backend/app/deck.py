@@ -3438,12 +3438,11 @@ def parents_row(v: dict) -> list[str] | None:
     if not ps:
         if v.get("region") == "US":
             # data100: a subsidiary filing its annual report in its parent's combined report is detected (theme_data.filed_in)
-            return [PARENTS_LABEL, "No shareholding filing is read for US companies, so a parent and its listed subsidiary are detected only "
-                                   "where the subsidiary files its annual report in its parent's combined report, and none here does; a "
-                                   "total that adds both would count the subsidiary twice.", "Not checked beyond combined reports."]
+            return [PARENTS_LABEL, "No shareholding filing is read for US companies: only a subsidiary filing in its parent's combined "
+                                   "report is detected, and none here does.", "Not checked otherwise."]
         return None
     # data100: one found by a combined annual report (a US utility's subsidiary filing in its parent's report) said as that
-    each = "; ".join((f"{clean_name(p['name'])} files its annual report in {clean_name(p['parent_name'])}'s combined report, as its subsidiary"
+    each = "; ".join((f"{clean_name(p['name'])} files its annual report in {clean_name(p['parent_name'])}'s combined report"
                       if p.get("by") == "report" else
                       f"{clean_name(p['name'])} is {p['pct']:g}% held by {clean_name(p['parent_name'])} (promoter, {p['quarter']} filing)")
                      + (", whose figures are its consolidated ones" if p.get("basis") == "consolidated" else ", whose figures are the whole company's"
