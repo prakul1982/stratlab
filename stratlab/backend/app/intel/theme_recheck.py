@@ -250,7 +250,18 @@ def rebuild(region: str, name: str) -> None:
 def release() -> None:
     """e81 (item 6, the live R79 re-check peaking at 1.92 GB of a 2 GB limit): after each theme, the objects its rebuild freed are collected
     and the C heap's free pages returned to the system (glibc's malloc_trim), so one theme's dive (a few MB of JSON, tens of MB as objects)
-    is never still held by the process while the next is built. Nothing else is touched; a system without it does nothing."""
+    is never still held by the process while the next is built. Nothing else is touched; a system without it does nothing.
+
+    mem100 (live R99: 1.0 GB at 18:15 UTC with 33 themes left, 1.38 GB at 18:50 as the pass ended, every theme of it "current"): a theme found
+    current takes no turn of the memory guard, so nothing brought the caches its check filled back under their budget between themes; now
+    each theme ends with the guard's whole release (expired cache entries out, the caches under their budget, then the collection and the
+    trim as before). Results unchanged: an entry dropped is read again when asked for."""
+    try:
+        from .. import memguard
+        if memguard.release_memory(force=True):          # {}: another thread's release under way: the collection here all the same
+            return
+    except Exception:
+        pass
     import gc
     gc.collect()
     try:

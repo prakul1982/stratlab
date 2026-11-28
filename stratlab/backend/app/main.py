@@ -348,7 +348,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print("startup: Kite not ready:", e)
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
-    threading.Thread(target=warm_caches, daemon=True).start()
+    threading.Thread(target=warm_when_alone, daemon=True, name="warm-caches").start()
     # every container serves requests; only the lease's holder runs the jobs and live sessions (a deploy overlaps two)
     leader.current.start(on_gain=lead, on_lose=follow)
     yield
@@ -361,6 +361,18 @@ async def lifespan(app: FastAPI):
 
 
 _jobs_started = False
+# mem100 (live R99, 27 Nov 17:45 UTC: 1.97 GB of the 2.0 GB limit in the deploy's minute, 1.0 GB an hour later with the theme re-check still
+# running): a deploy runs the new container beside the old one until the old stops (17:45:11 started, 17:45:24 the old one stopped), and
+# Railway counts both. The new one read every stored company page and filled its price caches (warm_caches) in that overlap, on top of the
+# old one's whole day of caches. Now it warms once it holds the lease (the old container gave it up on stopping), or after WARM_ALONE_WAIT
+# seconds without it (another container keeps it); it serves requests meanwhile, as it did while warming
+WARM_ALONE_WAIT = 120.0
+_alone = threading.Event()
+
+
+def warm_when_alone(wait: float | None = None) -> None:
+    _alone.wait(WARM_ALONE_WAIT if wait is None else wait)
+    warm_caches()
 
 
 def lead():
@@ -368,6 +380,7 @@ def lead():
     global _jobs_started
     db.reload_mirror()           # the settings the old container wrote since this one booted (read in the background,
                                  # the copy there is served meanwhile)
+    _alone.set()                 # mem100: the old container is gone: the caches are warmed now (warm_when_alone), the pages read once
     try:                         # ...among them today's Kite token, when it logged in after this one booted
         if kite.token_day != kite_today():      # (a token of today's that was cancelled stays off)
             kite.load_saved_token()
@@ -6946,7 +6959,18 @@ def server_status() -> dict:
             # whether server errors reach Sentry (SENTRY_DSN set and the SDK started), for Admin → System's "Error alerts" line
             "sentry": error_alerts.enabled(),
             # new Help & feedback reports, for "Needs your attention"
-            "feedback_new": feedback.new_count()}
+            "feedback_new": feedback.new_count(),
+            # each outside source's last good answer and last failure, with a plain verdict (admin100: the archive's refusals had no row)
+            "sources": source_health_rows()}
+
+
+def source_health_rows() -> list:
+    from . import source_health
+    try:
+        return source_health.rows()
+    except Exception as e:                  # Overview shows the rest without it
+        print("source health rows:", str(e)[:120])
+        return []
 
 
 def calendar_status() -> dict:
@@ -7906,6 +7930,15 @@ def platform_before(out: dict | None) -> list[str] | None:
     return list(earlier[-1].get("failed") or []) if earlier else None
 
 
+SOURCE_FAULT = re.compile(r"refused|\b(?:401|403|429|50\d)\b|timed out|time ?out|couldn't (?:be )?reach|isn't answering|not answering|blocking us|"
+                          r"page instead of data|is busy|having trouble|rate limit|ConnectError|ConnectTimeout|ReadTimeout|RemoteProtocolError", re.I)
+
+
+def source_fault(detail) -> bool:
+    """Whether a feature check's failure is its outside source's own (a refusal, a timeout, a busy or broken reply), not StratLab's."""
+    return bool(SOURCE_FAULT.search(str(detail or "")))
+
+
 def platform_issue(out: dict | None, before: list[str] | None = None) -> "autofix.Check":
     """The feature check's failures as one self-healing issue: it has retried each failing check already, so what still fails goes to
     the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov). A check that
@@ -7916,7 +7949,9 @@ def platform_issue(out: dict | None, before: list[str] | None = None) -> "autofi
     failing = [r for r in rows if r.get("state") == "fail"]
     counts = {r["name"]: 2 if r["name"] in set(before or ()) else 1 for r in failing}
     keep = set(autofix.lasting([r["name"] for r in failing], counts, len(rows)))
-    bad = [r for r in failing if r["name"] in keep]
+    # a check failing because its outside source turned the server away or didn't answer is the source's side: System lists it as Fail and
+    # Overview's Data sources card says since when, but it is not the owner's to fix, so it is neither mailed nor listed as a Fix (admin100)
+    bad = [r for r in failing if r["name"] in keep and not source_fault(r.get("detail"))]
     problem = (f"{len(bad)} check{'s' if len(bad) > 1 else ''} failing after a retry: "
                + "; ".join(f"{r['name']} ({str(r.get('detail') or '')[:140]})" for r in bad[:6])) if bad else None
     return autofix.Check(id="platform", name="Feature check", problem=problem, owner_only=True, to="/admin/system",

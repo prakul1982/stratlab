@@ -2,7 +2,7 @@ import type { HealthState } from "../../components/kit";
 import { IST, ago, dateOnly, fmtDate, istToday, quoteAt } from "../../lib/format";
 import { aiCountText } from "../../lib/connection";
 import { reconnectAt } from "../../lib/dataBack";
-import type { AIRow, AutofixStatus, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
+import type { AIRow, AutofixStatus, InvoiceSeller, JobRow, Overview, Reported, SourceRow } from "./AdminContext";
 
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
  * jobs and on System all come from services() below, so two pages can never tell the same fact two ways. */
@@ -174,9 +174,14 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
   if (sv.admin_alerts) {
     const a = sv.admin_alerts;
     const quota = quotaLine(a.quota);
-    out.push({ key: "mail", label: "Alert emails", state: !a.email_ready ? "bad" : quota?.low ? "warn" : "ok", to: "/admin/system",
-      detail: a.email_ready ? `${a.via ? `Sent through ${a.via}` : "Ready"}${quota ? ` · ${quota.text}` : ""}` : "Not set up: no email service on the server",
-      fix: a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}${quota ? `; ${quota.text}` : ""}, plus your phone or Telegram if set in Account.`
+    // the email service refusing the server's sends (twice in a row) is the owner's to fix, said with the step (admin100)
+    const failing = a.email_ready ? sourceRow(sv, "mail") : undefined;
+    const refused = !!failing?.owner;
+    out.push({ key: "mail", label: "Alert emails", state: !a.email_ready || refused ? "bad" : quota?.low ? "warn" : "ok", to: "/admin/system",
+      detail: refused ? `Sending fails: ${failing!.error ?? "the service turns the server away"}`
+        : a.email_ready ? `${a.via ? `Sent through ${a.via}` : "Ready"}${quota ? ` · ${quota.text}` : ""}` : "Not set up: no email service on the server",
+      fix: refused ? failing!.detail
+        : a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}${quota ? `; ${quota.text}` : ""}, plus your phone or Telegram if set in Account.`
         : "No email service is set up on the server. Add one in Railway: RESEND_API_KEY (a free account at resend.com made with this address), "
           + "or BREVO_API_KEY, or SMTP_HOST, SMTP_USER and SMTP_PASSWORD. Until then alerts reach only your phone or Telegram." });
   }
@@ -185,8 +190,13 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
     fix: sv.research?.finnhub ? undefined : "No key. Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key." });
   // live keys and no payment event ever received: a first real payment would not upgrade the plan by itself, so Check, not OK (LIVE1C-008)
   const noHook = sv.billing_enabled && sv.billing_hook?.mode === "live" && !sv.billing_hook.last_at;
-  out.push({ key: "pay", label: "Payments", state: sv.billing_enabled ? (noHook ? "warn" : "ok") : "warn",
-    detail: sv.billing_enabled ? (noHook ? "Connected, but Razorpay has never sent a payment event: send a test event before the first payment" : "Connected") : "Not set up", to: "/admin/money" });
+  // Razorpay turning the server's reads down (twice in a row) is the owner's to fix (admin100); the last payment event's time is said
+  const rz = sv.billing_enabled ? sourceRow(sv, "payments") : undefined;
+  const lastEvent = sv.billing_hook?.last_at ? ` · last payment event ${ago(sv.billing_hook.last_at)}` : "";
+  out.push({ key: "pay", label: "Payments", state: sv.billing_enabled ? (rz?.owner ? "bad" : noHook ? "warn" : "ok") : "warn",
+    detail: !sv.billing_enabled ? "Not set up" : rz?.owner ? `Razorpay turns the server down: ${rz.error ?? "no answer"}`
+      : noHook ? "Connected, but Razorpay has never sent a payment event: send a test event before the first payment" : `Connected${lastEvent}`, to: "/admin/money",
+    fix: rz?.owner ? rz.detail : undefined });
   if (sv.calendar?.days_left != null) {
     // the holidays on file and the exchange's live list are two facts: with the daily read failing the light says both, so
     // it never reads "OK" beside "The exchange feed isn't answering" in Needs your attention (R12-010)
@@ -234,25 +244,30 @@ export function needsOwner(a: AIRow): boolean {
 /** Where an Admin path is, in the menu's words. */
 const PAGE: Record<string, string> = { "/admin/data": "Data and jobs", "/admin/system": "System", "/admin/quality": "Quality", "/admin/money": "Money", "/admin/users": "Users and growth" };
 
-/** What needs a look, worst first. Each item says where it is fixed, in the same words as the service's own light. */
-export function attention(ov: Overview | null, reported: Reported | null, jobs: JobRow[] | null): Attention[] {
-  if (!ov) return [];
+/** One source's row from the server (admin100), by its key. */
+export const sourceRow = (sv: Overview["server"], key: string): SourceRow | undefined => (sv.sources ?? []).find((r) => r.key === key);
+
+/** Overview's two lists (owner, 26 Nov, Release 93: "in overview … just put things there which I need to fix manually"):
+ * `owner`, what only the owner can do (log the broker in, a key, a setting, a payment detail, a report to read, what the self-healing
+ * gave up on), worst first; `auto`, what StratLab is handling or a developer looks at (a feed being retried, a source not answering,
+ * server errors, the audit's mismatches), listed apart under "nothing for you to do". Each item says where it is, in the same words as
+ * the service's own light. */
+export function triage(ov: Overview | null, reported: Reported | null, jobs: JobRow[] | null): { owner: Attention[]; auto: Attention[] } {
+  if (!ov) return { owner: [], auto: [] };
   const sv = ov.server;
   const out: Attention[] = [];
+  const auto: Attention[] = [];
   const s = Object.fromEntries(services(ov, jobs).map((x) => [x.key, x]));
   if (s.kite.state === "bad") out.push({ text: `Broker data (India): ${s.kite.detail}`, to: "/admin/data", label: "Data and jobs", bad: true });
   if (s.auto.state === "bad") out.push({ text: `The automatic broker login failed: ${sv.auto_login.message}`, to: "/admin/data", label: "Data and jobs", bad: true });
-  if (s.feed.state !== "ok") out.push({ text: `Live price feed: ${s.feed.detail}.`, to: "/admin/data", label: "Data and jobs", bad: false });
+  // the feed reconnects by itself once the broker is logged in (a logged-out broker is the line above): not the owner's (admin100)
+  if (s.feed.state !== "ok") auto.push({ text: `Live price feed: ${s.feed.detail}.`, to: "/admin/data", label: "Data and jobs", bad: false });
   const aiKeys = sv.ai.filter((a) => a.configured);
   const aiDown = aiKeys.filter((a) => !aiUp(a));
   if (!aiKeys.length) out.push({ text: "No AI keys are set, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
-  // one line per provider that can't answer, with the provider's own reason (status code and message), so a rejected
-  // key reads differently from a fault on our side (R5O-016)
-  // a provider out of its free quota or paused resets on its own: one line for them all, nothing to do (DJ-002: four such
-  // lines buried the items the owner must act on); a failing one keeps its own line, with its own reason
-  // a provider that is out of quota, resting, or failed on a passing fault of its own (a 5xx, a timeout, a busy server) resets by itself:
-  // the AI light on Services says so and System lists each; Needs your attention holds only what the owner must do (LIVE1C-003:
-  // "paused … nothing to do" and "Gemini: server error 503" beside an invoice that did need a look)
+  // one line per provider that can't answer for a reason only the owner can clear (a rejected key, a model it can't use), with the
+  // provider's own reason (R5O-016); one out of free quota, paused or failing on a passing fault of its own resets by itself: the AI
+  // light on Services says so and System lists each (DJ-002, LIVE1C-003)
   // the self-healing's escalations (owner, 4 Nov): what it couldn't fix, with what was tried and the exact action; a job's own Problem
   // line already says it (with the retries), so only the others are added, each said once
   const given = new Map((sv.autofix?.escalated ?? []).map((e) => [e.id, e]));
@@ -263,18 +278,20 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   }
   for (const e of given.values()) {
     if (e.id.startsWith("job:")) continue;
-    // owner, 26 Nov ("in overview … just put things there which I need to fix manually"): a theme's coverage or data-gap note is the
-    // engine's work, not a manual fix; it is listed on Quality → Theme engine notes instead
+    // owner, 26 Nov: a theme's coverage or data-gap note is the engine's work, not a manual fix; it is listed on Quality → Theme engine notes
     if (isEngineNote(e.id)) continue;
     out.push({ text: `${e.name}: ${e.problem ?? "not working"}. ${e.tries ? `Fixed automatically ${e.tries} time${e.tries === 1 ? "" : "s"} without luck` : "Only you can fix this"}`
       + `${e.mailed ? "; you were emailed" : ""}. ${e.action ?? ""}`.trim(), to: e.to, label: PAGE[e.to] ?? "Overview", bad: true });
   }
   if (aiDown.length && aiDown.length === aiKeys.length && !given.has("ai:all")) out.push({ text: "No AI provider is answering, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
-  if (s.mail?.state === "bad") out.push({ text: "Alert emails can't be sent yet: no email service (Resend, Brevo or SMTP) is set up on the server.", to: "/admin/system", label: "System", bad: true });
-  // only the errors since this server started are "since the last restart"; ones kept from before it aren't news (R7O-006)
+  if (s.mail?.state === "bad") out.push(sv.admin_alerts?.email_ready
+    ? { text: `Alert emails are failing: ${s.mail.fix ?? s.mail.detail}`, to: "/admin/system", label: "System", bad: true }
+    : { text: "Alert emails can't be sent yet: no email service (Resend, Brevo or SMTP) is set up on the server.", to: "/admin/system", label: "System", bad: true });
+  // only the errors since this server started are "since the last restart"; ones kept from before it aren't news (R7O-006). A developer's
+  // to look at, not the owner's by hand (admin100)
   const errs = errorCounts(sv);
-  if (errs.since) out.push({ text: `${plural(errs.since, "server error")} since the last restart.`, to: "/admin/system", label: "System", bad: false });
-  // Help & feedback reports nobody has looked at yet (owner, 4 Nov)
+  if (errs.since) auto.push({ text: `${plural(errs.since, "server error")} since the last restart.`, to: "/admin/system", label: "System", bad: false });
+  // Help & feedback reports nobody has looked at yet (owner, 4 Nov): only the owner reads and answers them
   if (sv.feedback_new) out.push({ text: `${plural(sv.feedback_new, "new feedback report")} from users.`, to: "/admin/feedback", label: "Feedback", bad: false });
   const pending = (reported?.entries ?? []).filter((r) => r.hidden_by !== "admin").length;
   if (pending) out.push({ text: `${pending} library entr${pending > 1 ? "ies were" : "y was"} reported by users.`, to: "/admin/quality", label: "Quality", bad: false });
@@ -283,36 +300,57 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
     // the holidays read failing isn't holidays missing: said the way the Services light says it (R12-010)
     const err = plainError(j.error);
     const text = j.id === "holidays" && s.cal ? `Exchange holidays: ${s.cal.detail.replace(/^Holidays/, "holidays")}. ${err.text}` : `${j.name}: ${err.text}`;
-    out.push({ text, ...(err.full ? { full: `${j.name}: ${err.full}` } : {}), to: "/admin/data", label: "Data and jobs", bad: false });
+    // a Problem is what the self-healing gave up on, or a run stuck for hours (the server makes a fresh failure a Check while it retries):
+    // the owner's to look at; the holidays' live list down while the days on file cover the weeks ahead fixes itself (admin100)
+    (j.state === "bad" ? out : auto).push({ text, ...(err.full ? { full: `${j.name}: ${err.full}` } : {}), to: "/admin/data", label: "Data and jobs", bad: false });
   }
-  // feeds on "Check": never run, or only partly read (R5O-016: seven sat on "Not run yet" without a word here). A job
+  // feeds on "Check": being retried, never run, or only partly read (R5O-016). Each read again by itself: listed apart (admin100). A job
   // switched off on purpose isn't listed.
   const waiting = (jobs ?? []).filter((j) => j.state === "warn" && j.schedule !== "Off" && !holidaysDown(j));
   // each feed's words as Data and jobs writes them, not lowercased (DJ-007: "not read: index provider:")
-  if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j)})`).join("; ")}.`,
+  if (waiting.length) auto.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j)})`).join("; ")}.`,
     to: "/admin/data", label: "Data and jobs", bad: false });
-  // said once: when the holidays job's line above already speaks for them, not again here (R45A-017)
-  const holidaysSaid = out.some((o) => o.text.startsWith("Exchange holidays"));
+  // said once: when the holidays job's line above already speaks for them, not again here (R45A-017). Pasting the exchange's list is
+  // the owner's (Data and jobs → Exchange holidays)
+  const holidaysSaid = [...out, ...auto].some((o) => o.text.startsWith("Exchange holidays"));
   if (!holidaysSaid && s.cal && s.cal.state !== "ok" && (sv.calendar?.days_left ?? 0) < 60) out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
-  // official rate and rule sources: one unread for days, or a change waiting for a look, is named here, not only on
-  // Quality (R50-008: three sources unread for 16 days, Overview silent)
+  // official rate and rule sources: one unread for days is the reader's (a developer's), a change waiting for a look the owner's review
+  // (R50-008: three sources unread for 16 days, Overview silent)
   const rw = sv.rules_watch;
-  if (rw?.failing.length) out.push({ text: `Rate and rule sources unread: ${rw.failing.map((f) => `${f.name} (${f.fails} runs in a row)`).join(", ")}.`,
+  if (rw?.failing.length) auto.push({ text: `Rate and rule sources unread: ${rw.failing.map((f) => `${f.name} (${f.fails} runs in a row)`).join(", ")}.`,
     to: "/admin/quality", label: "Quality", bad: false });
   if (rw?.pending.length) out.push({ text: `Rate and rule sources changed, waiting for a look: ${rw.pending.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
-  // the whole-market audit's companies with a number that disagrees with its source (R50-008)
+  // the whole-market audit's companies with a number that disagrees with its source (R50-008): the engine's and a developer's
   const mm = sv.audit_mismatches ?? {};
   // with when those rows were checked: a mismatch from weeks ago isn't today's (DJ-026)
   const checkedOn = (r: "IN" | "US") => { const c = sv.audit_checked?.[r]; if (!c) return "";
     const a = fmtDate(c.oldest, { year: false, tz: IST }), b = fmtDate(c.newest, { year: false, tz: IST });
     return a === b ? ` (checked ${a})` : ` (checked ${a} to ${b})`; };
   const mmText = (["IN", "US"] as const).filter((r) => mm[r]).map((r) => `${mm[r]} in ${r === "IN" ? "India" : "the US"}${checkedOn(r)}`);
-  if (mmText.length) out.push({ text: `The whole-market audit has companies whose numbers disagree with their source: ${mmText.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
+  if (mmText.length) auto.push({ text: `The whole-market audit has companies whose numbers disagree with their source: ${mmText.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
+  // the outside sources (admin100): one not answering is the source's side and StratLab keeps asking; one only the owner fixes (the
+  // email service, Razorpay) is said through its service's light above, so it is never listed twice
+  for (const r of sv.sources ?? []) {
+    if (r.owner || r.state === "ok") continue;
+    auto.push({ text: `${r.label}: ${r.word} (${r.error ?? "no answer"}). StratLab keeps asking and uses its last good copy meanwhile.`,
+      to: r.to, label: PAGE[r.to] ?? "Data and jobs", bad: false });
+  }
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
   if (sv.billing_enabled && s.pay.state === "warn") out.push({ text: `Payments: ${s.pay.detail}.`, to: "/admin/money", label: "Money", bad: false });
+  if (sv.billing_enabled && s.pay.state === "bad") out.push({ text: `Payments: ${s.pay.fix ?? s.pay.detail}`, to: "/admin/money", label: "Money", bad: true });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });
-  return out.sort((x, y) => Number(y.bad) - Number(x.bad));
+  return { owner: out.sort((x, y) => Number(y.bad) - Number(x.bad)), auto };
+}
+
+/** What needs the owner, worst first: only what only the owner can fix (Release 93; triage). */
+export function attention(ov: Overview | null, reported: Reported | null, jobs: JobRow[] | null): Attention[] {
+  return triage(ov, reported, jobs).owner;
+}
+
+/** What StratLab is handling itself or a developer looks at: listed apart from the owner's, "nothing for you to do" (admin100). */
+export function selfFixing(ov: Overview | null, reported: Reported | null, jobs: JobRow[] | null): Attention[] {
+  return triage(ov, reported, jobs).auto;
 }
 
 /** Overview's paid-users figure: those paying (a subscription) apart from those on a plan the owner gave by hand, so a

@@ -129,7 +129,9 @@ def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | N
     of `log`); when some were read and some weren't, the run is partial: Check, not Problem. `effects` says, per source,
     what is missing while it is unread (DJ-021), `next_run` when it is tried again. `check`: something to look at that is not a
     failure (an IPO filing no exchange lists yet): Check, with that line, when nothing failed."""
-    state = "bad" if error else "ok" if last_run else "warn"
+    # a job switched off on purpose (schedule "Off") is not waiting for anything: OK, its line says Off (admin100: two switched-off jobs sat
+    # on amber Check on Overview for good)
+    state = "bad" if error else "ok" if last_run or schedule == "Off" else "warn"
     problems = [str(x) for x in (log or []) if x] if error else []
     failed = len(problems)
     if error and parts and 0 < failed < parts:
@@ -636,7 +638,7 @@ def admin_jobs(_=Depends(admin.admin_profile)):
     """Every background job: when it last ran, its schedule, how the last run went, and the routes that run it now."""
     # which container runs the jobs (a deploy overlaps two for a minute) and until when its lease holds; each row with what the
     # self-healing is doing about it (being retried: a Check; tries used up: a Problem)
-    return {"jobs": autofix.annotate(rows()), "leader": leader.current.status()}
+    return {"jobs": autofix.annotate(rows(), unwatched=OWN_CHECK), "leader": leader.current.status()}
 
 
 @router.get("/admin/stock-pages/rebuild")
@@ -651,6 +653,10 @@ def admin_stock_pages_rebuild(_=Depends(admin.admin_profile)):
 # never re-run by the sweep: jobs that mail users or read their connected accounts (a remedy must not touch users), and the exchange
 # holidays, which have a check of their own (data.calendar)
 NO_AUTO = frozenset({"newsletters", "statement-reminder", "ibkr-daily", "holidays"})
+# ...of those, the jobs with a check of their own (the exchange holidays: data.calendar); the others are still watched, with no remedy:
+# their own next run is the retry, and one still failing after the same window as a re-run job's goes to the owner (admin100: a failed
+# newsletter or IBKR run was a Problem from its first failure and never went through the self-healing at all)
+OWN_CHECK = frozenset({"holidays"})
 _REGION_WORD = {"India": re.compile(r"\b(?:India|IN)\b"), "US": re.compile(r"\b(?:US|New York)\b")}
 
 
@@ -681,11 +687,12 @@ def job_checks() -> list[autofix.Check]:
     """A check per job: its problem when it failed, is stuck, or read only some of its sources; the remedy re-runs it."""
     out = []
     for r in rows():
-        if r["id"] in NO_AUTO:
+        if r["id"] in OWN_CHECK:
             continue
         failing = r["state"] == "bad" or (r["state"] == "warn" and bool(r.get("error")) and not r.get("running"))
-        paths = remedy_paths(r)
+        paths = [] if r["id"] in NO_AUTO else remedy_paths(r)
         out.append(autofix.Check(id=f"job:{r['id']}", name=r["name"], problem=r.get("error") if failing else None,
                                  fix=(lambda ps=tuple(paths): [autofix.call_route(x) for x in ps]) if paths else None,
-                                 fix_text="re-ran the job", action=_job_action(r), to="/admin/data"))
+                                 fix_text="re-ran the job" if paths else "waited for its own next run", action=_job_action(r), to="/admin/data",
+                                 mail=r["id"] not in NO_AUTO))      # a job that mails users is listed for the owner, never mailed about
     return out
