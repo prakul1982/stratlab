@@ -41,6 +41,11 @@ class Settings:
 
     # Connect once (app/connect): the key that encrypts users' stored passwords and broker tokens (Fernet; see docs/ADMIN.md)
     CONNECT_SECRET_KEY = _env("CONNECT_SECRET_KEY")
+    # social103: Admin → Social posts the day's theme on X and LinkedIn as the owner (app/social.py); each network's app's own keys
+    X_CLIENT_ID = _env("X_CLIENT_ID")
+    X_CLIENT_SECRET = _env("X_CLIENT_SECRET")
+    LINKEDIN_CLIENT_ID = _env("LINKEDIN_CLIENT_ID")
+    LINKEDIN_CLIENT_SECRET = _env("LINKEDIN_CLIENT_SECRET")
     # Statement inbox: mail to u-<random>@INBOUND_DOMAIN reaches /inbound/email/<provider>?k=<INBOUND_WEBHOOK_SECRET>
     INBOUND_DOMAIN = _env("INBOUND_DOMAIN").lower().lstrip("@")
     INBOUND_PROVIDER = _env("INBOUND_PROVIDER", "brevo").lower()          # "brevo" (inbound parsing) or "signed" (HMAC-signed JSON)

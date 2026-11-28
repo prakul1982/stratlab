@@ -9,6 +9,7 @@ os.environ["THEME_DESCRIBE_MORE"] = "0"               # no background descriptio
 os.environ["THEME_RECHECK"] = "0"                      # r66e: no background re-check of the stored themes (tests call theme_recheck.step)
 os.environ["READ_BEHIND"] = "0"                        # no stored read worked out again on a worker behind the page (LIVE10A-008/011)
 os.environ["OFFICIAL_CLOSE_FETCH"] = "0"               # no exchange file or broker read for official closes (app/official_close.py)
+os.environ["SOCIAL_OFFLINE"] = "1"                     # social103: no call to X or LinkedIn from tests, ever (app/social.py refuses)
 os.environ["ANTHROPIC_API_KEY_2"] = ""                # no second Claude key from a shell or .env: tests that want one set it
 
 import pytest

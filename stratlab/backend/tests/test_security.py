@@ -25,6 +25,8 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/blog", "/blog/", "/blog/briefs", "/blog/briefs/", "/blog/research", "/blog/research/", "/blog/{slug}", "/blog/{slug}/",
           "/blog/feed.xml",                         # the public blog and its feed
           "/connect/dhan/callback", "/connect/kite/callback", "/connect/upstox/callback",   # broker logins return here (state-checked)
+          # (changed on purpose, social103) X and LinkedIn send the owner back here after Admin → Social → Connect (one-time state-checked)
+          "/admin/social/x/callback", "/admin/social/linkedin/callback",
           "/feedback",                              # a report from anyone, signed in or not (throttled per address)
           "/hooks/signal/{token}",                  # a chart alert's webhook: the secret token in the address is the key
           "/inbound/email/{provider}",              # the mail provider's inbound hook (signature-checked)

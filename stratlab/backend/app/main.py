@@ -36,6 +36,7 @@ from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, instrument_kinds, money_calendar, quote_share, tax_export, tax_lots, tax_total
 from . import autofix
+from . import social
 from . import money_mf
 from . import money_mf_nav
 from . import money_mf_ter
@@ -471,6 +472,7 @@ def start_jobs():
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
     _start("theme_recheck.job", _theme_recheck_start)     # r66e: every stored theme checked again after a version change, one at a time
+    _start("social.job", social.job.start)           # social103: X and LinkedIn's daily theme post, once a day when switched on
     _start("autofix", lambda: threading.Thread(target=autofix.loop, daemon=True, name="autofix").start())   # self-healing: retries what failed, emails the owner only when that fails (owner, 4 Nov)
 
 
@@ -490,6 +492,7 @@ app.include_router(research_routes.router)
 from . import sample_deck  # noqa: E402  (FREE-TIER: the public sample deck, /pricing/sample-deck)
 app.include_router(sample_deck.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
+app.include_router(social.router)            # /admin/social: X and LinkedIn's daily theme post (social103)
 app.include_router(feedback.router)          # /feedback from anyone, /admin/feedback the inbox (owner, 4 Nov)
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
 app.include_router(money_mf_ter.admin_router)  # /admin/ter
@@ -6948,7 +6951,17 @@ def server_status() -> dict:
             # new Help & feedback reports, for "Needs your attention"
             "feedback_new": feedback.new_count(),
             # each outside source's last good answer and last failure, with a plain verdict (admin100: the archive's refusals had no row)
-            "sources": source_health_rows()}
+            "sources": source_health_rows(),
+            # social103: X and LinkedIn's daily post: connected, on, LinkedIn's sign-in end, a post that failed both tries (Needs your attention)
+            "social": social_rows()}
+
+
+def social_rows() -> list:
+    try:
+        return social.summary()
+    except Exception as e:                  # Overview shows the rest without it
+        print("social rows:", str(e)[:120])
+        return []
 
 
 def source_health_rows() -> list:

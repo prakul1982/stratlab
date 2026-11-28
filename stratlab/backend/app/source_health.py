@@ -45,6 +45,9 @@ KNOWN: dict[str, tuple[str, str, bool, str]] = {
     "sec": ("The SEC (EDGAR)", "US company figures and filings", False, "/admin/data"),
     "mail": ("Email service", "alert emails, newsletters and sign-in links", True, "/admin/system"),
     "payments": ("Razorpay", "subscriptions and payment events", True, "/admin/money"),
+    # social103: the daily theme post; a post that fails its one retry is the owner's to look at (a sign-in turned down, a key)
+    "x": ("X (daily post)", "the daily theme post on X", True, "/admin/social"),
+    "linkedin": ("LinkedIn (daily post)", "the daily theme post on LinkedIn", True, "/admin/social"),
 }
 # a research source's own name (intel.net.Source.name) -> its key here
 NAMES = {"The SEC": "sec"}
@@ -191,6 +194,11 @@ def owner_action(k: str, error: str | None) -> str:
         if re.search(r"\b(401|403)\b|authentication|unauthori|invalid|key", e):
             return "Razorpay turned the server's keys down: check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Railway, then press Check payments setup in Admin → Money."
         return "Press Check payments setup in Admin → Money: it says what Razorpay answers."
+    if k in ("x", "linkedin"):
+        name = "X" if k == "x" else "LinkedIn"
+        if re.search(r"\b(401|403)\b|turned the stored sign-in down|run out|reconnect|connect", e):
+            return f"Open Admin → Social and press Connect {name} again, then Post now to check."
+        return f"Open Admin → Social: the last posts say what {name} answered; Post now tries again."
     return "Open Admin to see what failed."
 
 
@@ -204,7 +212,8 @@ def judge(k: str, row: dict, now: float | None = None) -> dict:
             "error": row.get("error") if fail_at else None, "fails": fails, "before_restart": bool(row.get("before_restart")),
             "owner": False, "action": None}
     if not ok_at and not fail_at:
-        idle = {"mail": "No email sent since the server started.",
+        idle = {"mail": "No email sent since the server started.", "x": "No post sent since the server started.",
+                "linkedin": "No post sent since the server started.",
                 "payments": "Not read since the server started: Money's lists, the setup check and Razorpay's payment events read it."}
         return {**base, "state": "ok", "word": "Not asked yet", "detail": idle.get(k, "Not asked since the server started; it is read when a page or job needs it.")}
     failing = bool(fail_at) and (not ok_at or fail_at > ok_at) and fails > 0
