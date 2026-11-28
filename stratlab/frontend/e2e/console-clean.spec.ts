@@ -43,7 +43,8 @@ for (const path of PATHS) {
     const hrefs = await page.evaluate(() => [...new Set(Array.from(document.querySelectorAll("a[href^='/']")).map((a) => (a as HTMLAnchorElement).getAttribute("href") || ""))]);
     // (updated on purpose, R43 data status: /status is a page the server draws, forwarded like /stocks and /blog (vercel.json), so
     // Movers' "When each dataset was last updated" opens it; it is no app route)
-    const dead = hrefs.map((h) => h.split(/[?#]/)[0]).filter((h) => h && h !== "/" && !/^\/(api|assets|v|c|stocks|blog|sitemaps?|status)(\/|$)/.test(h) && !opens(h));
+    // (changed on purpose, conv101: /sample-deck is a server-drawn page like /stocks, proxied by vercel.json and the Caddyfile)
+    const dead = hrefs.map((h) => h.split(/[?#]/)[0]).filter((h) => h && h !== "/" && !/^\/(api|assets|v|c|stocks|blog|sitemaps?|status|sample-deck(\.pdf)?)(\/|$)/.test(h) && !opens(h));
     expect(problems, "errors while the page loaded").toEqual([]);
     expect(dead, "links that open no page").toEqual([]);
   });

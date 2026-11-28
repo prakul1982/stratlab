@@ -269,12 +269,13 @@ def test_the_theme_pages_way_in_and_deck_preview_are_at_the_top_and_promise_no_f
     html = public_themes.render(_theme_view())
     top, first = html.index("data-cta-top"), html.index("data-layer")
     assert top < first
-    assert "Sign in free to open the theme</a>" in html and "from=theme" in html
+    # (changed on purpose, R102 CI: a public page's link into the app says "(needs sign-in)" and carries rel="nofollow", R44/AS1)
+    assert 'rel="nofollow"' in html and "Open the theme, free (needs sign-in)</a>" in html and "from=theme" in html
     assert 'href="https://stratlab.studio/sample-deck">Preview a theme deck, no sign-in</a>' in html
     assert "What the Defence slide deck holds" in html and "The value chain: 3 layers" in html and "companies and figures (12 companies)" in html
     assert "Slide decks are on Basic and Pro." in html
     assert "Download the full deck" not in html and "free deck" not in html.lower(), "Free has no decks of its own (plans.PLANS decks_per_month 0)"
-    assert len(re.findall(r">Sign in free to open the[^<]*</a>", html)) == 2, "the way in at the foot stays too"
+    assert len(re.findall(r">Open the [^<]*\(needs sign-in\)</a>", html)) == 2, "the way in at the foot stays too"
 
 
 # ---------- coordinator: the sample deck's own page, and the deck's footer ----------

@@ -70,12 +70,14 @@ function useCallsSettled(): boolean {
 export function Shell({ children, ask: question }: { children: ReactNode; ask?: ReactNode }) {
   const ask = useCallsSettled() ? question : null;
   useScrollMemory();
-  const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
+  const { notebooks, markets, me, focus, space: saved, setSpace, session } = useApp();
   const [open, setOpen] = useState(false);
   const pins = usePins();
   const [opened, setOpened] = usePersisted<Record<string, boolean>>(`${OPEN_KEY}.${me?.id ?? "guest"}`, NO_CHOICE);
   // each person's closed and moved page sections are their own (kit/Section.tsx)
-  useLayoutEffect(() => { setSectionUser(me?.id); }, [me?.id]);
+  // R102 CI (fix14 /new CLS 0.095): signed in, the session's user id is known before /me answers, so a page's section controls (shown only
+  // to a signed-in person, conv101 P10) are drawn with the page, not added under it a moment later
+  useLayoutEffect(() => { setSectionUser(me?.id ?? session?.user?.id); }, [me?.id, session?.user?.id]);
   // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
   const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
   const [search, setSearch] = useState(false);
