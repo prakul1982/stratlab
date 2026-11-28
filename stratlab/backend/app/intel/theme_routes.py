@@ -1588,10 +1588,23 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
 RESTATED_SHARE = 0.02            # e79: a newest year's revenue apart from its page's by more than this share (theme_changes.REVENUE_SHARE)
 
 
+_SALES: dict = {}          # mem100: region -> (the index rows it was made from, screens.version, the map)
+
+
 def _index_sales(region: str) -> dict:
-    """e79: {symbol: (revenue, year, unit)} of every company page as the screens' index has it now (each page's newest full year)."""
-    return {x["symbol"]: (x.get("sales"), str(x.get("sales_year") or ""), x.get("sales_unit")) for x in _routes().index_rows(region) or []
-            if isinstance(x, dict) and x.get("symbol") and isinstance(x.get("sales"), (int, float)) and x["sales"] > 0}
+    """e79: {symbol: (revenue, year, unit)} of every company page as the screens' index has it now (each page's newest full year).
+    mem100: made once for the index as it is (the same rows, unchanged since: screens.version), not once for each company a dive reads
+    (facts_piece asked for every member: a 13,000-row map made 300 times for a 300-company theme). Read it, never change it."""
+    from .. import screens
+    rows = _routes().index_rows(region) or []
+    mark = (screens.version(region), len(rows))
+    hit = _SALES.get(region)
+    if hit is not None and hit[0] is rows and hit[1] == mark:
+        return hit[2]
+    got = {x["symbol"]: (x.get("sales"), str(x.get("sales_year") or ""), x.get("sales_unit")) for x in rows
+           if isinstance(x, dict) and x.get("symbol") and isinstance(x.get("sales"), (int, float)) and x["sales"] > 0}
+    _SALES[region] = (rows, mark, got)
+    return got
 
 
 def _apart(a, b) -> bool:

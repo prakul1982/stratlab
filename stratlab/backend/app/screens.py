@@ -241,6 +241,7 @@ def note_page(region: str, symbol: str, facts: dict | None) -> None:
         hit = _mem.get(region)
         if hit:
             _mem[region] = (hit[0], _with_built(region, hit[1]))
+        _changed(region)
 
 
 # LIVE3-003: the theme table showed BDL at ₹37,205 cr (the 3 Nov close) beside ₹39,327 cr on its own page (4 Nov). The price job moves
@@ -266,6 +267,7 @@ def note_price(region: str, symbol: str, facts: dict | None) -> None:
         hit = _mem.get(region)
         if hit:
             _with_prices(region, hit[1], {symbol})
+        _changed(region)
 
 
 def _with_prices(region: str, index: dict, only: set | None = None) -> dict:
@@ -356,6 +358,7 @@ def build_index(region: str, store: bool = True) -> dict:
         db.set_setting(INDEX_KEY + region, json.dumps(index))
         with _mem_lock:
             _mem.pop(region, None)
+            _changed(region)
             # the pages built before this gathering began are in it now; those built while it ran stay on top of it
             _built[region] = {s: v for s, v in (_built.get(region) or {}).items() if v[0] >= started}
             _priced[region] = {s: v for s, v in (_priced.get(region) or {}).items() if v[0] >= started}
@@ -376,6 +379,18 @@ def build_index(region: str, store: bool = True) -> dict:
 
 _mem: dict[str, tuple[float, dict]] = {}
 _mem_lock = threading.Lock()
+# mem100: bumped whenever a market's index in memory is replaced or a row of it changed in place (a page's new close, a page built), so
+# what is worked out from the index once (stock_pages._sized: the market's companies by checked value, on every company page) is worked
+# out again then, and only then
+_version: dict[str, int] = {}
+
+
+def _changed(region: str) -> None:
+    _version[region] = _version.get(region, 0) + 1
+
+
+def version(region: str) -> int:
+    return _version.get(region, 0)
 
 
 def load_index(region: str) -> dict:
@@ -397,6 +412,7 @@ def load_index(region: str) -> dict:
     with _mem_lock:
         index = _with_prices(region, _with_built(region, index))
         _mem[region] = (time.time(), index)
+        _changed(region)
     return index
 
 
