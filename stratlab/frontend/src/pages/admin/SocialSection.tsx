@@ -15,6 +15,10 @@ export type SocialNet = {
   problem: string | null; failed: { at: string | null; status: string; error: string | null; day: string | null } | null;
   vars: string[]; callback: string; scopes: string; account: string | null; connected_at: string | null; renews: boolean;
   next: { at: string; parts: string[]; theme: string; link: string } | null; next_note: string | null;
+  /** X only (pay-per-use): this month's posts and replies, the estimated cost in dollars, the monthly cap and why posting is paused */
+  month?: { month: string; posts: number; replies: number; cost_usd: number; cap: number; paused: string | null; usd_inr: number | null;
+    rates: { link_post: number; plain_post: number; reply: number } };
+  thread?: boolean;
 };
 export type SocialPost = { id: string; net: string; name: string; kind: "daily" | "manual"; day: string; at: string; updated: string | null; theme: string | null;
   region: string | null; link: string | null; status: "sending" | "posted" | "failed" | "unknown"; attempts: number; url: string | null; error: string | null;
@@ -48,6 +52,7 @@ export function netState(n: SocialNet): { state: HealthState; word: string; deta
 function NetCard({ n, schedule, busy, act }: { n: SocialNet; schedule: string; busy: string | null; act: (key: string, fn: () => Promise<void>) => Promise<void> }) {
   const [ask, setAsk] = useState<"post" | "disconnect" | null>(null);
   const s = netState(n);
+  const [cap, setCap] = useState(String(n.month?.cap ?? ""));
   const connect = () => act(`${n.key}-connect`, async () => {
     const { url } = await api<{ url: string }>(`/admin/social/${n.key}/connect`, { method: "POST" });
     window.location.assign(url);
@@ -65,6 +70,19 @@ function NetCard({ n, schedule, busy, act }: { n: SocialNet; schedule: string; b
           <button type="button" className="btn outline sm" disabled={!n.connected || !n.next || busy !== null} onClick={() => setAsk("post")}>Post now</button>
           {n.connected && <button type="button" className="btn quiet sm" disabled={busy !== null} onClick={() => setAsk("disconnect")}>Disconnect</button>}
         </div>
+        {n.month && (
+          <div className="k-stack k-tight" data-testid={`social-month-${n.key}`}>
+            <p className="k-small">This month: <b>{n.month.posts}</b> post{n.month.posts === 1 ? "" : "s"}{n.month.replies ? ` and ${n.month.replies} repl${n.month.replies === 1 ? "y" : "ies"}` : ""},
+              about <b>${n.month.cost_usd.toFixed(2)}</b>{n.month.usd_inr ? ` (₹${Math.round(n.month.cost_usd * n.month.usd_inr).toLocaleString("en-IN")})` : ""} at
+              ${n.month.rates.link_post.toFixed(2)} a post with a link and ${n.month.rates.reply.toFixed(2)} a reply. Cap: {n.month.cap} a month.</p>
+            {n.month.paused && <p className="k-small k-down" role="status">{n.month.paused}</p>}
+            <div className="k-row">
+              <label className="k-small">Posts a month before X pauses <input className="k-input sm adm-cap" type="number" min={0} max={200} value={cap} onChange={(e) => setCap(e.target.value)} /></label>
+              <button type="button" className="btn outline sm" disabled={busy !== null || !/^\d+$/.test(cap) || Number(cap) === n.month.cap}
+                onClick={() => { void act(`${n.key}-cap`, async () => { await api(`/admin/social/${n.key}`, { method: "PUT", body: { cap: Number(cap) } }); }); }}>Save cap</button>
+            </div>
+          </div>
+        )}
         <p className="k-note k-muted">Address to register in the {n.name} app: <span className="adm-mono adm-break">{n.callback}</span></p>
         <div className="k-stack k-tight" data-testid={`social-next-${n.key}`}>
           <b className="k-small">Next post{n.next ? `: ${n.next.theme}, ${n.enabled ? n.next.at : "when switched on"}` : ""}</b>

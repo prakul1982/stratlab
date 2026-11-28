@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Lane social103 (owner, 28 Nov: "daily posting on X and LinkedIn fully automated; I have no time to post"): Admin → Social shows each
-// network's state, its switch (off, and only usable once connected), the next post and the last posts. The fake world has no X or LinkedIn
+// Lane social103 (owner, 28 Nov: "daily posting on X and LinkedIn fully automated; I have no time to post"; then LinkedIn only for now):
+// Admin → Social shows each network's state, its switch (off, and only usable once connected), the next post and the last posts. The fake world has no X or LinkedIn
 // app keys and never calls either network.
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
   refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
@@ -25,7 +25,9 @@ async function open(page: Page, path: string, ready: string) {
 test("social103 Admin → Social: each network's state, its switch off until connected, the next post and the last posts", async ({ page }) => {
   const errors = await open(page, "/admin/social", "Last posts");
   await expect(page.getByRole("heading", { level: 1, name: "Social" })).toBeVisible();
-  for (const [key, name, vars] of [["x", "X", "X_CLIENT_ID and X_CLIENT_SECRET"], ["linkedin", "LinkedIn", "LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET"]] as const) {
+  // owner, 28 Nov: LinkedIn only for now (X charges per post): X's card isn't shown while SOCIAL_X is off on the server
+  await expect(page.getByTestId("social-x")).toHaveCount(0);
+  for (const [key, name, vars] of [["linkedin", "LinkedIn", "LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET"]] as const) {
     const card = page.getByTestId(`social-${key}`);
     await expect(card).toBeVisible();
     // no app keys in the fake world: it says which variables to add, and nothing can be pressed that would leave the site
@@ -56,8 +58,8 @@ test("social103 Admin → Social: each network's state, its switch off until con
 });
 
 test("social103: back from a network's sign-in page, the page says how it went, once, and Overview asks nothing of a network not connected", async ({ page }) => {
-  const errors = await open(page, "/admin/social?social=x&result=denied", "Last posts");
-  await expect(page.getByText("X wasn't connected: the sign-in was cancelled on its page.")).toBeVisible();
+  const errors = await open(page, "/admin/social?social=linkedin&result=denied", "Last posts");
+  await expect(page.getByText("LinkedIn wasn't connected: the sign-in was cancelled on its page.")).toBeVisible();
   await expect(page).toHaveURL(/\/admin\/social$/);
   await page.getByRole("navigation", { name: "Admin sections" }).getByRole("link", { name: /^Overview/ }).click();
   const card = page.getByRole("region", { name: "Needs your attention" });

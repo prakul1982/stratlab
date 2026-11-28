@@ -254,8 +254,17 @@ def rows(now: float | None = None) -> list[dict]:
     _load()
     with _lock:
         st = {k: dict(v) for k, v in _st.items()}
-    order = list(KNOWN) + sorted((k for k in st if k not in KNOWN), key=lambda k: str(st[k].get("label") or k).lower())
+    order = [k for k in KNOWN if k != "x" or _x_on()] + sorted((k for k in st if k not in KNOWN), key=lambda k: str(st[k].get("label") or k).lower())
     return [judge(k, st.get(k, {}), now) for k in order]
+
+
+def _x_on() -> bool:
+    """X's daily post row only while X posting is turned on (SOCIAL_X; social103: LinkedIn only for now)."""
+    try:
+        from .config import settings
+        return bool(getattr(settings, "SOCIAL_X", False))
+    except Exception:
+        return False
 
 
 def watch(name: str, fn, label: str | None = None):

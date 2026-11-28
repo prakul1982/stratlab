@@ -78,6 +78,7 @@ def w(monkeypatch):
     computed.reset_for_tests()
     theme_library._refreshing.clear()
     monkeypatch.setattr(settings, "CONNECT_SECRET_KEY", Fernet.generate_key().decode())
+    monkeypatch.setattr(settings, "SOCIAL_X", True)          # X is off on the server until the owner wants it; its code is tested here
     monkeypatch.setattr(settings, "X_CLIENT_ID", "the-x-client")
     monkeypatch.setattr(settings, "X_CLIENT_SECRET", "the-x-client-secret")
     monkeypatch.setattr(settings, "LINKEDIN_CLIENT_ID", "the-li-client")
@@ -127,9 +128,20 @@ def view(**kw):
     return v
 
 
-def test_x_post_is_a_thread_of_facts_with_dates_link_and_not_advice_each_part_within_280():
+def test_x_post_is_one_post_with_its_link_and_the_facts_that_fit():
+    # lead, 28 Nov: X charges per post (about $0.20 with a link, $0.01 a reply): one post a day, the link in it only, no thread by default
     got = social_post.build("x", view(), "https://stratlab.studio")
+    assert len(got["parts"]) == 1
+    p = got["parts"][0]
+    assert len(p) <= social_post.X_LIMIT and p.count("https://") == 1 and p.endswith("https://stratlab.studio/themes/in/defence?from=x")
+    assert p.startswith("Defence in India: 9 listed companies in 3 layers (map made 20 Nov 2026). Largest layer: Shipyards, with 4 of the 9 companies.")
+    assert "Facts only, not investment advice." in p and social_post.lint(p) == []
+
+
+def test_x_thread_when_turned_on_is_facts_with_dates_link_once_and_not_advice_each_part_within_280():
+    got = social_post.build("x", view(), "https://stratlab.studio", thread=True)
     parts = got["parts"]
+    assert all("https://" not in x for x in parts[1:])                                        # replies carry no link
     assert 3 <= len(parts) <= 5 and all(len(p) <= social_post.X_LIMIT for p in parts)
     assert parts[0].startswith("Defence in India: 9 listed companies in 3 layers (map made 20 Nov 2026).")
     assert "Facts only, not investment advice." in parts[0] and "https://stratlab.studio/themes/in/defence?from=x" in parts[0]
@@ -176,7 +188,7 @@ def test_banned_words_block_a_post_and_a_fact_line_holding_one_is_left_out():
                                                      {"symbol": "WMT", "name": "Walmart Inc", "cap": "$700.0B", "cap_v": 700000.0}]},
                      {"name": "Clubs", "companies": [{"symbol": "COST", "name": "Costco Wholesale Corp", "cap": "$400.0B", "cap_v": 400000.0}]}],
              region="US", label="Retail (US)", slug="retail", members=3, all=3)
-    got = social_post.build("x", v, "https://stratlab.studio")
+    got = social_post.build("x", v, "https://stratlab.studio", thread=True)
     text = "\n".join(got["parts"])
     assert "Target" not in text and "Walmart Inc ($700.0B)" in text and got["parts"][0].startswith("Retail in the US")
     # a theme whose very name trips the lint gives no post at all
@@ -377,8 +389,7 @@ def test_the_daily_job_posts_once_a_day_at_its_time_and_never_twice(w, time_mach
     time_machine.move_to(at("2026-11-30", "09:41"))
     assert social.job.tick(at("2026-11-30", "09:41")) == {"x": "posted", "linkedin": "posted"}
     tweets = net.posts()
-    assert 3 <= len(tweets) <= 5
-    assert "reply" not in tweets[0]["json"] and all(t["json"]["reply"]["in_reply_to_tweet_id"] == str(101 + i) for i, t in enumerate(tweets[1:]))
+    assert len(tweets) == 1 and "reply" not in tweets[0]["json"]                              # one post a day on X, no thread by default
     assert tweets[0]["headers"]["Authorization"] == "Bearer acc-X-1"
     li = net.posts(social.LI_POSTS)
     assert len(li) == 1 and li[0]["json"]["author"] == "urn:li:person:abc123" and li[0]["json"]["visibility"] == "PUBLIC"
@@ -432,6 +443,7 @@ def test_a_retry_after_a_thread_broke_halfway_carries_on_from_the_part_that_fail
     c, net = w["client"], w["net"]
     keep("IN", "defence", DEFENCE)
     on(c, "x")
+    assert c.put("/admin/social/x", headers=ADMIN, json={"thread": True}).json()["networks"][0]["thread"] is True
     ok1 = httpx.Response(201, json={"data": {"id": "501"}})
     net.answer("POST", social.X_TWEETS, ok1, httpx.Response(503, json={"title": "Service Unavailable"}))
     time_machine.move_to(at("2026-11-30", "09:41"))
@@ -526,3 +538,46 @@ def test_errors_shown_in_admin_never_carry_a_token():
 def test_linkedin_version_is_a_recent_published_month():
     assert social.li_version(date(2026, 11, 28)) == "202609"
     assert social.li_version(date(2026, 1, 5)) == "202511"
+
+
+def test_x_month_count_cost_estimate_and_cap_pause_x_posting(w, time_machine):
+    c, net = w["client"], w["net"]
+    keep("IN", "defence", DEFENCE)
+    keep("IN", "railways", RAIL)
+    on(c, "x")
+    x = c.get("/admin/social", headers=ADMIN).json()["networks"][0]
+    assert x["month"]["cap"] == social.X_MONTH_CAP == 31 and x["month"]["posts"] == 0 and x["month"]["cost_usd"] == 0
+    assert x["month"]["rates"] == {"link_post": 0.20, "plain_post": 0.015, "reply": 0.01} and x["thread"] is False
+    assert c.put("/admin/social/x", headers=ADMIN, json={"cap": 1}).json()["networks"][0]["month"]["cap"] == 1
+    assert c.put("/admin/social/x", headers=ADMIN, json={"cap": -1}).status_code == 400
+    assert c.put("/admin/social/linkedin", headers=ADMIN, json={"cap": 5}).status_code == 400
+    time_machine.move_to(at("2026-11-30", "09:41"))
+    assert social.job.tick(at("2026-11-30", "09:41")) == {"x": "posted"}
+    x = c.get("/admin/social", headers=ADMIN).json()["networks"][0]
+    assert x["month"]["posts"] == 1 and x["month"]["cost_usd"] == 0.2 and "reached the cap of 1" in x["month"]["paused"]
+    # the cap reached: no post the next day, nor by hand, until the 1st
+    time_machine.move_to(at("2026-12-01", "09:41"))
+    assert social.x_capped(date(2026, 11, 30)) and social.x_capped(date(2026, 12, 1)) is None    # a new month starts again
+    time_machine.move_to(at("2026-11-30", "11:00"))
+    r = c.post("/admin/social/x/post-now", headers=ADMIN)
+    assert r.status_code == 400 and "paused" in r.json()["detail"]["message"]
+    assert len(net.posts()) == 1
+    row = next(x for x in c.get("/admin/overview?fresh=1", headers=ADMIN).json()["server"]["social"] if x["key"] == "x")
+    assert "paused" in row["paused"]
+
+
+def test_with_x_off_only_linkedin_shows_connects_and_posts(w, monkeypatch, time_machine):
+    c, net = w["client"], w["net"]
+    keep("IN", "defence", DEFENCE)
+    on(c, "x", "linkedin")
+    monkeypatch.setattr(settings, "SOCIAL_X", False)           # owner, 28 Nov: LinkedIn only for now
+    page = c.get("/admin/social", headers=ADMIN).json()
+    assert [n["key"] for n in page["networks"]] == ["linkedin"]
+    assert c.post("/admin/social/x/connect", headers=ADMIN).status_code == 404
+    assert c.post("/admin/social/x/post-now", headers=ADMIN).status_code == 404
+    time_machine.move_to(at("2026-11-30", "09:41"))
+    assert social.job.tick(at("2026-11-30", "09:41")) == {"linkedin": "posted"}
+    assert net.posts() == []
+    ov = c.get("/admin/overview?fresh=1", headers=ADMIN).json()["server"]
+    assert [x["key"] for x in ov["social"]] == ["linkedin"]
+    assert "x" not in [x["key"] for x in ov["sources"]] and "linkedin" in [x["key"] for x in ov["sources"]]

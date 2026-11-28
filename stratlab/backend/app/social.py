@@ -23,6 +23,10 @@ claimed is left), sends, and writes what happened. A failure the network answere
 stays failed and shows in Admin → Social, in Needs your attention and as the network's row under Data sources (source_health). A send
 cut off without an answer (a timeout, a restart mid-send) is "unknown" and never tried again by itself: it may have gone out.
 
+X is behind SOCIAL_X (owner, 28 Nov: LinkedIn only for now, as X charges per post): off, Admin shows LinkedIn only and X never connects
+or posts. Turned on, X posts once a day, one post with its link (about $0.20 each, X_COST_* below), no thread unless switched on, and
+pauses for the month at its cap (X_MONTH_CAP, editable in Admin).
+
 Nothing here runs in tests or the browser tests' fake world: the HTTP call refuses to leave the machine when SOCIAL_OFFLINE=1 or under
 pytest, and tests replace HTTP with a fake."""
 from __future__ import annotations
@@ -88,6 +92,17 @@ class SocialError(Exception):
     def __init__(self, message: str, status: int | None = None, ambiguous: bool = False, reconnect: bool = False):
         super().__init__(message)
         self.status, self.ambiguous, self.reconnect = status, ambiguous, reconnect
+
+
+def x_on() -> bool:
+    """X is behind SOCIAL_X (owner, 28 Nov: LinkedIn only for now, as X charges for every post): off, X is hidden in Admin, can't be
+    connected and never posts; its code stays ready for the day it is turned on."""
+    return bool(getattr(settings, "SOCIAL_X", False))
+
+
+def nets() -> tuple[str, ...]:
+    """The networks in use: LinkedIn always, X only with SOCIAL_X."""
+    return tuple(n for n in NAMES if n != "x" or x_on())
 
 
 def offline() -> bool:
@@ -178,9 +193,62 @@ def connected(net: str) -> bool:
     return bool(a.get("access")) and not a.get("broken")
 
 
+# X's API is pay-per-use (lead, 28 Nov 2026, from third-party guides): what one call costs, in US dollars. One place to change them.
+X_COST_LINK_POST = 0.20              # a post with a link in it (the daily post: its link to the theme page)
+X_COST_PLAIN_POST = 0.015            # a post with no link
+X_COST_REPLY = 0.01                  # a reply (a thread's further posts, none with a link)
+X_MONTH_CAP = 31                     # X posts a month (a thread counts once) before X posting pauses until the 1st; the owner can change it
+CAP_MAX = 200
+
+
 def conf() -> dict:
+    """Each network's switch (off until the owner turns it on); for X also the monthly cap and whether facts go on as replies (off)."""
     c = db.json_value(db.get_setting(CONF_KEY), {})
-    return {n: {"enabled": bool((c.get(n) or {}).get("enabled"))} for n in NAMES}
+    out = {n: {"enabled": bool((c.get(n) or {}).get("enabled"))} for n in NAMES}
+    x = c.get("x") or {}
+    cap = x.get("cap")
+    out["x"].update(cap=int(cap) if isinstance(cap, int) and 0 <= cap <= CAP_MAX else X_MONTH_CAP, thread=bool(x.get("thread")))
+    return out
+
+
+def set_conf(net: str, **fields) -> dict:
+    def fn(raw):
+        c = db.json_value(raw, {})
+        c[net] = {**(c.get(net) or {}), **fields}
+        return json.dumps(c)
+    db.update_setting(CONF_KEY, fn)
+    return conf()
+
+
+def month_of(today: date | None = None) -> str:
+    return (today or datetime.now(IST).date()).strftime("%Y-%m")
+
+
+def x_month(today: date | None = None, rs: list[dict] | None = None) -> dict:
+    """This month's X posts (India time; a thread counts once, a post that may have gone out counts) and their estimated cost in dollars:
+    the first post of each with its link at X_COST_LINK_POST, each reply at X_COST_REPLY."""
+    m = month_of(today)
+    posts = replies = 0
+    for r in rs if rs is not None else rows():
+        if r.get("net") != "x" or not str(r.get("day") or "").startswith(m):
+            continue
+        n = len(r.get("ids") or [])
+        if n or r.get("status") in ("posted", "unknown", "sending"):
+            posts += 1
+            replies += max(0, n - 1)
+    return {"month": m, "posts": posts, "replies": replies, "cost_usd": round(posts * X_COST_LINK_POST + replies * X_COST_REPLY, 2)}
+
+
+def x_capped(today: date | None = None) -> str | None:
+    """Why X posting is paused for the month (its cap reached), or None."""
+    cap = conf()["x"]["cap"]
+    got = x_month(today)
+    if got["posts"] < cap:
+        return None
+    d = (today or datetime.now(IST).date())
+    nxt = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return (f"X posting is paused: this month's {got['posts']} post{'s' if got['posts'] != 1 else ''} reached the cap of {cap}. It starts again on "
+            f"{nxt.day} {nxt.strftime('%b')}, or raise the cap here.")
 
 
 def enabled(net: str) -> bool:
@@ -188,12 +256,7 @@ def enabled(net: str) -> bool:
 
 
 def set_enabled(net: str, on: bool) -> dict:
-    def fn(raw):
-        c = db.json_value(raw, {})
-        c[net] = {**(c.get(net) or {}), "enabled": bool(on)}
-        return json.dumps(c)
-    db.update_setting(CONF_KEY, fn)
-    return conf()
+    return set_conf(net, enabled=bool(on))
 
 
 def rows() -> list[dict]:
@@ -573,7 +636,7 @@ def _make(net: str, entry: dict) -> dict | None:
     v = public_themes.view(entry, p)
     if not v.get("indexable"):
         return None
-    return social_post.build(net, v, settings.PUBLIC_SITE_URL)
+    return social_post.build(net, v, settings.PUBLIC_SITE_URL, thread=net == "x" and conf()["x"]["thread"])
 
 
 def next_post(net: str, today: date | None = None, fresh: bool = False) -> dict | None:
@@ -581,7 +644,7 @@ def next_post(net: str, today: date | None = None, fresh: bool = False) -> dict 
     from . import public_themes
     today = today or datetime.now(IST).date()
     rs = rows()
-    key = (net, today.isoformat(), social_post.last_posted(rs, net), len(rs))
+    key = (net, today.isoformat(), social_post.last_posted(rs, net), len(rs), conf()["x"]["thread"])
     with _preview_lock:
         hit = _preview.get(net)
         if not fresh and hit and hit[0] == key and _now() - hit[1] < PREVIEW_FOR:
@@ -622,6 +685,8 @@ def daily(net: str, today: date) -> dict | None:
     settle_stale()
     mine = next((r for r in rows() if r.get("net") == net and r.get("kind") == "daily" and r.get("day") == day), None)
     if mine is None:
+        if net == "x" and x_capped(today):               # the month's cap: paused until the 1st (Admin → Social says so)
+            return None
         post = next_post(net, today, fresh=True)
         if not post:                                     # nothing for the owner to do: Admin → Social's preview says why
             return None
@@ -640,6 +705,8 @@ def post_now(net: str) -> dict:
            for r in rows()):
         raise SocialError(f"A test post went to {NAMES[net]} in the last {MANUAL_GAP // 60} minutes: look at it there before sending another.")
     today = datetime.now(IST).date()
+    if net == "x" and x_capped(today):
+        raise SocialError(x_capped(today))
     post = next_post(net, today, fresh=True)
     if not post:
         raise SocialError(no_post_note(net, today))
@@ -702,7 +769,7 @@ class Job:
         try:
             c = conf()
             today = now.astimezone(IST).date()
-            for net in NAMES:
+            for net in nets():
                 if not c[net]["enabled"] or not connected(net):
                     continue
                 try:
@@ -739,7 +806,7 @@ def summary() -> list[dict]:
     except Exception:
         rs = []
     since = (datetime.now(IST).date() - timedelta(days=1)).isoformat()
-    for net in NAMES:
+    for net in nets():
         a = auth(net)
         last = next((r for r in reversed(rs) if r.get("net") == net), None)
         bad = last if last and str(last.get("day") or "") >= since and (
@@ -749,6 +816,7 @@ def summary() -> list[dict]:
                     "enabled": c[net]["enabled"], "expires_at": _iso(float(a["expires_at"])) if net == "linkedin" and a.get("expires_at") else None,
                     "days_left": _days_left(a) if net == "linkedin" and a.get("access") else None,
                     "problem": (a.get("broken") and f"{NAMES[net]} turned the stored sign-in down: press Connect {NAMES[net]} again.") or (p or {}).get("text"),
+                    "paused": (x_capped() if net == "x" and c[net]["enabled"] else None),
                     "failed": {"at": bad.get("updated") or bad.get("at"), "status": bad.get("status"), "error": bad.get("error"),
                                "day": bad.get("day")} if bad else None})
     return out
@@ -768,27 +836,40 @@ def admin_view() -> dict:
     now = datetime.now(timezone.utc)
     nxt = next_run(now)
     when = f"{nxt.strftime('%a')} {nxt.day} {nxt.strftime('%b')}, {nxt.strftime('%I:%M %p').lstrip('0')} IST"
-    nets = []
+    cards = []
     s = {x["key"]: x for x in summary()}
-    for net in NAMES:
+    c = conf()
+    for net in nets():
         a = auth(net)
         try:
             preview = next_post(net)
             note = None if preview else no_post_note(net)
         except Exception as e:
             preview, note = None, clean(f"The preview couldn't be built ({e.__class__.__name__}).")
-        nets.append({**s[net], "vars": list(VARS[net]), "callback": redirect_uri(net), "scopes": SCOPES[net],
+        cards.append({**s[net], "vars": list(VARS[net]), "callback": redirect_uri(net), "scopes": SCOPES[net],
                      "account": (a.get("account") or {}).get("name") if a.get("access") else None,
                      "connected_at": a.get("connected_at") if a.get("access") else None,
                      "renews": net == "x",
+                     **({"month": {**x_month(), "cap": c["x"]["cap"], "paused": x_capped(),
+                                   "rates": {"link_post": X_COST_LINK_POST, "plain_post": X_COST_PLAIN_POST, "reply": X_COST_REPLY},
+                                   "usd_inr": _usd_inr()},
+                         "thread": c["x"]["thread"]} if net == "x" else {}),
                      "next": {"at": when, "parts": preview["parts"], "theme": preview["theme"]["label"], "link": preview["link"]} if preview else None,
                      "next_note": note})
     posts = [_public_row(r) for r in reversed(rows())][:SHOW]
-    return {"networks": nets, "posts": posts, "vault_ready": vault.ready(), "schedule": f"{RUN_AT_TEXT} India time, Monday to Saturday",
+    return {"networks": cards, "posts": posts, "vault_ready": vault.ready(), "schedule": f"{RUN_AT_TEXT} India time, Monday to Saturday",
             "offline": offline()}
 
 
 RUN_AT_TEXT = "9:40 AM"
+
+
+def _usd_inr() -> float | None:
+    try:
+        from . import pricing
+        return float(pricing.usd_inr()["rate"])
+    except Exception:
+        return None
 
 
 # ---------- routes ----------
@@ -796,13 +877,15 @@ router = APIRouter(tags=["admin"])
 
 
 def _net(net: str) -> str:
-    if net not in NAMES:
-        err(404, "unknown_network", "Unknown network: x or linkedin.")
+    if net not in nets():
+        err(404, "unknown_network", "Unknown network." + ("" if x_on() else " X is off on this server (SOCIAL_X)."))
     return net
 
 
 class SwitchReq(BaseModel):
-    enabled: bool
+    enabled: bool | None = None
+    cap: int | None = None              # X only: posts a month before X posting pauses
+    thread: bool | None = None          # X only: the further facts as replies (each a paid call)
 
 
 @router.get("/admin/social")
@@ -823,7 +906,14 @@ def admin_social_switch(net: str, req: SwitchReq, _=Depends(admin.admin_profile)
     _net(net)
     if req.enabled and not connected(net):
         err(400, "not_connected", f"Connect {NAMES[net]} first: the switch turns on once it is connected.")
-    set_enabled(net, req.enabled)
+    if (req.cap is not None or req.thread is not None) and net != "x":
+        err(400, "x_only", "The monthly cap and replies are X's settings (LinkedIn posts once a day, free).")
+    if req.cap is not None and not 0 <= req.cap <= CAP_MAX:
+        err(400, "bad_cap", f"The monthly cap is a whole number from 0 to {CAP_MAX}.")
+    fields = {k: v for k, v in (("enabled", req.enabled), ("cap", req.cap), ("thread", req.thread)) if v is not None}
+    if fields:
+        set_conf(net, **fields)
+    forget_preview()
     return admin_view()
 
 

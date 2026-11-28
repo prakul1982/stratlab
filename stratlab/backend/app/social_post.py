@@ -151,13 +151,15 @@ def lines(f: dict, limit: int = X_LIMIT) -> dict:
             "check": keep(check_line)}
 
 
-def build(net: str, v: dict, site: str) -> dict | None:
+def build(net: str, v: dict, site: str, thread: bool = False) -> dict | None:
     """The post for one network from a theme page's view: {"parts": [...], "link", "figures", "theme": {...}}, or None when the theme gives
     no fit headline or the post would not pass check().
 
-    X: the headline (companies, layers, the map's date), the not-advice line and the link first; then one post a further fact (the largest
-    layer, the largest companies by market value, the membership check), a thread of three or four; with fewer than two further facts, one
-    post. LinkedIn: one post with every fact, the layers' names, the link and the not-advice line."""
+    X (pay-per-use, lead 28 Nov: a post with a link costs about $0.20, a reply $0.01): one post, the link in it only: the headline
+    (companies, layers, the map's date), as many further facts as fit (the largest layer, the largest companies by market value, the
+    membership check), the not-advice line and the link. With `thread` (off unless the owner turns it on), the headline post with the link,
+    then one reply a further fact, none with a link: three or four posts. LinkedIn: one post with every fact, the layers' names, the link
+    and the not-advice line."""
     f = facts(v)
     if not f["label"] or f["members"] <= 0 or f["layers"] <= 0:
         return None
@@ -166,17 +168,21 @@ def build(net: str, v: dict, site: str) -> dict | None:
         ln = lines(f, X_LIMIT)
         if not ln["head"]:
             return None
-        first = f"{ln['head']} {NOT_ADVICE}\n\nThe map, layer by layer: {link}"
-        if len(first) > X_LIMIT:
-            first = f"{ln['head']} {NOT_ADVICE}\n\n{link}"
+        extra = [x for x in (ln["layer"], ln["top"], ln["check"]) if x]
+
+        def single(facts_: list[str], label: bool) -> str:
+            return f"{' '.join([ln['head']] + facts_)} {NOT_ADVICE}\n\n{'The map, layer by layer: ' if label else ''}{link}"
+        first = single([], True) if len(single([], True)) <= X_LIMIT else single([], False)
         if len(first) > X_LIMIT:
             return None
-        extra = [x for x in (ln["layer"], ln["top"], ln["check"]) if x]
-        if len(extra) >= 2:
+        if thread and len(extra) >= 2:
             parts = [first] + extra
         else:
-            one = first.replace(f"{NOT_ADVICE}\n\n", f"{extra[0]} {NOT_ADVICE}\n\n", 1) if extra else first
-            parts = [one if len(one) <= X_LIMIT else first]
+            said: list[str] = []
+            for x in extra:                                  # each further fact that still fits, whole
+                if len(single(said + [x], False)) <= X_LIMIT:
+                    said.append(x)
+            parts = [single(said, True) if len(single(said, True)) <= X_LIMIT else single(said, False)] if said else [first]
     else:
         ln = lines(f, LINKEDIN_LIMIT)
         if not ln["head"]:

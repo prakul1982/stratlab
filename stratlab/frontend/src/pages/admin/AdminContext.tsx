@@ -157,6 +157,6 @@ export const SECTIONS: { path: string; label: string; title: string; lede: strin
   { path: "system", label: "System", title: "System", tabs: ["services"], lede: "Server errors, other services, AI providers, platform checks and real prices for testing." },
   { path: "library", label: "Library", title: "Library", tabs: [], lede: "Everything worked out once and kept for every user: theme reads, AI reads and the rest, with how often each was served, its size and when it was last read." },
   { path: "feedback", label: "Feedback", title: "Feedback", tabs: [], lede: "What people reported from the Feedback button: something broken, a feature not working, or an idea. Each new one is also emailed to you." },
-  { path: "social", label: "Social", title: "Social", tabs: [], lede: "The daily theme post on X and LinkedIn: connect each account, switch posting on, see the next post and the last ones." },
+  { path: "social", label: "Social", title: "Social", tabs: [], lede: "The daily theme post on LinkedIn: connect the account, switch posting on, see the next post and the last ones." },
   { path: "emails", label: "Email previews", title: "Email previews", tabs: [], lede: "Every email StratLab sends, as a reader gets it. The market briefs are the newest real issues; the rest use made-up details. Nothing here is sent." },
 ];

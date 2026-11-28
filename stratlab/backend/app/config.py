@@ -42,6 +42,7 @@ class Settings:
     # Connect once (app/connect): the key that encrypts users' stored passwords and broker tokens (Fernet; see docs/ADMIN.md)
     CONNECT_SECRET_KEY = _env("CONNECT_SECRET_KEY")
     # social103: Admin → Social posts the day's theme on X and LinkedIn as the owner (app/social.py); each network's app's own keys
+    SOCIAL_X = _env("SOCIAL_X", "false").lower() == "true"     # X off until the owner wants it (it charges per post); LinkedIn always on
     X_CLIENT_ID = _env("X_CLIENT_ID")
     X_CLIENT_SECRET = _env("X_CLIENT_SECRET")
     LINKEDIN_CLIENT_ID = _env("LINKEDIN_CLIENT_ID")

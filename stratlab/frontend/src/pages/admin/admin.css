@@ -103,3 +103,4 @@
 .adm-social { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4); align-items: start; }
 .adm-post { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--chip); }
 .adm-post-t { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--t-small, 14px); }
+.adm-cap { width: 6em; margin-left: var(--s2); }
