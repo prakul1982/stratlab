@@ -132,8 +132,9 @@ def test_stock_page_links_carry_a_valid_invite_code(w):
     code = c.get("/me/referrals", headers=_h("pro-token")).json()["code"]
     t = c.get(f"/stocks/in/RELIANCE?ref={code}").text
     assert f'href="https://stratlab.studio/?ref={code}"' in t                        # sign up
-    assert f"symbol=RELIANCE&amp;ref={code}" in t                                     # test a strategy
-    assert f"/research/IN/RELIANCE/deep?ref={code}" in t
+    # (changed on purpose, conv101 T1: the links into the app carry ?from=stock too, before the invite code)
+    assert f"symbol=RELIANCE&amp;from=stock&amp;ref={code}" in t                      # test a strategy
+    assert f"/research/IN/RELIANCE/deep?from=stock&amp;ref={code}" in t
     assert '<link rel="canonical" href="https://stratlab.studio/stocks/in/RELIANCE">' in t
     assert 'href="/stocks/in/ONGC"' in t                                              # other company pages unchanged
     plain = c.get("/stocks/in/RELIANCE").text
