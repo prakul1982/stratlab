@@ -147,7 +147,7 @@ test.describe("plans: the right currency at once, the charged amount on the card
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699", { timeout: 30_000 });
     await expect(sec.getByRole("heading", { level: 2 })).toHaveText("Plans");
     await expect(sec).not.toContainText(/Free to start|Choose a plan after you sign in/);
-    await expect(sec.locator('.lp-price[data-plan="pro"] button')).toHaveText("Continue with Google to see plans");
+    await expect(sec.locator('.lp-price[data-plan="pro"] button')).toHaveText("Continue with Google to get Pro");     // (changed on purpose, conv101 P7: the button names its plan)
     await expect(sec.locator(".lp-price")).toHaveCount(3);
   });
 });
@@ -367,6 +367,9 @@ test.describe("what a visitor's browser loads and keeps (R5V-020, R5V-022)", () 
       await page.addInitScript(() => {
         Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false });
         Object.defineProperty(Navigator.prototype, "userAgent", { get: () => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36" });
+        // (changed on purpose, conv101 T2: a headless browser is left out of analytics, and CI's headless shell names itself "HeadlessChrome" in
+        // userAgentData too: hidden here, as analytics.spec's and r15-ad's tests hide it)
+        Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined });
       });
       await page.addInitScript(init);
       await open(page, "/", { config: config(',POSTHOG_KEY:"phc_test"') });

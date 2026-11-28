@@ -310,7 +310,9 @@ test("LIVE1B-019, 037: a Stat in a half-width tile still fits (the duo check cou
 test("LIVE1B-051: the home page's description fits a search result and still says options are paper trading", async () => {
   const { HOME_DESCRIPTION } = await import("../src/content/seo.ts");
   assert.ok(HOME_DESCRIPTION.length <= 160, `${HOME_DESCRIPTION.length} characters`);
-  assert.match(HOME_DESCRIPTION, /paper trade them; options are paper trading only\./);
+  // (changed on purpose, conv101 P9: the description says what StratLab does in one sentence and names no options at all, so it can't read as
+  // if options could be backtested)
+  assert.doesNotMatch(HOME_DESCRIPTION, /options/i);
   assert.ok(read("index.html").includes(`content="${HOME_DESCRIPTION}"`));
 });
 

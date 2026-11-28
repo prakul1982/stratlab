@@ -58,7 +58,8 @@ test("a deep dive's share link opens a dated public teaser, and Account turns it
   await expect(page.locator("[data-shared]")).toContainText("Shared from StratLab");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,follow");
   const cta = page.locator("[data-cta]").getByRole("link", { name: "See the full research on StratLab" });
-  await expect(cta).toHaveAttribute("href", /\/research\/IN\/RELIANCE\/deep$/);
+  // (changed on purpose, conv101 T1: a public page's link into the app carries ?from=<page kind>)
+  await expect(cta).toHaveAttribute("href", /\/research\/IN\/RELIANCE\/deep(\?from=[a-z]+)?$/);
   expect(await page.locator("main").innerText()).not.toMatch(PROVIDERS);
   await noSideScroll(page);
   await shots(page, "share-deep", phone);

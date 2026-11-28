@@ -2314,13 +2314,22 @@ def peer_sections(region: str, symbol: str, industry: list[str], cap: float | No
             coarse = [r for r in rows if _sp500_sectors().get(r["symbol"]) == where and r["symbol"] not in have][:PEERS]
         elif region == "IN" and ind:
             where = ind[0]
-            coarse = [r for r in rows if str(r.get("sector") or "").lower() == where.lower() and r["symbol"] not in have][:PEERS]
+            # conv101 (funnel 27 Nov: Reliance's "Same sector" listed Gulf Oil Lubricants, Veedol and Kotyark above IOC, BPCL and HPCL): the
+            # wider sector is there for companies of the large company's own size, so it takes the same PEER_MIN_SHARE rule as its industry
+            # peers; a sector whose rest is all small adds no list at all
+            coarse = [r for r in rows if str(r.get("sector") or "").lower() == where.lower() and r["symbol"] not in have
+                      and (_num(r.get("market_cap")) or 0) >= cap * PEER_MIN_SHARE][:PEERS]
         if coarse:
             out.append({"title": "Same sector", "rows": [(r["symbol"], name(r)) for r in coarse],
-                        "caption": f"The largest companies in the wider sector ({where}), by market value."})
+                        "caption": f"The largest companies in the wider sector ({where}), by market value.", "_top": _num(coarse[0].get("market_cap")) or 0})
     if same_ind:
         out.append({"title": "Same industry", "rows": [(r["symbol"], name(r)) for r in same_ind],
-                    "caption": f"The largest companies in the same industry ({say(ind[-1])}), by market value."})
+                    "caption": f"The largest companies in the same industry ({say(ind[-1])}), by market value.", "_top": _num(same_ind[0].get("market_cap")) or 0})
+        # conv101: the list whose largest company is the larger comes first (Apple: the sector's NVIDIA and Microsoft over Dell; a sector list of
+        # smaller companies never stands above an industry list of larger ones)
+        out.sort(key=lambda s: -s["_top"])
+    for s in out:
+        s.pop("_top", None)
     if len(same_ind) < 4 and len(ind) > 1 and not coarse:
         have = {r["symbol"] for r in same_ind}
         sector = [r for r in rows if r["symbol"] not in have and str(r.get("sector") or "").lower() == ind[0].lower()]
@@ -2815,9 +2824,18 @@ _ANCHOR = re.compile(r'<a ([^>]*?)href="([^"]*)"([^>]*)>(.*?)</a>', re.S)
 SIGN_IN_NOTE = " (needs sign-in)"
 
 
-def _mark_app_links(page: str) -> str:
+def _with_from(href: str, src: str | None) -> str:
+    """conv101 (T1): a link into the app carries where it was followed from (?from=stock|theme|blog|…), which the app keeps until sign-up and
+    sends with the "signed up" event, so sign-ups can be told by the page that led to them. An href written for HTML (& as &amp;)."""
+    if not src or "from=" in href:
+        return href
+    base, hash_ = (href.split("#", 1) + [""])[:2]
+    return base + ("&amp;" if "?" in base else "?") + "from=" + src + ("#" + hash_ if hash_ else "")
+
+
+def _mark_app_links(page: str, src: str | None = None) -> str:
     """Every link from a public page into the app (APP_PATH) gets rel="nofollow" and, unless its words already say sign-in,
-    " (sign-in)" at the end of its words."""
+    " (sign-in)" at the end of its words; with `src`, ?from=<src> too (_with_from)."""
     site = settings.PUBLIC_SITE_URL
 
     def one(m):
@@ -2829,8 +2847,22 @@ def _mark_app_links(page: str) -> str:
         if "rel=" in attrs and "nofollow" not in attrs:
             pre, post = re.sub(r'rel="([^"]*)"', r'rel="\1 nofollow"', pre), re.sub(r'rel="([^"]*)"', r'rel="\1 nofollow"', post)
         said = re.search(r"sign[ -]?in|sign[ -]?up", re.sub(r"<[^>]+>", " ", words), re.I)
-        return f'<a {pre}href="{href}"{post}{rel}>{words}{"" if said else SIGN_IN_NOTE}</a>'
+        return f'<a {pre}href="{_with_from(href, src)}"{post}{rel}>{words}{"" if said else SIGN_IN_NOTE}</a>'
     return _ANCHOR.sub(one, page)
+
+
+# conv101 (T1): the pageview beacon (app/pv.js) on every page the server draws, addressed by its hash so it is kept long
+PV_JS = (Path(__file__).with_name("pv.js")).read_text(encoding="utf-8")
+PV_JS_V = hashlib.sha1(PV_JS.encode()).hexdigest()[:8]
+POSTHOG_PUBLIC_KEY = re.compile(r"^phc_\w{8,80}$")
+
+
+def beacon(kind: str) -> str:
+    """The pageview beacon's tag, with the public project key and the page's kind; "" while analytics is off (no POSTHOG_KEY)."""
+    key = (settings.POSTHOG_KEY or "").strip()
+    if not POSTHOG_PUBLIC_KEY.match(key):
+        return ""
+    return f'<script src="/stocks/pv.js?v={PV_JS_V}" data-k="{e(key)}" data-kind="{e(kind)}" defer></script>'
 
 
 def _top(sign_in: str | None = None) -> str:
@@ -2863,16 +2895,19 @@ def _foot() -> str:
     policies += f'<a href="{site}/help#feedback">Feedback</a>'
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
-            f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
+            # conv101 (P6): the Terms' own words on SEBI, on every page the server draws, with where the data comes from
+            "past prices don't predict future returns. StratLab is not a SEBI-registered investment adviser or research analyst. Figures come "
+            f"from companies' reported results and filings (NSE, BSE and the SEC) and market prices. © {datetime.now(timezone.utc).year} StratLab.</p>"
             f'<nav aria-label="Explore">{explore}</nav><nav aria-label="Policies">{policies}</nav></div></footer>')
 
 
-def _page(head: str, sign_in: str | None, body: str, template: bool = False) -> str:
+def _page(head: str, sign_in: str | None, body: str, template: bool = False, src: str = "directory") -> str:
     """A whole page the server draws: the site's header and menu, the page in `main`, the footer. `template`: the page is one
     template filled in with figures (a company page, a market brief), so its words are marked as template wording (data-shared)
-    and it never carries an ad (ads.enough_content). Links into the app say they ask for sign-in (_mark_app_links)."""
+    and it never carries an ad (ads.enough_content). Links into the app say they ask for sign-in (_mark_app_links). `src`: the kind of
+    page (stock, theme, blog, directory, status…), carried on its links into the app (?from=) and on its pageview (beacon)."""
     main = '<main id="main" data-shared>' if template else '<main id="main">'
-    return head + "<body>" + _top(sign_in) + _mark_app_links(f"{main}{body}</main>") + _foot() + "</body></html>"
+    return head + "<body>" + _mark_app_links(_top(sign_in) + f"{main}{body}</main>", src) + _foot() + beacon(src) + "</body></html>"
 
 
 def _find_form(region: str | None, q: str = "") -> str:
@@ -3104,7 +3139,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
         desc = f"{name} ({symbol}), listed in {country}. Test a trading idea on it or read its numbers on StratLab."
         body = f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">Listed in {country}. Its reported numbers aren't available to show here right now.</p>"""
-        return _page(_head(title, desc, canonical, robots="noindex,follow"), app, body + _cta(symbol, test, deep), template=True)
+        return _page(_head(title, desc, canonical, robots="noindex,follow"), app, body + _cta(symbol, test, deep), template=True, src="stock")
     if f.get("not_company"):
         return _not_company_page(region, symbol, str(f["not_company"]))
     desc = description({**f, "name": name})          # the tidied name, as in the title and the h1 (a filing's capitals stay out of the snippet)
@@ -3120,7 +3155,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     # PUB-2: the name, one quiet line, the price; then the chart; then the key figures; the explanations come last
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 {_sub_line(f.get("exchange") or country, ind)}{_price_block(f, as_of)}
-<p class="small muted" data-advice>Facts from reported results and exchange filings. Not investment advice.</p>"""]
+<p class="small muted" data-advice>Facts from reported results and exchange filings. Not investment advice.</p>""", _cta_top(symbol, test, deep)]
     parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
     figs = _figures(f)
     parts.append(figs)
@@ -3148,7 +3183,14 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     # for a visitor who looks it up, kept out of search results and the sitemap (see has_content)
     # AS1: a company page is one template filled in with the company's figures, so all of its words are template wording (data-shared
     # on its main): it carries no ad (ads.enough_content); one without a recent price is thin and kept out of search results too
-    return _page(_head(title, desc, canonical, ld, robots="index,follow" if indexable(f) else "noindex,follow"), app, "".join(parts), template=True)
+    return _page(_head(title, desc, canonical, ld, robots="index,follow" if indexable(f) else "noindex,follow"), app, "".join(parts), template=True, src="stock")
+
+
+def _cta_top(symbol: str, test: str, deep: str) -> str:
+    """conv101 (P3, funnel 27 Nov: the only way in was halfway down the page): the two ways into the app under the price, in the first screen
+    on a phone too. Their words say they sign up or sign in, so no "(needs sign-in)" is added to them."""
+    return (f'<div class="ctas" data-cta-top><a class="btn" href="{e(test)}">Free sign-in: backtest an idea on {e(symbol)}</a>'
+            f'<a class="btn ghost" href="{e(deep)}">Sign in for the full deep dive</a></div>')
 
 
 def _cta(symbol: str, test: str, deep: str) -> str:

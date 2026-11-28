@@ -41,3 +41,12 @@ export function exampleEyebrow(e: ExampleEntry, title: string): string | null {
   const said = e.group ? e.group.name : e.instrument?.symbol ?? e.market;
   return title.toLowerCase().includes(said.toLowerCase()) ? null : said;
 }
+
+/** conv101 (P4, funnel 27 Nov: the no-sign-in proof opened on a list whose first line said most ideas lost to buy and hold): the one real
+ * verdict the hero's "no sign-in" button opens, by rule, never by name: a strategy whose checks all passed and that made money after costs
+ * on the whole period and on the years it was never tuned on (at least 1 point there), the recognised markets first, then the most made on
+ * those unseen years. Its own page says everything else, buy and hold included. null when none qualifies (the button then opens the list). */
+export function heroExample<T extends ExampleEntry & { stats?: { ret?: number | null; unseen?: number | null } | null }>(entries: T[]): T | null {
+  const ok = entries.filter((e) => e.ran !== false && passedAll(e) && (e.stats?.ret ?? 0) > 0 && (e.stats?.unseen ?? 0) >= 1);
+  return [...ok].sort((a, b) => rank(a.market) - rank(b.market) || (b.stats?.unseen ?? 0) - (a.stats?.unseen ?? 0))[0] ?? null;
+}

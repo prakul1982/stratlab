@@ -40,6 +40,10 @@ HTML_CSP = (b"content-security-policy", b"default-src 'none'; style-src 'unsafe-
 # other origin (PUB-1)
 CHART_CSP = (b"content-security-policy", HTML_CSP[1].replace(b"default-src 'none';", b"default-src 'none'; script-src 'self'; connect-src 'self';"))
 COMPANY_PAGE = re.compile(r"^/stocks/(?:in|us)/[^/]+$", re.I)
+# conv101 (T1): every other page the site shows from the API (the company directories, themes, the blog, data status, the sample deck) runs one
+# script of the site's own, the pageview beacon (/stocks/pv.js), which posts to the site's own /ingest: script-src and connect-src 'self',
+# nothing inline, no other origin. Share previews, mail pages and the rest of the API's pages stay script-free.
+SITE_PAGE = re.compile(r"^/(?:stocks|themes|blog)(?:/.*)?$|^/status$|^/sample-deck$", re.I)
 # embeddable charts (embeds.py) are the only pages another site may frame: no X-Frame-Options, and frame-ancestors * (bet 3)
 EMBED = re.compile(r"^/embed/")
 EMBED_CSP = (b"content-security-policy", HTML_CSP[1].replace(b"frame-ancestors 'none'", b"frame-ancestors *"))
@@ -49,7 +53,7 @@ def security_headers(path: str, html: bool) -> list:
     """The headers every answer gets, and a page its content policy: an embed may be framed anywhere, nothing else anywhere."""
     if EMBED.match(path):
         return [h for h in HEADERS if h[0] != b"x-frame-options"] + ([EMBED_CSP] if html else [])
-    return HEADERS + ([CHART_CSP if COMPANY_PAGE.match(path) else HTML_CSP] if html else [])
+    return HEADERS + ([CHART_CSP if COMPANY_PAGE.match(path) or SITE_PAGE.match(path) else HTML_CSP] if html else [])
 
 
 def max_body(scope) -> int:

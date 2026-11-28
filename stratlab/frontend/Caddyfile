@@ -16,8 +16,11 @@
 	@www host www.stratlab.studio
 	redir @www https://stratlab.studio{uri} 308
 
-	# trailingSlash: false
-	@slash path_regexp slash ^(.+)/$
+	# trailingSlash: false (conv101: not for /ingest, PostHog's own addresses, which end in a slash: /ingest/e/, /ingest/i/v0/e/)
+	@slash {
+		path_regexp slash ^(.+)/$
+		not path /ingest/*
+	}
 	redir @slash {re.slash.1} 308
 
 	# LIVE8A-013: /sitemap answered 404 (the sitemap is /sitemap.xml), and /index.html was a second copy of the home page
@@ -68,8 +71,22 @@
 		?Cache-Control "public, max-age=0, must-revalidate"
 	}
 
+	# conv101 (T4): PostHog through the site's own address, as vercel.json's /ingest rewrites, so an ad blocker that blocks posthog.com doesn't
+	# drop the site's analytics (the app's config.js POSTHOG_HOST is /ingest; the pages the server draws post to /ingest too)
+	handle_path /ingest/static/* {
+		rewrite * /static{uri}
+		reverse_proxy https://us-assets.i.posthog.com {
+			header_up Host us-assets.i.posthog.com
+		}
+	}
+	handle_path /ingest/* {
+		reverse_proxy https://us.i.posthog.com {
+			header_up Host us.i.posthog.com
+		}
+	}
+
 	# Paths the API draws (vercel.json rewrites to the API host)
-	@api path /v/* /c/* /r/* /themes /themes/* /embed /embed/* /money/calendar/feed/* /stocks /stocks/* /blog /blog/* /status /sitemap.xml /sitemaps /sitemaps/* /unsubscribe /email/confirm /news-link/*
+	@api path /v/* /c/* /r/* /themes /themes/* /embed /embed/* /money/calendar/feed/* /stocks /stocks/* /blog /blog/* /status /sitemap.xml /sitemaps /sitemaps/* /unsubscribe /email/confirm /news-link/* /sample-deck /sample-deck.pdf /pricing/sample-deck
 	handle @api {
 		reverse_proxy {$API_UPSTREAM:https://stratlab-production-ca25.up.railway.app} {
 			header_up Host {upstream_hostport}

@@ -198,7 +198,8 @@ def test_the_page_wears_the_sites_header_and_footer(w):
     csp = r.headers["content-security-policy"]                  # the site's fonts may load; its own chart script too, and nothing inline (PUB-1)
     assert "font-src 'self'" in csp and "default-src 'none'" in csp and "script-src 'self';" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
     # (updated on purpose, AS1: Sign in is rel="nofollow", and the menu is the site's public pages: Library is a link on the site's own host)
-    for part in ('href="https://stratlab.studio/research/IN/RELIANCE" rel="nofollow">Sign in</a>', ">Contact us</a>", ">Cancellation and refunds</a>",
+    # (changed on purpose, conv101 T1: a link into the app says which kind of page it was followed from, ?from=stock)
+    for part in ('href="https://stratlab.studio/research/IN/RELIANCE?from=stock" rel="nofollow">Sign in</a>', ">Contact us</a>", ">Cancellation and refunds</a>",
                  ">Terms of service</a>", ">Privacy policy</a>", 'href="https://stratlab.studio/pricing"', 'href="/stocks">Companies</a>', 'href="/library">Library</a>', 'href="/about">About</a>', '>Strategy library</a>',
                  "url(/fonts/fraunces-latin-400-normal.woff2)", "<span>Market cap</span><b>₹", " lakh crore</b>", 'id="main"'):
         assert part in t, part

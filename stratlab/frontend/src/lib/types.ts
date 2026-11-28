@@ -149,6 +149,8 @@ export type Focus = "invest" | "trade" | "money" | "both";
 export type FreeChange = { on: string; rows: { key: string; label: string; before: number | null; after: number | null }[]; moves: string[]; over?: string[] };
 
 export interface Me {
+  /** one of StratLab's own accounts (an admin or a test account): left out of usage analytics (conv101) */
+  internal?: boolean;
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
   /** given_by_owner: a paid plan the site owner gave by hand, with no subscription behind it (nothing renews, nothing to cancel). */
   billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean; given_by_owner?: boolean };

@@ -3,7 +3,7 @@ window.STRATLAB_CONFIG = {
   SUPABASE_URL: "https://enxrxhikzzfualjzqibf.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_31v3Fc59LUCl_aMZpyulbA_SXtDV4cs",
   POSTHOG_KEY: "phc_yjniCAedaF52gysc4635oJtJk6BVSbLASMqVUqjUrMCH",
-  POSTHOG_HOST: "https://us.i.posthog.com",
+  POSTHOG_HOST: "/ingest",
   SENTRY_DSN: "https://e1d8de8a6e7a984701bf09a295982013@o4512374450094080.ingest.de.sentry.io/4512379720237136",
   BUSINESS_NAME: "StratLab",
   CONTACT_EMAIL: "support@stratlab.studio",

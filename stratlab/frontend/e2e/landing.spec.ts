@@ -22,7 +22,7 @@ async function open(page: Page) {
 
 test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets", async ({ page }) => {
   const errors = await open(page);
-  const order = ["trade", "invest", "money", "alerts", "pricing", "faq"];
+  const order = ["try", "trade", "invest", "money", "alerts", "pricing", "faq"];     // (changed on purpose, conv101 P1: "Try one idea now" under the hero)
   for (const [id, heading] of [["trade", /From a sentence/], ["invest", /Start with any company/], ["money", /What you own/],
     ["alerts", /Hear about it/], ["pricing", /^Free (to start|during early access|until)|^Every Pro feature/], ["faq", /Good to know/]] as const) {
     const sec = page.locator(`section#${id}`);
@@ -37,7 +37,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page.locator(".lp-space .lp-space-list li"), "each space lists three things it does").toHaveCount(9);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
   // what search engines and link previews show says the same
-  await expect(page).toHaveTitle("StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab"): the landing page is the brand alone
+  await expect(page).toHaveTitle("Backtest trading ideas on Indian and US stocks · StratLab");      // (changed on purpose, conv101 P9: what StratLab is, in the owner's "Page · StratLab" pattern)
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]']) await expect(page.locator(sel)).toHaveAttribute("content", /trad/i);
   // what ships today, one line each
   // the long lists show a few and fold the rest: open them, everything is still there

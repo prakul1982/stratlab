@@ -21,7 +21,9 @@ test("LIVE18B-003: /plans' start-up frame is the Plans page itself: the header, 
     assert.match(html, /<div class="lp-period" data-boot-js><span class="lp-skel lp-skel-seg"><\/span><span class="lp-skel lp-skel-cur"><\/span><\/div>/);
     assert.equal(html.match(/class="lp-card lp-price[^"]*" data-plan="(free|basic|pro)"/g).length, 3);
     assert.match(html, /data-plan="pro"><div class="stack g2"><h2 class="h2">Pro<\/h2><span class="small muted">For active traders and heavy research<\/span>/);
-    assert.match(html, /<button type="button" class="btn outline" disabled>Continue with Google to see plans<\/button><a class="btn outline email-way lp-plan-email" href="\/login\?plan=basic#email">/);
+    // (changed on purpose, conv101 P7: the button names its plan, and "Cancel any time…" sits under the ways in, as the app draws it)
+    assert.match(html, /<button type="button" class="btn outline" disabled>Continue with Google to get Basic<\/button><a class="btn outline email-way lp-plan-email" href="\/login\?plan=basic#email">/);
+    assert.match(html, /<span class="small muted lp-plan-cancel">Cancel any time · full refund if you ask within 7 days<\/span><\/div>/);
     assert.match(html, /<details class="lp-more lp-phone-fold"><summary>What Basic includes<\/summary>/);
     assert.match(html, /<ul class="lp-plan-list boot-wide"><li><span aria-hidden="true">✓<\/span>Everything in Basic<\/li>/);
     // with scripts off: the page's own words and the plain list of plans, the frame's cards hidden

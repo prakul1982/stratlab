@@ -75,7 +75,9 @@ test("every Card with a title, and every FoldCard, is a section with the close a
   assert.match(sec, /aria-expanded=\{frame\.open\}/);
   for (const item of ["Move up", "Move down", "Reset order"]) assert.ok(sec.includes(`label: "${item}"`), item);
   assert.match(sec, /usePersisted<Folds>\(`\$\{FOLDS_KEY\}\.\$\{user\}`/);
-  assert.match(read("src/components/Shell.tsx"), /setSectionUser\(me\?\.id\)/);
+  // (changed on purpose, conv101 P10 / Release 102: the signed-in session's id while /me is still on its way, so a signed-in page never draws a
+  // section without its controls first and then adds them: fix14's layout shift on /new)
+  assert.match(read("src/components/Shell.tsx"), /setSectionUser\(me\?\.id \?\? session\?\.user\?\.id\)/);
   const css = read("src/styles.css");
   assert.match(css, /\.k-card\.k-folded > :not\(\.k-card-head\) \{ display: none !important; \}/);
   // "On this page" opens a closed section and follows the person's order

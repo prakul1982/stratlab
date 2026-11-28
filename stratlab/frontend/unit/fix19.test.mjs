@@ -21,9 +21,11 @@ const ONE = /^[^·]+ · StratLab$/;
 test("every tab title is 'Page · StratLab' with a one-part name, the landing page the brand alone (owner, 18 Nov)", () => {
   assert.equal(seo.withBrand("Briefs"), "Briefs · StratLab");
   assert.equal(seo.withBrand(), "StratLab");
-  assert.equal(seo.HOME_TITLE, "StratLab");
+  // (changed on purpose, conv101 P9: the home page says what StratLab is, in the same "Page · StratLab" pattern)
+  assert.equal(seo.HOME_TITLE, "Backtest trading ideas on Indian and US stocks · StratLab");
+  assert.match(seo.HOME_TITLE, ONE);
   assert.equal(title.DEFAULT_TITLE, "StratLab");
-  assert.equal(title.signedOutTitle("/"), "StratLab");
+  assert.equal(title.signedOutTitle("/"), "Backtest trading ideas on Indian and US stocks · StratLab");
   // every menu page and every entry page, signed in and signed out
   for (const { page } of ALL_PAGES) {
     assert.match(title.titleFor(page.to), ONE, page.to);
@@ -66,7 +68,7 @@ test("no page writes its own ' · StratLab': the app's titles go through withBra
     assert.doesNotMatch(src, /["`'][^"`'\n]*\S · StratLab["`']/, rel);
   }
   // the static page the landing is drawn from says the same as the app
-  assert.match(read("index.html"), /<title>StratLab<\/title>/);
+  assert.match(read("index.html"), /<title>Backtest trading ideas on Indian and US stocks · StratLab<\/title>/);   // (changed on purpose, conv101 P9)
   assert.match(read("scripts/seoPages.mjs"), /title: withBrand\("Page not found"\)/);
 });
 

@@ -3,10 +3,12 @@
 // unit/rewrite-proxy.test.mjs checks this list against vercel.json.
 import { readFileSync } from "node:fs";
 
-/** The source of every rewrite whose destination is another host ("/stocks/:path*", "/v/:token", "/sitemap.xml"). */
+/** The source of every rewrite whose destination is another host ("/stocks/:path*", "/v/:token", "/sitemap.xml"), but PostHog's (/ingest,
+ *  conv101 T4: analytics through the site's own address, which a local copy has no use for). */
+export const toPostHog = (r) => /^https:\/\/[a-z0-9.-]*posthog\.com\//.test(r.destination);
 export function forwardedPaths(vercelPath = new URL("../vercel.json", import.meta.url)) {
   const { rewrites = [] } = JSON.parse(readFileSync(vercelPath, "utf8"));
-  return rewrites.filter((r) => /^https?:\/\//.test(r.destination)).map((r) => r.source);
+  return rewrites.filter((r) => /^https?:\/\//.test(r.destination) && !toPostHog(r)).map((r) => r.source);
 }
 
 /** A rewrite source as a pattern that matches whole paths only: "/c/:token" is "/c/abc" but not "/config.js"; "/stocks/:path*"

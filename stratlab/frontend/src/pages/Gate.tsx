@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Card, CardHead } from "../components/kit/Card";
 import { LinkCard } from "../components/kit/LinkCard";
 import { PageHeader } from "../components/kit/PageHeader";
-import { Google } from "../components/Icons";
+import { Google } from "../components/IconsLite";
 import { PublicFrame } from "../components/PublicFrame";
 import { publicGet, type ApiError } from "../lib/http";
 import { describePath } from "../lib/deepLinks";
@@ -20,6 +20,9 @@ import { SignInFrame } from "../components/SiteFrame";
  * nothing is at ("Page not found"). Each says what happened and offers the way on; none moves anyone somewhere else
  * without saying so. These need no account code, so they load with the landing page's small start-up. (A signed-in
  * person's "You don't have access" and Help are in AppGates.tsx.) */
+
+// conv101 (P1): /new for a visitor: one of the library's rule sets tried right here, no sign-in (its code loads only on this address)
+const GuestTry = lazy(() => import("../components/GuestTry").then((m) => ({ default: m.GuestTry })));
 
 const SignInButton = ({ label = "Continue with Google" }: { label?: string }) => (
   <button type="button" className="btn lp-cta" onClick={() => void signIn()}><Google />{label}</button>
@@ -79,6 +82,7 @@ export function SignInGate() {
   // LIVE11B-002: the words name both ways in while email sign-in is on, and Google alone only while it is the only way
   const email = emailSignInOn();
   const how = email ? "sign in with Google or your email" : "sign in with Google";
+  const guestNew = !none && !ended && !unfinished && loc.pathname.replace(/\/$/, "") === "/new";
   return (
     <SignInFrame>
       <span className="eyebrow">StratLab</span>
@@ -94,6 +98,15 @@ export function SignInGate() {
       </div>
       {/* sign-in by email under Google's, the same form as /login's, while /config.js switches it on (owner, 16 Nov) */}
       <EmailSignIn />
+      {guestNew && (
+        <section className="stack g12" aria-labelledby="gate-try" data-testid="gate-try">
+          <h2 id="gate-try" className="serif lp-h3">Or try one idea now, no sign-in</h2>
+          <p className="small muted">Pick one of StratLab's well-known rule sets and a stock: the real test on five years of prices after every charge, with the verdict. Nothing is saved.</p>
+          <Suspense fallback={<div className="lp-card gt-card" aria-busy="true"><span className="lp-skel lp-skel-p" /></div>}>
+            <GuestTry symbol={new URLSearchParams(loc.search).get("symbol")} market={new URLSearchParams(loc.search).get("market")} where="new" />
+          </Suspense>
+        </section>
+      )}
       {co && (
         <Card label="Public page">
           <CardHead title={`${co.name} without signing in`} level={2} />

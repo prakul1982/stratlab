@@ -185,6 +185,22 @@ def page_path(region: str, name: str) -> str:
     return path(region, hit["slug"] if hit else s)
 
 
+def public_address(region: str | None, name: str | None) -> str:
+    """conv101 (deck footer): the site address a theme's deck names so a forwarded PDF leads back: "stratlab.studio/themes/in/defence" when the
+    theme has a public page (by its library name, its normalised name or its label), else the market's themes ("stratlab.studio/themes/in")."""
+    host = re.sub(r"^https?://", "", settings.PUBLIC_SITE_URL).rstrip("/")
+    r = region if region in REGIONS.values() else None
+    if not r:
+        return host + "/themes"
+    want = {slug(name or "")}
+    try:
+        want.add(slug(theme_library.normalise(name or "", r)))
+        hit = next((x for x in entries(r) if want & {slug(x["name"]), x["slug"], slug(short_label(x["label"]))} - {""}), None)
+    except Exception:
+        hit = None
+    return host + (path(r, hit["slug"]) if hit else f"/themes/{r.lower()}")
+
+
 def find(region: str, s: str) -> tuple[dict | None, str | None]:
     """(the entry at this slug, None), or (None, the canonical slug) when the slug is one of a theme's aliases, or (None, None)."""
     rows = entries(region)
@@ -700,6 +716,23 @@ def render(v: dict) -> str:
             + (f" · market values at the {e(day_text(v['prices']))} close" if v.get("prices") else "")
             + (f"; {v['prices_older']} compan{'y' if v['prices_older'] == 1 else 'ies'} at an earlier close"
                if v.get("prices") and v.get("prices_older") else "") + "</p>")
+    # conv101 (P2, funnel 27 Nov: the only call to action sat 91% of the way down, under 180 company cards on a phone): what signing up opens and
+    # what the theme's deck holds, at the top. The deck itself is on Basic and Pro (plans.PLANS decks_per_month; Free gets the sample deck), so
+    # the page offers the free sample to look at, never the theme's own deck as free
+    n_layers = len(v["layers"])
+    outline = ["Cover and the theme at a glance", f"The value chain: {n_layers} layer{'' if n_layers == 1 else 's'}, as a chart and a table"]
+    if v["layers"]:
+        outline.append(f"Each layer's companies and figures ({v['members']} compan{'y' if v['members'] == 1 else 'ies'})")
+    outline += ["Tailwinds and risks, each with its source", "How every number was worked out"]
+    body += (f'<section class="card" data-cta-top><h2>The full {e(label)} theme, free with an account</h2>'
+             f"<p>Sign in free to open the whole theme: each company's place in the map and how it was checked, every layer's figures, the "
+             f"tailwinds and risks with their sources, and the news.</p>"
+             f'<div class="ctas"><a class="btn" rel="nofollow" href="{e(app)}">Open the theme, free (needs sign-in)</a>'
+             f'<a class="btn ghost" href="{e(site)}/sample-deck">Preview a theme deck, no sign-in</a></div>'
+             f'<details class="how" data-deck-preview><summary>What the {e(label)} slide deck holds</summary><ol>'
+             + "".join(f"<li>{e(x)}</li>" for x in outline)
+             + f'</ol><p class="muted small">Slide decks are on Basic and Pro. A free account can open the theme itself and download '
+             f'<a href="{e(site)}/sample-deck">the sample deck</a>.</p></details></section>')
     if v.get("older"):             # r66e (LIVE12A-001): a theme shown from its read under an earlier version of the checks says so
         body += ('<p class="note" data-older>' + e(OLDER_LINE + (" " + RECHECKING_LINE if v.get("rechecking") else "")) + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown
@@ -757,10 +790,10 @@ def render(v: dict) -> str:
         body += f'<section class="card" data-about><h2>About the theme</h2><p>{e(v["summary"])}</p></section>'
     body += (f'<section class="card" data-cta><h2>See the full theme on StratLab</h2><p>Sign in for the whole theme: the figures of each layer, '
              f"every company placed by the map and how it was checked, the tailwinds and risks with their sources, the news and the slides.</p>"
-             f'<div class="ctas"><a class="btn" href="{e(app)}">Open the {e(label)} theme</a><a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div></section>'
+             f'<div class="ctas"><a class="btn" rel="nofollow" href="{e(app)}">Open the {e(label)} theme (needs sign-in)</a><a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div></section>'
              f'<details class="how"><summary>How this page is made</summary><p>{e(METHOD)}</p></details>'
              f'<p class="note">{e(FACTS_LINE)} <a href="{e(site)}/help#feedback">Report an error</a>.</p>')
-    return stock_pages._page(head, app, body)
+    return stock_pages._page(head, app, body, src="theme")
 
 
 def directory(region: str | None) -> str:
@@ -789,7 +822,7 @@ def directory(region: str | None) -> str:
         body += '<p class="note">No theme has been mapped and checked yet. Open the themes in the app to map one.</p>'
     body += (f'<div class="ctas"><a class="btn" href="{e(_app(region or "IN"))}">Map any theme on StratLab</a></div>'
              f'<p class="note">{e(FACTS_LINE)}</p>')
-    return stock_pages._page(head, _app(region or "IN"), body)
+    return stock_pages._page(head, _app(region or "IN"), body, src="theme")
 
 
 def card_line(x: dict) -> str:
@@ -815,7 +848,7 @@ def card_line(x: dict) -> str:
 def not_found() -> str:
     site = settings.PUBLIC_SITE_URL
     head = stock_pages._head(page_title("Theme not found"), "No theme at this address.", site + "/themes", robots="noindex,follow")
-    return stock_pages._page(head, None, '<h1>No theme at this address</h1><p><a href="/themes">See every theme</a></p>')
+    return stock_pages._page(head, None, '<h1>No theme at this address</h1><p><a href="/themes">See every theme</a></p>', src="theme")
 
 
 def _missing():

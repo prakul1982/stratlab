@@ -14,7 +14,7 @@ import { istToday, minusNode } from "../../lib/format";
 import { scrollToEnd } from "../../lib/phoneFit";
 import { columnOf, csvName, type CsvValue } from "../../lib/csv";
 import { downloadCsv } from "../../lib/csvDownload";
-import { Download } from "../Icons";
+import { Download } from "../IconsLite";
 import { ReportFigure, useReportScope } from "./ReportFigure";
 
 export type Column<R> = {

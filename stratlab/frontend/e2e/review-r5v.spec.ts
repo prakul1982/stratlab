@@ -20,7 +20,8 @@ test("a public company page wears the site's header, footer and type, and dates 
   await expect(page.locator("h1")).toContainText("Reliance Industries");
   const header = page.locator("header.nav");
   await expect(header.getByRole("link", { name: "StratLab home" })).toBeVisible();
-  await expect(header.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", /\/research\/IN\/RELIANCE$/);
+  // (changed on purpose, conv101 T1: a link into the app says which kind of page it was followed from)
+  await expect(header.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", /\/research\/IN\/RELIANCE\?from=stock$/);
   const foot = page.locator("footer.site");
   for (const name of ["Terms of service", "Privacy policy", "Cancellation and refunds", "Contact us"]) await expect(foot.getByRole("link", { name })).toBeVisible();
   // one price rule: the last close with its date, never "Last price"

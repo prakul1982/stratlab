@@ -1,6 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Close } from "../Icons";
+import { Close } from "../IconsLite";
 import { firstFocus, tabbables, trapTab } from "../../lib/focusTrap";
 
 /* One behaviour for everything that floats over the page.

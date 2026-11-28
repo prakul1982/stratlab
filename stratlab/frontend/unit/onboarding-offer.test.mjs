@@ -67,7 +67,7 @@ test("the launch offer names its end; an unknown offer promises nothing", () => 
   assert.equal(offer.promoUntil(promo, Date.parse("2099-11-01")), null);
   assert.equal(offer.offerMode(null), "unknown");
   // the offer couldn't be read: the same cards, a real button and no promise (R5V-006: one pricing look, not a second old one)
-  assert.deepEqual(offer.landingAction(null, "pro"), { label: "Continue with Google to see plans", buy: true });
+  assert.deepEqual(offer.landingAction(null, "pro"), { label: "Continue with Google to get Pro", buy: true });   // (changed on purpose, conv101 P7: the plan the button is for)
   const unknown = offer.pricingIntro(null, LIMITS.pro, "landing");
   assert.equal(unknown.title, "Plans");
   assert.doesNotMatch(unknown.title + unknown.lede, /Free to start|Choose a plan after/);
