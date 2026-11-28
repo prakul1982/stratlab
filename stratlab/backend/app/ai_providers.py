@@ -567,6 +567,8 @@ def _provider_view(name: str, now: float) -> dict:
                       "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens", "requests_reset", "tokens_reset")} or None,
                       "remaining_at": st.remaining.get("at")},
             "last_ok": st.last_ok, "last_error": named(st, st.last_error), "last_used_model": st.model,
+            # when its last failure was, beside its last answer (admin100: each source's row says both)
+            "last_error_at": getattr(st, "last_error_at", None) or None,
             "pinned": pin_admin or pin_env or None, "pinned_by": "admin" if pin_admin else "railway" if pin_env else None,
             "ranked_at": st.ranked_at or None, "rank_error": named(st, st.rank_error), "discovered": st.discovered, "skipped": st.skipped,
             "probing": st.probing, "models": models,

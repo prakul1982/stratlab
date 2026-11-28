@@ -138,7 +138,17 @@ def activity(count: int = 50) -> dict:
                          for x in pays if x.get("status") == "failed"][:count]
     except Exception as e:
         out["errors"]["failed"] = (str(e) or e.__class__.__name__)[:200]
+    _health(not out["errors"], next(iter(out["errors"].values()), None))
     return out
+
+
+def _health(ok: bool, error: str | None = None) -> None:
+    """A read of Razorpay (Money's lists, the setup check, a signed event arriving), for Admin's Data sources card (admin100)."""
+    try:
+        from . import source_health
+        source_health.record("payments", ok, error)
+    except Exception:
+        pass
 
 
 def check_setup() -> dict:
@@ -157,7 +167,9 @@ def check_setup() -> dict:
         out["keys_ok"] = True
     except Exception as e:
         out["keys_error"] = (str(e) or e.__class__.__name__)[:200]
+        _health(False, out["keys_error"])
         return out
+    _health(True)
     out["international"] = international_status(key, secret)
     currencies = set()
     for label, pid in (("Basic monthly", settings.RAZORPAY_PLAN_BASIC), ("Pro monthly", settings.RAZORPAY_PLAN_PRO),
@@ -411,6 +423,7 @@ def handle_webhook(body: bytes, signature: str, event_id: str = ""):
         raise SignatureVerificationError("Webhook secret is not configured.")
     client().utility.verify_webhook_signature(body.decode(errors="replace"), _sig(signature), settings.RAZORPAY_WEBHOOK_SECRET)
     event = json.loads(body)
+    _health(True)
     try:                                # when Razorpay last reached us, for Admin's Payments row (DJ-017)
         db.set_setting(LAST_WEBHOOK, json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                                  "event": str(event.get("event") or "")[:60]}))

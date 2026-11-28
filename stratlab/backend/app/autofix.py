@@ -355,14 +355,22 @@ def status(st: dict | None = None) -> dict:
     return {"trying": trying, "escalated": escalated, "history": st["history"][:20]}
 
 
-def annotate(rows: list[dict], st: dict | None = None) -> list[dict]:
+FRESH_NOTE = (" Failed in its last run: it is tried again by itself, and you are emailed only if that keeps failing.")
+
+
+def annotate(rows: list[dict], st: dict | None = None, unwatched=()) -> list[dict]:
     """Admin's job rows with what the self-healing is doing about them: a job being retried is a Check that says so (try 2 of 3, the
-    next at …), one whose tries are used up a Problem that says the owner was emailed."""
+    next at …), one whose tries are used up a Problem that says the owner was emailed. While the sweep is on, a job that has just failed
+    and that the sweep hasn't picked up yet is a Check too (admin100: one failed run read as a Problem for up to ten minutes, and a job the
+    sweep didn't watch for good): a Problem is what the self-healing couldn't fix, or a run stuck for hours. `unwatched`: job ids with a
+    check of their own elsewhere, left as they read."""
     st = st if st is not None else load()
     out = []
     for r in rows:
         i = st["open"].get(f"job:{r['id']}")
-        if i and r.get("error"):
+        if not i and ON and r.get("state") == "bad" and r.get("error") and r["id"] not in unwatched and not str(r["error"]).startswith("Stuck"):
+            r = {**r, "state": "warn", "error": r["error"] + FRESH_NOTE}
+        elif i and r.get("error"):
             if i.get("escalated"):
                 r = {**r, "state": "bad", "error": f"{r['error']} Retried automatically {len(i.get('tried') or [])} times without luck"
                                                   f"{'; you were emailed' if i.get('mailed') else ''}."}

@@ -148,7 +148,10 @@ test("R13-012: the holidays read failing with months on file is one Check, said 
   assert.equal(holidaysDown({ ...job, error: null, state: "warn" }), false);
   const cal = services(ov, [job]).find((s) => s.key === "cal");
   assert.deepEqual([cal.state, cal.detail], ["warn", "Holidays on file for 83 more days · live feed down"]);
-  const todo = attention(ov, null, [job]).map((a) => a.text);
+  // with 83 days on file it fixes itself (the daily read): listed apart (changed on purpose, admin100, Release 93 rule: Needs your attention holds only the owner's manual fixes; the rest is listed apart as nothing to do)
+  const { selfFixing } = await import("../src/pages/admin/attention.ts");
+  assert.ok(!attention(ov, null, [job]).some((t) => t.text.startsWith("Exchange holidays")));
+  const todo = selfFixing(ov, null, [job]).map((a) => a.text);
   assert.ok(todo.includes("Exchange holidays: holidays on file for 83 more days · live feed down. Couldn't reach the exchange."), todo.join("\n"));
   assert.ok(!todo.some((t) => /data feeds? on Check/.test(t)), todo.join("\n"));       // said once, not again among the feeds
 });

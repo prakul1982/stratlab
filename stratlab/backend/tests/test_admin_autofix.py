@@ -143,7 +143,9 @@ def test_every_failing_job_gets_a_check_and_its_remedy_is_its_own_run_now(monkey
             {"id": "newsletters", "name": "Newsletters", "state": "bad", "error": "x", "run": [{"label": "Run", "path": "/admin/newsletters/run"}]}]
     monkeypatch.setattr(admin_jobs, "rows", lambda: rows)
     checks = {c.id: c for c in admin_jobs.job_checks()}
-    assert "job:newsletters" not in checks                      # a job that mails users is never re-run by the sweep
+    # a job that mails users is never re-run by the sweep; it is watched with no remedy and listed, never mailed about
+    # (changed on purpose, admin100: it had no check at all, so a failed run was a Problem from the first failure for good)
+    assert checks["job:newsletters"].fix is None and checks["job:newsletters"].mail is False
     assert checks["job:breadth"].problem == "US: 3 stocks failed" and checks["job:ipo"].problem and checks["job:vix"].problem is None
     assert admin_jobs.remedy_paths(rows[0]) == ["/admin/breadth/run?region=US&full=true"]     # the market the problem names
     assert admin_jobs.remedy_paths({**rows[0], "error": "stalled"}) == ["/admin/breadth/run?region=IN&full=true"]
