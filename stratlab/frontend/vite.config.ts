@@ -33,8 +33,9 @@ export default defineConfig({
             { name: "boot", priority: 1, test: /src[\\/]lib[\\/](entry|config|http|returnTo)\.ts$|vite[\\/]preload-helper/ },
             // (the public pages use them too: none of them may import the account code below)
             // the consent banner and its settings too (ADS-1): every page draws it, so it rides in this file rather than adding its own
-            // (conv101: not the app's icons: the public pages' three are components/IconsLite, so the landing page doesn't download the rest)
-            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry|ads|adsConfig|track)|components[\\/](Logo|ui|Tracking|FeedbackOpen))\.tsx?$/ },
+            // (conv101: not the app's icons: the public pages' three are components/IconsLite, here, so the landing page doesn't download the rest,
+            // and /library none of its own files more)
+            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry|ads|adsConfig|track)|components[\\/](IconsLite|Logo|ui|Tracking|FeedbackOpen))\.tsx?$/ },
             // the plans' prices and feature lists (14 kB) are the landing page's and the app's, not a policy page's: apart from this file they stay out of its download (R5V-020)
             // the plan cards' part (names, prices, limits, the cards' lines) is all the landing page downloads; the comparison table's rows
             // (plans.ts) are loaded by the app, the Plans page and the landing page's comparison fold (Release 43: the landing budget)

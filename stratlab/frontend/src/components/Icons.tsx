@@ -1,7 +1,7 @@
 import { base, type P } from "./IconsLite";
 // conv101 (the landing page's 450 KB budget): the three icons the public pages draw live in IconsLite, so a visitor's download doesn't carry the
 // app's other icons; they are the same icons, under the same names, here
-export { Close, Google, Markets } from "./IconsLite";
+export { Close, Download, Google, Markets, Search } from "./IconsLite";
 
 export const Plus = ({ size }: P) => <svg {...base(size)}><path d="M12 5v14M5 12h14" /></svg>;
 export const Menu = ({ size }: P) => <svg {...base(size)}><path d="M4 7h16M4 12h16M4 17h16" /></svg>;
@@ -10,7 +10,6 @@ export const Layers = ({ size }: P) => <svg {...base(size)}><path d="m12 3 9 5-9
 export const Star = ({ size }: P) => <svg {...base(size)}><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1-4.5-4.2 6.1-.8z" /></svg>;
 export const User = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></svg>;
 export const Book = ({ size }: P) => <svg {...base(size)}><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" /><path d="M5 17a3 3 0 0 1 3-3h11" /></svg>;
-export const Search = ({ size }: P) => <svg {...base(size)}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>;
 /** Settings (DI-022: a pencil read as "edit"). */
 export const Gear = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>;
 export const Help = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.3M12 17h.01" /></svg>;
@@ -18,7 +17,6 @@ export const Share = ({ size }: P) => <svg {...base(size)}><path d="M12 3v12M7 8
 export const Trash = ({ size }: P) => <svg {...base(size)}><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>;
 export const Globe = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>;
 export const Sparkle = ({ size }: P) => <svg {...base(size)}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></svg>;
-export const Download = ({ size }: P) => <svg {...base(size)}><path d="M12 4v11M7 10l5 5 5-5" /><path d="M5 20h14" /></svg>;
 export const Pencil = ({ size }: P) => <svg {...base(size)}><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></svg>;
 export const Lens = ({ size }: P) => <svg {...base(size)}><path d="M4 20V13M8 20V9M12 20v-4" /><circle cx="16" cy="9" r="4.2" /><path d="m19 12 3 3" /></svg>;
 export const Shield = ({ size }: P) => <svg {...base(size)}><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z" /><path d="m9 12 2 2 4-4" /></svg>;

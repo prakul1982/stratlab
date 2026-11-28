@@ -248,8 +248,8 @@ def test_the_stock_pages_ways_in_are_under_the_price_and_the_footer_names_sebi_a
     page = w["client"].get("/stocks/in/RELIANCE").text
     top = page.index("data-cta-top")
     assert page.index("data-price") < top < page.index("data-chart") if "data-chart" in page else page.index("data-price") < top
-    assert "Free sign-in: test a strategy on RELIANCE</a>" in page and "Sign in for the full deep dive</a>" in page
-    assert "Free sign-in: test a strategy on RELIANCE (needs sign-in)" not in page
+    assert "Free sign-in: backtest an idea on RELIANCE</a>" in page and "Sign in for the full deep dive</a>" in page
+    assert "Free sign-in: backtest an idea on RELIANCE (needs sign-in)" not in page
     assert "Go further with RELIANCE" in page, "the way in at the foot stays"
     assert "StratLab is not a SEBI-registered investment adviser or research analyst." in page
     assert "(NSE, BSE and the SEC)" in page

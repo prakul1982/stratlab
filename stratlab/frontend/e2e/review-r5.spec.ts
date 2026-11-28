@@ -367,6 +367,9 @@ test.describe("what a visitor's browser loads and keeps (R5V-020, R5V-022)", () 
       await page.addInitScript(() => {
         Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false });
         Object.defineProperty(Navigator.prototype, "userAgent", { get: () => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36" });
+        // (changed on purpose, conv101 T2: a headless browser is left out of analytics, and CI's headless shell names itself "HeadlessChrome" in
+        // userAgentData too: hidden here, as analytics.spec's and r15-ad's tests hide it)
+        Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined });
       });
       await page.addInitScript(init);
       await open(page, "/", { config: config(',POSTHOG_KEY:"phc_test"') });

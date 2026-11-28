@@ -228,7 +228,10 @@ function PhoneFold({ label, children }: { label: string; children: ReactNode }) 
 const faqItem = (f: (typeof FAQ)[number]) => <details key={f.q}><summary>{f.q}</summary>{f.a.map((t) => <p key={t} className="muted">{t}</p>)}</details>;
 
 /** A few tools in view, the rest one click away: the page stays short and nothing is left out. */
-function ToolList({ items, label, shown = 4, three = false }: { items: [string, string][]; label: string; shown?: number; three?: boolean }) {
+function ToolList({ items, label, shown: wide = 4, phoneShown, three = false }: { items: [string, string][]; label: string; shown?: number; phoneShown?: number; three?: boolean }) {
+  // Release 102 (live5: under 9,000 px on a phone with "Try one idea now" added): a list may show fewer on a phone, the rest one click away
+  const [phone] = useState(phoneNow);
+  const shown = phone && phoneShown ? phoneShown : wide;
   const tool = ([t, b]: [string, string]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>;
   const cls = `lp-tools${three ? " lp-tools-3" : ""}`;
   return (
@@ -480,7 +483,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             </div>
             <PhoneFold label="See a sample company page"><ResearchMock /></PhoneFold>
           </div>
-          <ToolList items={RESEARCH} label="research tool" />
+          <ToolList items={RESEARCH} label="research tool" phoneShown={2} />
         </div>
       </section>
 
@@ -499,7 +502,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
           <Head eyebrow="Alerts" title="Hear about it when it happens.">
             On your phone or by email, including every paper trade. Alerts report what happened, never what to do about it.
           </Head>
-          <ToolList items={ALERTS} label="kind of alert" shown={3} three />
+          <ToolList items={ALERTS} label="kind of alert" shown={3} phoneShown={1} three />
         </div>
       </section>
 
@@ -556,7 +559,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
       <footer className="lp-foot">
         <div className="lp-wrap spread wrap g16">
           <Logo size={30} />
-          <p className="small muted k-measure">Research and paper trading only. No real orders are placed. Past results don't predict future returns. StratLab gives facts, not investment advice, and is not a SEBI-registered investment adviser or research analyst. © {new Date().getFullYear()} StratLab.</p>
+          <p className="small muted k-measure">Research and paper trading only. No real orders are placed. Past results don't predict future returns. StratLab gives facts, not investment advice, and is not a SEBI-registered investment adviser or research analyst. {DATA_LINE} © {new Date().getFullYear()} StratLab.</p>
           <div className="stack g6">
             <SiteLinks />
             <LegalLinks />
@@ -597,6 +600,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
   // a plan's name is one level under the heading above the cards: the landing page's section title (h2) makes it an h3; on /plans the page's h1 is
   // the heading above, and an h3 there skipped a level (A11Y-012)
   const PlanHeading = top ? "h2" : "h3";
+  const [phone] = useState(phoneNow);
   return (
     <section id="pricing" className={`lp-sec${top ? " lp-sec-first" : ""}`} aria-busy={loading}>
       <div className="lp-wrap stack g32">
@@ -673,12 +677,15 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
           })}
         </div>
         <AllFeatures />
-        <p className="small muted lp-center" data-testid="plans-trust">{TRUST_LINE} {DATA_LINE}</p>
+        {/* on the landing page the line is under the hero (or, on a phone, in the footer) */}
+        {top && <p className="small muted lp-center" data-testid="plans-trust">{TRUST_LINE} {DATA_LINE}</p>}
         {/* LIVE14B-007 / LIVE14A-012: the table promises Free "a sample deck to download": the signed-out /plans gives the link too */}
         {/* conv101: on the landing page too, with the sample deck's own page (its link previews when shared) */}
-        <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>
+        {(top || !phone) && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
-        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p></PhoneFold>}
+        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p>
+          {/* on the landing page on a phone the sample deck goes with the prices' small print, one fold away (live5) */}
+          {!top && phone && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}</PhoneFold>}
       </div>
     </section>
   );
@@ -803,19 +810,24 @@ function ResearchMock() {
  * opened with one press (its code and its list load then). */
 function GuestTrySection() {
   const [open, setOpen] = useState(false);
+  // Release 102 (live5: the landing page on a phone stays under 9,000 px): on a phone the section is its heading and its button; the tool says
+  // what it does once opened, and the facts-not-advice line is in the page's footer there
+  const [phone] = useState(phoneNow);
   return (
-    <section id="try" className="lp-sec lp-try" aria-labelledby="try-h">
-      <div className="lp-wrap stack g18">
-        <div className="lp-head">
-          <span className="eyebrow">No sign-in</span>
-          <h2 id="try-h" className="serif lp-h2">Try one idea now.</h2>
-          <p className="lp-p">Pick a well-known rule set and a stock. StratLab runs its real test on five years of prices after every charge and shows the verdict, good or bad.</p>
-        </div>
+    <section id="try" className={`lp-sec lp-try${phone ? " lp-try-phone" : ""}`} aria-labelledby="try-h">
+      <div className={`lp-wrap stack ${phone ? "g12" : "g18"}`}>
+        {phone ? <h2 id="try-h" className="serif lp-h3">Try one idea now, no sign-in</h2> : (
+          <div className="lp-head">
+            <span className="eyebrow">No sign-in</span>
+            <h2 id="try-h" className="serif lp-h2">Try one idea now.</h2>
+            <p className="lp-p">Pick a well-known rule set and a stock. StratLab runs its real test on five years of prices after every charge and shows the verdict, good or bad.</p>
+          </div>
+        )}
         {open ? <Suspense fallback={<div className="lp-card gt-card" aria-busy="true"><span className="lp-skel lp-skel-p" /><span className="lp-skel lp-skel-p" /></div>}><GuestTry /></Suspense>
           : <div><button type="button" className="btn" data-testid="guest-open" onClick={() => setOpen(true)}>Try an idea, free</button></div>}
         {/* conv101 (P6): what StratLab is and isn't, in the Terms' own words, and where its figures come from, straight under the hero (the hero
             itself names no "facts": VR5-owner-2) */}
-        <p className="small muted lp-trust" data-testid="trust-line">{TRUST_LINE} {DATA_LINE}</p>
+        {!phone && <p className="small muted lp-trust" data-testid="trust-line">{TRUST_LINE} {DATA_LINE}</p>}
       </div>
     </section>
   );

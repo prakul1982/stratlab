@@ -45,7 +45,7 @@ test.describe("T1, T2: a pageview from the pages the server draws", () => {
     expect(ev.properties.$session_id).toBe(stored.$sesid[1]);
     // the page's ways into the app sit under the price and carry where they came from
     const top = page.locator("[data-cta-top] a").first();
-    await expect(top).toHaveText("Free sign-in: test a strategy on RELIANCE");
+    await expect(top).toHaveText("Free sign-in: backtest an idea on RELIANCE");
     await expect(top).toHaveAttribute("href", /from=stock/);
     await expect(top).toBeInViewport();
   });
@@ -161,11 +161,12 @@ test.describe("P1: try one idea without an account", () => {
 });
 
 test.describe("P4, P6, P7, P10: the landing page and the plans", () => {
-  test("the hero's no-sign-in proof opens a verdict that held up; the facts-not-advice line is in the first screen", async ({ page }) => {
+  test("the hero's no-sign-in proof opens a verdict that held up; the facts-not-advice line is on the page", async ({ page }, info) => {
     await page.goto("/");
-    const trust = page.getByTestId("trust-line");
+    // (changed on purpose, Release 102: on a phone the line is in the page's footer, so the landing page stays under 9,000 px: live5)
+    const trust = info.project.name === "phone" ? page.locator("footer.lp-foot") : page.getByTestId("trust-line");
     await expect(trust).toContainText("not a SEBI-registered investment adviser or research analyst", { timeout: 30_000 });
-    await expect(trust).toBeVisible();
+    await expect(trust).toContainText("(NSE, BSE and the SEC)");
     expect(await page.locator(".lp-hero").innerText()).not.toMatch(/facts/i);      // the hero names no "facts" (VR5-owner-2)
     const proof = page.getByTestId("hero-proof");
     await expect(proof).toHaveText("See a verdict that held up, no sign-in");

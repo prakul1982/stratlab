@@ -1,5 +1,6 @@
-/* The icons the public pages draw (Google's mark on the sign-in buttons, a dialog's close button, the Market Watch launcher), apart from the
- * app's other icons (components/Icons.tsx re-exports these), so the landing page's download stays inside its budget (review-r5, conv101). */
+/* The icons the public pages draw (Google's mark on the sign-in buttons, a dialog's close button, the Market Watch launcher, the library's search
+ * and a table's download), apart from the app's other icons (components/Icons.tsx re-exports these), so the public pages' downloads stay inside
+ * their budgets (review-r5, review-r8v; conv101). */
 export type P = { size?: number };
 export const base = (size = 20) => ({
   width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8,
@@ -16,3 +17,5 @@ export const Google = ({ size = 18 }: P) => (
   </svg>
 );
 export const Markets = ({ size }: P) => <svg {...base(size)}><path d="M7 4v3M7 17v3M17 3v4M17 15v6" /><rect x="5" y="7" width="4" height="10" rx="1" /><rect x="15" y="7" width="4" height="8" rx="1" /></svg>;
+export const Search = ({ size }: P) => <svg {...base(size)}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>;
+export const Download = ({ size }: P) => <svg {...base(size)}><path d="M12 4v11M7 10l5 5 5-5" /><path d="M5 20h14" /></svg>;

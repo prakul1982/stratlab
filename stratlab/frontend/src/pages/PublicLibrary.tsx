@@ -6,7 +6,7 @@ import { absolute, groupLabel, plainTerms, withBrand } from "../content/seo";
 import { pct, TF_NAME } from "../lib/format";
 import { emailSignInOn, signedInHere, signIn, startSignIn } from "../lib/signin";
 import { EmailWay } from "../components/EmailWay";
-import { Search } from "../components/Icons";
+import { Search } from "../components/IconsLite";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
 import { adsLive } from "../lib/ads";
 import { CONFIG } from "../lib/adsConfig";

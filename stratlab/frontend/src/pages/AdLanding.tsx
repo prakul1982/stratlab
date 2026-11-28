@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { AD_DESCRIPTION, AD_HEADLINE, AD_POINTS, AD_TITLE } from "../content/ad";
 import { applySeo } from "../lib/seo";
 import { absolute } from "../content/seo";
-import { Google } from "../components/Icons";
+import { Google } from "../components/IconsLite";
 import { Logo } from "../components/Logo";
 import { track } from "../lib/analytics";
 import { signIn, signInUnfinished } from "../lib/signin";
