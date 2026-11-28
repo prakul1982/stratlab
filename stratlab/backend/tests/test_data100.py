@@ -295,7 +295,7 @@ def test_the_deck_says_one_registrant_under_two_symbols():
 
 
 # ---------- 3. a theme piece behind its rebuilt page is taken again ----------
-def test_a_piece_kept_before_its_page_had_figures_is_taken_again():
+def test_a_piece_kept_before_its_page_had_figures_is_taken_again(monkeypatch):
     """Fails on main: SpiceJet's and Tata Elxsi's pieces were kept from pages built before they had a year of revenue (R56's stale
     consolidated page), so their rows stayed "(no figures)" while their pages showed five years: the rule re-took a piece only when its
     newest year was the page's and the revenues differed."""
@@ -307,7 +307,7 @@ def test_a_piece_kept_before_its_page_had_figures_is_taken_again():
     assert TR.restated_since("IN", "TATAELXSI", older, idx)                         # the page has a newer year now
     same = {"unit": "₹ crore", "years": [{"year": "Mar 2026", "sales": 255324.0}]}
     assert not TR.restated_since("IN", "TCS", same, idx) and not TR.restated_since("IN", "NOPAGE", none, idx)
-    TR._index_sales = lambda region: idx
+    monkeypatch.setattr(TR, "_index_sales", lambda region: idx)
     dive = {"layers": [{"companies": [{"symbol": "TATAELXSI", "unit": "₹ crore", "year": None, "revenue": None},
                                       {"symbol": "SPICEJET", "unit": "₹ crore", "year": None, "revenue": None},
                                       {"symbol": "TCS", "unit": "₹ crore", "year": "Mar 2026", "revenue": 255324.0}]}]}
