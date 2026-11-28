@@ -176,11 +176,29 @@ class _Guarded:
 
         def call(*a, **kw):
             try:
-                return attr(*a, **kw)
+                out = attr(*a, **kw)
             except TokenException as e:
+                _health(False, "Zerodha cancelled the day's login")
                 self._on(e)
                 raise
+            except Exception as e:
+                # a request Zerodha answered with "no such instrument" or bad input is the broker answering; anything else (network,
+                # its server, its rate limit) is a failed read (admin100: Data sources)
+                _health(type(e).__name__ in ("InputException", "OrderException", "PermissionException"),
+                        f"{type(e).__name__}: {str(e)[:120]}")
+                raise
+            _health(True)
+            return out
         return call
+
+
+def _health(ok: bool, error: str | None = None) -> None:
+    """One call to the broker's API, for Admin's Data sources card. Never raises."""
+    try:
+        from . import source_health
+        source_health.record("broker", ok, None if ok else error)
+    except Exception:
+        pass
 
 
 class KiteService:

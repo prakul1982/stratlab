@@ -128,7 +128,7 @@ export function SystemSection() {
               word={filing ? undefined : auto ? (auto.check.state === "pass" ? "Pass" : auto.check.state === "warn" ? "Check" : "Fail") : "Not checked"} label={`Exchange filings${filing ? ` (${filing.symbol})` : ""}`}
               detail={!filing ? (auto ? `In the check ${ago(auto.at)}: ${auto.check.detail} Press the button to ask again now.` : "Press the button to ask the exchange for a company's filings.") : filing.ok
                 ? `${filing.count} filings in the last year. Latest: ${(filing.latest ?? []).map((l) => `${l.at.slice(0, 10)} ${l.label}`).join("; ") || "none"}`
-                : `${filing.error} The exchange sometimes blocks cloud servers; if this keeps failing, the BSE feed can be added as a fallback.`}
+                : `${filing.error} The exchange sometimes turns cloud servers away for a while: that is its side, StratLab asks again by itself, and Overview → Data sources says since when. Nothing to do.`}
               actions={<button type="button" className="btn quiet sm" disabled={busy === "filings"} onClick={checkFilings}>{busy === "filings" ? "Asking the exchange…" : "Check filings feed"}</button>} />
             {filing?.ok && <StatusRow state={filing.document?.ok ? "ok" : "warn"} label="Company documents (deep dive)"
               detail={!filing.document ? `No presentation or call transcript among ${filing.symbol}'s filings to try.`

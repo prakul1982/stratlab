@@ -64,7 +64,7 @@ test("DJ-015, DJ-019: prices say Fixed with the day they were set, the info text
 });
 
 test("DJ-002, DJ-007: AI providers waiting on their quota are one line; a cut line ends at a word; feeds keep their own case", async () => {
-  const { attention, oneLine } = await import("../src/pages/admin/attention.ts");
+  const { attention, selfFixing, oneLine } = await import("../src/pages/admin/attention.ts");
   const p = (label, result, extra = {}) => ({ label, configured: true, in_use: true, model: "m", last_error: null, answering: result === "working", result, state_text: "Free quota used up for now; it resets on its own.", ...extra });
   const ai = [p("Groq", "working"), p("Gemini", "working"), p("Cerebras", "quota"), p("Z.ai", "quota"), p("Hugging Face", "paused"),
     p("SambaNova", "failed", { state_text: "Failing: timed out." })];
@@ -76,7 +76,10 @@ test("DJ-002, DJ-007: AI providers waiting on their quota are one line; a cut li
   const rejected = attention({ ...ov, server: { ...ov.server, ai: [...ai, p("Mistral", "failed", { state_text: "401: the key was rejected." })] } }, null, []).map((a) => a.text);
   assert.ok(rejected.includes("AI, Mistral: 401: the key was rejected."), rejected.join("\n"));
   assert.ok(!items.some((t) => t.startsWith("AI, Cerebras")));
-  assert.ok(items.some((t) => t.includes("Market events (Partial: 4 of 5 sources read. Not read: Index provider: down.)")), items.join("\n"));
+  // (changed on purpose, admin100, Release 93 rule: Needs your attention holds only the owner's manual fixes; the rest is listed apart as nothing to do)
+  const auto = selfFixing(ov, null, [{ id: "events", name: "Market events", schedule: "x", last_run: "2026-10-24T13:00:00Z", error: "Partial: 4 of 5 sources read. Not read: Index provider: down.", state: "warn" }]).map((a) => a.text);
+  assert.ok(auto.some((t) => t.includes("Market events (Partial: 4 of 5 sources read. Not read: Index provider: down.)")), auto.join("\n"));
+  assert.ok(!items.some((t) => t.includes("Market events")), items.join("\n"));
   const cut = oneLine("SambaNova is currently experiencing high demand and cannot serve the request right now please", 40);
   assert.equal(cut.text, "SambaNova is currently experiencing…");
 });
@@ -113,7 +116,7 @@ test("DJ-034, DJ-033: alert emails show Brevo's sends against what is left today
 });
 
 test("DJ-026: the audit's mismatch count on Overview says when those rows were checked, and each row carries its date", async () => {
-  const { attention } = await import("../src/pages/admin/attention.ts");
+  const { selfFixing: attention } = await import("../src/pages/admin/attention.ts");     // the engine's, listed apart (changed on purpose, admin100, Release 93 rule: Needs your attention holds only the owner's manual fixes; the rest is listed apart as nothing to do)
   const sv = { kite_ready: true, feed_connected: true, live_sessions: 0, auto_login_configured: true, auto_login: { ok: true, message: "ok" }, ai: [], billing_enabled: true,
     audit_mismatches: { IN: 49, US: 19 }, audit_checked: { IN: { oldest: "2026-10-05T04:00:00Z", newest: "2026-10-09T04:00:00Z" }, US: { oldest: "2026-10-07T04:00:00Z", newest: "2026-10-07T09:00:00Z" } } };
   const items = attention({ server: sv, stats: {} }, null, []).map((a) => a.text);

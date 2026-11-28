@@ -7,7 +7,7 @@ import { IST, fmtDateTime, money, safeHref } from "../../lib/format";
 import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, FigureTable, HealthGrid, HealthTile, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
-import { attention, errorCounts, fixRows, lights, paidUsers, quotaLine, revenueText, withUsd, type FixRow } from "./attention";
+import { errorCounts, fixRows, lights, paidUsers, quotaLine, revenueText, triage, withUsd, type FixRow } from "./attention";
 import { usePricing } from "../../lib/currency";
 
 type InvoiceRow = { date: string; total: number; currency: string };
@@ -35,7 +35,10 @@ export function OverviewSection() {
   if (!ov) return <Card label="Loading status">{loading ? <Skeleton label="Loading the server's status" />
     : <ErrorState title="The server's status couldn't be read" action={{ label: "Try again", onClick: () => void reload() }} />}</Card>;
   const sv = ov.server, st = ov.stats;
-  const todo = attention(ov, reported, jobs);
+  // what only the owner can fix, and apart from it what StratLab is handling itself (Release 93; admin100)
+  const { owner: todo, auto } = triage(ov, reported, jobs);
+  const sources = sv.sources ?? [];
+  const lookSources = sources.filter((r) => r.state !== "ok" || r.word === "Retrying" || r.word === "Fix"), okSources = sources.filter((r) => !lookSources.includes(r));
   const fixes = fixRows(sv.autofix);
   const { services, feeds } = lights(ov, jobs);
   const today = istDay(new Date());
@@ -59,7 +62,7 @@ export function OverviewSection() {
       <Card label="Needs your attention">
         <CardHead title="Needs your attention" actions={todo.length ? <Badge tone="warn">{todo.length} need{todo.length === 1 ? "s" : ""} a look</Badge> : <Badge tone="ok">All clear</Badge>} />
         {!todo.length ? (
-          <EmptyState title="Nothing needs you">The broker is logged in, AI is answering, and there are no new errors or reports. What fails is retried by itself first (Automatic fixes, below); only what that can't clear is emailed to you.</EmptyState>
+          <EmptyState title="Nothing needs you">The broker is logged in, AI is answering, and there are no reports or settings waiting for you. What fails is retried by itself first (Automatic fixes, below); only what that can't clear is listed here and emailed to you.</EmptyState>
         ) : (
           <div className="adm-todo">
             {todo.map((x, i) => (
@@ -68,6 +71,14 @@ export function OverviewSection() {
               </div>
             ))}
           </div>
+        )}
+        {/* apart from what needs the owner: what StratLab is handling itself, or a developer looks at (admin100) */}
+        {auto.length > 0 && (
+          <Disclosure summary={`${auto.length} thing${auto.length === 1 ? "" : "s"} StratLab is handling itself: nothing for you to do`} testId="self-fixing">
+            <ul className="k-small adm-list" aria-label="Handled by StratLab">
+              {auto.map((x, i) => <li key={i}><span title={x.full}>{x.text}</span> <Link className="link" to={x.to}>{x.label} →</Link></li>)}
+            </ul>
+          </Disclosure>
         )}
       </Card>
 
@@ -119,6 +130,25 @@ export function OverviewSection() {
           {services.map((l) => <HealthTile key={l.key} state={l.state} label={l.label} detail={l.detail} to={l.to} />)}
         </HealthGrid>
       </Card>
+
+      {sources.length > 0 && (
+        <Card label="Data sources" testId="data-sources">
+          <CardHead title="Data sources" info="Every outside source StratLab reads, with its last good answer and its last failure. A good answer clears a source at once; a failed read is retried by itself (Retrying), a run of failures over half an hour is Not answering, and a day with none is Down. Only the email service and payments can need you (Fix): the rest is the source's side, and StratLab keeps asking." />
+          <p className="k-small" data-testid="sources-summary">{[...new Set(sources.map((r) => r.word))].map((w) => `${sources.filter((r) => r.word === w).length} ${w}`).join(" · ")}</p>
+          {lookSources.length > 0 && (
+            <StatusList label="Data sources that need a look">
+              {lookSources.map((r) => <StatusRow key={r.key} state={r.state} word={r.word} label={r.label} detail={r.detail} />)}
+            </StatusList>
+          )}
+          {okSources.length > 0 && (
+            <Disclosure summary={`Show the other ${okSources.length} source${okSources.length === 1 ? "" : "s"}`} testId="sources-ok">
+              <StatusList label="Data sources">
+                {okSources.map((r) => <StatusRow key={r.key} state={r.state} word={r.word} label={r.label} detail={r.detail} />)}
+              </StatusList>
+            </Disclosure>
+          )}
+        </Card>
+      )}
 
       <Card label="Data feeds">
         <CardHead title="Data feeds" actions={<Link className="btn quiet sm" to="/admin/data">Data and jobs</Link>} />

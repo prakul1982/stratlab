@@ -945,6 +945,11 @@ class NSEFilings:
     BACKOFF = (0.0, 2.0)            # the pause before each retry after a refusal: at once with fresh cookies, then later
 
     def _get_once(self, path: str, params: dict, referer: str | None = None):
+        """One call, noted for Admin's Data sources card by how it ended (admin100)."""
+        from .. import source_health
+        return source_health.watch("nse-feed", lambda: self._get_once_raw(path, params, referer))
+
+    def _get_once_raw(self, path: str, params: dict, referer: str | None = None):
         self._prime()
         headers = {"Referer": referer} if referer else None
         for attempt in range(len(self.BACKOFF) + 1):
@@ -1655,6 +1660,11 @@ class BSEFilings:
             self.sleep(wait)
 
     def _call(self, path: str, params: dict) -> dict:
+        """One API call, noted for Admin's Data sources card by how it ended (admin100)."""
+        from .. import source_health
+        return source_health.watch("bse", lambda: self._call_raw(path, params))
+
+    def _call_raw(self, path: str, params: dict) -> dict:
         """One API call: paced, with fresh cookies and a pause before each retry when BSE turns it away."""
         if time.time() < self._down_until:
             raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
