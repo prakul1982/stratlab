@@ -4,7 +4,7 @@ import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../li
 import { FOUNDING_YEARLY, foundingOf } from "../lib/founding";
 import { cardPrice, checkoutCur, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
 import { CurrencySwitch } from "../components/CurrencySwitch";
-import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, YEARLY_SHORT, yearlySaving } from "../lib/offer";
+import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, YEARLY_SHORT, yearlySaving } from "../lib/offerCore";
 import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/planCore";   // the cards only: the tables (plans.ts) stay off the landing download
 import { early, emailSignInOn, signIn, signInUnfinished, startSignIn } from "../lib/signin";
 import { rememberNext } from "../lib/returnTo";
@@ -597,6 +597,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
     year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") },
     gst });
   const showYear = !!(offer?.yearly && offer.payments);
+  // the sample deck's line, drawn once: under the cards, or on a phone on the landing page in the prices' fold (live5)
+  const deckLine = <p className="small muted" data-testid="sample-deck-line">{DECK_LINE} <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>;
   // price102 (owner, 28 Nov, GTM P1): the founding-member yearly prices while the server says they run, on the yearly cards charged in rupees
   const founding = offer?.payments ? foundingOf(offer) : null;
   const foundingOn = !!founding && period === "year" && checkoutCur(cur, usd, "year", usdOn) === "INR";
@@ -693,11 +695,11 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         {/* LIVE14B-007 / LIVE14A-012: the table promises Free "a sample deck to download": the signed-out /plans gives the link too */}
         {/* conv101: on the landing page too, with the sample deck's own page (its link previews when shared) */}
         {/* price102 (GTM P2): Free makes one theme deck a month, a PDF marked "Made with StratLab"; on a phone on the landing page it sits in the prices' fold (live5) */}
-        {(top || !phone) && <p className="small muted" data-testid="sample-deck-line">{DECK_LINE} <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}
+        {(top || !phone) && deckLine}
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
         {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p>
           {/* on the landing page on a phone the sample deck goes with the prices' small print, one fold away (live5) */}
-          {!top && phone && <p className="small muted" data-testid="sample-deck-line">{DECK_LINE} <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}</PhoneFold>}
+          {!top && phone && deckLine}</PhoneFold>}
       </div>
     </section>
   );

@@ -22,8 +22,10 @@ export function StudentApply() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // the request as the server answered it: shown at once, so an older /me still on its way can't bring the Apply line back (R103)
+  const [sent, setSent] = useState<StudentState | null>(null);
   if (!me) return null;
-  const s: StudentState | null = me.student ?? null;
+  const s: StudentState | null = sent ?? me.student ?? null;
   if (s && s.status === "approved") {
     return <p className="k-small k-muted" data-testid="student-line">{s.mode === "grant"
       ? `Your student request was approved${s.decided_at ? ` on ${dateOnly(s.decided_at)}` : ""}: Basic is given to you for a year.`
@@ -37,7 +39,8 @@ export function StudentApply() {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      await api("/student/apply", { method: "POST", body: { college, college_email: email, note } });
+      const out = await api<{ student: StudentState | null }>("/student/apply", { method: "POST", body: { college, college_email: email, note } });
+      setSent(out.student);
       setOpen(false);
       notify("Request sent. We check it by hand and tell you when it's approved.");
       await refreshMe();

@@ -73,7 +73,7 @@ test("DP2-022, DP1-018: one limit wording, with the month's reset and what the n
 });
 
 test("DP2-012, DP1-018, DP1-025: the lock is the line icon, never the emoji; the page lock reads plainly", () => {
-  for (const f of ["src/components/kit/Notice.tsx", "src/components/PageLock.tsx", "src/lib/offer.ts", "src/pages/NotebookPage.tsx", "src/pages/OptionsPage.tsx", "src/styles.css"])
+  for (const f of ["src/components/kit/Notice.tsx", "src/components/PageLock.tsx", "src/lib/offer.ts", "src/lib/offerCore.ts", "src/pages/NotebookPage.tsx", "src/pages/OptionsPage.tsx", "src/styles.css"])
     assert.doesNotMatch(read(f), /🔒/, f);
   assert.match(read("src/components/Icons.tsx"), /export const Lock = /);
   assert.match(read("src/components/kit/Notice.tsx"), /<span className="plan-lock" aria-hidden="true"><Lock \/><\/span>/);

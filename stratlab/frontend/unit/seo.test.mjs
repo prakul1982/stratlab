@@ -302,7 +302,7 @@ test("the landing page: one tagline, sample labels, no old pricing variant, no v
   assert.ok((all.match(/honest/gi) ?? []).length <= 1, "'honest' is a claim, not a fact: at most once");
   assert.doesNotMatch(login, /Likely a real edge/);
   assert.doesNotMatch(login, /Find out before your money does|Test your trading idea before/);
-  assert.doesNotMatch(login + read("src/lib/offer.ts"), /Choose a plan after you sign in|dashed/);
+  assert.doesNotMatch(login + read("src/lib/offer.ts") + read("src/lib/offerCore.ts"), /Choose a plan after you sign in|dashed/);
   assert.doesNotMatch(login, /Ideas to test on|Buy NVDA when|Test an idea on NVDA/);
   assert.match(login, /rule template to test/i);
   assert.match(login, /not a suggestion/);

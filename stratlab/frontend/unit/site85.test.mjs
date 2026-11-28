@@ -118,7 +118,7 @@ test("LIVE21B-003: /mine lists the watchlist in its own order, and Coming up has
 
 test("owner, 20 Nov: the phone's billing choice reads \"Yearly\", the saving on each yearly card", () => {
   for (const f of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) assert.match(read(f), /\{ value: "year", label: founding \? FOUNDING_YEARLY : YEARLY_LABEL, short: YEARLY_SHORT \}/, f);     // (changed on purpose, price102: a founding year is more than 2 months free)
-  assert.match(read("src/lib/offer.ts"), /export const YEARLY_SHORT = "Yearly";/);
+  assert.match(read("src/lib/offerCore.ts"), /export const YEARLY_SHORT = "Yearly";/);     // (changed on purpose, price102 R103: the landing page's part of offer.ts is offerCore.ts, re-exported)
 });
 
 test("owner, 20 Nov: an IPO in BSE's list only says it is BSE's, never \"No NSE page yet\" with its lot and bids blank (Mahanadi Coalfields)", async () => {

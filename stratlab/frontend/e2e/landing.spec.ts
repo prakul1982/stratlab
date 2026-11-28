@@ -104,7 +104,8 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
   // LIVE4-020: the cards show the Plans page's five lines; every feature, with each limit, is in the fold under them
   // (updated on purpose, FREE-TIER: Free keeps 1 saved screen, said in the singular)
   await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`${plans.free.stock_alerts} stock alerts, ${plans.free.screens} saved screen, ${plans.free.holdings} holdings`);
-  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`${plans.free.deepdives_per_month} company deep dive a month, ${plans.free.ai_reads_per_day} fresh AI reads a day`);
+  // (changed on purpose, price102: the owner's GTM P2, Free's card line names its one theme deck a month as a PDF)
+  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`${plans.free.deepdives_per_month} deep dive and ${plans.free.decks_per_month} theme deck (PDF) a month, ${plans.free.ai_reads_per_day} AI reads a day`);
   await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText(`Paper trade ${plans.pro.live_limit} strategies`);
   const all = page.getByTestId("all-features");
   await all.locator("summary").click();

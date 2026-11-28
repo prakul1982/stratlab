@@ -22,7 +22,7 @@ USERS = {
     # the R15 lane's e2e (e2e/r15-pages.spec.ts): its own Pro accounts, one per project and repeat
     **{f"r15-{i}": (f"u-r15-{i}", f"r15{i}@example.com", "pro") for i in range(12)},
     # lane price102's e2e (e2e/price102.spec.ts): its own Free accounts, one per test and project (a student request is kept per person)
-    **{f"price102-{i}": (f"u-price102-{i}", f"price102{i}@example.com", "free") for i in range(8)},
+    **{f"price102-{i}": (f"u-price102-{i}", f"price102{i}@example.com", "free") for i in range(60)},
     # the EXPORT lane's e2e (e2e/export.spec.ts): its own accounts, one per test and project (Pro, then a Free pair for the deck limit)
     **{f"export-{i}": (f"u-export-{i}", f"export{i}@example.com", "free" if i >= 20 else "pro") for i in range(24)},
     # the R19 lane's e2e (e2e/r19-library.spec.ts): its own Free accounts, one per test, project and repeat (refreshes are counted per person)
