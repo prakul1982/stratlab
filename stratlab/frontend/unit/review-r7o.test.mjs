@@ -30,7 +30,7 @@ test("Red flags and the breadth card open on the reader's own market (R7O-003, R
 });
 
 test("Admin: a running job says Running on Overview too, and only errors since the start count as since the restart (R7O-006)", async () => {
-  const { attention, errorCounts, lights } = await import("../src/pages/admin/attention.ts");
+  const { selfFixing, errorCounts, lights } = await import("../src/pages/admin/attention.ts");
   const job = { id: "breadth", name: "Market breadth", schedule: "x", last_run: new Date(Date.now() - 21 * 60_000).toISOString(), error: null, state: "ok", running: true, log: [], run: [] };
   const sv = { server: { kite_ready: true, kite_token_day: null, feed_connected: false, live_sessions: 0, india_sessions: 0,
     auto_login: { at: null, ok: true, message: "ok" }, auto_login_configured: true, billing_enabled: true, ai: [], research: { finnhub: true },
@@ -41,7 +41,8 @@ test("Admin: a running job says Running on Overview too, and only errors since t
   assert.match(lights(sv, [{ ...job, running_since: new Date(Date.now() - 12 * 60_000).toISOString() }]).feeds[0].detail, /^Running for 12 min · Last finished run 21 min ago$/);
   assert.deepEqual(errorCounts(sv.server), { since: 1, before: 1 });
   assert.deepEqual(errorCounts({ recent_errors: [{ at: "2026-09-25T10:00:00+05:30" }] }), { since: 0, before: 1 });   // an older server: never "since the restart"
-  assert.ok(attention(sv, null, [job]).some((a) => a.text === "1 server error since the last restart."));
+  // a developer's to look at, listed apart (changed on purpose, admin100, Release 93 rule: Needs your attention holds only the owner's manual fixes; the rest is listed apart as nothing to do)
+  assert.ok(selfFixing(sv, null, [job]).some((a) => a.text === "1 server error since the last restart."));
 });
 
 test("Plans: a price converted from the rupee charge is said as 'about', beside the rupee price; dollars stay as set (R7O-008, DK-001)", async () => {

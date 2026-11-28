@@ -22,6 +22,7 @@ type Provider = {
   result?: string | null;
   quota: { limited: boolean; reset_at: number | null; remaining: { requests?: number; tokens?: number; requests_reset?: number; tokens_reset?: number } | null; remaining_at: number | null };
   last_ok: number | null; last_error: string | null; last_used_model: string | null; pinned: string | null; pinned_by: "admin" | "railway" | null;
+  /** when its last failure was (older servers don't send it) */ last_error_at?: number | null;
   ranked_at: number | null; rank_error: string | null; discovered: number | null; skipped: Record<string, number>; probing: boolean;
   models: Model[]; blocked: string[]; blocked_info?: Record<string, { by?: string | null; at?: number | null }>;
   /** Claude only: its two keys side by side (owner, 12 Nov) */ keys?: ClaudeKey[] | null;
@@ -125,6 +126,15 @@ function Said({ text }: { text: string | null | undefined }) {
   return <span title={s.full}>{s.text}</span>;
 }
 const iso = (t: number | null | undefined) => (t ? new Date(t * 1000).toISOString() : null);
+
+/** A provider's last answer and last failure in one line (admin100: every source's row says both): the failure only when it is newer, or
+ * said as passed once an answer came after it. */
+export function answerTimes(ok: number | null | undefined, bad: number | null | undefined): string {
+  if (!ok && !bad) return "No answer or failure since the server started.";
+  const good = ok ? `Last answer ${ago(iso(ok)!)}` : "No answer yet";
+  if (!bad) return `${good}.`;
+  return bad > (ok ?? 0) ? `${good}; last failure ${ago(iso(bad)!)}, after it.` : `${good}; the last failure (${ago(iso(bad)!)}) was before it.`;
+}
 const secs = (ms: number | null) => (ms == null ? "–" : `${(ms / 1000).toFixed(1)} s`);
 function until(t: number | null) {
   if (!t) return "";
@@ -326,6 +336,7 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
           {p.probing ? "Measuring…" : "Re-rank"}</button>
       </div>
       <span className="k-small k-muted"><Said text={p.state_text} /></span>
+      {p.configured && <span className="k-small k-muted" data-testid={`ai-times-${p.name}`}>{answerTimes(p.last_ok, p.last_error_at)}</span>}
       {p.keys?.some((k) => k.slot === 2 && k.configured) && (
         <span className="k-small k-muted" aria-label={`${p.label} keys`}>{p.keys.filter((k) => k.configured).map(keyLine).join(" · ")}.</span>
       )}

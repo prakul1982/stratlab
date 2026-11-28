@@ -249,6 +249,30 @@ def send_telegram(chat_id: str, text: str) -> None:
 
 
 def send_email(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
+    """send_email_now, noted for Admin's Data sources card by how it went (admin100: the email service had no row with its last good
+    send or its last refusal). Nothing is noted while no service is set up: the Alert emails light says that."""
+    if not to:
+        return
+    service = email_service()
+    try:
+        send_email_now(to, subject, body, html, headers)
+    except Exception as e:
+        if service:
+            _mail_health(False, f"{service}: {str(e)[:160]}")
+        raise
+    if service:
+        _mail_health(True)
+
+
+def _mail_health(ok: bool, error: str | None = None) -> None:
+    try:
+        from . import source_health
+        source_health.record("mail", ok, error)
+    except Exception:
+        pass
+
+
+def send_email_now(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
     """Plain text, plus an HTML version and extra headers (like List-Unsubscribe) when given. Over HTTPS when a
     Brevo or Resend key is set (they work where outgoing mail ports are blocked), otherwise SMTP."""
     if not to:
