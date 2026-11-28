@@ -39,6 +39,7 @@ from . import autofix
 from . import product_analytics  # noqa: E402  (conv101: sign-up and checkout events from the server)
 from . import guest_try  # noqa: E402  (conv101: try one idea without signing in)
 from . import money_mf
+from . import offers  # noqa: E402  (price102: founding-member and student prices)
 from . import money_mf_nav
 from . import money_mf_ter
 from . import money_mf_behaviour
@@ -131,6 +132,7 @@ from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, CustomScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, TelegramCodeReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq, ViewAsReq)
+from .models import OfferPlansReq, StudentDecisionReq, StudentReq
 from .plans import holdings_limit
 from . import money_networth
 from .plans import networth_items
@@ -138,7 +140,7 @@ from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, ai_reads_per_day, bigger_plan, free_basic_until, screens as screens_limit
 from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live  # noqa: F401  (tests set main.payments_live)
-from .plans import limit_message as plan_limit_message, limit_of, not_on_plan, allows_for, free_change_notice
+from .plans import limit_message as plan_limit_message, limit_of, not_on_plan, allows_for, free_change_notice, deck_refusal, deck_rules
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -1014,6 +1016,74 @@ class CurrencyPlansReq(BaseModel):
     currencies: list[str] = Field(default_factory=lambda: ["USD", "EUR", "GBP"], max_length=5)
 
 
+@app.get("/admin/offers")
+def admin_offers(_=Depends(admin.admin_profile)):
+    """price102: the founding-member offer (its plans, deadline, paying customers against the 100, why it is closed) and the student
+    requests."""
+    return offers.admin_view()
+
+
+@app.put("/admin/offers/plans")
+def admin_offer_plans(req: OfferPlansReq, who=Depends(admin.admin_profile)):
+    """price102: the founding-member and student Razorpay plan IDs, pasted from the Razorpay dashboard (a blank one clears it)."""
+    try:
+        offers.save_plan_ids(req.model_dump(exclude_unset=True))
+    except ValueError as e:
+        err(400, "bad_plan_id", str(e))
+    log.info("admin %s: offer plans %s", who.get("email"), sorted(req.model_dump(exclude_unset=True)))
+    return offers.admin_view()
+
+
+@app.post("/admin/offers/razorpay-plans")
+def admin_make_offer_plans(who=Depends(admin.admin_profile)):
+    """price102: make the three offer plans at Razorpay with the app's own key, in rupees, every year (as "Make the currency plans" does),
+    and store their IDs. A plan already set is kept. Pressed by the owner in Admin → Prices; nothing calls it by itself."""
+    made, error, have = {}, None, offers.plan_ids()
+    for field in offers.FIELDS:
+        if have[field]:
+            continue
+        plan = field.split("_")[1]
+        kind = "founding member" if field.startswith("founding") else "student"
+        try:
+            got = billing.client().plan.create({
+                "period": "yearly", "interval": 1,
+                "item": {"name": f"StratLab {plan.title()} ({kind}, yearly)", "amount": offers.AMOUNT[field] * 100, "currency": "INR",
+                         "description": f"StratLab {plan.title()} plan, billed yearly, {kind} price"},
+                "notes": {"plan": plan, "period": "year", "currency": "INR", "offer": field.split("_")[0]}})
+            made[field] = got["id"]
+        except Exception as e:
+            error = public_text(str(e))[:200]
+            break
+    if made:
+        offers.save_plan_ids(made)
+    log.info("admin %s: offer plans made %s", who.get("email"), sorted(made))
+    return {"made": made, **({"error": error} if error else {}), **offers.admin_view()}
+
+
+@app.post("/admin/students/{user_id}")
+def admin_student_decision(user_id: str, req: StudentDecisionReq, who=Depends(admin.admin_profile)):
+    """price102: approve a student's request at the student price ("price") or with Basic for a year given by hand ("grant"), or turn it down."""
+    try:
+        row = offers.decide(user_id, req.decision, who.get("email"))
+    except LookupError as e:
+        err(404, "no_request", str(e))
+    except ValueError as e:
+        err(400, "bad_decision", str(e))
+    log.info("admin %s: student %s %s", who.get("email"), user_id, req.decision)
+    return {"request": row, "students": offers.requests()}
+
+
+@app.post("/student/apply")
+def student_apply(req: StudentReq, profile=Depends(current_profile)):
+    """price102 (GTM P3): ask for the student price of Basic (₹2,499 a year). The owner checks the college email or ID note by hand."""
+    throttle(profile, "student_apply", 3, 3600, "That's a lot of requests in an hour. Try again later.")
+    try:
+        offers.apply(profile, req.college, req.college_email, req.note)
+    except ValueError as e:
+        err(400, "bad_request", str(e))
+    return {"student": offers.student_public(profile["id"])}
+
+
 @app.post("/admin/prices/razorpay-plans")
 def admin_make_currency_plans(req: CurrencyPlansReq, who=Depends(admin.admin_profile)):
     """Make the Razorpay plans that let a currency be charged in that currency at its fixed price (the owner, 25 Oct:
@@ -1058,7 +1128,8 @@ def me(profile=Depends(current_profile)):
     uid = profile["id"]
     # the person's settings read below one by one, in one database call (R11E: 11 to 18 round trips on a cold /me)
     db.prefetch_settings([alerts.ALERT_OFF + uid, daily_report.PREFS + uid, holdings.KEY + uid, user_data.WATCHLIST + uid,
-                          push.KEYS, feedback.NOTE_KEY + uid, admin.TEST_ACCOUNTS])       # (conv101: the test accounts, for `internal`)
+                          push.KEYS, feedback.NOTE_KEY + uid, admin.TEST_ACCOUNTS,       # (conv101: the test accounts, for `internal`)
+                          offers.STUDENT_KEY + uid])                                     # (price102: the person's student request)
     try:
         lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
     except Exception as e:
@@ -1118,6 +1189,8 @@ def me(profile=Depends(current_profile)):
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "offer": offer_state(promo=not seen),
+        # price102: the person's student request and, once approved at it, the price their Basic yearly checkout is at
+        "student": None if seen else offers.student_public(uid),
         "onboarding": onboarding_of(profile["id"]),
         "notes": feedback.notes_for(uid),          # one-line notes for the person: a figure they reported was fixed
         "established": established_of(profile["id"]),
@@ -3435,8 +3508,11 @@ def check_deep(profile, kind: str, sym: str, region: str, mark: str | None = Non
                                        "deep dives", monthly=True, after="Companies you've already opened this month still open."), "deepdive_limit")
         # a deck is a company's or a theme's: its PDF and its PowerPoint count as one, so those still download (DP1-026); a company's and
         # a theme's decks share the month's count (EXPORT)
+        # price102: Free's one deck is a theme's PDF (plans.DECK_RULES), so its words name no PowerPoint
+        pdf_only = "pptx" not in deck_rules(profile)["formats"]
         upgrade(plan_limit_message(profile["_plan"], key, f"You've made {limit} slide deck{'' if limit == 1 else 's'} this month", "decks", monthly=True,
-                                   after="A company's or a theme's PDF and PowerPoint count as one deck, so a deck you've already made this "
+                                   after="The theme deck you've already made this month still downloads." if pdf_only else
+                                         "A company's or a theme's PDF and PowerPoint count as one deck, so a deck you've already made this "
                                          "month still downloads in either format."), "deck_limit")
     return mark
 
@@ -4701,6 +4777,9 @@ def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profil
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
     base = deep_base(sym, region)
+    # price102: Free's one deck a month is a theme's PDF; a company's deck is Basic's (plans.DECK_RULES), refused before anything counts
+    if why := deck_refusal(profile, "company", "pdf" if format == "pdf" else "pptx"):
+        upgrade(why, "deck_limit")
     marks = {k: check_deep(profile, k, sym, region) for k in ("deepdive", "deck")}   # both limits before either counts
     for k, mark in marks.items():
         if mark:
@@ -6775,7 +6854,14 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile), x_analytics: 
     throttle(profile, "subscribe", 5, 60, "That's a lot of checkouts in a minute. Try again in a minute.")
     throttle(profile, "subscribe_day", 20, 86400, "You've started a lot of checkouts today. Try again tomorrow.")
     try:
-        out = billing.create_subscription(profile, req.plan, req.period, req.currency)
+        # price102: the offer the page showed, when it said one (older pages send none and are charged what checkout charges)
+        extra = {"expect_offer": req.offer} if "offer" in req.model_fields_set else {}
+        out = billing.create_subscription(profile, req.plan, req.period, req.currency, **extra)
+    except offers.OfferChanged as e:
+        now = e.args[0] if e.args else None
+        err(409, "price_changed", "The price changed just now: " + ("the founding-member price has ended" if req.offer == "founding" and not now
+                                                                    else "this plan has another price for you now")
+            + ". Check the amount on the plan again, then subscribe.")
     except ValueError as e:
         err(503, "billing_offline", str(e))
     except rz_errors.BadRequestError as e:

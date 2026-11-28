@@ -165,7 +165,8 @@ def test_readme_plan_table_says_the_free_tier():
     assert _readme_row("AI strategy builds")[1] == f"{f['ai_builds_per_month']} a month"
     assert _readme_row("Instruments in a group test")[1:3] == [str(f["group_size"]), str(PLANS["basic"]["group_size"])]
     assert _readme_row("Company deep dives")[1] == f"{f['deepdives_per_month']} a month"
-    assert f["decks_per_month"] == 0 and _readme_row("Slide decks")[1].startswith("None (a sample deck")
+    # (changed on purpose, price102: one theme deck a month on Free, a PDF marked "Made with StratLab")
+    assert f["decks_per_month"] == 1 and _readme_row("Slide decks")[1].startswith("1 theme deck a month (PDF, marked")
     assert _readme_row("New themes mapped")[1:4] == [f"{f['themes_per_month']} a month", f"{PLANS['basic']['themes_per_month']} a month", "Unlimited"]
     assert _readme_row("Fresh AI reads a day")[1:4] == [str(f["ai_reads_per_day"]), str(PLANS["basic"]["ai_reads_per_day"]), "Unlimited"]
     assert _readme_row("AI answers in the search box")[1:4] == [str(PLANS[p]["search_ai_per_day"]) for p in ("free", "basic", "pro")]
@@ -182,10 +183,11 @@ def test_features_doc_and_cards_say_the_free_tier():
     assert f"{f['ai_reads_per_day']} fresh AI reads and {f['search_ai_per_day']} search answers a day, no refreshes" in doc
     assert f"{f['themes_per_month']} new theme, {f['deepdives_per_month']} deep dive, {f['backtests_per_month']} backtests and {f['ai_builds_per_month']} AI builds a month" in doc
     assert "sample deck" in doc and "14 days" in doc
-    # the cards (plans.ts KEY) never say "0 slide deck"; Free's card says its deep dive and daily reads from LIMITS
+    # the cards (plans.ts KEY) never say "0 slide deck"; Free's card says its deep dive, its theme deck and daily reads from LIMITS
+    # (changed on purpose, price102: the owner's GTM P2, one theme deck a month as a PDF on Free)
     key = _block("KEY")
     assert "slide deck a month" not in _plan(key, "free")
-    assert "${L.free.deepdives_per_month} company deep dive a month, ${L.free.ai_reads_per_day} fresh AI reads a day" in _plan(key, "free")
+    assert "${L.free.deepdives_per_month} deep dive and ${L.free.decks_per_month} theme deck (PDF) a month, ${L.free.ai_reads_per_day} AI reads a day" in _plan(key, "free")
     assert "${L.free.screens} saved screen," in _plan(key, "free")
 
 

@@ -717,7 +717,7 @@ def render(v: dict) -> str:
             + (f"; {v['prices_older']} compan{'y' if v['prices_older'] == 1 else 'ies'} at an earlier close"
                if v.get("prices") and v.get("prices_older") else "") + "</p>")
     # conv101 (P2, funnel 27 Nov: the only call to action sat 91% of the way down, under 180 company cards on a phone): what signing up opens and
-    # what the theme's deck holds, at the top. The deck itself is on Basic and Pro (plans.PLANS decks_per_month; Free gets the sample deck), so
+    # what the theme's deck holds, at the top. The deck itself: Free one theme PDF a month, marked; Basic and Pro more (plans.PLANS decks_per_month, DECK_RULES), so
     # the page offers the free sample to look at, never the theme's own deck as free
     n_layers = len(v["layers"])
     outline = ["Cover and the theme at a glance", f"The value chain: {n_layers} layer{'' if n_layers == 1 else 's'}, as a chart and a table"]
@@ -731,8 +731,8 @@ def render(v: dict) -> str:
              f'<a class="btn ghost" href="{e(site)}/sample-deck">Preview a theme deck, no sign-in</a></div>'
              f'<details class="how" data-deck-preview><summary>What the {e(label)} slide deck holds</summary><ol>'
              + "".join(f"<li>{e(x)}</li>" for x in outline)
-             + f'</ol><p class="muted small">Slide decks are on Basic and Pro. A free account can open the theme itself and download '
-             f'<a href="{e(site)}/sample-deck">the sample deck</a>.</p></details></section>')
+             + f'</ol><p class="muted small">A free account makes one theme deck a month as a PDF, marked "Made with StratLab"; Basic and Pro make '
+             f'more, as PDF or PowerPoint. Anyone can download <a href="{e(site)}/sample-deck">the sample deck</a>.</p></details></section>')
     if v.get("older"):             # r66e (LIVE12A-001): a theme shown from its read under an earlier version of the checks says so
         body += ('<p class="note" data-older>' + e(OLDER_LINE + (" " + RECHECKING_LINE if v.get("rechecking") else "")) + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown

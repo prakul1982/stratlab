@@ -1,4 +1,4 @@
-"""The sample deck (FREE-TIER, owner Nov: Free is a teaser). Free has no slide decks of its own (plans.PLANS decks_per_month 0), so the
+"""The sample deck (FREE-TIER, owner Nov: Free is a teaser). Free makes one theme deck a month as a marked PDF (price102), and the
 Plans page and the locked deck buttons offer one fixed theme deck that is already kept in the shared store (computed.py, kind
 "deck:theme", made by theme_routes.theme_dive_deck) for anyone, signed in or not, to download and see what a deck holds.
 
@@ -177,7 +177,7 @@ def page_html() -> tuple[str, int]:
                 theme_link = f'<p><a class="link" href="{e(public_themes.path(region, hit["slug"]))}">See the {e(public_themes.short_label(hit["label"]))} theme\'s companies on the site</a></p>'
         except Exception as ex:
             print("sample deck theme link failed:", str(ex)[:160])
-    basic, pro = plans.PLANS["basic"]["decks_per_month"], plans.PLANS["pro"]["decks_per_month"]
+    free, basic, pro = (plans.PLANS[p]["decks_per_month"] for p in ("free", "basic", "pro"))
     per = lambda n: "unlimited" if n is None else f"{n} a month"      # noqa: E731
     holds = "".join(f"<li>{e(x)}</li>" for x in WHAT_IT_HOLDS)
     body = (f'<h1>Sample theme deck <span class="muted">{e(theme)}</span></h1>'
@@ -185,8 +185,9 @@ def page_html() -> tuple[str, int]:
             f'<div class="ctas" data-sample-download><a class="btn" href="{e(pdf)}" download>Download the sample deck (PDF)</a>'
             f'<a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div>'
             f'<section class="card"><h2>What a theme deck holds</h2><ul class="plain">{holds}</ul></section>'
-            f'<section class="card"><h2>Decks of any theme or company</h2><p>Slide decks are on Basic ({e(per(basic))}) and Pro ({e(per(pro))}), '
-            f'as PowerPoint or PDF. Free accounts get this sample. <a class="link" href="{e(site)}/pricing">Plans and prices</a>.</p></section>'
+            f'<section class="card"><h2>Decks of any theme or company</h2><p>A free account makes {e(str(free))} theme deck a month as a PDF, each page marked '
+            f'"Made with StratLab · stratlab.studio". Basic makes {e(per(basic))} and Pro {e(per(pro))}, of a company or a theme, as PowerPoint or PDF. '
+            f'<a class="link" href="{e(site)}/pricing">Plans and prices</a>.</p></section>'
             + theme_link +
             '<p class="note">StratLab gives facts, not investment advice, and is not a SEBI-registered investment adviser or research analyst. '
             'Figures come from companies\' reported results and filings (NSE, BSE and the SEC) and market prices.</p>')

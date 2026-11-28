@@ -23,7 +23,7 @@ const L = await import("../src/lib/lockText.ts");
 test("Free's limits are the teaser ones; Basic and Pro are as before", () => {
   const f = plans.LIMITS.free;
   assert.deepEqual([f.backtests_per_month, f.ai_builds_per_month, f.group_size, f.deepdives_per_month, f.decks_per_month, f.stock_alerts, f.screens, f.themes_per_month, f.ai_reads_per_day],
-    [5, 5, 5, 1, 0, 3, 1, 1, 5]);
+    [5, 5, 5, 1, 1, 3, 1, 1, 5]);     // (changed on purpose, price102: the owner's GTM P2, one theme deck a month as a PDF on Free)
   const b = plans.LIMITS.basic, p = plans.LIMITS.pro;
   assert.deepEqual([b.backtests_per_month, b.deepdives_per_month, b.decks_per_month, b.stock_alerts, b.screens, b.ai_reads_per_day, b.themes_per_month], [100, 15, 5, 25, 10, 60, 10]);
   assert.deepEqual([p.backtests_per_month, p.decks_per_month, p.ai_reads_per_day, p.themes_per_month], [null, null, null, null]);
@@ -33,11 +33,12 @@ test("Free's limits are the teaser ones; Basic and Pro are as before", () => {
 test("the Free card says its numbers from LIMITS and never '0 slide deck'", () => {
   const card = plans.KEY.free.join(" | ");
   assert.match(card, /5 backtests and 5 AI strategy builds a month/);
-  assert.match(card, /1 company deep dive a month, 5 fresh AI reads a day/);
+  assert.match(card, /1 deep dive and 1 theme deck \(PDF\) a month, 5 AI reads a day/);     // (changed on purpose, price102)
   assert.match(card, /3 stock alerts, 1 saved screen, 30 holdings/);
   assert.doesNotMatch(card, /\b0 slide deck|1 saved screens/);
   const all = FEATURES.free.join(" | ");
-  assert.match(all, /1 company deep dive a month with the report card and checklist, 5 fresh AI reads a day, and the sample deck to download/);
+  // (changed on purpose, price102: Free's one theme deck a month, a marked PDF)
+  assert.match(all, /1 company deep dive a month with the report card and checklist, 1 theme deck \(PDF\) a month, 5 fresh AI reads a day, and the sample deck to download/);
   assert.match(all, /every theme already mapped \(and 1 new theme a month\)/);
   assert.match(all, /3 stock alerts and 1 saved screen;/);
   assert.match(FEATURES.basic.join(" "), /Money: tax report downloads, /);
@@ -72,7 +73,8 @@ test("the deck lock reads well for a limit of 0, as the server's words", () => {
     assert.match(src, /<SampleDeckLink className="btn quiet sm" label="Sample deck" \/>/);
   }
   // (updated on purpose, LIVE10A-003: a Free account in its grace is told it keeps its earlier decks, inside the same sentence)
-  assert.match(read("src/pages/PlansPage.tsx"), /Slide decks are on Basic and Pro\{deckGrace \? .*: ""\}\. <SampleDeckLink label="Download a sample deck" \/>/);
+  // (changed on purpose, price102: Free makes one theme deck a month as a marked PDF)
+  assert.match(read("src/pages/PlansPage.tsx"), /Free makes one theme deck a month as a PDF, marked "Made with StratLab"; Basic and Pro make more, of a company or a theme, as PDF or PowerPoint\{deckGrace \? .*: ""\}\. <SampleDeckLink label="Download a sample deck" \/>/);
   assert.match(read("src/components/SampleDeck.tsx"), /\/pricing\/sample-deck\/info/);
 });
 

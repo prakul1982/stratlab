@@ -108,7 +108,7 @@ test("the pages draw the switch, the card prices and the checkout from the same 
     assert.match(src, /usdPricesNote\(usd, period, usdOn\)/);
   }
   assert.match(plans, /const currency = checkoutCur\(cur, usd, period, usdOn\);/);
-  assert.match(plans, /body: \{ plan, period, currency \}/);
+  assert.match(plans, /body: \{ plan, period, currency, offer: offerFor\(plan, period\) \}/);     // (changed on purpose, price102)
   // the server answered in another currency than the page confirmed: no payment window
   assert.match(plans, /if \(d\.currency && d\.currency !== currency\) \{ notify\(/);
   assert.ok(plans.indexOf("d.currency !== currency") < plans.indexOf("await loadRazorpay()"));

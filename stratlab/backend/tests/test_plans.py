@@ -53,8 +53,8 @@ def test_each_plan_gets_what_pricing_lists_payments_or_not(monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "")
     info = plan_info("free")
     assert not has_indicators("free") and not has_fno("free") and not info["indicators"] and not any(info["features"].values())
-    # (updated on purpose, FREE-TIER: Free's 1 deep dive, no decks and 5 backtests)
-    assert deepdives("free") == 1 and decks("free") == 0 and info["deepdives_per_month"] == 1
+    # (updated on purpose, FREE-TIER: Free's 1 deep dive, no decks and 5 backtests; changed on purpose, price102: one theme PDF a month)
+    assert deepdives("free") == 1 and decks("free") == 1 and info["deepdives_per_month"] == 1
     assert info["backtests_per_month"] == 5
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_live_x")
     monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "secret")
@@ -64,7 +64,7 @@ def test_each_plan_gets_what_pricing_lists_payments_or_not(monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
     assert not has_indicators("free") and has_indicators("basic") and not has_fno("basic") and has_fno("pro")
-    assert (deepdives("free"), decks("free"), deepdives("basic"), decks("basic")) == (1, 0, 15, 5)   # (updated on purpose, FREE-TIER)
+    assert (deepdives("free"), decks("free"), deepdives("basic"), decks("basic")) == (1, 1, 15, 5)   # (updated on purpose, FREE-TIER; changed on purpose, price102)
 
 
 def test_a_trial_started_after_the_close_counts_from_the_next_trading_day():

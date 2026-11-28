@@ -9,7 +9,7 @@ import { Download } from "./Icons";
 import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
-import { deckLock } from "../lib/account";
+import { deckLock, pptxLock } from "../lib/account";
 import { countsLine, marginCell, quarterText } from "../lib/themeFormat";
 import { decksWord, useUsage } from "../lib/usage";
 import { SampleDeckLink } from "./SampleDeck";
@@ -201,7 +201,10 @@ export function memberRows(r: SectorAI, dive: Dive | null): MemberRow[] {
  * deep dive's deck builder and counted against the same monthly decks; and every company as a CSV. Each file goes through lib/share.ts. */
 export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
   const { fail, refreshMe, me } = useApp();
-  const locked = me?.usage?.deck_limit === 0;      // FREE-TIER: no decks on Free: a locked button and the sample deck
+  const locked = me?.usage?.deck_limit === 0;      // FREE-TIER: no decks on the plan: a locked button and the sample deck
+  // price102 (owner, 28 Nov, GTM P2): Free makes one theme deck a month as a PDF, marked "Made with StratLab"; PowerPoint is Basic's
+  const pptxOff = !(me?.plan_info?.deck_formats ?? ["pdf", "pptx"]).includes("pptx");
+  const marked = me?.plan_info?.deck_mark === true;
   // LIVE9A-003: the month's decks used and left beside the buttons (Basic showed no count), with a Free account's earlier count said as one
   const { usage } = useUsage();
   const decksNote = decksWord(me?.usage?.deck_used, me?.usage?.deck_limit, usage);
@@ -232,11 +235,12 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
       {locked ? <><Link className="btn quiet sm" to="/plans" title={deckLock()} data-testid="deck-locked">🔒 Slides: on Basic</Link>
         <SampleDeckLink className="btn quiet sm" label="Sample deck" /></> : <>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
-      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
+      {pptxOff ? <Link className="btn quiet sm" to="/plans" title={pptxLock()} data-testid="pptx-locked">🔒 PowerPoint: on Basic</Link>
+        : <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>}</>}
       <WorkbookButton region={region} theme={theme} dive={dive} locked={lock === "workbook"} onLock={() => setLock("workbook")} />
       {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} locked={lock === "csv"} onLock={() => setLock("csv")} />}
       {/* the month's count after the buttons, not between two of them (LIVE11A-014) */}
-      {decksNote && <span className="k-note" data-testid="decks-left">{decksNote}</span>}
+      {decksNote && <span className="k-note" data-testid="decks-left">{decksNote}{marked ? `; each page of a Free deck says "Made with StratLab · stratlab.studio" with this theme's link` : ""}</span>}
       {preparing && <Working small label={preparing} />}
       {spent && lock === "deck" && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">{spent}</PlanNote> <SampleDeckLink className="link" label="Sample deck" /></div>}
     </div>

@@ -24,7 +24,9 @@ export function PlanCompare({ plans, grace }: { plans?: Record<string, Partial<L
     if (kept) return `${v == null ? unlimitedLabel(p, k) : v.toLocaleString("en-IN")} (${changeCount(kept.before)} for you until ${graceDay})`;
     // Free's one session is a trial of 5 market days: said as a trial in the cell (DK-005)
     // FREE-TIER: no decks of its own on Free: the sample deck (Plans page) shows what one holds
-    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v === 0 && k === "decks_per_month" ? (sample === null ? "0" : "0 (a sample deck to download)") : v.toLocaleString("en-IN");
+    // price102 (GTM P2): Free's one deck a month is a theme's PDF, marked "Made with StratLab"
+    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v === 0 && k === "decks_per_month" ? (sample === null ? "0" : "0 (a sample deck to download)")
+      : p === "free" && k === "decks_per_month" ? `${v} (a theme's PDF, marked)` : v.toLocaleString("en-IN");
   };
   const shareCell = (p: PlanId) => {
     const v = (plans?.[p] as { share_links_per_month?: number | null } | undefined)?.share_links_per_month;

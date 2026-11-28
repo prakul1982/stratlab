@@ -88,8 +88,8 @@ export const TOURS: Record<TourId, IntroTour> = {
         body: "Type any Indian or US company by its name or symbol, or open one of the suggestions under the box.",
         act: { label: "Open one", kind: "follow", sel: SUGGESTED } },
       { id: "company", title: "One company, in depth", via: { page: "/research", sel: SUGGESTED }, here: COMPANY, at: ["main a.btn[href$='/deep']"], or: "main h1",
-        // FREE-TIER: 1 deep dive a month and no slide decks (the sample deck on Plans shows one)
-        free: `On Free: ${LIMITS.free.deepdives_per_month} deep dive a month; slide decks are on Basic.`,
+        // FREE-TIER: 1 deep dive a month; price102: one theme deck a month as a PDF, a company's deck on Basic
+        free: `On Free: ${LIMITS.free.deepdives_per_month} deep dive and ${LIMITS.free.decks_per_month} theme deck (PDF) a month; a company's slide deck is on Basic.`,
         body: "Its price chart, key numbers, results, who owns it, filings, deals and an AI read of the figures. Deep dive adds ten years of figures, the business and its plans read from the company's own documents, an investor checklist, and slides to download." },
       { id: "themes", title: "Themes, company by company", go: "/research/themes", at: ["main form"], or: "main h1",
         body: "Type a sector or a trend. StratLab lists the listed companies in it, places each in a layer of the value chain with that layer's figures, and turns the whole theme into slides (PowerPoint or PDF) to download." },

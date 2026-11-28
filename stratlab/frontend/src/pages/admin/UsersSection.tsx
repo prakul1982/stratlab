@@ -7,6 +7,7 @@ import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState
 import { endsAt } from "../../lib/offer";
 import { useAdmin, type Plan } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
+import { StudentRequests } from "./OffersPanel";
 import { PLAN_FILTERS, PLAN_NAME, PLAN_RANK, monthShort, planNote, untilWords, usersPath, type PlanFilter, type UserRow } from "./users";
 
 /** An address that breaks after its "@" when its column is narrow, never inside a word ("load59@example .com", admin90). */
@@ -290,6 +291,7 @@ export function UsersSection() {
       <TestAccountsCard />
 
       <InviteRewards onChanged={() => loadUsers(q, plan)} />
+      <StudentRequests />
 
       <Card label="Launch offer">
         {/* nothing until the overview is read: "Off … Start now" flashed for 2 s while the offer was on (R70-009) */}

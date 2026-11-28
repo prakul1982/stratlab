@@ -40,6 +40,10 @@ def plan_for(sub: dict) -> str | None:
     ids = {v: k for period in ("month", "year") for k, v in plan_ids(period).items() if v}
     if sub.get("plan_id") in ids:
         return ids[sub["plan_id"]]
+    from . import offers                                          # a founding-member or student plan (price102)
+    offer = offers.all_offer_ids().get(sub.get("plan_id"))
+    if offer:
+        return offer[0]
     other = pricing.all_plan_ids().get(sub.get("plan_id"))       # a plan in another currency
     return other[1] if other else None
 
@@ -98,6 +102,9 @@ def price_of(sub: dict) -> dict:
     plan, period, cur = notes.get("plan"), notes.get("period") or "month", notes.get("currency") or "INR"
     if plan not in ("basic", "pro"):
         return {"amount": None, "currency": None, "period": None}
+    from . import offers
+    if notes.get("offer") and offers.amount(notes.get("offer"), plan) is not None:     # price102: a founding or student price
+        return {"amount": float(offers.amount(notes["offer"], plan)), "currency": "INR", "period": "year", "offer": notes["offer"]}
     try:
         amount = (pricing.table().get(cur) or {}).get(plan + ("_year" if period == "year" else ""))
     except Exception:
@@ -187,6 +194,23 @@ def check_setup() -> dict:
             except Exception as e:
                 row["detail"] = f"Razorpay can't find this plan with these keys ({(str(e) or 'error')[:120]})"
         out["plans"].append(row)
+    from . import offers
+    for field, pid in offers.plan_ids().items():          # price102: the founding-member and student plans, at their amounts
+        if not pid:
+            continue
+        row = {"label": offers.LABEL[field], "id": pid, "ok": False, "detail": None}
+        try:
+            p = probe.plan.fetch(pid)
+            item = p.get("item") or {}
+            got, amount = item.get("currency") or "INR", (item.get("amount") or 0) / 100
+            yearly = p.get("period") == "yearly" and int(p.get("interval") or 1) == 1
+            same = got == "INR" and abs(amount - offers.AMOUNT[field]) < 0.005
+            row.update(ok=same and yearly, detail=f"{item.get('name', '')}: {got} {amount:,.0f} every {p.get('interval', 1)} {p.get('period', '')}".strip()
+                       + ("" if same else f". It should be ₹{offers.AMOUNT[field]:,} in rupees (GST included).")
+                       + ("" if yearly else ". It should renew every year."))
+        except Exception as e:
+            row["detail"] = f"Razorpay can't find this plan with these keys ({(str(e) or 'error')[:120]})"
+        out["plans"].append(row)
     for pid, (cur, plan, period) in sorted(pricing.all_plan_ids().items(), key=lambda kv: kv[1]):
         row = {"label": f"{plan.title()} {'yearly' if period == 'year' else 'monthly'} in {cur}", "id": pid, "ok": False, "detail": None}
         try:
@@ -208,16 +232,26 @@ def check_setup() -> dict:
     return out
 
 
-def create_subscription(profile: dict, plan: str, period: str = "month", currency: str = "INR") -> dict:
+_UNSET = object()
+
+
+def create_subscription(profile: dict, plan: str, period: str = "month", currency: str = "INR", expect_offer=_UNSET) -> dict:
     """Subscribe in the visitor's currency when that currency's Razorpay plan is set up, otherwise in rupees
-    (international cards are charged the rupee price and converted by the card)."""
+    (international cards are charged the rupee price and converted by the card). price102: a yearly plan charged in rupees is the
+    founding-member plan while that offer runs, or the student plan for an approved student (offers.checkout_plan); the plan's price is
+    then the subscription's for every renewal. `expect_offer`: the offer the page showed (None for the standard price); when checkout
+    would charge another, offers.OfferChanged is raised before anything is made at Razorpay."""
+    from . import offers
     if not enabled():
         raise ValueError("Payments aren't set up on the server yet.")
     own = pricing.plan_id(currency, plan, period)
-    if period == "year" and not yearly_enabled() and not own:
-        raise ValueError("Yearly billing isn't set up yet; pick monthly.")
     charged = currency if own else "INR"
-    plan_id = own or plan_ids(period)[plan]
+    offer, offer_plan = offers.checkout_plan(profile, plan, period, charged)
+    if expect_offer is not _UNSET and (expect_offer or None) != offer:
+        raise offers.OfferChanged(offer)
+    if period == "year" and not yearly_enabled() and not own and not offer_plan:
+        raise ValueError("Yearly billing isn't set up yet; pick monthly.")
+    plan_id = own or offer_plan or plan_ids(period)[plan]
     # the payment window opened again for the same plan and period: the checkout started before, still unpaid, is used again
     # rather than a new subscription made at Razorpay every time (DP2-042: five made in one sitting). Razorpay lets a
     # subscription that is still "created" be paid until it expires; any other state, or another plan, gets a new one.
@@ -228,12 +262,12 @@ def create_subscription(profile: dict, plan: str, period: str = "month", currenc
             "total_count": 10 if period == "year" else 120,   # up to 10 years of renewals; users can cancel any time
             "quantity": 1,
             "customer_notify": 1,
-            "notes": {"user_id": profile["id"], "plan": plan, "period": period, "currency": charged},
+            "notes": {"user_id": profile["id"], "plan": plan, "period": period, "currency": charged, **({"offer": offer} if offer else {})},
         })
         _drop_unpaid(profile.get("pending_subscription_id"), profile.get("razorpay_subscription_id"))
         db.update_profile(profile["id"], pending_subscription_id=sub["id"])
     return {"subscription_id": sub["id"], "key_id": settings.RAZORPAY_KEY_ID,
-            "email": profile.get("email"), "plan": plan, "currency": charged}
+            "email": profile.get("email"), "plan": plan, "currency": charged, "offer": offer}
 
 
 def _reusable(sid: str | None, plan_id: str, uid: str) -> dict | None:

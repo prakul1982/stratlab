@@ -1,7 +1,8 @@
 import { lazy, Suspense, use, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Link } from "react-router-dom";
 import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../lib/currency";
-import { cardPrice, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
+import { FOUNDING_YEARLY, foundingOf } from "../lib/founding";
+import { cardPrice, checkoutCur, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
 import { CurrencySwitch } from "../components/CurrencySwitch";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, YEARLY_SHORT, yearlySaving } from "../lib/offer";
 import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/planCore";   // the cards only: the tables (plans.ts) stay off the landing download
@@ -574,6 +575,8 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
  * owner 29 Oct: "₹699 a month (about $8)", whatever the browser's locale; LIVE1B-078 had an en-US browser read "$8" alone), with the
  * same lines as the Plans page. One look in every case: while the prices are coming the cards are drawn with their amounts held back
  * (so nothing flashes and then changes, and nothing moves), and if they can't be read the cards show the rupee prices with a line saying so. */
+const DECK_LINE = 'Free makes one theme deck a month as a PDF, marked "Made with StratLab"; Basic and Pro make more, as PDF or PowerPoint.';
+
 function Pricing({ top }: { top?: { heading: string; error: string | null } } = {}) {
   const { pricing, status, rate } = usePricing();
   const loading = status === "loading";
@@ -594,6 +597,9 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
     year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") },
     gst });
   const showYear = !!(offer?.yearly && offer.payments);
+  // price102 (owner, 28 Nov, GTM P1): the founding-member yearly prices while the server says they run, on the yearly cards charged in rupees
+  const founding = offer?.payments ? foundingOf(offer) : null;
+  const foundingOn = !!founding && period === "year" && checkoutCur(cur, usd, "year", usdOn) === "INR";
   // /plans on its own (`top`): the page's one heading and one short line, so the cards are in view on a desktop screen (DK-004: an h1,
   // an eyebrow and a second heading put them 620 px down). The launch offer's longer lede moves under the cards.
   const line = intro.title === "Plans" ? intro.lede : intro.title;
@@ -617,23 +623,26 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         <div className="lp-period">
           {showYear && !loading ? (
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
-              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL, short: YEARLY_SHORT }]} />
+              options={[{ value: "month", label: "Monthly" }, { value: "year", label: founding ? FOUNDING_YEARLY : YEARLY_LABEL, short: YEARLY_SHORT }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
           {/* LIVE18B-003: the currency switch's place is held while the prices come (on a phone it is a second row: the cards moved 62px) */}
           {loading && <span className="lp-skel lp-skel-cur" />}
           {!loading && usd && <CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} />}
         </div>
+        {founding && !loading && <p className="small lp-center lp-founding" data-testid="founding-banner">{founding.line}</p>}
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
             const year = showYear && period === "year" && p !== "free";
             const act = landingAction(offer, p);
             const per = showYear && period === "year" ? "year" : "month";     // Free's $0 follows the switch too (R17-001)
             // the card's price in the currency shown, and beside it the dollar figure of a rupee price or the rupee charge of a dollar one
-            const inr = PRICE[p][year ? 1 : 0];
+            const offerPrice = foundingOn && year ? founding!.prices[p] : null;
+            const inr = offerPrice ?? PRICE[p][year ? 1 : 0];
             const price = p === "free" ? null : cardPrice({ plan: p, period: year ? "year" : "month", cur, inr, usd, checkoutOn: usdOn, aboutUsd: (v) => aboutUsd(v, rate) });
-            const about = price?.about ?? null;
+            // price102: beside an offer's rupee price, its own dollar figure, not the standard plan's US price
+            const about = offerPrice != null && !price?.usdShown ? aboutUsd(offerPrice, rate) : price?.about ?? null;
             // a year's saving in the currency shown (in rupees with its dollar figure)
-            const save = p !== "free" && year ? (price?.usdShown && usd ? yearlySaving(usd[p], usd[`${p}_year`]) : yearlySaving(PRICE[p][0], PRICE[p][1])) : null;
+            const save = p !== "free" && year ? (price?.usdShown && usd ? yearlySaving(usd[p], usd[`${p}_year`]) : yearlySaving(PRICE[p][0], inr)) : null;
             const saveText = save == null ? "" : price?.usdShown ? dollarText(save) : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
@@ -644,7 +653,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 <div className="stack g2">
                   {loading ? <span className={`lp-skel lp-skel-amount${p === "free" ? " lp-skel-amount-one" : ""}`} role="img" aria-label="Loading the price" /> : (
                     <div className="lp-amount-row">
-                      <div className="serif lp-amount">{price ? price.shown : freePrice(cur, usd)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
+                      <div className="serif lp-amount">{price ? price.shown : freePrice(cur, usd)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span>
+                        {offerPrice != null && !price?.usdShown && <s className="small muted lp-was" data-testid={`was-${p}`}>{rupees(p, true)}</s>}</div>
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
                     </div>
                   )}
@@ -655,6 +665,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                     <span className="small lp-price-note">
                       {gst && price?.chargedCur !== "USD" ? "incl. GST" : ""}
                       {save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
+                      {offerPrice != null && <span className="lp-offer-note" data-testid={`founding-${p}`}>{founding!.note[p]}</span>}
                     </span>
                   )}
                 </div>
@@ -681,11 +692,12 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         {top && <p className="small muted lp-center" data-testid="plans-trust">{TRUST_LINE} {DATA_LINE}</p>}
         {/* LIVE14B-007 / LIVE14A-012: the table promises Free "a sample deck to download": the signed-out /plans gives the link too */}
         {/* conv101: on the landing page too, with the sample deck's own page (its link previews when shared) */}
-        {(top || !phone) && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}
+        {/* price102 (GTM P2): Free makes one theme deck a month, a PDF marked "Made with StratLab"; on a phone on the landing page it sits in the prices' fold (live5) */}
+        {(top || !phone) && <p className="small muted" data-testid="sample-deck-line">{DECK_LINE} <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
         {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p>
           {/* on the landing page on a phone the sample deck goes with the prices' small print, one fold away (live5) */}
-          {!top && phone && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}</PhoneFold>}
+          {!top && phone && <p className="small muted" data-testid="sample-deck-line">{DECK_LINE} <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>}</PhoneFold>}
       </div>
     </section>
   );

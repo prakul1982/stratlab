@@ -154,10 +154,9 @@ test("account: Free's limits match the Plans page, and deleting all your data as
     const row = plan.locator(".k-rows > div", { hasText: label });
     await expect(row).toContainText(new RegExp(`(of ${n}$|Free has ${n} a month)`));
   }
-  // (updated on purpose, FREE-TIER: Free has no decks of its own, so the row says where they are, never "0 of 0")
-  expect(plans.free.decks_per_month).toBe(0);
-  await expect(plan.locator(".k-rows > div", { hasText: "Slide decks this month" }))
-    .toContainText(`None on Free: on Basic, ${plans.basic.decks_per_month} a month. The sample deck is on Plans.`);
+  // (changed on purpose, price102: the owner's GTM P2, Free makes one theme deck a month as a PDF, so the row counts it like the others)
+  expect(plans.free.decks_per_month).toBe(1);
+  await expect(plan.locator(".k-rows > div", { hasText: "Slide decks this month" })).toContainText(new RegExp(`(of ${plans.free.decks_per_month}$|Free has ${plans.free.decks_per_month} a month)`));
   await expect(plan.locator(".k-rows > div", { hasText: "New themes this month" })).toContainText(new RegExp(`of ${plans.free.themes_per_month}$`));
   // "Contact us" once on the page
   await expect(main.getByRole("link", { name: "Contact us" })).toHaveCount(1);

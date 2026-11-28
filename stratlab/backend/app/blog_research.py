@@ -698,7 +698,7 @@ def theme_page_path(theme: str, region: str) -> str:
 
 
 def app_theme_path(theme: str, region: str) -> str:
-    """The theme in the app, where its deck is made (a sign-in; decks on Basic and Pro)."""
+    """The theme in the app, where its deck is made (a sign-in; one theme deck a month as a PDF on Free, more on Basic and Pro)."""
     from urllib.parse import quote
     return f"/research/themes?q={quote(str(theme or ''))}&region={region}"
 
@@ -970,7 +970,7 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
         {"t": "h2", "text": "The theme and its deck"},
         {"t": "p", "text": ["Every company in the theme by layer, with what each one's place rests on: the ", {"a": f"{sector} theme page", "href": page},
                             ". The full theme, with every company's figures, the tailwinds and risks with their sources and the slide deck these figures "
-                            "are from, is ", {"a": "the theme in StratLab", "href": app}, " (a sign-in; decks on Basic and Pro, a sample deck on ",
+                            "are from, is ", {"a": "the theme in StratLab", "href": app}, " (a sign-in; one theme deck a month as a PDF on Free, more on Basic and Pro; a sample deck on ",
                             {"a": "the plans page", "href": "/plans"}, ")."]},
         {"t": "details", "title": "How these figures were worked out", "items": [x for x in [
             src.get("basis") or "",

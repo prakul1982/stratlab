@@ -2699,6 +2699,8 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 }
 .k-plan-price { font-family: var(--serif); font-size: 44px; letter-spacing: -.02em; line-height: 1.1; }
 .k-plan-price span { font-family: var(--sans); font-size: var(--t-label); color: var(--muted); letter-spacing: 0; }
+/* price102: the yearly price an offer replaces, struck through beside the offer's price */
+.k-plan-price .k-plan-was { font-family: var(--sans); font-size: var(--t-body, 15px); color: var(--muted); margin-left: 8px; letter-spacing: 0; text-decoration-thickness: 1.5px; }
 .k-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); flex: 1; font-size: var(--t-label); }
 .k-plan-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--s2); align-items: start; }
 .k-plan-list li > span { color: var(--blue); font-weight: 700; }
@@ -2985,6 +2987,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 }
 .lp-price-note { display: block; line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
+/* price102: the founding-member prices on the landing page's plans: the line above the cards, the struck yearly price, the card's note */
+.lp-founding { max-width: 760px; margin-inline: auto; color: var(--ink-2); }
+.lp-was { font-family: var(--sans); margin-left: 8px; }
+.lp-offer-note { display: block; color: var(--muted); font-weight: 400; }
 .lp-price > .btn:disabled { opacity: .6; }
 
 /* real verdicts on the landing page */

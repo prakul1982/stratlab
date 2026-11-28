@@ -114,7 +114,8 @@ test("DK-001: a card charged in rupees leads with the rupee price on the landing
   // both pages draw the card from one function (lib/priceCurrency cardPrice), whose rupee price leads with "about $" beside it
   assert.match(login, /<div className="serif lp-amount">\{price \? price\.shown : freePrice\(cur, usd\)\}/);
   assert.match(login, /cardPrice\(\{ plan: p, period: year \? "year" : "month", cur, inr, usd, checkoutOn: usdOn, aboutUsd: \(v\) => aboutUsd\(v, rate\) \}\)/);
-  assert.match(plans, /cardPrice\(\{ plan: p, period: per === "year" \? "year" : "month", cur, inr: rupees\(p, per\), usd, checkoutOn: usdOn, aboutUsd: \(v\) => aboutUsd\(v, rate\) \}\)/);
+  // (changed on purpose, price102: the rupee amount is an offer's price when one applies, the founding or the student one)
+  assert.match(plans, /cardPrice\(\{ plan: p, period: per === "year" \? "year" : "month", cur, inr: charge\(p, per\), usd, checkoutOn: usdOn, aboutUsd: \(v\) => aboutUsd\(v, rate\) \}\)/);
   // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when the table has one, not the rupees converted)
   assert.match(read("src/lib/priceCurrency.ts"), /if \(cur !== "USD" \|\| !usd\) return \{ shown: rupeeText\(inr\), about: inr > 0 \? \(usd \? usPriceText\(amount\) : o\.aboutUsd\(inr\)\) : null/);
 });
