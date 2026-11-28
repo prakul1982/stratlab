@@ -81,9 +81,11 @@ export function countOf(used: number, limit: number): string {
 /** The deep dive's line under its buttons: "Companies opened this month: 2 of 2 (limit reached). Decks: 1 of 1 (limit
  * reached). Opening a company again this month doesn't count." (R22-002). A deck is a company's: its PDF and its PowerPoint
  * count as one, so the line says so (DP1-026). */
-export function deepDiveLimitLine(deepdiveUsed: number, deepdiveLimit: number, deckUsed: number, deckLimit: number | null | undefined): string {
-  // FREE-TIER: a plan with no decks (Free) says where they are, never "Decks: 0 of 0 (limit reached)"
-  const decks = deckLimit === 0 ? ` ${deckLock()}` : deckLimit != null ? ` Decks: ${countOf(deckUsed, deckLimit)}; a company's or a theme's PDF and PowerPoint are one deck.` : "";
+export function deepDiveLimitLine(deepdiveUsed: number, deepdiveLimit: number, deckUsed: number, deckLimit: number | null | undefined, companyDecks = true): string {
+  // FREE-TIER: a plan with no decks says where they are, never "Decks: 0 of 0 (limit reached)"; price102: Free's one deck is a theme's PDF, so
+  // the deep dive (a company's) says where a company's deck is
+  const decks = deckLimit === 0 ? ` ${deckLock()}` : !companyDecks ? ` ${companyDeckLock()}`
+    : deckLimit != null ? ` Decks: ${countOf(deckUsed, deckLimit)}; a company's or a theme's PDF and PowerPoint are one deck.` : "";
   return `Companies opened this month: ${countOf(deepdiveUsed, deepdiveLimit)}.${decks} Opening a company again this month doesn't count.`;
 }
 
@@ -91,6 +93,15 @@ export function deepDiveLimitLine(deepdiveUsed: number, deepdiveLimit: number, d
  * month. The sample deck on the Plans page shows what one holds." */
 export function deckLock(next = "Basic", cap: number | null = 5): string {
   return `Slide decks are on ${next}${cap == null ? ", with no limit" : `: ${cap} a month`}. The sample deck on the Plans page shows what one holds.`;
+}
+
+/** price102 (owner, 28 Nov, GTM P2): Free makes one theme deck a month as a PDF; a company's deck and PowerPoint are Basic's, as the server
+ * says it (plans.deck_refusal). */
+export function companyDeckLock(next = "Basic", cap: number | null = 5, free = 1): string {
+  return `A company's slide deck is on ${next}${cap == null ? ", with no limit" : `: ${cap} a month`}, as PDF or PowerPoint. Free makes ${free} theme deck a month, as a PDF.`;
+}
+export function pptxLock(next = "Basic", cap: number | null = 5, free = 1): string {
+  return `PowerPoint decks are on ${next}${cap == null ? ", with no limit" : `: ${cap} a month`}. Free makes ${free} theme deck a month as a PDF, each page marked "Made with StratLab · stratlab.studio" with the theme's link.`;
 }
 
 /** AI builds this month: "5 of 100", or on a plan with no monthly limit "5 (unlimited; up to 200 a day)", the daily safety cap

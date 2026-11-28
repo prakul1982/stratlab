@@ -8,6 +8,7 @@ import { invoiceWarning, withUsd } from "./attention";
 import { usePricing } from "../../lib/currency";
 import { InvoiceAdminPanel } from "./InvoiceAdminPanel";
 import { PricesPanel } from "./PricesPanel";
+import { OffersPanel } from "./OffersPanel";
 import { subsSummary } from "./subs";
 
 interface BillingCheck {
@@ -126,6 +127,7 @@ export function MoneySection() {
           </div>
         )}
       </Card>
+      <OffersPanel />
       <PricesPanel />
       <InvoiceAdminPanel />
     </>

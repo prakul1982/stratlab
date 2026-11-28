@@ -36,7 +36,8 @@ test("LIVE10A-003: a deck press over the month's count shows the plan line besid
   assert.match(cmp, /\$\{changeCount\(kept\.before\)\} for you until \$\{graceDay\}/);
   const plans = read("src/pages/PlansPage.tsx");
   assert.match(plans, /grace=\{me\?\.free_change\}/);
-  assert.match(plans, /Slide decks are on Basic and Pro\{deckGrace \? ` \(your Free account keeps \$\{deckGrace\}\)` : ""\}/);
+  // (changed on purpose, price102: Free makes one theme deck a month as a marked PDF)
+  assert.match(plans, /as PDF or PowerPoint\{deckGrace \? ` \(your Free account keeps \$\{deckGrace\}\)` : ""\}/);
 });
 
 test("LIVE10A-008: a dive being read again behind the page is asked for quietly, and the price bar shows for the first read only", () => {

@@ -15,6 +15,8 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { SampleDeckLink, SampleDeckPageLink } from "../components/SampleDeck";
 import { PlanInterestButton } from "../components/PlanInterest";
+import { StudentApply } from "../components/StudentApply";
+import { foundingCardNote, foundingLine, foundingOf } from "../lib/founding";
 import { track } from "../lib/analytics";
 import { LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { KEY } from "../lib/planKeys";
@@ -52,9 +54,23 @@ export function PlansPage() {
     const sp = me?.plans?.[p];
     return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
   };
+  // price102 (owner, 28 Nov, GTM P1/P3): the founding-member yearly prices while the server says they run, and an approved student's Basic
+  // yearly price. Both are yearly and charged in rupees only, as checkout charges them (backend offers.checkout_plan)
+  const founding = foundingOf(offer);
+  const studentPrice = me?.student?.price ?? null;
+  const offerFor = (p: PlanId, per: string): "founding" | "student" | null => {
+    if (p === "free" || per !== "year" || checkoutCur(cur, usd, "year", usdOn) !== "INR") return null;
+    if (p === "basic" && studentPrice) return "student";
+    return founding ? "founding" : null;
+  };
+  /** What the card is charged in rupees: the offer's price when one applies, else the plan's. */
+  const charge = (p: PlanId, per: string) => {
+    const o = offerFor(p, per);
+    return o === "student" && studentPrice ? studentPrice : o === "founding" && founding && p !== "free" ? founding.prices[p] : rupees(p, per);
+  };
   /** A paid card's price in the currency shown (lib/priceCurrency): the main price, the line beside it, and what the card is charged. */
   const paidPrice = (p: "basic" | "pro", per: string) =>
-    cardPrice({ plan: p, period: per === "year" ? "year" : "month", cur, inr: rupees(p, per), usd, checkoutOn: usdOn, aboutUsd: (v) => aboutUsd(v, rate) });
+    cardPrice({ plan: p, period: per === "year" ? "year" : "month", cur, inr: charge(p, per), usd, checkoutOn: usdOn, aboutUsd: (v) => aboutUsd(v, rate) });
   /** A card's price: Free is "₹0" (or "$0"), with nothing beside it. */
   const priceOf = (p: PlanId, per: string) => {
     if (p === "free") return { shown: freePrice(cur, usd), inr: false, about: null };
@@ -64,7 +80,7 @@ export function PlansPage() {
   /** What a year saves against twelve months, in the currency shown (rupees with their dollar figure). */
   const savingOf = (p: "basic" | "pro") => {
     if (paidPrice(p, "year").usdShown && usd) { const s = yearlySaving(usd[p], usd[`${p}_year`]); return s == null ? null : dollarText(s); }
-    const save = yearlySaving(rupees(p, "month"), rupees(p, "year"));
+    const save = yearlySaving(rupees(p, "month"), charge(p, "year"));
     return save == null ? null : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
   };
 
@@ -74,7 +90,8 @@ export function PlansPage() {
     try {
       // the rupee plan, as before, unless dollar checkout is switched on and the server has the USD plans for this period (lib/priceCurrency)
       const currency = checkoutCur(cur, usd, period, usdOn);
-      const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency } });
+      // price102: the offer this page showed (null: the standard price); the server refuses with 409 when checkout would charge another
+      const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency, offer: offerFor(plan, period) } });
       // the server charges another currency than the one this page confirmed (its USD plans changed meanwhile): no payment window
       // with an amount the page didn't show
       if (d.currency && d.currency !== currency) { notify("The prices changed just now. Check the amount on the plan again, then subscribe."); setBusy(null); return; }
@@ -96,7 +113,11 @@ export function PlansPage() {
       });
       rz.on("payment.failed", (r: { error: { description: string } }) => { told("failed"); notify(`Payment failed: ${r.error.description}`); setBusy(null); });
       rz.open();
-    } catch (e) { fail(e); setBusy(null); }
+    } catch (e) {
+      // price102: the founding price ended (or another price applies now) between this page and the checkout: say so, and show the new price
+      if ((e as { status?: number })?.status === 409) { notify((e as Error).message); void refreshMe(); setBusy(null); return; }
+      fail(e); setBusy(null);
+    }
   };
 
   const [switching, setSwitching] = useState<"basic" | "pro" | null>(null);
@@ -115,11 +136,13 @@ export function PlansPage() {
   const chargeWords = (p: "basic" | "pro") => {
     const c = paidPrice(p, period);
     if (c.chargedCur === "USD") return `${c.charged}, every ${period}`;
-    return `${rupeeCharge(rupees(p, period), gst)} (${c.usdShown ? `shown as ${c.shown}; charged in rupees` : aboutUsd(rupees(p, period), rate)}), every ${period}`;
+    const o = offerFor(p, period);
+    return `${rupeeCharge(charge(p, period), gst)} (${c.usdShown ? `shown as ${c.shown}; charged in rupees` : aboutUsd(charge(p, period), rate)}), every ${period}`
+      + (o === "founding" ? ", at the founding-member price for as long as you renew" : o === "student" ? ", at the student price" : "");
   };
 
   /** The amount charged, alone, for the dialog's button (LIVE1B-079: "Continue to payment" did not say what it would charge). */
-  const chargeAmount = (p: "basic" | "pro") => { const c = paidPrice(p, period); return c.chargedCur === "USD" ? c.charged : rupeeCharge(rupees(p, period), gst); };
+  const chargeAmount = (p: "basic" | "pro") => { const c = paidPrice(p, period); return c.chargedCur === "USD" ? c.charged : rupeeCharge(charge(p, period), gst); };
 
   /** A card's one button. A plan you have, or one a higher plan you have includes, says so on a quiet button that can't be pressed;
    * the others buy it. */
@@ -164,6 +187,12 @@ export function PlansPage() {
           {(usd || pricingStatus === "loading") && <FieldGroup label="Prices in"><CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} /></FieldGroup>}
         </FormGrid></div>
       )}
+      {/* price102 (GTM P1): the founding-member prices, said once above the cards with the deadline and the seats; the yearly cards show them */}
+      {founding && billing && (
+        <div data-testid="founding-banner"><Notice label="Founding-member prices" actions={!yearly && yearlyOk ? <button type="button" className="btn sm" onClick={() => setYearly(true)}>See yearly prices</button> : undefined}>
+          {foundingLine(founding)}
+        </Notice></div>
+      )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
       <div className="k-plans">
         {(["free", "basic", "pro"] as const).map((p) => {
@@ -176,8 +205,12 @@ export function PlansPage() {
                 <span className="k-small k-muted">{WHO[p]}</span>
               </div>
               <div className="k-stack tight">
-                <div className="k-plan-price">{price.shown}<span>{p === "free" ? " always" : ` / ${period}`}</span></div>
+                <div className="k-plan-price">{price.shown}<span>{p === "free" ? " always" : ` / ${period}`}</span>
+                  {/* price102: the yearly price it replaces, struck through, beside an offer's price shown in rupees */}
+                  {offerFor(p, period) && !paidPrice(p as "basic" | "pro", period).usdShown && <s className="k-plan-was" data-testid={`was-${p}`} aria-label={`was ₹${rupees(p, period).toLocaleString("en-IN")}`}>₹{rupees(p, period).toLocaleString("en-IN")}</s>}</div>
                 {price.about && <span className="k-note" data-testid={`about-${p}`}>{price.about}</span>}
+                {offerFor(p, period) === "founding" && founding && p !== "free" && <span className="k-note k-plan-offer" data-testid={`founding-${p}`}>{foundingCardNote(founding, p)}</span>}
+                {offerFor(p, period) === "student" && <span className="k-note k-plan-offer" data-testid={`student-${p}`}>Your approved student price, yearly.</span>}
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
               </div>
@@ -197,7 +230,9 @@ export function PlansPage() {
       </div>
       {/* FREE-TIER: Free has no slide decks of its own: one real theme deck to download, so a Free reader or a visitor sees what one holds */}
       <p className="k-small k-muted" data-testid="plans-trust">{TRUST_LINE} {DATA_LINE}</p>
-      <p className="k-small k-muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro{deckGrace ? ` (your Free account keeps ${deckGrace})` : ""}. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>
+      {/* price102 (GTM P2): Free makes one theme deck a month as a marked PDF; the sample deck shows what one holds */}
+      <p className="k-small k-muted" data-testid="sample-deck-line">Free makes one theme deck a month as a PDF, marked "Made with StratLab"; Basic and Pro make more, of a company or a theme, as PDF or PowerPoint{deckGrace ? ` (your Free account keeps ${deckGrace})` : ""}. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>
+      {billing && <StudentApply />}
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}

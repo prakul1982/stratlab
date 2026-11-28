@@ -15,8 +15,8 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Paper trading trial: ${L.free.live_limit} strategy on 1 stock for 5 market days from your first start, then Basic or Pro`,
     "Options builder with Greeks and breakevens after charges; on every company page, red flags and its latest 3 customer and supplier links",
     `Today's derivatives positioning, F&O contract changes, the top 5 market movers and the first 3 results of a filings search, and a journal of your last ${L.free.journal_trades} trades`,
-    // a deep dive on Free has the report card and checklist too (DP1-021); FREE-TIER: no decks of its own, the sample deck instead; reads already written never count
-    `${L.free.deepdives_per_month} company deep dive a month with the report card and checklist, ${L.free.ai_reads_per_day} fresh AI reads a day, and the sample deck to download; ${SHARE_LINKS.free} share link`,
+    // a deep dive on Free has the report card and checklist too (DP1-021); price102: one theme deck a month as a PDF, marked; reads already written never count
+    `${L.free.deepdives_per_month} company deep dive a month with the report card and checklist, ${L.free.decks_per_month} theme deck (PDF) a month, ${L.free.ai_reads_per_day} fresh AI reads a day, and the sample deck to download; ${SHARE_LINKS.free} share link`,
     `Price charts, screens, every theme already mapped (and ${L.free.themes_per_month} new theme a month), the heatmap, sector rotation, today's market breadth and ETF prices against NAV`,
     `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screen; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries; Market Watch with ${L.free.watchlists} list of ${L.free.watchlist_symbols} symbols and drawings kept on ${L.free.chart_saves} charts`,
     // the same words as the table's row (DP2-010: "a weekly My Stocks email" here, "Weekly Market Brief and My Stocks" there)

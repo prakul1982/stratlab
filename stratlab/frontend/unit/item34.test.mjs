@@ -50,7 +50,7 @@ test("no browser locale picks the currency; the old saved choice stays cleared; 
   assert.doesNotMatch(cur, /resolvedOptions\(\)\.timeZone|navigator\.languages/);
   assert.match(cur, /try \{ localStorage\.removeItem\(KEY\); \} catch/);
   const plans = read("src/pages/PlansPage.tsx"), land = read("src/pages/Login.tsx");
-  assert.match(plans, /body: \{ plan, period, currency \}/);
+  assert.match(plans, /body: \{ plan, period, currency, offer: offerFor\(plan, period\) \}/);     // (changed on purpose, price102: the offer the page showed)
   assert.match(plans, /const currency = checkoutCur\(cur, usd, period, usdOn\);/);
   assert.match(plans, /\{price\.about && <span className="k-note" data-testid=\{`about-\$\{p\}`\}>\{price\.about\}<\/span>\}/);
   assert.match(plans, /<li data-testid="usd-note">\{cur === "USD" && usd \? usdPricesNote\(usd, period, usdOn\) : usdNote\(rate, pricing\?\.usd_inr\?\.fallback, usd\)\}<\/li>/);      // one line of the small print (R11) (updated on purpose: LIVE10B-001 names the US prices)

@@ -183,10 +183,11 @@ def test_features_doc_and_cards_say_the_free_tier():
     assert f"{f['ai_reads_per_day']} fresh AI reads and {f['search_ai_per_day']} search answers a day, no refreshes" in doc
     assert f"{f['themes_per_month']} new theme, {f['deepdives_per_month']} deep dive, {f['backtests_per_month']} backtests and {f['ai_builds_per_month']} AI builds a month" in doc
     assert "sample deck" in doc and "14 days" in doc
-    # the cards (plans.ts KEY) never say "0 slide deck"; Free's card says its deep dive and daily reads from LIMITS
+    # the cards (plans.ts KEY) never say "0 slide deck"; Free's card says its deep dive, its theme deck and daily reads from LIMITS
+    # (changed on purpose, price102: the owner's GTM P2, one theme deck a month as a PDF on Free)
     key = _block("KEY")
     assert "slide deck a month" not in _plan(key, "free")
-    assert "${L.free.deepdives_per_month} company deep dive a month, ${L.free.ai_reads_per_day} fresh AI reads a day" in _plan(key, "free")
+    assert "${L.free.deepdives_per_month} deep dive and ${L.free.decks_per_month} theme deck (PDF) a month, ${L.free.ai_reads_per_day} AI reads a day" in _plan(key, "free")
     assert "${L.free.screens} saved screen," in _plan(key, "free")
 
 

@@ -128,6 +128,8 @@ export interface Notebook extends NotebookItem {
 
 export interface PlanInfo {
   name: string; price: number; backtests_per_month: number | null; ai_builds_per_month: number | null;
+  /** price102: the decks this account makes: Free a theme's PDF, marked "Made with StratLab" (plans.DECK_RULES) */
+  deck_kinds?: ("company" | "theme")[]; deck_formats?: ("pdf" | "pptx")[]; deck_mark?: boolean;
   live_limit: number; live_trial_days: number | null;
   /** every indicator beyond price, SMA, EMA and RSI (Basic and up) */
   indicators: boolean;
@@ -185,6 +187,8 @@ export interface Me {
     companies?: "all" | "mine" | null };
   /** What anyone can buy and use today: the same answer /pricing gives the landing page (lib/offer.ts words it). */
   offer?: Offer;
+  /** price102: the person's student request (null: none sent) */
+  student?: StudentState | null;
   /** The first-run guide, kept on the account: shown once per person, not once per device. */
   onboarding?: { welcome: string | null; tour: "done" | "skipped" | null };
   /** One-line notes for the person not yet shown: a figure they reported was fixed (backend feedback.notes_for). */
@@ -199,7 +203,15 @@ export interface Me {
 export interface Offer {
   mode: "early" | "promo" | "paid"; payments: boolean; yearly: boolean; promo_until: string | null;
   free_now: Record<string, number | null>; free_trial_days: number | null;
+  /** price102: the founding-member yearly prices while they can be bought (backend offers.founding_public), else null */
+  founding?: Founding | null;
 }
+
+/** price102 (GTM P1): Basic and Pro yearly at founding-member prices until `until` or the first `seats` paying customers, kept on renewal. */
+export interface Founding { open: boolean; until: string; seats: number; prices: { basic: number; pro: number }; was: { basic: number; pro: number } }
+
+/** price102 (GTM P3): the person's student request; `price` is set once approved at the student price (their Basic yearly checkout). */
+export interface StudentState { status: "pending" | "approved" | "rejected"; mode: "price" | "grant" | null; at: string | null; decided_at: string | null; price: number | null }
 
 export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number;
   /** "corp": a bonus, split or dividend applied on its ex-date (a log line: no side, quantity or price) */

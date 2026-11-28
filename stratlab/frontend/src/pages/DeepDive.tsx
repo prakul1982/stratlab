@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { deckLock, deepDiveLimitLine } from "../lib/account";
+import { companyDeckLock, deckLock, deepDiveLimitLine } from "../lib/account";
 import { SampleDeckLink } from "../components/SampleDeck";
 import { asOf, CRORE, inrCompact, lowerKeepAcronyms, marketTz, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
@@ -205,6 +205,8 @@ export function DeepDivePage() {
   const [busy, setBusy] = useState<string | null>(null);   // the source is busy: the page asks again on its own (busyRetry)
   const auto = useRef(0);                                  // automatic tries since the last one a person asked for
   const u = me?.usage;
+  // price102: Free's one deck a month is a theme's PDF (plans.DECK_RULES); a company's deck is Basic's
+  const companyDecks = (me?.plan_info?.deck_kinds ?? ["company", "theme"]).includes("company");
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
   const [decking, setDecking] = useState<"pptx" | "pdf" | null>(null);
@@ -289,9 +291,10 @@ export function DeepDivePage() {
       {/* the tools' row keeps a button's height while the dive loads, so the page doesn't drop when they arrive (LIVE9B-013: 0.196) */}
       <div className="k-row dd-tools">
         {v && <>
-          {/* FREE-TIER: no decks on Free: a locked button that says where they are, and the sample deck beside it */}
-          {u?.deck_limit === 0 ? <>
-            <Link className="btn quiet sm" to="/plans" title={deckLock()} data-testid="deck-locked">🔒 Slides: on Basic</Link>
+          {/* FREE-TIER: no company decks on Free (price102: its one deck a month is a theme's PDF): a locked button that says where they are,
+              and the sample deck beside it */}
+          {u?.deck_limit === 0 || !companyDecks ? <>
+            <Link className="btn quiet sm" to="/plans" title={u?.deck_limit === 0 ? deckLock() : companyDeckLock()} data-testid="deck-locked">🔒 Slides: on Basic</Link>
             <SampleDeckLink className="btn quiet sm" label="Sample deck" />
           </> : <>
           <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
@@ -315,7 +318,7 @@ export function DeepDivePage() {
       {!v && !error && <Card>{busy && <p className="k-small" role="status" data-testid="deep-busy">{busy}</p>}<Skeleton label="Reading the reported numbers" lines={5} /></Card>}
       {v?.figures_kept && <p className="k-small k-muted" data-figures-kept>These are the company's figures as read on {fmtDate(v.numbers_at ?? "")}: the latest couldn't be read just now.</p>}
       {v && u?.deepdive_limit != null && (
-        <p className="k-note">{deepDiveLimitLine(u.deepdive_used ?? 0, u.deepdive_limit, u.deck_used ?? 0, u.deck_limit)} <Link className="link" to="/plans">Plans</Link></p>
+        <p className="k-note">{deepDiveLimitLine(u.deepdive_used ?? 0, u.deepdive_limit, u.deck_used ?? 0, u.deck_limit, companyDecks)} <Link className="link" to="/plans">Plans</Link></p>
       )}
       {v && n && (
         <>

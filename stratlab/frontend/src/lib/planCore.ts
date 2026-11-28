@@ -22,7 +22,7 @@ export type Limits = { backtests_per_month: number | null; ai_builds_per_month: 
   ai_reads_per_day: number | null; features: string[] };
 
 export const LIMITS: Record<PlanId, Limits> = {
-  free: { backtests_per_month: 5, ai_builds_per_month: 5, live_limit: 1, group_size: 5, deepdives_per_month: 1, decks_per_month: 0,
+  free: { backtests_per_month: 5, ai_builds_per_month: 5, live_limit: 1, group_size: 5, deepdives_per_month: 1, decks_per_month: 1,
     stock_alerts: 3, screens: 1, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50, themes_per_month: 1,
     watchlists: 1, watchlist_symbols: 20, chart_saves: 3, chart_indicators: 3, ai_reads_per_day: 5, features: [] },
   basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
@@ -71,7 +71,8 @@ export const KEY: Record<PlanId, string[]> = {
   free: ["Every market, price charts, screens and the options builder",
     `${L.free.backtests_per_month} backtests and ${L.free.ai_builds_per_month} AI strategy builds a month`,
     `Paper trading trial: ${L.free.live_limit} strategy for 5 market days`,
-    `${L.free.deepdives_per_month} company deep dive a month, ${L.free.ai_reads_per_day} fresh AI reads a day`,
+    // price102 (owner, 28 Nov, GTM P2): Free's one theme deck a month, a PDF marked "Made with StratLab"
+    `${L.free.deepdives_per_month} deep dive and ${L.free.decks_per_month} theme deck (PDF) a month, ${L.free.ai_reads_per_day} AI reads a day`,
     `${L.free.stock_alerts} stock alerts, ${L.free.screens} saved screen, ${L.free.holdings} holdings`],
   basic: ["Everything in Free, with no ads",
     `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, all 20+ indicators`,

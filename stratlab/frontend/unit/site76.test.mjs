@@ -84,7 +84,8 @@ test("LIVE14B-007 / LIVE14A-012: the signed-out /plans gives the sample deck its
   // (updated on purpose, site78 LIVE15A-003: the same module also gives the shared /info read the Free list uses)
   // (changed on purpose, conv101: the line is on the landing page's plans too, with the sample deck's own page beside the download)
   assert.match(login, /import \{ SampleDeckLink, SampleDeckPageLink, useSampleDeck \} from "\.\.\/components\/SampleDeck";/);
-  assert.match(login, /<p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro\. <SampleDeckLink label="Download a sample deck" \/><SampleDeckPageLink \/><\/p>/);
+  // (changed on purpose, price102: Free makes one theme deck a month as a marked PDF)
+  assert.match(login, /<p className="small muted" data-testid="sample-deck-line">Free makes one theme deck a month as a PDF, marked "Made with StratLab"; Basic and Pro make more, as PDF or PowerPoint\. <SampleDeckLink label="Download a sample deck" \/><SampleDeckPageLink \/><\/p>/);
   assert.match(read("src/components/PlanCompare.tsx"), /0 \(a sample deck to download\)/);
 });
 

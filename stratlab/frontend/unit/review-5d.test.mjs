@@ -30,8 +30,9 @@ test("B2: a currency charged by its own plan names that currency's amount, with 
   // (updated on purpose: owner 16 Nov, US dollars on a visible switch; rupees stay the default outside the US and the charge is said in rupees until dollar checkout is on): the dollar plan only when dollars are really charged (lib/priceCurrency checkoutCur), then the dollar amount alone
   const plans = src("pages/PlansPage.tsx");
   assert.match(plans, /const currency = checkoutCur\(cur, usd, period, usdOn\);/);
-  assert.match(plans, /body: \{ plan, period, currency \}/);
-  assert.match(plans, /return c\.chargedCur === "USD" \? c\.charged : rupeeCharge\(rupees\(p, period\), gst\);/);
+  // (changed on purpose, price102: the offer the page showed goes with the call, and a card is charged an offer's price when one applies)
+  assert.match(plans, /body: \{ plan, period, currency, offer: offerFor\(plan, period\) \}/);
+  assert.match(plans, /return c\.chargedCur === "USD" \? c\.charged : rupeeCharge\(charge\(p, period\), gst\);/);
   assert.doesNotMatch(plans, /if \(own\) return/);
 });
 

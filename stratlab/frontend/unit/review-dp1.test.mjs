@@ -137,7 +137,8 @@ test("DP1-021, DP1-022, DI-032, DP1-026: an honest Free line, decks one per comp
   assert.equal(plans.WHO.free, "Every market and the core tools, free");
   // (updated on purpose, FREE-TIER: Free has no decks of its own now, so its line names the report card and checklist and the sample deck;
   // a deck's PDF and PowerPoint counting as one is said on the table's row and in the deep dive's line, as before)
-  assert.ok(FEATURES_ALL.free.some((l) => /with the report card and checklist/.test(l) && /the sample deck to download/.test(l)));
+  // (changed on purpose, price102: Free makes one theme deck a month as a marked PDF; the sample deck is on Plans)
+  assert.ok(FEATURES_ALL.free.some((l) => /with the report card and checklist/.test(l) && /1 theme deck \(PDF\) a month/.test(l) && /the sample deck to download/.test(l)));
   assert.ok(plans.NUMBERS.some(([k, label]) => k === "decks_per_month" && /its PDF and PowerPoint are one deck/.test(label)));
   // every paid feature row belongs to one of the three parts
   const groups = new Set(plans.FLAG_GROUPS.map((g) => g.id));
