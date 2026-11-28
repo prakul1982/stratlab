@@ -220,7 +220,9 @@ def test_a_rendered_page_is_kept_as_utf8_and_served_as_the_same_text(w, monkeypa
     assert isinstance(kept[0], bytes) and any(ord(ch) > 255 for ch in text)      # a page with a "₹", "–" or "·" in it
     assert len(kept[0]) < sys.getsizeof(text) * 0.6          # about half the memory of the same page as text
     again = w["client"].get("/stocks/in/TCS")
-    assert again.text == first.text and again.headers["cache-control"] == first.headers["cache-control"]
+    import re
+    same = lambda h: re.sub(r"s-maxage=\d+", "s-maxage=", h)          # noqa: E731 (counts down to the next close by the second)
+    assert again.text == first.text and same(again.headers["cache-control"]) == same(first.headers["cache-control"])
 
 
 def test_a_new_container_warms_its_caches_once_the_old_one_has_given_up_the_lease(monkeypatch):
