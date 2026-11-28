@@ -245,8 +245,9 @@ def fresh_settings_mirror():
 def page_builds_waited_for(monkeypatch):
     """A view of a company page due a rebuild waits for the whole build here, however busy the machine (production serves the stored copy
     after stock_pages.BUILD_WAIT seconds: mem100); tests/test_mem100.py sets it back to check that."""
-    from app import stock_pages
+    from app import blog_research, stock_pages
     monkeypatch.setattr(stock_pages, "BUILD_WAIT", None)
+    blog_research._tried.clear()         # the theme posts another test worked out under today's rules (mem100: once per rules in a process)
     yield
 
 

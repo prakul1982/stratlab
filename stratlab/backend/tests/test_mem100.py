@@ -259,3 +259,24 @@ def test_each_theme_of_the_recheck_ends_with_the_memory_guards_whole_release(mon
     monkeypatch.setattr(memguard, "release_memory", lambda force=False, full=True: called.append(force) or {"rss_after_mb": 1})
     theme_recheck.release()
     assert called == [True]
+
+
+def test_a_theme_post_that_stays_stale_is_worked_out_once_per_rules_and_the_stamp_is_marked(monkeypatch):
+    """Live 27-28 Nov: "waited for blog-theme-refresh" every ~10 minutes all night: a stale post its new figures left stale (hidden, or its
+    post refused) was worked out again at every check and the stamp never marked."""
+    from app import blog, blog_research as BR
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    stale_src = {"region": "US", "theme": "Chips", "stamp": ["old"]}
+    monkeypatch.setattr(blog, "admin_rows", lambda n: [{"slug": BR.THEME_PREFIX + "chips-us", "kind": "research"}])
+    monkeypatch.setattr(blog, "get", lambda slug: {"slug": slug})
+    monkeypatch.setattr(BR, "_stored_src", lambda post: dict(stale_src))
+    monkeypatch.setattr(BR, "theme_source", lambda dive, theme, region: {})
+    monkeypatch.setattr(BR, "carry_to_stored", lambda slug, src, now=None: "hidden")          # the post stays stale
+    dives = []
+    first = BR.refresh_stale_theme_posts(dive_for=lambda r, t: dives.append(t) or {"x": 1})
+    assert first["made"] and dives == ["Chips"] and BR.theme_posts_due()
+    monkeypatch.setattr(BR, "library_dive", lambda r, t: dives.append(t) or {"x": 1})
+    assert BR.refresh_theme_posts_if_due() is not None          # the next check: nothing left it can do, the stamp is marked
+    assert dives == ["Chips"] and not BR.theme_posts_due() and BR.refresh_theme_posts_if_due() is None
