@@ -75,11 +75,34 @@ def _face(text: str, bold: bool = False, head: bool = False) -> str:
     return "Head" if head else "Body-Bold" if bold else "Body"
 
 
+# mem100: the widths are kept for one deck's making only (R35: a deck is laid out several times over on the same words), then let go. Kept
+# for the process's life they were never asked for again (another theme's words) and held the last 200,000 measures: every prefix a line
+# was wrapped through and every cut a "…" was fitted by, at each size a box was tried at (22.7 MB left behind by one small deck, ~60 MB
+# at the bound), between deploys
 @functools.lru_cache(maxsize=200_000)
 def _measure(text: str, size: float, bold: bool, head: bool) -> float:
     from reportlab.pdfbase import pdfmetrics
     _fonts()
     return pdfmetrics.stringWidth(text, "Head" if head else _face(text, bold), size) / 72
+
+
+_making = [0]
+_making_lock = __import__("threading").Lock()
+
+
+@__import__("contextlib").contextmanager
+def _one_deck():
+    """mem100: a deck's making; when the last one being made is done, the widths measured for it are let go (results unchanged: a width
+    is the font's, worked out again when next asked)."""
+    with _making_lock:
+        _making[0] += 1
+    try:
+        yield
+    finally:
+        with _making_lock:
+            _making[0] -= 1
+            if _making[0] == 0:
+                _measure.cache_clear()
 
 
 def _width(text: str, size: float, bold: bool = False, head: bool = False) -> float:
@@ -2170,14 +2193,16 @@ def _render(slides: list[Slide], footer: str, title: str, pdf: bool) -> bytes:
 
 def build(v: dict) -> bytes:
     """The deck as PowerPoint."""
-    slides, footer = plan(v)
-    return _render(slides, footer, f"{v['name']} ({v['symbol']}): company deep dive", pdf=False)
+    with _one_deck():
+        slides, footer = plan(v)
+        return _render(slides, footer, f"{v['name']} ({v['symbol']}): company deep dive", pdf=False)
 
 
 def build_pdf(v: dict) -> bytes:
     """The same deck as a PDF."""
-    slides, footer = plan(v)
-    return _render(slides, footer, f"{v['name']} ({v['symbol']}): company deep dive", pdf=True)
+    with _one_deck():
+        slides, footer = plan(v)
+        return _render(slides, footer, f"{v['name']} ({v['symbol']}): company deep dive", pdf=True)
 
 
 # ---------- a theme's deck (EXPORT, 4 Nov: "you forgot to put an export PDF or slides option in themes") ----------
@@ -10036,5 +10061,6 @@ def build_theme(v: dict, pdf: bool = False) -> bytes:
 
 def build_theme_gated(v: dict, pdf: bool = False) -> tuple[bytes, dict]:
     """A theme's deck and its publication gate's result (R27: stored with the deck, shown in Admin -> Library)."""
-    slides, footer = theme_plan(v)
-    return _render(slides, footer, f"{v.get('sector') or 'Theme'}: theme deep dive", pdf=pdf), getattr(slides[0], "gate", None) or {}
+    with _one_deck():
+        slides, footer = theme_plan(v)
+        return _render(slides, footer, f"{v.get('sector') or 'Theme'}: theme deep dive", pdf=pdf), getattr(slides[0], "gate", None) or {}

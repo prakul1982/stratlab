@@ -33,16 +33,19 @@ class NotFound(SourceError):
 
 def approx_size(value, _budget: list | None = None) -> int:
     """A rough byte count of a cached value (strings, bytes, dicts, lists, numbers), cheap enough to run on every
-    set: it walks at most 20,000 nodes and scales up from there. Counted generously, since parsed JSON takes several
-    times its text size in memory."""
+    set: it walks at most 20,000 nodes. Counted generously, since parsed JSON takes several times its text size in memory.
+
+    mem100: a value past that walk (a company's SEC facts, five years of candles, a theme's map) is estimated from a sample of each of its
+    containers instead (_sampled): scaling the part walked by how much of the walk was still waiting counted such a value at a quarter of
+    what it holds (a 6.5 MB tree of filings counted as 1.7 MB), so the caches holding them (the SEC's built companies, the broker's candles)
+    held several times their bound and the caches' one budget never saw it."""
     budget = _budget if _budget is not None else [20000]
-    seen, size, stack = 0, 0, [value]
+    size, stack = 0, [value]
     while stack:
         v = stack.pop()
         if budget[0] <= 0:
-            return int(size * (1 + len(stack) / max(seen, 1))) + 64 * len(stack)
+            return _sampled(value)
         budget[0] -= 1
-        seen += 1
         if isinstance(v, (str, bytes, bytearray)):
             size += sys.getsizeof(v)         # exact, and O(1): a page with one ₹ in it is two bytes a character, one with an emoji four (MEM-3)
         elif isinstance(v, dict):
@@ -55,6 +58,45 @@ def approx_size(value, _budget: list | None = None) -> int:
         else:
             size += 32
     return size
+
+
+SAMPLE = 24                  # children of a container measured to estimate the rest (_sampled)
+
+
+def _sampled(value, nodes: int = 40000) -> int:
+    """mem100: a large value's size estimated by the same counts as approx_size, measuring at most SAMPLE children of each container (evenly
+    spaced) and scaling by its length, within `nodes` measured in all (a container measured once the walk is spent counts its own slots and
+    its children as numbers). Parsed JSON is regular (a list of filings, of candles, of companies), so the sample stands for the rest."""
+    left = [nodes]
+
+    def est(v) -> float:
+        left[0] -= 1
+        if isinstance(v, (str, bytes, bytearray)):
+            return sys.getsizeof(v)
+        if isinstance(v, dict):
+            n, own = len(v), 100 + 50 * len(v)
+            items = list(v.items()) if n <= SAMPLE else [x for i, x in enumerate(v.items()) if i % max(1, n // SAMPLE) == 0][:SAMPLE]
+            parts = [p for k, x in items for p in (k, x)]
+        elif isinstance(v, (list, tuple)):
+            n, own = len(v), 60 + 8 * len(v)
+            parts = list(v) if n <= SAMPLE else [v[i * n // SAMPLE] for i in range(SAMPLE)]
+            items = parts
+        elif isinstance(v, (set, frozenset)):
+            n, own = len(v), 60 + 8 * len(v)
+            parts = [x for i, x in zip(range(SAMPLE), v)]
+            items = parts
+        else:
+            return 32
+        if not parts:
+            return own
+        done, got = 0, 0.0
+        for x in parts:
+            if left[0] <= 0 and done:
+                break
+            got += est(x) if left[0] > 0 else 32
+            done += 1
+        return own + got * (len(parts) / done) * (n / max(1, len(items)))
+    return int(est(value))
 
 
 # Every cache below, so memguard can sweep the expired entries and keep their total under one budget (MEM-001): a cache
@@ -73,6 +115,25 @@ def sweep_caches() -> int:
 
 def cache_bytes() -> int:
     return sum(c.bytes for c in caches())
+
+
+# mem100: the caches' one budget (memguard.CACHE_BUDGET, the same setting) is also kept between the janitor's rounds: a cache that takes a new
+# value while all of them together hold a quarter more than the budget brings them back under it at once, not up to five minutes later
+# (a crawl or a market-wide read filled them several times over in between)
+BUDGET = int(float(__import__("os").environ.get("CACHE_BUDGET_MB", "256")) * 1024 * 1024)
+OVER = 1.25
+_policing = threading.Lock()
+
+
+def police(budget: int | None = None) -> int:
+    """Past OVER times the budget in all, the caches shrunk to it (shrink_caches); the bytes dropped (0: under it, or another thread is at it)."""
+    budget = BUDGET if budget is None else budget
+    if not budget or cache_bytes() <= budget * OVER or not _policing.acquire(blocking=False):
+        return 0
+    try:
+        return shrink_caches(budget)
+    finally:
+        _policing.release()
 
 
 def shrink_caches(budget: int) -> int:
@@ -130,6 +191,10 @@ class TTLCache:
         if n > self.max_bytes // 4:          # one value bigger than a quarter of the cache: don't keep it
             with self._lock:
                 self._drop(key)
+            # mem100: said in the log (at most hourly a cache), so a value read again on every ask for being too big is seen
+            if time.time() - getattr(self, "_refused_said", 0.0) > 3600:
+                self._refused_said = time.time()
+                print(f"cache: not kept, too big: {str(key)[:80]} about {n / 1048576:.1f} MB in a {self.max_bytes / 1048576:.0f} MB cache")
             return
         with self._lock:
             self._drop(key)
@@ -138,6 +203,7 @@ class TTLCache:
             while self._d and (len(self._d) > self.max or self.bytes > self.max_bytes):
                 _, old = self._d.popitem(last=False)
                 self.bytes -= old[2]
+        police()
 
     def stored_at(self, key) -> float | None:
         """When an entry was stored (None when there is none)."""
@@ -200,6 +266,7 @@ class SizedDict:
             while self._d and (len(self._d) > self.max or self.bytes > self.max_bytes):
                 k, _ = self._d.popitem(last=False)
                 self.bytes -= self._sizes.pop(k, 0)
+        police()
 
     def pop(self, key, default=None, _locked: bool = False):
         if not _locked:

@@ -1321,6 +1321,11 @@ def theme_post_problems(src: dict, post: dict | None = None) -> list[str]:
 
 
 THEME_REFRESH_RUN = 5                   # stale theme posts worked out again in one run (each a theme dive from stored pieces: no AI)
+# mem100 (live, 27-28 Nov: "memguard: ... waited for blog-theme-refresh" every ~10 minutes through the evening and the night, each run a theme
+# dive read again for the same posts): a post worked out once under today's rules that stays stale (hidden as the new figures can't stand it
+# up, or its post refused) was taken again at every check, so the stamp was never marked. Each post is worked out once per rules in this
+# process; the run then finds nothing left to do and the stamp is marked, as for the other posts
+_tried: dict = {}                       # tuple(theme_stamp()) -> {slugs worked out under it in this process}
 THEME_STAMP_KEY = "blog:theme:stamp"    # the theme_stamp() the stored theme posts were last brought up to date for
 
 
@@ -1358,6 +1363,12 @@ def refresh_stale_theme_posts(now: datetime | None = None, limit: int = THEME_RE
             src = _stored_src(blog.get(slug))
             if not src or not stale_figures(src):
                 continue
+            tried = _tried.setdefault(tuple(theme_stamp()), set())
+            if slug in tried:                     # mem100: worked out under these rules already; it stays as that left it
+                continue
+            if len(_tried) > 4:
+                for k in [k for k in _tried if k != tuple(theme_stamp())]:
+                    _tried.pop(k, None)
             if done >= limit:
                 out["waiting"].append(slug)
                 continue
@@ -1368,6 +1379,7 @@ def refresh_stale_theme_posts(now: datetime | None = None, limit: int = THEME_RE
                 out["waiting"].append(slug)
                 continue
             res = carry_to_stored(slug, theme_source(dive, src.get("theme") or src.get("sector") or "", src.get("region") or "IN"), now)
+            tried.add(slug)
             out["made"].append({"post": "theme", "slug": slug, "result": res or "same"})
         except Exception as e:
             out["problems"].append(f"{slug}: {type(e).__name__}: {str(e)[:160]}")

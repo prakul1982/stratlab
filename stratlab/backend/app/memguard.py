@@ -378,12 +378,41 @@ def census(top: int = 25) -> dict:
             "tracked_mb": round(tracked / 1048576, 1), "python_heap": python_heap(), "rss_split": rss_split(), "caches": named_caches(top)}
 
 
+# mem100 (live 27-28 Nov: 1.0 GB at 18:14 UTC to 1.69 GB at 00:14 with no deploy, ~0.1 GB an hour toward the 2.0 GB restart): past SOFT_MB of
+# resident memory the janitor cuts the caches to a quarter of their budget and collects every generation before trimming, so what the caches
+# and the heap hold can't carry the process to the restart line; a cache entry dropped is read again when asked for
+SOFT_MB = float(os.environ.get("MEMORY_SOFT_MB", "1100"))      # the old container at a deploy plus a new one (~0.3 GB) stays under 1.5 GB
+_soft_said = [0.0]
+
+
+def over_soft(rss: float | None = None) -> dict:
+    """Past SOFT_MB: the caches cut to a quarter of the budget, a full collection and a trim; what it measured ({} when under)."""
+    rss = rss_mb() if rss is None else rss
+    if rss is None or rss <= SOFT_MB:
+        return {}
+    freed = 0
+    try:
+        from .intel import net
+        freed = net.sweep_caches() + net.shrink_caches(CACHE_BUDGET // 4)
+    except Exception as e:
+        print("memguard: caches not cut:", str(e)[:120])
+    gc.collect()
+    malloc_trim()
+    out = {"rss_before_mb": rss, "rss_after_mb": rss_mb(), "cache_freed_mb": round(freed / 1048576, 1)}
+    if time.time() - _soft_said[0] > 3600:
+        _soft_said[0] = time.time()
+        print(f"memguard: {rss:.0f} MB is past {SOFT_MB:.0f} MB: caches cut to a quarter of their budget "
+              f"({out['cache_freed_mb']} MB), now {out['rss_after_mb']} MB")
+    return out
+
+
 def janitor(every: float = 300.0, sleep=time.sleep):
     """Every few minutes: expired cache entries out, the caches under budget, and the heap trimmed (the jobs do it after
-    their own work; this catches what pages and imports left)."""
+    their own work; this catches what pages and imports left); past SOFT_MB, the caches cut harder (over_soft)."""
     while True:
         sleep(every)
         try:
             release_memory(force=True, full=False)
+            over_soft()
         except Exception as e:
             print("memguard: janitor failed:", str(e)[:120])
