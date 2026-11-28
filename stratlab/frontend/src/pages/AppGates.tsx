@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHead, DataTable, LinkCard, PageHeader, type Column } from "../components/kit";
-import { ALL_PAGES, NAV, placeTrail, type Located } from "../lib/nav";
+import { ALL_PAGES, NAV, type Located } from "../lib/nav";
+import { placeTrail } from "../lib/placeTrail";
 import { openTour } from "../components/Onboarding";
 import { openFeedback } from "../components/FeedbackOpen";
 import { useDocTitle } from "../lib/title";

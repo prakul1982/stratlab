@@ -64,7 +64,9 @@
 .inv-news-row:hover > span:first-child { text-decoration: underline; }
 
 /* key numbers (UI-CO item 2): each group is a small table; two columns of one width, balanced by rows, one column on a phone */
-.inv-metrics { columns: 2; column-gap: var(--s6); }
+/* ui100: two columns only when each is at least 27rem: at 1280 (two columns of ~400px) the label column of each table was ~60px and broke words
+   mid-way ("Curre/nt ratio", "Opera/ting margi/n" on the live Apple page), at 1024 26px; one column below that */
+.inv-metrics { columns: 27rem 2; column-gap: var(--s6); }
 @media (max-width: 900px) { .inv-metrics { columns: 1; } }
 .inv-mt { break-inside: avoid; margin-bottom: var(--s5); }
 .inv-mt .k-table { table-layout: fixed; }

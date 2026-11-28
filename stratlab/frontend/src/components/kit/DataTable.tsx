@@ -148,6 +148,12 @@ function keepShort(b: HTMLElement) {
   }
 }
 
+/** ui100: marks a phone card's cells of more than `LONG_CELL` characters with data-long, which takes the card's whole width. */
+const LONG_CELL = 40;
+function markLong(b: HTMLElement) {
+  for (const c of b.querySelectorAll<HTMLElement>(":scope > table > tbody > tr > td")) c.toggleAttribute("data-long", (c.textContent ?? "").trim().length > LONG_CELL);
+}
+
 export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, scrollEnd, csv, csvInMenu, more, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
@@ -234,6 +240,9 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
     // ui100: a fit table's short words stay on one line: a column whose every cell is a few characters (a year "Mar 2026", a date, a code)
     // keeps them whole while the long words beside it wrap (the theme page's Year column broke "Mar / 2026" at 1440)
     if (fit && b) keepShort(b);
+    // ui100: on a phone card a cell of many words takes the card's whole width, not half of it (Money's "Coming up" detail ran 18 lines
+    // down the left half with the right half empty)
+    if (stack && phone && b) markLong(b);
   });
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });

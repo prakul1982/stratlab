@@ -30,7 +30,8 @@ test("VR7-004: the signed-out library keeps every card in the page and a phone s
 
 test("VR7-006 (UI-CO item 2): Key numbers are tables of one width in two balanced columns (one on a phone); a long note is a numbered note under them", () => {
   const inv = read("src/styles-invest.css");
-  assert.match(inv, /\.inv-metrics \{ columns: 2; column-gap: var\(--s6\); \}/);
+  // (changed on purpose, ui100: two columns only when each is at least 27rem; one below, so no label column breaks words mid-way at 1280)
+  assert.match(inv, /\.inv-metrics \{ columns: 27rem 2; column-gap: var\(--s6\); \}/);
   assert.match(inv, /@media \(max-width: 900px\) \{ \.inv-metrics \{ columns: 1; \} \}/);
   const src = read("src/components/Research.tsx");
   assert.match(src, /<div key=\{g\.title\} className="inv-mt">/);

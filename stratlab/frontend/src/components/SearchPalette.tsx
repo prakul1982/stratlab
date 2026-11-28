@@ -11,7 +11,8 @@ import { buildIdea, findInstrument } from "./IdeaComposer";
 import { track, trackBacktest } from "../lib/analytics";
 import { Book, Close, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 import { SPACES, spaceOf, type Space } from "../lib/spaces";
-import { pageAt, placeName } from "../lib/nav";
+import { pageAt } from "../lib/nav";
+import { placeLabel } from "../lib/placeTrail";
 import { useDialogFocus } from "./kit/Dialog";
 import { asksContract, companyFirst, companyHits, compareTo, firstForQuestion, isCompany, namesFeature, offerIdeas, pickCompany, type CompanyHit } from "../lib/paletteRank";
 import { signOutHere } from "../lib/signout";
@@ -30,7 +31,7 @@ const lastMarket = () => { try { return localStorage.getItem(LAST_MARKET) || "IN
 /** Investor phrasings that should open a page directly, before any AI guessing. `name` is a company to look up. */
 type Intent = { title: string; sub: string; to?: string; deep?: string; compare?: [string, string] };
 /** A page's name where it is now (IA-1): "Market today › Sectors (Sector rotation)". */
-const here = (to: string) => { const l = pageAt(to); return l ? placeName(l, true) : to; };
+const here = (to: string) => { const l = pageAt(to); return l ? placeLabel(l, true) : to; };
 function intentFor(q: string): Intent | null {
   const t = q.trim();
   let m = t.match(/^(?:deep ?dive|deepdive)(?:\s+(?:on|of|into|for))?\s+(.+)$/i) || t.match(/^(.+?)\s+deep ?dive$/i);

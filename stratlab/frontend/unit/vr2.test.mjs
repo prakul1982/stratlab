@@ -32,7 +32,8 @@ test("VR2-006, VR2-007: market events are two to a row; Key numbers' last row fi
   assert.match(read("src/pages/trade/EventsPage.tsx"), /<DataTable label="The next seven days"/);
   const inv = read("src/styles-invest.css");
   // (UI-CO item 2: each group is a table; two columns of them balanced by CSS columns, so no last row is left half empty)
-  assert.match(inv, /\.inv-metrics \{ columns: 2; column-gap: var\(--s6\); \}/);
+  // (changed on purpose, ui100: two columns only when each is at least 27rem; one below, so no label column breaks words mid-way at 1280)
+  assert.match(inv, /\.inv-metrics \{ columns: 27rem 2; column-gap: var\(--s6\); \}/);
 });
 
 test("VR2-008: a long usage value on Account takes the whole row", () => {

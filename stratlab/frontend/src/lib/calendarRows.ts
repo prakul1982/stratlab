@@ -1,6 +1,7 @@
 /* The one Calendar's "All dates" rows (IA-1 item 3), worked out here, apart from the page, so the unit tests can read them:
  * each source's dated things as one kind of row, and the order they are listed in. */
-import { fmtDate, perShare, price } from "./format";
+import { fmtDate, price } from "./format";
+import { perShare } from "./perShare";
 import type { IpoRow } from "./ipo";
 
 export type CalType = "results" | "action" | "ipo" | "event" | "money";

@@ -1,5 +1,6 @@
 import { searchWords } from "./helpTopics";
-import { ALL_PAGES, NAV, placeName } from "./nav";
+import { ALL_PAGES, NAV } from "./nav";
+import { placeLabel } from "./placeTrail";
 
 /** Everything StratLab can do, with the words people might search for. Used by search and the home page grid.
  * `to` is a route; "@notebook", "@market" and "@verdict" mean the notebook you're in (or your latest one). */
@@ -141,7 +142,7 @@ const SEARCHABLE: Feature[] = (() => {
   }
   // IA-1: a tab is found by its new name, its entry's and its old one, and says where it is now: "Find stocks › Figures (Screener)"
   const pages: Feature[] = ALL_PAGES.map((l) => ({
-    id: `page:${l.page.to}`, title: placeName(l, true), what: l.page.line, to: l.page.to,
+    id: `page:${l.page.to}`, title: placeLabel(l, true), what: l.page.line, to: l.page.to,
     words: [l.page.label, l.page.words, ...(merged.get(l.page.to) ?? []), NAV[l.space].label, l.group.label].join(" "),
     // the entry's own name ("Find stocks", "Calendar") is its first tab's
     names: [l.page.label, l.page.was, l.group.pages.length > 1 ? `${l.group.label} ${l.page.label}` : null, l.group.pages[0] === l.page ? l.group.label : null].filter((x): x is string => !!x).map((x) => x.toLowerCase()),

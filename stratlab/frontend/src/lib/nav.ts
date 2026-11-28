@@ -278,11 +278,7 @@ export const pageAt = (to: string): Located | null => ALL_PAGES.find((l) => l.pa
 
 /** A page's name with its entry, for search and the tab's title: "Find stocks › Figures", or the page alone when the entry
  * is that one page ("Themes"). `was` adds the old name: "Find stocks › Figures (Screener)". */
-/** ui100: a page's place as words, a name said once: "Invest › Calendar", never "Invest › Calendar › Calendar" (the Calendar's group and its
- *  own page share the name; search said "Calendar › Calendar"). */
-export const placeTrail = (parts: string[]): string => parts.filter((x, i) => i === 0 || x !== parts[i - 1]).join(" › ");
-
 export function placeName(l: Located, was = false): string {
-  const own = l.group.pages.length === 1 ? l.page.label : placeTrail([l.group.label, l.page.label]);
+  const own = l.group.pages.length === 1 ? l.page.label : `${l.group.label} › ${l.page.label}`;
   return was && l.page.was ? `${own} (${l.page.was})` : own;
 }

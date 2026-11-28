@@ -5,9 +5,10 @@ import { readFileSync } from "node:fs";
 import { register } from "node:module";
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
-const { perShare } = await import("../src/lib/format.ts");
+const { perShare } = await import("../src/lib/perShare.ts");
 const { snapWidth } = await import("../src/lib/phoneFit.ts");
-const { placeTrail, placeName, locate } = await import("../src/lib/nav.ts");
+const { locate } = await import("../src/lib/nav.ts");
+const { placeTrail, placeLabel } = await import("../src/lib/placeTrail.ts");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
 
@@ -57,7 +58,8 @@ test("two charts side by side line up their plots", () => {
 test("a page's place names each part once", () => {
   assert.equal(placeTrail(["Invest", "Calendar", "Calendar"]), "Invest › Calendar");     // Help and search said "Calendar › Calendar"
   assert.equal(placeTrail(["Trade", "Calendar", "Market events & expiries"]), "Trade › Calendar › Market events & expiries");
-  assert.equal(placeName(locate("/calendar")), "Calendar");
+  assert.equal(placeLabel(locate("/calendar")), "Calendar");
+  assert.equal(placeLabel(locate("/trade/events"), true), "Calendar › Market events & expiries (Market events)");
   assert.match(src("pages/AppGates.tsx"), /placeTrail\(\[NAV\[l\.space\]\.label/);
 });
 
@@ -65,4 +67,13 @@ test("an index notice whose day has passed is an earlier change, not above the o
   const page = src("pages/trade/EventsPage.tsx");
   assert.match(page, /const past = \(c: IndexChange\) => !!c\.effective && c\.effective < today;/);
   assert.match(page, /const unread = unreadAll\.filter\(\(c\) => !past\(c\)\), unreadPast = unreadAll\.filter\(past\);/);
+});
+
+test("Key numbers sit two to a row only when each table has room for its labels", () => {
+  assert.match(readFileSync(new URL("../src/styles-invest.css", import.meta.url), "utf8"), /\.inv-metrics \{ columns: 27rem 2;/);
+});
+
+test("a phone card's long cell takes the card's whole width", () => {
+  assert.match(css, /\.k-tbl-wrap\.stack:not\(\.compact\) \.k-table td\[data-long\] \{ grid-column: 1 \/ -1; \}/);
+  assert.match(src("components/kit/DataTable.tsx"), /if \(stack && phone && b\) markLong\(b\);/);
 });

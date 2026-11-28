@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { perShare, price, safeHref, fmtDate } from "../lib/format";
+import { price, safeHref, fmtDate } from "../lib/format";
+import { perShare } from "../lib/perShare";
 import type { Region } from "../lib/research";
 import { Badge, DataTable, ErrorState, Skeleton } from "./kit";
 
