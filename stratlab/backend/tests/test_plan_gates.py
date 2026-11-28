@@ -32,7 +32,7 @@ def test_prices_and_limits():
     assert row("backtests_per_month") == [5, 100, None] and row("ai_builds_per_month") == [5, 100, None]
     assert row("live_limit") == [1, 2, 10] and row("group_size") == [5, 25, 50]
     assert row("holdings") == [30, 100, 300] and row("stock_alerts") == [3, 25, 100] and row("screens") == [1, 10, 25]
-    assert row("deepdives_per_month") == [1, 15, None] and row("decks_per_month") == [0, 5, None]
+    assert row("deepdives_per_month") == [1, 15, None] and row("decks_per_month") == [1, 5, None]     # (changed on purpose, price102: Free's theme PDF)
     assert row("themes_per_month") == [1, 10, None]
     assert PLANS["free"]["live_trial_days"] == 5
 
@@ -63,9 +63,10 @@ def test_features_per_plan_once_payments_are_live(paid):
         "indicators": "basic", "alerts": "basic", "scans": "basic", "fno": "pro", "export": "pro"}
     assert group_size("free") == 5 and group_size("basic") == 25          # (updated on purpose, FREE-TIER)
     assert (has_indicators("free"), has_indicators("basic"), has_fno("basic"), has_fno("pro")) == (False, True, False, True)
-    assert [deepdives(p) for p in ("free", "basic", "pro")] == [1, 15, None] and [decks(p) for p in ("free", "basic", "pro")] == [0, 5, None]
-    info = plan_info("free")
-    assert (info["indicators"], info["fno"], info["deepdives_per_month"], info["decks_per_month"]) == (False, False, 1, 0)
+    assert [deepdives(p) for p in ("free", "basic", "pro")] == [1, 15, None] and [decks(p) for p in ("free", "basic", "pro")] == [1, 5, None]
+    info = plan_info("free")     # (changed on purpose, price102: Free's one theme deck a month, a PDF, marked)
+    assert (info["indicators"], info["fno"], info["deepdives_per_month"], info["decks_per_month"]) == (False, False, 1, 1)
+    assert (info["deck_kinds"], info["deck_formats"], info["deck_mark"]) == (["theme"], ["pdf"], True)
     assert "pro_features" not in info
 
 

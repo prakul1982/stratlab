@@ -450,6 +450,25 @@ class SubscribeReq(BaseModel):
     plan: Literal["basic", "pro"]
     period: Literal["month", "year"] = "month"
     currency: str = Field("INR", pattern=r"^[A-Z]{3}$")
+    # price102: the offer the page showed for this plan and period ("founding", "student", or null for the standard price); when it is
+    # sent and checkout would charge another, the call is refused (409 price_changed) before anything is made at Razorpay
+    offer: Literal["founding", "student"] | None = None
+
+
+class StudentReq(BaseModel):
+    college: str = Field("", max_length=120)
+    college_email: str = Field("", max_length=200)
+    note: str = Field("", max_length=500)
+
+
+class StudentDecisionReq(BaseModel):
+    decision: Literal["price", "grant", "reject"]
+
+
+class OfferPlansReq(BaseModel):
+    founding_basic_year: str | None = Field(None, max_length=40)
+    founding_pro_year: str | None = Field(None, max_length=40)
+    student_basic_year: str | None = Field(None, max_length=40)
 
 
 class SellerReq(BaseModel):

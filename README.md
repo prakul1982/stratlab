@@ -164,12 +164,14 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | | Free | Basic | Pro |
 |---|---|---|---|
 | Price (rupee prices include 18% GST) | ₹0 | ₹699 a month (₹6,999 a year) · $8 | ₹1,999 a month (₹19,999 a year) · $20 |
+| Founding-member yearly price (until 31 Dec 2026, 11:59 pm IST or the first 100 paying customers; kept for as long as it renews) | – | ₹4,999 a year | ₹14,999 a year |
+| Student price (approved by hand) | – | ₹2,499 a year | – |
 | Backtests, each with a verdict | 5 a month | 100 a month | Unlimited |
 | AI strategy builds | 5 a month | 100 a month | Unlimited (a daily safety cap applies) |
 | Paper trading | 1 session, for 5 market days | 2 at a time | 10 at a time |
 | Instruments in a group test | 5 | 25 | 50 |
 | Company deep dives (each company counted once a month) | 1 a month | 15 a month | Unlimited |
-| Slide decks, of a company or a theme (its PDF and PowerPoint are one deck) | None (a sample deck to download) | 5 a month | Unlimited |
+| Slide decks, of a company or a theme (its PDF and PowerPoint are one deck) | 1 theme deck a month (PDF, marked "Made with StratLab · stratlab.studio" with the theme's link) | 5 a month | Unlimited |
 | New themes mapped (every theme already in the library opens on every plan) | 1 a month | 10 a month | Unlimited |
 | Fresh AI reads a day, refreshes included (a read already written never counts; Free gets the Basic/Pro read when there is one) | 5 | 60 | Unlimited |
 | AI answers in the search box a day | 10 | 40 | 40 |

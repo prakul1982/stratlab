@@ -272,8 +272,9 @@ def test_the_theme_pages_way_in_and_deck_preview_are_at_the_top_and_promise_no_f
     assert "Sign in free to open the theme</a>" in html and "from=theme" in html
     assert 'href="https://stratlab.studio/sample-deck">Preview a theme deck, no sign-in</a>' in html
     assert "What the Defence slide deck holds" in html and "The value chain: 3 layers" in html and "companies and figures (12 companies)" in html
-    assert "Slide decks are on Basic and Pro." in html
-    assert "Download the full deck" not in html and "free deck" not in html.lower(), "Free has no decks of its own (plans.PLANS decks_per_month 0)"
+    # (changed on purpose, price102: the owner's GTM P2, Free makes one theme deck a month as a marked PDF)
+    assert 'A free account makes one theme deck a month as a PDF, marked "Made with StratLab"; Basic and Pro make more' in html
+    assert "Download the full deck" not in html and "free deck" not in html.lower(), "no deck is promised without a sign-in"
     assert len(re.findall(r">Sign in free to open the[^<]*</a>", html)) == 2, "the way in at the foot stays too"
 
 
@@ -290,7 +291,8 @@ def test_the_sample_deck_has_a_page_with_a_preview_and_a_stable_pdf_address(w, m
     assert page.status_code == 200 and 'content="index,follow"' in t
     assert '<meta property="og:title" content="Sample theme deck: India defence · StratLab">' in t and '<link rel="canonical" href="https://stratlab.studio/sample-deck">' in t
     assert 'href="https://stratlab.studio/sample-deck.pdf?id=deck-1" download>Download the sample deck (PDF)</a>' in t
-    assert "Slide decks are on Basic (5 a month) and Pro (unlimited)" in t
+    # (changed on purpose, price102: Free's one theme PDF a month, marked)
+    assert 'A free account makes 1 theme deck a month as a PDF, each page marked "Made with StratLab · stratlab.studio". Basic makes 5 a month and Pro unlimited' in t
     assert "not a SEBI-registered investment adviser or research analyst" in t
     pdf = c.get("/sample-deck.pdf?id=deck-1")
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF") and pdf.headers["content-type"] == "application/pdf"

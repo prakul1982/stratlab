@@ -105,15 +105,17 @@ def test_each_published_limit_is_the_enforced_one(plan_env, plan, key):
 
 
 def test_free_after_the_change_gets_no_theme_deck_from_the_route(plan_env, monkeypatch):
-    # the theme deck route itself refuses a Free account (the sample deck only); a Basic one is counted
+    # (changed on purpose, price102: the owner's GTM P2, 28 Nov: Free makes one theme deck a month as a PDF; PowerPoint stays Basic's)
+    # the theme deck route itself refuses a Free account's PowerPoint before anything is read; Free's PDF and a Basic one are counted
     from app import main
     from app.intel import theme_routes
     monkeypatch.setattr(theme_routes, "map_for_deck", lambda R, profile, region, q, wait=0, pending=None: ("US", "Semiconductors", {}))
     monkeypatch.setattr(theme_routes, "_routes", lambda: None)
     with pytest.raises(HTTPException) as e:
-        theme_routes.theme_dive_deck("Semiconductors", "US", "pdf", profile=_who("free"))
+        theme_routes.theme_dive_deck("Semiconductors", "US", "pptx", profile=_who("free"))
     assert e.value.status_code == 402 and e.value.detail["code"] == "deck_limit"
-    assert e.value.detail["message"].startswith("Slide decks are on Basic: 5 a month.")
+    assert e.value.detail["message"].startswith("PowerPoint decks are on Basic: 5 a month, of a company or a theme.")
+    assert main.check_deep(_who("free"), "deck", "", "US", mark="deck:theme:US:semiconductors") == "deck:theme:US:semiconductors"
     assert main.check_deep(_who("basic"), "deck", "", "US", mark="deck:theme:US:semiconductors") == "deck:theme:US:semiconductors"
     assert plan_env == []
 
@@ -137,7 +139,7 @@ def test_my_usage_says_a_grace_count_is_kept_until_a_date(plan_env):
         rows = {r["key"]: r for r in u["rows"]}
         if grace:
             assert u["grace"]["until"].startswith((AT + timedelta(days=plans.FREE_GRACE_DAYS)).date().isoformat())
-            assert (u["grace"]["reads_after"], u["grace"]["decks_after"]) == (5, 0)
+            assert (u["grace"]["reads_after"], u["grace"]["decks_after"]) == (5, 1)     # (changed on purpose, price102: Free's one theme PDF)
             assert rows["research_ai"]["limit"] == 60 and rows["deck"]["limit"] == 1
         else:
             assert u["grace"] is None

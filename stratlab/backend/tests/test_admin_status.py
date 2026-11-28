@@ -133,7 +133,7 @@ def test_me_gives_the_plans_own_limits_and_what_lifts_them(w, monkeypatch):
     u = c.get("/me", headers=headers("free-token")).json()["usage"]
     # (updated on purpose, FREE-TIER: Free's 1 deep dive and no decks of its own)
     assert u["deepdive_plan_limit"] == plans.PLANS["free"]["deepdives_per_month"] == 1
-    assert u["deck_plan_limit"] == plans.PLANS["free"]["decks_per_month"] == 0
+    assert u["deck_plan_limit"] == plans.PLANS["free"]["decks_per_month"] == 1      # (changed on purpose, price102: one theme PDF a month)
     # payments off no longer lifts anything (the owner's decision, 7 Oct): Free's own limit, nothing lifting it
     assert u["deepdive_limit"] == 1 and u["lifted_by"] is None
     for mod in (plans, main):

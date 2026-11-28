@@ -476,8 +476,9 @@ def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
     assert c.post("/research/deep/CCC/card").status_code == 402                  # the report card counts the same way
     r = c.get("/research/deep/AAA/deck")
     assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
-    # no decks on Free: the words say where they are and point at the sample deck, never "You've made 0 slide decks"
-    assert r.json()["detail"]["message"].startswith("Slide decks are on Basic: 5 a month. The sample deck on the Plans page shows what one holds.")
+    # (changed on purpose, price102: Free's one deck a month is a theme's PDF; a company's deck is Basic's, said before anything counts)
+    assert r.json()["detail"]["message"].startswith("A company's slide deck is on Basic: 5 a month, of a company or a theme, as PDF or PowerPoint. "
+                                                    "Free makes 1 theme deck a month, as a PDF.")
     assert usage.count("deepdive") == 1 and usage.count("deck") == 0
     who["p"] = {"id": "u1", "plan": "basic", "_plan": "basic"}
     assert c.get("/research/deep/AAA/deck").status_code == 200                   # Basic: a deck

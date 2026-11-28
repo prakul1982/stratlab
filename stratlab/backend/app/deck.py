@@ -1455,6 +1455,8 @@ class Canvas:
             self.text(M, 1.36, CW, 0.3, [(sl.subtitle or "").upper()], 12, color=GREEN_WICK, bold=True)
             self.mark(M, 0.5, 0.62)
             self.text(M + 0.38, 0.62, 3, 0.4, ["StratLab"], 19, color=ON_DARK, head=True)
+            if getattr(self, "mark_line", None):       # price102: the cover has no footer, so the mark and the link go at its foot
+                self.text(M, 7.08, CW, 0.24, [self.clip(self.mark_line, 9.5, CW, 1)], 9.5, color=DARK_MUTED)
             return
         if sl.kind == "section":
             size = title_size(sl)
@@ -1480,7 +1482,9 @@ class Canvas:
     def _footer(self, footer, n, total, dark):
         self.line(M, 7.0, W_IN - M, 7.0, DARK_LINE if dark else LINE2, 0.75)
         col = DARK_MUTED if dark else MUTED
-        self.text(M, 7.08, 8.4, 0.24, [self.clip(f"StratLab · {footer}", 9.5, 8.4, 1)], 9.5, color=col)
+        # price102: a Free plan's deck says "Made with StratLab · stratlab.studio" first on every page, before the theme's public link
+        head = MADE_WITH if getattr(self, "mark_line", None) else "StratLab"
+        self.text(M, 7.08, 8.4, 0.24, [self.clip(f"{head} · {footer}", 9.5, 8.4, 1)], 9.5, color=col)
         self.text(W_IN - M - 4, 7.08, 4, 0.24, [f"Not investment advice · {n} / {total}"], 9.5, color=col, align="right")
 
     def _contents(self, sl):
@@ -2180,9 +2184,15 @@ def probe(sl: Slide) -> list[dict]:
     return p.found
 
 
-def _render(slides: list[Slide], footer: str, title: str, pdf: bool) -> bytes:
-    """Slides as PowerPoint or as a PDF: the one renderer each deck goes through (a company's, a theme's)."""
+# price102 (owner, 28 Nov, GTM P2): every page of a Free plan's theme deck carries this, with the theme's public page after it
+MADE_WITH = "Made with StratLab · stratlab.studio"
+
+
+def _render(slides: list[Slide], footer: str, title: str, pdf: bool, mark_line: str | None = None) -> bytes:
+    """Slides as PowerPoint or as a PDF: the one renderer each deck goes through (a company's, a theme's). `mark_line` (a Free plan's
+    deck): MADE_WITH and the theme's public link, on the cover's foot and first in every other page's footer."""
     r = PdfRenderer(title) if pdf else PptxRenderer()
+    r.mark_line = mark_line
     for i, sl in enumerate(slides, 1):
         r.draw(sl, i, len(slides), footer)
     if not pdf:
@@ -10065,13 +10075,16 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
     # ownership, events and management report cards are per-company lists: on the theme's page, and their dated facts in "Dated company updates" (R19; m2: its name)
 
 
-def build_theme(v: dict, pdf: bool = False) -> bytes:
+def build_theme(v: dict, pdf: bool = False, marked: bool = False) -> bytes:
     """A theme's deck, PowerPoint or (`pdf`) the same slides as a PDF."""
-    return build_theme_gated(v, pdf)[0]
+    return build_theme_gated(v, pdf, marked)[0]
 
 
-def build_theme_gated(v: dict, pdf: bool = False) -> tuple[bytes, dict]:
-    """A theme's deck and its publication gate's result (R27: stored with the deck, shown in Admin -> Library)."""
+def build_theme_gated(v: dict, pdf: bool = False, marked: bool = False) -> tuple[bytes, dict]:
+    """A theme's deck and its publication gate's result (R27: stored with the deck, shown in Admin -> Library). `marked`: a Free plan's
+    deck (price102), every page marked MADE_WITH with the theme's public link."""
     with _one_deck():
         slides, footer = theme_plan(v)
-        return _render(slides, footer, f"{v.get('sector') or 'Theme'}: theme deep dive", pdf=pdf), getattr(slides[0], "gate", None) or {}
+        line = f"{MADE_WITH} · {theme_address(v.get('region'), v.get('sector') or 'Theme')}" if marked else None
+        return (_render(slides, footer, f"{v.get('sector') or 'Theme'}: theme deep dive", pdf=pdf, mark_line=line),
+                getattr(slides[0], "gate", None) or {})

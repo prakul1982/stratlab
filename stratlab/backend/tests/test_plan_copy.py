@@ -165,7 +165,8 @@ def test_readme_plan_table_says_the_free_tier():
     assert _readme_row("AI strategy builds")[1] == f"{f['ai_builds_per_month']} a month"
     assert _readme_row("Instruments in a group test")[1:3] == [str(f["group_size"]), str(PLANS["basic"]["group_size"])]
     assert _readme_row("Company deep dives")[1] == f"{f['deepdives_per_month']} a month"
-    assert f["decks_per_month"] == 0 and _readme_row("Slide decks")[1].startswith("None (a sample deck")
+    # (changed on purpose, price102: one theme deck a month on Free, a PDF marked "Made with StratLab")
+    assert f["decks_per_month"] == 1 and _readme_row("Slide decks")[1].startswith("1 theme deck a month (PDF, marked")
     assert _readme_row("New themes mapped")[1:4] == [f"{f['themes_per_month']} a month", f"{PLANS['basic']['themes_per_month']} a month", "Unlimited"]
     assert _readme_row("Fresh AI reads a day")[1:4] == [str(f["ai_reads_per_day"]), str(PLANS["basic"]["ai_reads_per_day"]), "Unlimited"]
     assert _readme_row("AI answers in the search box")[1:4] == [str(PLANS[p]["search_ai_per_day"]) for p in ("free", "basic", "pro")]

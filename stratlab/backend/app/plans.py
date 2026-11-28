@@ -15,7 +15,9 @@ PLANS = {
         "stock_alerts": 3,            # active price and indicator alerts on stocks
         "screens": 1,                 # saved stock screens (running a screen has no limit on any plan)
         "deepdives_per_month": 1,     # companies opened in the deep dive (each counted once a month)
-        "decks_per_month": 0,         # slide decks of a company or a theme (PowerPoint or PDF); Free gets the sample deck (sample_deck)
+        # price102 (owner, 28 Nov: "all ok to do", GTM P2): one THEME deck a month, PDF only, every page marked "Made with StratLab ·
+        # stratlab.studio" with the theme's public link (DECK_RULES); a company's deck, PowerPoint and the workbook stay on Basic
+        "decks_per_month": 1,
         "themes_per_month": 1,        # NEW themes mapped a month (a theme already in the library opens on every plan)
         "ai_reads_per_day": 5,        # fresh AI reads a day, refreshes included (ai_reads_per_day)
         "search_ai_per_day": 10,      # the search box's AI answers a day
@@ -315,8 +317,41 @@ def deepdives(plan) -> int | None:
 
 
 def decks(plan) -> int | None:
-    """How many slide decks (a company's or a theme's) a month (None: unlimited; 0 on Free, which has the sample deck)."""
+    """How many slide decks (a company's or a theme's) a month (None: unlimited; Free's one is a theme's PDF: DECK_RULES)."""
     return _limit(plan, "decks_per_month")
+
+
+# price102 (owner, 28 Nov, GTM P2): what kind of deck each plan makes. Free: a theme's deck as a PDF, every page marked "Made with
+# StratLab · stratlab.studio" beside the theme's public link (deck.MADE_WITH); Basic and Pro: a company's or a theme's, PDF or PowerPoint,
+# unmarked (the workbook is Basic's own feature, theme_workbook). A Free account in the grace keeps what Free had before (any deck, either
+# format, unmarked) until its grace ends, as it keeps the counts (FREE_BEFORE).
+DECK_RULES = {"free": {"kinds": ("theme",), "formats": ("pdf",), "mark": True},
+              "basic": {"kinds": ("company", "theme"), "formats": ("pdf", "pptx"), "mark": False},
+              "pro": {"kinds": ("company", "theme"), "formats": ("pdf", "pptx"), "mark": False}}
+
+
+def deck_rules(who) -> dict:
+    """DECK_RULES for a plan ("free") or a profile (plan_of; a Free account in the grace: Basic's kinds and formats, unmarked)."""
+    if isinstance(who, dict):
+        plan = plan_of(who)
+        if plan == "free" and free_grace_until(who):
+            return DECK_RULES["basic"]
+        return DECK_RULES[plan]
+    return DECK_RULES[who]
+
+
+def deck_refusal(who, kind: str, format: str) -> str | None:
+    """The one lock wording when a plan can't make this deck (a company's on Free, PowerPoint on Free), else None."""
+    rules = deck_rules(who)
+    plan = plan_of(who) if isinstance(who, dict) else who
+    if kind in rules["kinds"] and format in rules["formats"]:
+        return None
+    nxt = bigger_plan(plan, "decks_per_month") or "Basic"
+    cap = PLANS[nxt.lower()]["decks_per_month"]
+    many = "with no limit" if cap is None else f"{cap} a month"
+    head = (f"A company's slide deck is on {nxt}: {many}, of a company or a theme, as PDF or PowerPoint."
+            if kind not in rules["kinds"] else f"PowerPoint decks are on {nxt}: {many}, of a company or a theme.")
+    return head + f" {PLANS[plan]['name']} makes {PLANS[plan]['decks_per_month']} theme deck a month, as a PDF."
 
 
 def themes(plan) -> int | None:
@@ -367,7 +402,9 @@ def free_change_notice(profile: dict | None, now: datetime | None = None) -> dic
     if end is None or plan_of(profile) != "free":
         return None
     return {"on": end.isoformat(),
-            "rows": [{"key": k, "label": label, "before": FREE_BEFORE[k], "after": PLANS["free"][k]} for k, label in FREE_CHANGE_WORDS],
+            # price102: a count that is the same before and after (Free's one deck a month) is no change, so it isn't listed
+            "rows": [{"key": k, "label": label, "before": FREE_BEFORE[k], "after": PLANS["free"][k]} for k, label in FREE_CHANGE_WORDS
+                     if FREE_BEFORE[k] != PLANS["free"][k]],
             "moves": [REFRESH_MOVES, "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"],
             # what happens to what is over a new count on the day (LIVE8B-008: nothing said what became of alerts 4 and 5): the alert check
             # and the event alerts take the oldest active alerts up to the plan's count (stock_alerts.Job, fire_events_counted)
@@ -393,11 +430,14 @@ def plan_info(plan: str, profile: dict | None = None) -> dict:
     """What a plan includes, for /me; with the `profile`, the counts as that account has them (a Free account in the grace: FREE_BEFORE)."""
     who = profile if profile is not None and plan_of(profile) == plan else plan
     info = {k: v for k, v in PLANS[plan].items() if k != "features"}
+    rules = deck_rules(who)
     out = {**info, "group_size": group_size(who), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(who),
            "screens": screens(who), "deepdives_per_month": deepdives(who), "decks_per_month": decks(who), "themes_per_month": themes(who),
            "networth_items": networth_items(plan), "mf_schemes": mf_limit(plan), "journal_trades": journal_limit(plan), "indicators": has_indicators(plan), "fno": has_fno(plan),
            "ai_reads_per_day": ai_reads_per_day(who), "search_ai_per_day": search_ai_per_day(who),
-           "features": {f: allows(plan, f) or (isinstance(who, dict) and allows_for(who, f)) for f in FEATURES}}
+           "features": {f: allows(plan, f) or (isinstance(who, dict) and allows_for(who, f)) for f in FEATURES},
+           # price102: the decks this account makes (Free: a theme's PDF, marked)
+           "deck_kinds": list(rules["kinds"]), "deck_formats": list(rules["formats"]), "deck_mark": rules["mark"]}
     for k in ("backtests_per_month", "ai_builds_per_month"):
         out[k] = _limit(who, k)
     return out
@@ -406,6 +446,7 @@ def plan_info(plan: str, profile: dict | None = None) -> dict:
 def public_plans() -> dict:
     """What each plan includes, for the Plans page (independent of early access)."""
     return {k: {**{x: v for x, v in p.items() if x != "features"}, "ai_reads_per_day": ai_reads_per_day(k), "refresh": refreshes_allowed(k),
+                "deck_kinds": list(DECK_RULES[k]["kinds"]), "deck_formats": list(DECK_RULES[k]["formats"]), "deck_mark": DECK_RULES[k]["mark"],
                 "features": sorted(p["features"])}
             for k, p in PLANS.items()}
 
@@ -618,14 +659,18 @@ def offer_state(now: datetime | None = None, promo: bool = True) -> dict:
     a plan, so every feature is open and only some Free limits apply); else "paid".
     free_now: the Free plan's limits as they apply today (in early access most are lifted to Pro's).
     promo=False leaves the launch offer out, as the site owner sees it while viewing as a plan."""
-    from . import billing
+    from . import billing, offers
     payments = billing.enabled()
     until = promo_until() if promo and promo_active(now) else None
     info = plan_info("free")
+    founding = offers.founding_public(now) if payments else None
     return {
         "mode": "promo" if until else "paid" if payments else "early",
         "payments": payments,
-        "yearly": billing.yearly_enabled(),
+        # price102: a year can be bought on the founding-member plans while that offer runs, even before the standard yearly plans are set
+        "yearly": billing.yearly_enabled() or bool(founding),
+        # price102 (GTM P1): the founding-member yearly prices while they can be bought (offers.founding_public), else None
+        "founding": founding,
         "promo_until": until.isoformat() if until else None,
         "free_now": {k: info[k] for k in LIMIT_KEYS},
         "free_trial_days": PLANS["free"]["live_trial_days"],

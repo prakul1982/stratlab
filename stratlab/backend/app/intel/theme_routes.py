@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from .. import computed, db
+from .. import computed, db, plans
 from ..admin import admin_profile
 from ..ai_providers import AIError
 from ..auth import current_profile
@@ -2708,6 +2708,9 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     from .. import biz_updates, main
     if format not in ("pptx", "pdf"):
         err(400, "bad_format", "Pick PowerPoint or PDF.")
+    # price102 (GTM P2): Free makes one theme deck a month as a PDF, marked; PowerPoint is Basic's (plans.DECK_RULES), refused before the map
+    if why := plans.deck_refusal(profile, "theme", format):
+        main.upgrade(why, "deck_limit")
     R = _routes()
     pending: list = []
     r, theme, m = map_for_deck(R, profile, region, q, pending=pending)
@@ -2718,8 +2721,9 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
         return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
                              "message": "Preparing the deck: the theme is being checked again under the current rules." if m.get("_older")
                              else "Preparing the deck: the AI map is being written."}, status_code=202)
-    biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
-    body = deck_file(R, r, theme, m, profile, format, biz)
+    biz = r == "IN" and bool(biz_updates._allowed(profile))       # a part of the deck that depends on the plan
+    marked = plans.deck_rules(profile)["mark"]                   # price102: Free's deck, every page marked "Made with StratLab"
+    body = deck_file(R, r, theme, m, profile, format, biz, marked=marked)
     if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
         db.add_usage(profile["id"], "deck")
         db.add_usage(profile["id"], mark)
@@ -2728,9 +2732,11 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
                     headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, market_day(r))}"'})
 
 
-def deck_file(R, r: str, theme: str, m: dict, profile: dict, format: str, biz: bool) -> bytes:
+def deck_file(R, r: str, theme: str, m: dict, profile: dict, format: str, biz: bool, marked: bool = False) -> bytes:
     """A theme deck's file for the checked map: the one kept today for the same read (DECK_CACHE, the shared store), else made, kept with
-    its publication gate and the close its prices are at (theme_dive_deck; e85: the sample deck's refresh too, refresh_sample)."""
+    its publication gate and the close its prices are at (theme_dive_deck; e85: the sample deck's refresh too, refresh_sample).
+    price102: `marked` (Free's deck) puts "Made with StratLab · stratlab.studio" and the theme's public link on every page; it is kept in
+    memory only, under its own key, so it is never the sample deck nor the file a paid plan gets."""
     from .. import deck
     today = datetime.now(R.IST).date()
     stamp = int(float(m.get("generated_at") or 0))
@@ -2743,7 +2749,13 @@ def deck_file(R, r: str, theme: str, m: dict, profile: dict, format: str, biz: b
     waiting = figures_waiting(dive)
     key = deck_key(r, theme, format, today, f"{stamp}.{replaced_n}" if replaced_n else stamp, biz, seen, waiting,
                    str(dive.get("as_of") or "")[:10])
+    if marked:
+        key = key + ("made-with",)
     body = DECK_CACHE.get(key)
+    if body is None and marked:
+        view = deck_view(r, m, dive, deck_extras(r, theme, m, profile, apart=apart_symbols(dive)))
+        body, _gate = deck.build_theme_gated(view, pdf=format == "pdf", marked=True)
+        DECK_CACHE.set(key, body, DECK_TTL, size=len(body))
     if body is None:                           # R20: the file is kept in the shared store too, so a restart or a deploy doesn't rebuild it
         import base64
         from .. import computed

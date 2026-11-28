@@ -36,7 +36,7 @@ def paid(plan, **kw):
 def test_free_limits_are_the_teaser_ones():
     f = PLANS["free"]
     assert (f["backtests_per_month"], f["ai_builds_per_month"], f["group_size"], f["stock_alerts"], f["screens"]) == (5, 5, 5, 3, 1)
-    assert (f["deepdives_per_month"], f["decks_per_month"], f["themes_per_month"], f["ai_reads_per_day"], f["search_ai_per_day"]) == (1, 0, 1, 5, 10)
+    assert (f["deepdives_per_month"], f["decks_per_month"], f["themes_per_month"], f["ai_reads_per_day"], f["search_ai_per_day"]) == (1, 1, 1, 5, 10)   # (changed on purpose, price102: one theme PDF a month)
     assert not plans.refreshes_allowed("free")
     assert "tax_export" not in f["features"] and plans.FEATURE_PLAN["tax_export"] == "basic"
     # what Free keeps: holdings, funds, net worth, the journal, Market Watch, the trial
@@ -96,7 +96,7 @@ def test_the_notice_says_exactly_what_changes_and_when(time_machine):
     assert n["on"] == (AT + timedelta(days=14)).isoformat()
     rows = {r["key"]: (r["before"], r["after"]) for r in n["rows"]}
     assert rows == {"ai_reads_per_day": (60, 5), "search_ai_per_day": (40, 10), "themes_per_month": (None, 1),
-                    "backtests_per_month": (10, 5), "ai_builds_per_month": (10, 5), "deepdives_per_month": (2, 1), "decks_per_month": (1, 0),
+                    "backtests_per_month": (10, 5), "ai_builds_per_month": (10, 5), "deepdives_per_month": (2, 1),   # (changed on purpose, price102: decks 1 before and after, so no row)
                     "stock_alerts": (5, 3), "screens": (2, 1), "group_size": (10, 5)}
     assert n["moves"] == ["Refreshing a stored read (each Refresh is one fresh AI read) moves to Basic",
                           "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"]
@@ -188,14 +188,16 @@ def test_free_refreshes_in_the_grace(counts, monkeypatch, time_machine):
     assert computed.refresh_gate(old, "theme", 1.0) == "capped"
 
 
-# ---------- decks: none on Free, and the lock reads well for 0 ----------
+# ---------- decks: (changed on purpose, price102, the owner's GTM P2) one theme PDF a month on Free, and the lock reads well ----------
 def test_zero_decks_reads_as_on_basic(counts):
     from app import main
-    status, d = _code(main.check_deep, free(), "deck", "AAA", "IN")
+    assert main.check_deep(free(), "deck", "", "IN", mark="deck:theme:IN:defence") == "deck:theme:IN:defence"     # the month's one
+    counts.extend(["deck"])
+    status, d = _code(main.check_deep, free(), "deck", "", "IN", "deck:theme:IN:banks")
     assert status == 402 and d["code"] == "deck_limit"
-    # (while no plan can be bought, upgrade_note adds how to get early access after it)
-    assert d["message"].startswith("Slide decks are on Basic: 5 a month. The sample deck on the Plans page shows what one holds.")
-    assert "0 slide deck" not in d["message"] and "You've made" not in d["message"] and counts == []
+    assert d["message"].startswith("You've made 1 slide deck this month. The count starts again on ")
+    assert "The theme deck you've already made this month still downloads. Basic gives 5 a month." in d["message"]
+    assert "PowerPoint" not in d["message"]
     assert plans.not_on_plan("free", "decks_per_month", "Slide decks") == "Slide decks are on Basic: 5 a month."
 
 

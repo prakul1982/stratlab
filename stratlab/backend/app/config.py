@@ -72,6 +72,11 @@ class Settings:
     RAZORPAY_PLAN_PRO = _env("RAZORPAY_PLAN_PRO")
     RAZORPAY_PLAN_BASIC_YEAR = _env("RAZORPAY_PLAN_BASIC_YEAR")     # optional: yearly plans (two months free)
     RAZORPAY_PLAN_PRO_YEAR = _env("RAZORPAY_PLAN_PRO_YEAR")
+    # price102 (offers.py): the founding-member and student yearly plans, when they are set as Railway variables rather than in
+    # Admin -> Prices (Admin's value wins)
+    RAZORPAY_PLAN_BASIC_YEAR_FOUNDING = _env("RAZORPAY_PLAN_BASIC_YEAR_FOUNDING")
+    RAZORPAY_PLAN_PRO_YEAR_FOUNDING = _env("RAZORPAY_PLAN_PRO_YEAR_FOUNDING")
+    RAZORPAY_PLAN_BASIC_YEAR_STUDENT = _env("RAZORPAY_PLAN_BASIC_YEAR_STUDENT")
 
     # AI strategy builder: providers are tried in order until one answers (see ai_providers.py)
     AI_PROVIDERS = _env("AI_PROVIDERS", "auto")         # "auto" = every provider with a key, or e.g. "groq,gemini"
