@@ -99,5 +99,6 @@ def test_the_blogs_more_links_into_the_app_say_they_need_sign_in(w):
     from tests.test_blog import issue_for
     blog.save_brief(issue_for("IN"), datetime(2026, 10, 1, 11, 0, tzinfo=timezone.utc))
     t = w["client"].get("/blog/india-market-brief-2026-10-01").text
-    assert re.search(r'<a href="/new" rel="nofollow">Test a trading idea on past prices \(needs sign-in\)</a>', t)
-    assert re.search(r'<a href="/research/rotation\?region=IN" rel="nofollow">Sector rotation chart \(needs sign-in\)</a>', t)
+    # (changed on purpose, conv101 T1: each carries where it was followed from, ?from=blog)
+    assert re.search(r'<a href="/new\?from=blog" rel="nofollow">Test a trading idea on past prices \(needs sign-in\)</a>', t)
+    assert re.search(r'<a href="/research/rotation\?region=IN&amp;from=blog" rel="nofollow">Sector rotation chart \(needs sign-in\)</a>', t)

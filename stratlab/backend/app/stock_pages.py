@@ -3119,7 +3119,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
 def _cta_top(symbol: str, test: str, deep: str) -> str:
     """conv101 (P3, funnel 27 Nov: the only way in was halfway down the page): the two ways into the app under the price, in the first screen
     on a phone too. Their words say they sign up or sign in, so no "(needs sign-in)" is added to them."""
-    return (f'<div class="ctas" data-cta-top><a class="btn" href="{e(test)}">Free sign-up: test a strategy on {e(symbol)}</a>'
+    return (f'<div class="ctas" data-cta-top><a class="btn" href="{e(test)}">Free sign-in: test a strategy on {e(symbol)}</a>'
             f'<a class="btn ghost" href="{e(deep)}">Sign in for the full deep dive</a></div>')
 
 

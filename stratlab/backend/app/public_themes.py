@@ -725,9 +725,9 @@ def render(v: dict) -> str:
         outline.append(f"Each layer's companies and figures ({v['members']} compan{'y' if v['members'] == 1 else 'ies'})")
     outline += ["Tailwinds and risks, each with its source", "How every number was worked out"]
     body += (f'<section class="card" data-cta-top><h2>The full {e(label)} theme, free with an account</h2>'
-             f"<p>Sign up free to open the whole theme: each company's place in the map and how it was checked, every layer's figures, the "
+             f"<p>Sign in free to open the whole theme: each company's place in the map and how it was checked, every layer's figures, the "
              f"tailwinds and risks with their sources, and the news.</p>"
-             f'<div class="ctas"><a class="btn" href="{e(app)}">Sign up free to open the theme</a>'
+             f'<div class="ctas"><a class="btn" href="{e(app)}">Sign in free to open the theme</a>'
              f'<a class="btn ghost" href="{e(site)}/sample-deck">Preview a theme deck, no sign-in</a></div>'
              f'<details class="how" data-deck-preview><summary>What the {e(label)} slide deck holds</summary><ol>'
              + "".join(f"<li>{e(x)}</li>" for x in outline)
@@ -790,7 +790,7 @@ def render(v: dict) -> str:
         body += f'<section class="card" data-about><h2>About the theme</h2><p>{e(v["summary"])}</p></section>'
     body += (f'<section class="card" data-cta><h2>See the full theme on StratLab</h2><p>Sign in for the whole theme: the figures of each layer, '
              f"every company placed by the map and how it was checked, the tailwinds and risks with their sources, the news and the slides.</p>"
-             f'<div class="ctas"><a class="btn" href="{e(app)}">Sign up free to open the {e(label)} theme</a><a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div></section>'
+             f'<div class="ctas"><a class="btn" href="{e(app)}">Sign in free to open the {e(label)} theme</a><a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div></section>'
              f'<details class="how"><summary>How this page is made</summary><p>{e(METHOD)}</p></details>'
              f'<p class="note">{e(FACTS_LINE)} <a href="{e(site)}/help#feedback">Report an error</a>.</p>')
     return stock_pages._page(head, app, body, src="theme")

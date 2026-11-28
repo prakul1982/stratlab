@@ -248,8 +248,8 @@ def test_the_stock_pages_ways_in_are_under_the_price_and_the_footer_names_sebi_a
     page = w["client"].get("/stocks/in/RELIANCE").text
     top = page.index("data-cta-top")
     assert page.index("data-price") < top < page.index("data-chart") if "data-chart" in page else page.index("data-price") < top
-    assert "Free sign-up: test a strategy on RELIANCE</a>" in page and "Sign in for the full deep dive</a>" in page
-    assert "Free sign-up: test a strategy on RELIANCE (needs sign-in)" not in page
+    assert "Free sign-in: test a strategy on RELIANCE</a>" in page and "Sign in for the full deep dive</a>" in page
+    assert "Free sign-in: test a strategy on RELIANCE (needs sign-in)" not in page
     assert "Go further with RELIANCE" in page, "the way in at the foot stays"
     assert "StratLab is not a SEBI-registered investment adviser or research analyst." in page
     assert "(NSE, BSE and the SEC)" in page
@@ -269,12 +269,12 @@ def test_the_theme_pages_way_in_and_deck_preview_are_at_the_top_and_promise_no_f
     html = public_themes.render(_theme_view())
     top, first = html.index("data-cta-top"), html.index("data-layer")
     assert top < first
-    assert "Sign up free to open the theme</a>" in html and "from=theme" in html
+    assert "Sign in free to open the theme</a>" in html and "from=theme" in html
     assert 'href="https://stratlab.studio/sample-deck">Preview a theme deck, no sign-in</a>' in html
     assert "What the Defence slide deck holds" in html and "The value chain: 3 layers" in html and "companies and figures (12 companies)" in html
     assert "Slide decks are on Basic and Pro." in html
     assert "Download the full deck" not in html and "free deck" not in html.lower(), "Free has no decks of its own (plans.PLANS decks_per_month 0)"
-    assert len(re.findall(r">Sign up free to open the[^<]*</a>", html)) == 2, "the way in at the foot stays too"
+    assert len(re.findall(r">Sign in free to open the[^<]*</a>", html)) == 2, "the way in at the foot stays too"
 
 
 # ---------- coordinator: the sample deck's own page, and the deck's footer ----------

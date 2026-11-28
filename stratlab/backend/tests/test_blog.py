@@ -181,7 +181,8 @@ def test_a_post_is_real_html_with_canonical_tags_json_ld_and_links(w):
     assert re.search(r'<th scope="row" class="l">NIFTY 50</th><td data-l="Close">24,812.30</td><td data-l="Day %">▲ \+0.42%</td>', html)
     assert re.search(r'<th scope="row" class="l">Nifty IT</th><td class="l" data-l="From → To">Improving → Leading</td>', html)       # a sector's move is a row
     assert '<a href="/stocks/in/TCS">TCS</a>' in html and "Stage 2 (advancing)" in html           # a company name goes to its page, its stage in the row
-    for link in ('href="/library"', 'href="/new"', 'href="/stocks"', 'href="/blog/briefs"', 'href="/research/rotation?region=IN"'):
+    # (changed on purpose, conv101 T1: a link into the app says which kind of page it was followed from, ?from=blog)
+    for link in ('href="/library"', 'href="/new?from=blog"', 'href="/stocks"', 'href="/blog/briefs"', 'href="/research/rotation?region=IN&amp;from=blog"'):
         assert link in html, link
     assert 'rel="alternate" type="application/atom+xml"' in html and '<a href="/blog">Blog</a>' in html          # the feed, and the header's Blog link
     assert "Headline" not in html and "Brokerage says buy" not in html and "Nifty ends higher" not in html     # no news headlines
@@ -657,7 +658,7 @@ def test_a_theme_post_sets_layers_against_layers_and_draws_them(w):
     html = page(w["client"], "/blog/theme-cybersecurity-margins-us")
     assert html.count('<figure class="hb">') == 1 and 'class="bar neg"' in html
     assert "Check Point &lt;b&gt;Software&lt;/b&gt;" in html and "latest full latest" not in html
-    assert 'href="/themes/us/cybersecurity"' in html and 'href="/research/themes?q=cybersecurity&amp;region=US"' in html
+    assert 'href="/themes/us/cybersecurity"' in html and 'href="/research/themes?q=cybersecurity&amp;region=US&amp;from=blog"' in html   # (changed on purpose, conv101 T1: ?from=blog)
     assert blog_research.advice_words(post) is None and not any(v in html.lower() for v in VENDORS)
 
 

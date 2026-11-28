@@ -45,7 +45,7 @@ test.describe("T1, T2: a pageview from the pages the server draws", () => {
     expect(ev.properties.$session_id).toBe(stored.$sesid[1]);
     // the page's ways into the app sit under the price and carry where they came from
     const top = page.locator("[data-cta-top] a").first();
-    await expect(top).toHaveText("Free sign-up: test a strategy on RELIANCE");
+    await expect(top).toHaveText("Free sign-in: test a strategy on RELIANCE");
     await expect(top).toHaveAttribute("href", /from=stock/);
     await expect(top).toBeInViewport();
   });
