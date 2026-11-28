@@ -6,7 +6,8 @@ import { SkipLink } from "./SkipLink";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 
 /** The line under every sign-in page's footer logo: the same words as the landing page's and /login's footer (pages/Login.tsx). */
-export const SITE_DISCLAIMER = "Research and paper trading only. No real orders are placed. Past results don't predict future returns, and nothing on StratLab is investment advice.";
+// conv101 (P6): with the Terms' own sentence on SEBI, word for word as the landing page's footer (content/trust.ts TRUST_LINE)
+export const SITE_DISCLAIMER = "Research and paper trading only. No real orders are placed. Past results don't predict future returns. StratLab gives facts, not investment advice, and is not a SEBI-registered investment adviser or research analyst.";
 
 /* LIVE11B-002: one sign-in design. A signed-out visit to an app address ("Sign in to see Holdings") is drawn in /login's own frame: its
  * header (the logo home, the public pages' links, the phone's Menu), its ruled band with the sign-in in one centred column, and its

@@ -82,8 +82,9 @@ test("LIVE14A-013: an open Indian issue without its lot or bids says why (the is
 test("LIVE14B-007 / LIVE14A-012: the signed-out /plans gives the sample deck its table promises", () => {
   const login = read("src/pages/Login.tsx");
   // (updated on purpose, site78 LIVE15A-003: the same module also gives the shared /info read the Free list uses)
-  assert.match(login, /import \{ SampleDeckLink, useSampleDeck \} from "\.\.\/components\/SampleDeck";/);
-  assert.match(login, /\{top && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro\. <SampleDeckLink label="Download a sample deck" \/><\/p>\}/);
+  // (changed on purpose, conv101: the line is on the landing page's plans too, with the sample deck's own page beside the download)
+  assert.match(login, /import \{ SampleDeckLink, SampleDeckPageLink, useSampleDeck \} from "\.\.\/components\/SampleDeck";/);
+  assert.match(login, /<p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro\. <SampleDeckLink label="Download a sample deck" \/><SampleDeckPageLink \/><\/p>/);
   assert.match(read("src/components/PlanCompare.tsx"), /0 \(a sample deck to download\)/);
 });
 

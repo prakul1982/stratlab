@@ -11,7 +11,7 @@ import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
 import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_SPACES } from "../content/intro";
-import { Google } from "../components/Icons";
+import { Google } from "../components/IconsLite";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
@@ -21,7 +21,8 @@ import { publicGet } from "../lib/http";
 import { plainTerms } from "../content/seo";
 import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeUi";
 import type { LibEntry } from "../components/LibraryBits";
-import { exampleEyebrow, pickExamples } from "../lib/landingExamples";
+import { exampleEyebrow, heroExample, pickExamples } from "../lib/landingExamples";
+import { TRUST_LINE, DATA_LINE, CANCEL_NOTE } from "../content/trust";
 import { importWithRetry } from "../lib/lazyRetry";
 import { emailFormNow, emailFormSettled, loadEmailForm } from "../lib/emailForm";
 import { adsLive } from "../lib/ads";
@@ -35,10 +36,12 @@ const cardChecks = (e: LibEntry) => underHeadline(lostMoney(e.verdict.verdict, e
 const ADS_HERE = adsLive(CONFIG, "public");
 const PublicAdLazy = lazy(() => import("../components/AdUnit").then((m) => ({ default: m.PublicAd })));
 const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></Suspense> : null);
+// conv101 (P1): try one idea without signing in; its code loads only when a visitor opens it (the landing's 450 KB budget, review-r5)
+const GuestTry = lazy(() => importWithRetry(() => import("../components/GuestTry")).then((m) => ({ default: m.GuestTry })));
 const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
 // sign-in by email (owner, 16 Nov): on the sign-in page only while /config.js switches it on; its code loads only then
 import { EmailWay } from "../components/EmailWay";
-import { SampleDeckLink, useSampleDeck } from "../components/SampleDeck";
+import { SampleDeckLink, SampleDeckPageLink, useSampleDeck } from "../components/SampleDeck";
 // LIVE16B-001: on the sign-in page itself the email form's code is asked for as this file runs, and drawn straight away once here, so the form
 // the start-up frame shows is never swapped for an empty slot while it downloads
 // (LIVE17B-002: lib/emailForm, so a plan card's email button asks for it before it opens this page)
@@ -373,8 +376,8 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
               {cta()}
               {/* R61/R64: beside Continue with Google, the email way in as a button of its own, while email sign-in is on (the sign-in page has the form itself) */}
               {!login && <EmailWay className="lp-cta-2" />}
-              {/* NAV3: a real result anyone can open without signing in (the public library: rules, verdict and checks) */}
-              {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
+              {/* NAV3: a real result anyone can open without signing in; conv101 (P4): one that held up, explained on its own page, not the list */}
+              {full && <HeroProof />}
             </div>
             {/* its place held from the first frame (LIVE12B-008: the form arrived after it and pushed the small print 208 px down on a phone) */}
             {login && emailSignInOn() && (EmailNow ? <EmailNow signup={signup} /> : <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>)}
@@ -384,6 +387,8 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
           {full && <HeroDemo />}
         </div>
       </section>}
+
+      {full && <GuestTrySection />}
 
       {/* LAND-2: in the first screens under the hero, the three spaces with three real things each, then the three steps. It replaced
           the three picture cards and Trade's own four steps, which said the same less plainly. The same words are in the page's HTML for
@@ -551,7 +556,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
       <footer className="lp-foot">
         <div className="lp-wrap spread wrap g16">
           <Logo size={30} />
-          <p className="small muted k-measure">Research and paper trading only. No real orders are placed. Past results don't predict future returns, and nothing on StratLab is investment advice. © {new Date().getFullYear()} StratLab.</p>
+          <p className="small muted k-measure">Research and paper trading only. No real orders are placed. Past results don't predict future returns. StratLab gives facts, not investment advice, and is not a SEBI-registered investment adviser or research analyst. © {new Date().getFullYear()} StratLab.</p>
           <div className="stack g6">
             <SiteLinks />
             <LegalLinks />
@@ -653,7 +658,9 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   // LIVE11B-001: the Google and email buttons are ONE row of the card's four-row subgrid (name, price, ways in, list): as two
                   // children the email button took the list's row and the list ran under it, its ticks boxed under "Sign in with email"
                   : <div className="lp-plan-ways"><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? `/plans?plan=${p}` : null)}>{act.label}</button>
-                    <EmailWay next={act.buy ? `/plans?plan=${p}` : null} className="lp-plan-email" label={act.label.replace("Continue with Google", "Sign in with email")} /></div>}
+                    <EmailWay next={act.buy ? `/plans?plan=${p}` : null} className="lp-plan-email" label={act.label.replace("Continue with Google", "Sign in with email")} />
+                    {/* conv101 (P7): what lowers the risk of paying, beside the button, not only in the fine print */}
+                    <span className="small muted lp-plan-cancel" data-testid={`cancel-note-${p}`}>{p === "free" ? "No card needed" : CANCEL_NOTE}</span></div>}
                 {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
                 <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">
@@ -666,8 +673,10 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
           })}
         </div>
         <AllFeatures />
+        <p className="small muted lp-center" data-testid="plans-trust">{TRUST_LINE} {DATA_LINE}</p>
         {/* LIVE14B-007 / LIVE14A-012: the table promises Free "a sample deck to download": the signed-out /plans gives the link too */}
-        {top && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /></p>}
+        {/* conv101: on the landing page too, with the sample deck's own page (its link previews when shared) */}
+        <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
         {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p></PhoneFold>}
       </div>
@@ -790,6 +799,46 @@ function ResearchMock() {
   );
 }
 
+/** conv101 (P1): "Try one idea now, no sign-in", straight under the hero: a real backtest of one of the library's rule sets on a well-known stock,
+ * opened with one press (its code and its list load then). */
+function GuestTrySection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <section id="try" className="lp-sec lp-try" aria-labelledby="try-h">
+      <div className="lp-wrap stack g18">
+        <div className="lp-head">
+          <span className="eyebrow">No sign-in</span>
+          <h2 id="try-h" className="serif lp-h2">Try one idea now.</h2>
+          <p className="lp-p">Pick a well-known rule set and a stock. StratLab runs its real test on five years of prices after every charge and shows the verdict, good or bad.</p>
+        </div>
+        {open ? <Suspense fallback={<div className="lp-card gt-card" aria-busy="true"><span className="lp-skel lp-skel-p" /><span className="lp-skel lp-skel-p" /></div>}><GuestTry /></Suspense>
+          : <div><button type="button" className="btn" data-testid="guest-open" onClick={() => setOpen(true)}>Try an idea, free</button></div>}
+        {/* conv101 (P6): what StratLab is and isn't, in the Terms' own words, and where its figures come from, straight under the hero (the hero
+            itself names no "facts": VR5-owner-2) */}
+        <p className="small muted lp-trust" data-testid="trust-line">{TRUST_LINE} {DATA_LINE}</p>
+      </div>
+    </section>
+  );
+}
+
+/** The public library's newest strategies, asked for once per page load and shared by the hero's proof button and the examples below
+ * (the start-up asked for the same address early: lib/entry publicReads). */
+let libList: Promise<{ entries: LibEntry[]; total: number }> | null = null;
+const libraryList = () => (libList ??= publicGet<{ entries: LibEntry[]; total: number }>("/public/library?sort=new&limit=60").catch((e) => { libList = null; throw e; }));
+
+/** conv101 (P4): "See a verdict that held up, no sign-in": one real strategy whose checks all passed and that made money after costs, also on the
+ * years it was never tuned on (lib/landingExamples heroExample, by rule), whose own page explains the checks and says how it did against buy
+ * and hold. Until the list is here, or when none qualifies, the library itself. */
+function HeroProof() {
+  const [to, setTo] = useState("/library");
+  useEffect(() => {
+    let live = true;
+    libraryList().then((r) => { const best = heroExample(r.entries); if (live && best) setTo(`/library/${encodeURIComponent(best.id)}`); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  return <Link className="btn quiet lp-cta-2" to={to} data-testid="hero-proof">See a verdict that held up, no sign-in</Link>;
+}
+
 /** A few of StratLab's own library strategies with the verdict each earned: real output anyone can open without signing in. One whose checks
  * all passed and one that failed, from different markets, Indian and US stocks and crypto first (lib/landingExamples.ts; LIVE9A-019: three
  * rupee currency pairs), up to three. */
@@ -798,7 +847,7 @@ function LibraryExamples() {
   const [total, setTotal] = useState(0);
   useEffect(() => {
     let live = true;
-    publicGet<{ entries: LibEntry[]; total: number }>("/public/library?sort=new&limit=60")
+    libraryList()
       .then((r) => { if (!live) return; setTotal(r.total); setRows(pickExamples(r.entries)); })
       .catch(() => { if (live) setRows([]); });
     return () => { live = false; };

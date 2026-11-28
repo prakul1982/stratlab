@@ -13,6 +13,7 @@ import { FAQ, faqText } from "../src/content/faq.ts";
 import { AD_PAGE } from "../src/content/ad.ts";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS as POLICY_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
 import { ABOUT_BLOCKS } from "../src/content/about.ts";
+import { CANCEL_NOTE, DATA_LINE, TRUST_LINE } from "../src/content/trust.ts";
 /** Every page drawn from the policy text: the policies and /about (kept apart in the app so a policy page doesn't download it). */
 const LEGAL_BLOCKS = { "/about": ABOUT_BLOCKS, ...POLICY_BLOCKS };
 import { KEY, PLAN_IDS, PLAN_NAME, PRICE, WHO } from "../src/lib/plans.ts";
@@ -84,6 +85,8 @@ export const NOT_FOUND_LINKS = `\n<ul class="boot-links">\n<li><a href="/">Home<
 export const HERO_EYEBROW = "For traders and investors in India and the US";
 export const HERO_LEDE = "Write it in plain words. StratLab tests it on years of real prices after every charge, then checks four ways whether the result could be luck. Company research, your holdings and your tax sit beside it.";
 export const HERO_SMALL = "Free to start · No card · No coding";
+export const HERO_PROOF = "See a verdict that held up, no sign-in";     // conv101 (P4): Login.tsx HeroProof's words
+export const HERO_TRUST = `${TRUST_LINE} ${DATA_LINE}`;                  // conv101 (P6): Login.tsx's trust line (under the plans' cards in the frame)
 const MARK_SVG = '<svg width="19" height="46" viewBox="254 174 156 382" aria-hidden="true" class="logo-mark"><defs><linearGradient id="boot-g" gradientUnits="userSpaceOnUse" x1="392" y1="228" x2="300" y2="365"><stop offset="0" stop-color="#16CC8F"/><stop offset=".55" stop-color="#0C8A5C"/><stop offset="1" stop-color="#063B28"/></linearGradient><linearGradient id="boot-r" gradientUnits="userSpaceOnUse" x1="285" y1="525" x2="345" y2="395"><stop offset="0" stop-color="#FF585E"/><stop offset=".5" stop-color="#E6333C"/><stop offset="1" stop-color="#930C17"/></linearGradient></defs><path fill="#FFFFFF" d="M266,308C268,322 300,338 330,352C370,372 400,392 404,418C408,432 394,448 390,460C390,440 360,416 320,396C285,378 262,362 257,343C254,330 258,316 266,308Z"/><rect x="381" y="177" width="10" height="56" rx="1.5" fill="#12C48A"/><path fill="url(#boot-g)" d="M345,252C310,268 266,290 266,308C268,322 300,338 330,352C370,372 400,392 404,418V234Q404,230 400,230H361Q357,230 357,234V348L345,342Z"/><rect x="277" y="455" width="11" height="98" rx="1.5" fill="#FF444B"/><path fill="url(#boot-r)" d="M257,343C262,362 285,378 320,396C362,416 391,436 390,460C390,480 350,510 316,530V405L306,399V453Q306,457 302,457H261Q257,457 257,453Z"/></svg>';
 const GOOGLE_SVG = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
 const MAIL_SVG = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg>';
@@ -116,7 +119,8 @@ export function heroFrame(template, { heading, summary, after = "", fonts = [] }
   const frame = `<div class="lp-hero ruled boot-hero" data-boot>\n<div class="lp-wrap lp-hero-grid"><div class="stack g22 lp-hero-copy">\n`
     + `<span class="eyebrow boot-js">${text(HERO_EYEBROW)}</span>\n<h1 class="serif lp-h1">${h1}</h1>\n<p class="serif lp-lede boot-js">${text(HERO_LEDE)}</p>\n`
     + `<div class="row wrap g12 boot-js"><a class="btn lp-cta" href="/login">${GOOGLE_SVG}Continue with Google</a><a class="btn outline email-way lp-cta-2" href="/login#email">${MAIL_SVG}Sign in with email</a>`
-    + `<a class="btn quiet lp-cta-2" href="/library">See real results, no sign-in</a></div>\n<p class="small muted boot-js">${text(HERO_SMALL)}</p>\n`
+    + `<a class="btn quiet lp-cta-2" href="/library">${text(HERO_PROOF)}</a></div>\n<p class="small muted boot-js">${text(HERO_SMALL)}</p>\n`
+
     + `${words}${after.replace(/<ul class="boot-links">/, '<ul class="boot-links boot-text">')}\n${b[1].replace('class="boot-foot"', 'class="boot-foot boot-text"')}\n`
     + `</div><div class="boot-demo" aria-hidden="true"></div></div>\n</div>`;
   return template.replace(block, () => frame);
@@ -170,7 +174,7 @@ export function loginFrame(template, { heading, summary, signup = false }) {
 // sign in) are the page's own paragraphs and plans list, shown only then. The Google buttons wait, disabled, as the app's do until the
 // prices come; the email way is a plain link to the sign-in page with the plan picked.
 /** A loading plan card's Google button's words (pages/Login.tsx landingAction before the offer is read: unit/site81 keeps them equal). */
-export const PLAN_FRAME_LABEL = { free: "Continue with Google", basic: "Continue with Google to see plans", pro: "Continue with Google to see plans" };
+export const PLAN_FRAME_LABEL = { free: "Continue with Google", basic: "Continue with Google to get Basic", pro: "Continue with Google to get Pro" };   // (conv101, P7: the plan the button is for)
 
 export function plansFrame(template, { heading, summary, after = "" }) {
   template = landingHead(template, `<a class="btn outline sm" href="/login">Sign in</a>`);
@@ -184,7 +188,8 @@ export function plansFrame(template, { heading, summary, after = "" }) {
     return `<div class="lp-card lp-price${p === "pro" ? " lp-price-top" : ""}" data-plan="${p}"><div class="stack g2"><h2 class="h2">${text(PLAN_NAME[p])}</h2><span class="small muted">${text(WHO[p])}</span></div>`
       + `<div class="stack g2"><span class="lp-skel lp-skel-amount${p === "free" ? " lp-skel-amount-one" : ""}" role="img" aria-label="Loading the price"></span></div>`
       + `<div class="lp-plan-ways"><button type="button" class="btn${p === "pro" ? "" : " outline"}" disabled>${text(label)}</button>`
-      + `<a class="btn outline email-way lp-plan-email" href="${attr(email)}">${MAIL_SVG}${text(label.replace("Continue with Google", "Sign in with email"))}</a></div>`
+      + `<a class="btn outline email-way lp-plan-email" href="${attr(email)}">${MAIL_SVG}${text(label.replace("Continue with Google", "Sign in with email"))}</a>`
+      + `<span class="small muted lp-plan-cancel">${text(p === "free" ? "No card needed" : CANCEL_NOTE)}</span></div>`
       // on a phone the five lines are one fold under the buttons, as the app's PhoneFold draws them; on a wider screen in view (index.html)
       + `<details class="lp-more lp-phone-fold"><summary>What ${text(PLAN_NAME[p])} includes</summary><div class="stack g24">${list(p)}</div></details>`
       + list(p).replace('class="lp-plan-list"', 'class="lp-plan-list boot-wide"') + `</div>`;
@@ -196,6 +201,7 @@ export function plansFrame(template, { heading, summary, after = "" }) {
     + `<div class="lp-period" data-boot-js><span class="lp-skel lp-skel-seg"></span><span class="lp-skel lp-skel-cur"></span></div>\n`
     + `<div class="lp-prices" data-boot-js>${PLAN_IDS.map(card).join("")}</div>\n`
     + `<div class="lp-faq lp-all-features" data-boot-js><details><summary>Every feature, plan by plan</summary><p class="small muted">Opening the lists…</p></details></div>\n`
+    + `<p class="small muted lp-center" data-boot-js>${text(HERO_TRUST)}</p>\n`
     + `<p class="small muted" data-boot-js>Slide decks are on Basic and Pro. </p>\n<span class="lp-skel lp-skel-fine" data-boot-js></span>\n`
     + `${b[1].replace('class="boot-foot"', 'class="boot-foot boot-text"')}\n</div>\n</section>`;
   // with email sign-in off in /config.js, signin-early.js marks the page and the email ways go (index.html), as on /login

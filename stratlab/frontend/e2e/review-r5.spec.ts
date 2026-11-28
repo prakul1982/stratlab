@@ -147,7 +147,7 @@ test.describe("plans: the right currency at once, the charged amount on the card
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699", { timeout: 30_000 });
     await expect(sec.getByRole("heading", { level: 2 })).toHaveText("Plans");
     await expect(sec).not.toContainText(/Free to start|Choose a plan after you sign in/);
-    await expect(sec.locator('.lp-price[data-plan="pro"] button')).toHaveText("Continue with Google to see plans");
+    await expect(sec.locator('.lp-price[data-plan="pro"] button')).toHaveText("Continue with Google to get Pro");     // (changed on purpose, conv101 P7: the button names its plan)
     await expect(sec.locator(".lp-price")).toHaveCount(3);
   });
 });

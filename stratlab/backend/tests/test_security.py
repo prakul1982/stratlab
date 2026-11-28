@@ -19,6 +19,8 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/public/business",                       # the seller's name, address and email, for the policy pages
           # (updated on purpose, FREE-TIER) the sample deck: one theme deck already kept, for Free and visitors on Plans (app/sample_deck.py)
           "/pricing/sample-deck", "/pricing/sample-deck/info",
+          "/stocks/pv.js", "/sample-deck", "/sample-deck.pdf",     # conv101 (added on purpose): the pages' pageview beacon, the sample deck's page and PDF
+          "/public/try",                                          # conv101 (added on purpose): a visitor's one try, no sign-in, a few a day per address
           # a Market Brief's headline from the plain-text email: forwards only to a link stored in that brief (R13-003)
           "/news-link/{iid}/{n}",
           # routes on included routers, seen since the sweep reads every router (newer FastAPI keeps them unflattened; LIVE4-016):
@@ -224,7 +226,10 @@ def test_the_apis_html_pages_run_no_script_and_json_is_left_alone(client):
     assert page.status_code == 200 and csp == guard.CHART_CSP[1].decode()
     assert "script-src 'self';" in csp and "connect-src 'self';" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
     assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp
-    other = client.get("/stocks").headers["content-security-policy"]           # every other page of the API stays script-free
+    # conv101 (changed on purpose): the site's other pages drawn here (the directories, themes, blog, status) run one script of the site's own, the
+    # pageview beacon, with the company pages' policy; the API's other pages (a share preview, unsubscribe) stay script-free
+    assert client.get("/stocks").headers["content-security-policy"] == guard.CHART_CSP[1].decode()
+    other = client.get("/v/x").headers.get("content-security-policy") or guard.HTML_CSP[1].decode()
     assert other == guard.HTML_CSP[1].decode() and "script-src" not in other
     assert "content-security-policy" not in client.get("/plans").headers                     # JSON needs none
     gone = client.get("/unsubscribe", params={"t": "bad"})

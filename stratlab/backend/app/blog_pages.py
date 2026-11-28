@@ -164,14 +164,14 @@ def _html(body: str, status: int = 200, headers: dict | None = None) -> HTMLResp
 def _unavailable() -> HTMLResponse:
     """The posts can't be read right now: a page a visitor can read, never cached, and 503 so a crawler tries again."""
     body = sp._page(sp._head(page_title("The blog is busy"), "The blog can't be read right now.", _site() + "/blog", robots="noindex,follow"), None,
-                    '<h1>The blog is busy</h1><p class="muted">Please try again in a minute.</p>')
+                    '<h1>The blog is busy</h1><p class="muted">Please try again in a minute.</p>', src="blog")
     return HTMLResponse(body, status_code=503, headers={"Retry-After": "120", "Cache-Control": "no-store"})
 
 
 def _not_found(what: str = "post") -> HTMLResponse:
     body = sp._page(sp._head(page_title("Page not found"), "That blog page doesn't exist.", _site() + "/blog", f"<style>{STYLE}</style>", robots="noindex,follow"), None,
                     f'<h1>That {e(what)} isn\'t here</h1><p class="muted">It may have been moved or taken down.</p>'
-                    '<div class="ctas"><a class="btn" href="/blog">All blog posts</a><a class="btn ghost" href="/blog/briefs">Market briefs</a></div>')
+                    '<div class="ctas"><a class="btn" href="/blog">All blog posts</a><a class="btn ghost" href="/blog/briefs">Market briefs</a></div>', src="blog")
     return HTMLResponse(body, status_code=404, headers={"Cache-Control": "public, max-age=60, s-maxage=60"})
 
 
@@ -231,7 +231,7 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
             + _tabs(kind) + (f'<ul class="posts">{cards}</ul>' if cards else '<p class="muted">No posts yet. The first market brief is written after the next close.</p>')
             + pager)
     head = sp._head(title, desc, canonical, f"{_feed_link()}{rel}{ld}<style>{STYLE}</style>")
-    return _html(sp._page(head, None, body), headers={"Cache-Control": LIST_CACHE})
+    return _html(sp._page(head, None, body, src="blog"), headers={"Cache-Control": LIST_CACHE})
 
 
 # ---------- one post ----------
@@ -284,7 +284,7 @@ def post_page(slug: str) -> HTMLResponse:
     # AS1: a market brief and a theme post are each one template filled in with the day's or the theme's figures, so their words are
     # template wording and they carry no ad; a research post written for its one subject is counted (ads.enough_content)
     template = post["kind"] == "brief" or str(post.get("slug") or "").startswith(blog_research.THEME_PREFIX)
-    page = ads.add_to_page(sp._page(head, None, body, template=template), "blog")        # ADS-1: as the page is sent; unchanged while ads are off
+    page = ads.add_to_page(sp._page(head, None, body, template=template, src="blog"), "blog")        # ADS-1: as the page is sent; unchanged while ads are off
     return _html(page, headers={"Cache-Control": CACHE, **({} if indexable else {"X-Robots-Tag": "noindex, follow"})})
 
 

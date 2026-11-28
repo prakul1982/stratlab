@@ -216,7 +216,10 @@ def test_a_company_page_may_run_the_sites_script_and_nothing_else(w):
     assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp
     for url in ("/stocks", "/stocks/in", "/stocks/in/browse/r", "/stocks/in/index/nifty-50", "/blog"):
         other = w["client"].get(url).headers["content-security-policy"]
-        assert "script-src" not in other and "connect-src" not in other, url      # every other page of the API stays script-free
+        # conv101 (changed on purpose): the site's own pages drawn here run its pageview beacon too, and nothing inline or from elsewhere
+        assert "script-src 'self';" in other and "connect-src 'self';" in other and "'unsafe-inline'" not in other.split("style-src")[0], url
+    for url in ("/unsubscribe?t=bad",):
+        assert "script-src" not in (w["client"].get(url).headers.get("content-security-policy") or ""), url     # the API's other pages stay script-free
     js = w["client"].get("/stocks/chart.js")
     assert js.status_code == 200 and js.headers["content-type"].startswith("text/javascript") and "s-maxage" in js.headers["cache-control"]
     assert js.text == stock_pages.CHART_JS

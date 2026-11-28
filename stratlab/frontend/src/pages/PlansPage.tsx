@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CANCEL_NOTE, DATA_LINE, TRUST_LINE } from "../content/trust";
 import { changeDay, graceLine } from "../lib/freeChange";
 import { AccountWait } from "../components/AccountWait";
 import { Card, ConfirmDialog, FieldGroup, FormGrid, Notice, PageHeader, Seg } from "../components/kit";
@@ -12,7 +13,7 @@ import { cardPrice, checkoutCur, dollarText, freePrice, usdPricesNote, usdRowOf 
 import { CurrencySwitch } from "../components/CurrencySwitch";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
-import { SampleDeckLink } from "../components/SampleDeck";
+import { SampleDeckLink, SampleDeckPageLink } from "../components/SampleDeck";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
@@ -78,7 +79,8 @@ export function PlansPage() {
       // with an amount the page didn't show
       if (d.currency && d.currency !== currency) { notify("The prices changed just now. Check the amount on the plan again, then subscribe."); setBusy(null); return; }
       await loadRazorpay();
-      track("checkout started", { plan, period });
+      // "checkout started" is the server's now (POST /billing/subscribe, conv101 T3); closing the window or a failed payment is told to it here
+      const told = (event: "dismissed" | "failed") => { void api("/billing/checkout-event", { method: "POST", body: { event, plan, period } }).catch(() => undefined); };
       const rz = new window.Razorpay({
         // the payment window's name carries the plan and the period (R6V-009)
         key: d.key_id, subscription_id: d.subscription_id, name: `StratLab · ${planName(plan)}, ${period === "year" ? "yearly" : "monthly"}`,
@@ -90,9 +92,9 @@ export function PlansPage() {
           catch (e) { fail(e); }
           finally { setBusy(null); }
         },
-        modal: { ondismiss: () => setBusy(null) },
+        modal: { ondismiss: () => { told("dismissed"); setBusy(null); } },
       });
-      rz.on("payment.failed", (r: { error: { description: string } }) => { notify(`Payment failed: ${r.error.description}`); setBusy(null); });
+      rz.on("payment.failed", (r: { error: { description: string } }) => { told("failed"); notify(`Payment failed: ${r.error.description}`); setBusy(null); });
       rz.open();
     } catch (e) { fail(e); setBusy(null); }
   };
@@ -186,13 +188,16 @@ export function PlansPage() {
                 {p === "free" && cur && me?.free_change && <p className="k-note" data-testid="plan-grace">{graceLine(me.free_change)} <Link className="link" to="/account#free-change">See what changes</Link></p>}
                 {picked === p && p !== "free" && !cur && <p className="k-note" data-testid="plan-picked">The plan you picked before signing in.</p>}
                 {action(p, cur)}
+                {/* conv101 (P7): the Cancellation page's terms beside the button that buys */}
+                {p !== "free" && !cur && billing && me && <p className="k-note" data-testid={`cancel-note-${p}`}>{CANCEL_NOTE}</p>}
               </div>
             </Card>
           );
         })}
       </div>
       {/* FREE-TIER: Free has no slide decks of its own: one real theme deck to download, so a Free reader or a visitor sees what one holds */}
-      <p className="k-small k-muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro{deckGrace ? ` (your Free account keeps ${deckGrace})` : ""}. <SampleDeckLink label="Download a sample deck" /></p>
+      <p className="k-small k-muted" data-testid="plans-trust">{TRUST_LINE} {DATA_LINE}</p>
+      <p className="k-small k-muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro{deckGrace ? ` (your Free account keeps ${deckGrace})` : ""}. <SampleDeckLink label="Download a sample deck" /><SampleDeckPageLink /></p>
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}

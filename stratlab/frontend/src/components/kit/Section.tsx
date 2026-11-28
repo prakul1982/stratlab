@@ -221,9 +221,13 @@ export function SectionMenu({ frame }: { frame: SectionFrame }) {
 
 /** The two buttons at the right of a section's header: the menu, and the chevron that closes or opens it. */
 export function SectionControls({ frame, fold = true }: { frame: SectionFrame; fold?: boolean }) {
+  // conv101 (P10, funnel 27 Nov: "Move section / Close section" on the sign-in wall and the public library): a visitor who isn't signed in has
+  // nothing to arrange, so no menu, and no way to close an open section; a section closed for them to start with still opens
+  const guest = useUser() === "guest";
+  if (guest && (!fold || frame.open)) return null;
   return (
     <div className="k-sec">
-      <SectionMenu frame={frame} />
+      {!guest && <SectionMenu frame={frame} />}
       {fold && (
         <button type="button" className="k-sec-btn k-sec-fold" aria-expanded={frame.open} aria-label={frame.open ? "Close section" : "Open section"}
           aria-describedby={frame.headingId ?? undefined} title={frame.open ? "Close this section" : "Open this section"}

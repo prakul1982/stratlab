@@ -3495,6 +3495,9 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 /* fix98: pressed, it waits for the sign-in page's email form before opening the page: it looks pressed and busy meanwhile */
 .lp-plan-ways { display: flex; flex-direction: column; gap: 8px; }        /* LIVE11B-001: one subgrid row holding both ways in */
 .lp-plan-ways > .btn { width: 100%; }
+/* conv101 (P7): "Cancel any time · full refund…" under a plan's buttons; P6: the facts-not-advice line under the hero's buttons */
+.lp-plan-cancel { text-align: center; }
+.lp-trust { max-width: 560px; }
 .lp-final-ways { justify-content: center; }
 /* LIVE11A-011: the theme's member tables share one column grid, so "Market value" and the quote sit at the same x in every layer's table
    (each sized its own columns: x 1075 in one, 1205 in the next); a phone reads them as cards */
@@ -3600,3 +3603,19 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
   .k-sform .k-chiprow.wrap { gap: 6px; }
   .k-sform .k-chiprow.wrap .k-chip, .k-sform .k-chipset > .k-chip { flex: 1 1 auto; min-height: 40px; justify-content: center; text-align: center; }
 }
+
+/* conv101 (P1): try one idea without signing in (components/GuestTry.tsx) */
+.lp-try { padding-top: 28px; padding-bottom: 28px; }
+.gt-card { max-width: 860px; }
+.gt-pick { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gt-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.gt-chip { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+.gt-chip.on { background: var(--ink); color: var(--on-ink, var(--paper)); border-color: var(--ink); }
+.gt-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.gt-rule { margin: 0; }
+.gt-result { border-top: 1px solid var(--line-2); padding-top: 16px; }
+.gt-headline { font-size: 1.25rem; line-height: 1.3; }
+.gt-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.gt-stats dd { margin: 2px 0 0; font-weight: 600; }
+@media (max-width: 640px) { .gt-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.gt-next { background: var(--chip); border-radius: 12px; padding: 14px; }

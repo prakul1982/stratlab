@@ -186,5 +186,6 @@ def test_a_visitors_public_company_page_says_to_sign_in_to_report_a_figure():
     from app import stock_pages
     f = {"name": "Example Ltd", "symbol": "EXAMPLE", "price": 100.0, "low52": 80.0, "high52": 120.0, "pe": 20.0, "market_cap": 1000.0}
     html = stock_pages.render(f, "IN", "EXAMPLE", "Example Ltd")
-    assert "data-report" in html and "Sign in to report it" in html and "/research/IN/EXAMPLE#co-numbers" in html
+    # (changed on purpose, conv101 T1: the link carries ?from=stock, before its #part)
+    assert "data-report" in html and "Sign in to report it" in html and "/research/IN/EXAMPLE?from=stock#co-numbers" in html
     assert "data-report" not in stock_pages.render(None, "IN", "EXAMPLE", "Example Ltd")
