@@ -20,6 +20,7 @@ price, 5 Oct 2026", never "close" (R6V-002).
 Market values are checked before they are shown or ranked (cap_problem): an American depositary share counted as an
 ordinary share, a share count a thousand times off or a shell's stray trade can make a $46 trillion bank. Such a value
 is n/a on the page and left out of every "largest" list, and so is a P/E above 1,000 (R6V-001)."""
+import contextvars
 import hashlib
 import json
 import math
@@ -150,6 +151,22 @@ class Busy(Exception):
 BUILD_WAIT = 2.0
 BUILDERS = 2
 _served_behind = threading.local()        # set while a request is served the stored copy of a page whose build goes on behind it
+# seo102 (Search Console: 13,426 company pages "Discovered, currently not indexed", that is crawls put off because the site looked
+# slow): a search engine's crawler is served a stored copy at once, never kept the BUILD_WAIT seconds a person waits for a fresh build
+# (live: 1.5-2.6 s to the first byte of a crawled page). The build still starts behind it, within the minute's ration, for the next view.
+SEARCH_CRAWLER = re.compile(r"Googlebot|Google-InspectionTool|GoogleOther|Storebot-Google|AdsBot-Google|Mediapartners-Google|bingbot|"
+                            r"BingPreview|DuckDuckBot|YandexBot|Applebot|Baiduspider", re.I)
+_crawler_visit = contextvars.ContextVar("stock_page_crawler", default=False)
+
+
+def is_crawler(user_agent: str | None) -> bool:
+    """Whether a request's User-Agent names a search engine's crawler (SEARCH_CRAWLER)."""
+    return bool(user_agent) and bool(SEARCH_CRAWLER.search(str(user_agent)[:400]))
+
+
+def crawler_visit(user_agent: str | None):
+    """Mark the request as a search crawler's (or not) for the page store; returns the token to reset it with."""
+    return _crawler_visit.set(is_crawler(user_agent))
 
 
 def _setting(key: str):
@@ -1763,6 +1780,63 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
 
 
 BUILT_KEY = "stocks:built:"          # stocks:built:<region> = {"at", "pages": every stored page, "shown": those with something to show}
+# seo102: the day each company page's reported content last changed, for the sitemap's <lastmod> (it said the companies list's refresh day,
+# that is today, for all 13,400 pages every day, which teaches a search engine to ignore it). stocks:mod:<region> = {symbol: [print, day]}:
+# `print` is a short hash of what the page reports (CONTENT_KEYS: the name, industry, yearly figures, growth, latest quarter and filings),
+# never the price, the range, the market value or the trend, which move with every close. Kept by the screens' gathering of the stored
+# pages (screens.build_index), which reads every stored page anyway; a page first seen takes the newest of its filings' dates and its
+# annual report's filing date, else the day it was built.
+MOD_KEY = "stocks:mod:"
+CONTENT_KEYS = ("name", "exchange", "industry", "unit", "basis", "currency_note", "report_currency", "years", "growth", "q", "lender",
+                "no_numbers", "not_company", "annual_filed")
+ISO_DAY = re.compile(r"^\d{4}-\d\d-\d\d$")
+
+
+def content_print(f: dict | None) -> str:
+    """A short hash of what a page reports (CONTENT_KEYS and its filings' dates and names), the same for two builds that differ only in
+    the price and what moves with it."""
+    f = f or {}
+    got = {k: f.get(k) for k in CONTENT_KEYS if f.get(k) not in (None, "", [], {})}
+    got["filings"] = [[str(x.get("at") or "")[:10], str(x.get("name") or "")] for x in f.get("filings") or [] if isinstance(x, dict)]
+    return hashlib.sha1(json.dumps(got, sort_keys=True, default=str, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+
+
+def first_day(f: dict | None, ts: float | None) -> str:
+    """The day a page first seen by the change log is taken to have last changed: the newest date it reports (a filing's, its annual
+    report's), never after the day it was built; else that day."""
+    built = datetime.fromtimestamp(float(ts or time.time()), timezone.utc).date().isoformat()
+    days = [str(x.get("at") or "")[:10] for x in (f or {}).get("filings") or [] if isinstance(x, dict)]
+    days.append(str((f or {}).get("annual_filed") or "")[:10])
+    days = [d for d in days if ISO_DAY.match(d) and d <= built]
+    return max(days) if days else built
+
+
+def content_days(region: str) -> dict[str, str]:
+    """{symbol: the day its page's reported content last changed} (MOD_KEY); {} before the first gathering or when storage is down."""
+    got = _setting(MOD_KEY + region) or {}
+    return {s: v[1] for s, v in got.items() if isinstance(v, list) and len(v) == 2 and ISO_DAY.match(str(v[1]))} if isinstance(got, dict) else {}
+
+
+def note_content(region: str, prints: dict[str, tuple[str, str]], today: str | None = None) -> dict[str, list]:
+    """Bring the change log up to date with the stored pages as gathered now: `prints` is {symbol: (content_print, first_day)}. A page whose
+    print is unchanged keeps its day; a changed one takes `today`; a page first seen takes its first_day; a page no longer stored is
+    dropped. Written only when something changed. Returns the log."""
+    today = today or datetime.now(timezone.utc).date().isoformat()
+    old = _setting(MOD_KEY + region)
+    old = old if isinstance(old, dict) else {}
+    new: dict[str, list] = {}
+    for sym, (fp, first) in prints.items():
+        was = old.get(sym)
+        if isinstance(was, list) and len(was) == 2 and ISO_DAY.match(str(was[1])):
+            new[sym] = was if was[0] == fp else [fp, today]
+        else:
+            new[sym] = [fp, first if ISO_DAY.match(str(first or "")) else today]
+    if new != old:
+        try:
+            _put(MOD_KEY + region, new)
+        except Exception as ex:
+            print("stock pages: could not save the change log", region, str(ex)[:120])
+    return new
 # how far the stored pages are rebuilt to the facts a page shows now (owner, 13 Nov: "show how far the company-page rebuild has got"):
 # stocks:rebuild:<region> = {"at", "version", "current": pages with facts at FACTS_VERSION, "of": pages with facts, "pages": every stored
 # page}, counted while the screens' index gathers every stored page (no read of its own), and read by Admin, kept REBUILD_MEMORY
@@ -1809,19 +1883,54 @@ def has_content(f: dict | None) -> bool:
     return bool(f) and not f.get("not_company") and not f.get("no_numbers")
 
 
-def indexable(f: dict | None) -> bool:
+def indexable(f: dict | None, newest: str | None = None) -> bool:
     """Whether a company's page is offered to search engines: it has reported numbers to show (has_content) AND a recent share
     price. A page with only one of the two (no recent price: suspended, delisted or untraded; or no reported numbers) is thin,
     so it is noindex and left out of the sitemap; a visitor who opens it still reads what there is (AS1: AdSense's
-    low-value-content rule, docs/ADMIN.md)."""
-    return has_content(f) and _num((f or {}).get("price")) is not None
+    low-value-content rule, docs/ADMIN.md). seo102: a price is recent when it is no more than STALE_PRICE_DAYS older than `newest`,
+    the market's newest close among the stored pages (market_newest); a share untraded that long is suspended or delisted, and its
+    page, a month-old price over old figures, was one of thousands Google left uncrawled. Without `newest` any price counts."""
+    return has_content(f) and _num((f or {}).get("price")) is not None and not price_stale(f, newest)
 
 
-def sitemap_ok(f: dict | None) -> bool:
+def sitemap_ok(f: dict | None, newest: str | None = None) -> bool:
     """Whether a stored page may be listed in the sitemap: it is indexable, and the build knew
     what the ticker is, so it can't turn out to be a fund's 404 when next built (R12-013: GSMT). A page whose build
     couldn't read that is built again within the hour when opened, like one whose annual report couldn't be read."""
-    return indexable(f) and not (f or {}).get("type_unread")
+    return indexable(f, newest) and not (f or {}).get("type_unread")
+
+
+STALE_PRICE_DAYS = 30          # seo102: a last close this many days older than the market's newest says the share isn't trading
+
+
+def price_stale(f: dict | None, newest: str | None) -> bool:
+    """Whether a page's price is more than STALE_PRICE_DAYS older than `newest` (an ISO day); False when either day is unknown."""
+    at = str((f or {}).get("price_at") or "")[:10]
+    if not newest or not ISO_DAY.match(at) or not ISO_DAY.match(str(newest)[:10]):
+        return False
+    return (date.fromisoformat(str(newest)[:10]) - date.fromisoformat(at)).days > STALE_PRICE_DAYS
+
+
+def newest_day(days) -> str | None:
+    """The newest ISO day of `days` that isn't after tomorrow (a damaged date in the future never makes every other page stale)."""
+    cap = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    return max((d for d in (str(x or "")[:10] for x in days) if ISO_DAY.match(d) and d <= cap), default=None)
+
+
+_NEWEST: dict = {}             # region -> (the index rows it was worked out from, their mark, the newest close)
+
+
+def market_newest(region: str) -> str | None:
+    """The newest close among the screens' index of stored pages (worked out once per index, as _sized is), or None before the first."""
+    from . import screens
+    rows = _index_rows(region)
+    mark = (screens.version(region), len(rows))
+    hit = _NEWEST.get(region)
+    if hit is not None and hit[0] is rows and hit[1] == mark:
+        return hit[2]
+    newest = newest_day(r.get("price_at") for r in rows)
+    _NEWEST[region] = (rows, mark, newest)
+    return newest
 
 
 _thin: set[tuple[str, str]] = set()          # companies already marked in this process
@@ -1957,6 +2066,8 @@ class Pages:
             # copy to show waits for the build at most BUILD_WAIT seconds, then is served that copy (as when the minute's builds are used
             # up) while the build finishes behind it, for the next view; anyone else (a job, a page with nothing stored) waits for it
             wait = BUILD_WAIT if stored and stored.get("facts") and db.in_request() else None
+            if wait is not None and _crawler_visit.get():
+                wait = 0                 # seo102: a crawler is served the stored copy at once, the build going on behind it
             try:
                 return fut.result(timeout=wait)
             except FutureTimeout:
@@ -2001,7 +2112,7 @@ class Pages:
                 # e77: a page that found its reporting registrant names it for the directory and the themes too
                 keep_reporting_names(region, {symbol: {"name": got["name"], "listed": got["registrant"]}})
         _put(key, {"ts": time.time(), "facts": got})
-        _mark_thin(region, symbol, not indexable(got))         # nothing to show, no recent price (or a fund): not in the sitemap
+        _mark_thin(region, symbol, not indexable(got, market_newest(region)))   # nothing to show, no recent price (or a fund): not in the sitemap
         self.mem.set(key, got or {}, 600)
         self.mem.pop(f"html:{region}:{symbol}")     # mem100: a copy rendered from the stored page while this build ran is not served on
         if self.on_built:
@@ -3183,7 +3294,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     # for a visitor who looks it up, kept out of search results and the sitemap (see has_content)
     # AS1: a company page is one template filled in with the company's figures, so all of its words are template wording (data-shared
     # on its main): it carries no ad (ads.enough_content); one without a recent price is thin and kept out of search results too
-    return _page(_head(title, desc, canonical, ld, robots="index,follow" if indexable(f) else "noindex,follow"), app, "".join(parts), template=True, src="stock")
+    return _page(_head(title, desc, canonical, ld, robots="index,follow" if indexable(f, market_newest(region)) else "noindex,follow"), app, "".join(parts), template=True, src="stock")
 
 
 def _cta_top(symbol: str, test: str, deep: str) -> str:
@@ -4228,12 +4339,25 @@ def robots() -> str:
     return SCRAPERS + f"User-agent: *\nAllow: /\nAllow: /blog\nDisallow: /admin\nDisallow: /account\n\nSitemap: {site}/sitemap.xml\n"
 
 
+def _list_day(R: str) -> str:
+    """The day a market's list of listed companies was last refreshed ("" when unknown)."""
+    return str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10]
+
+
+def _newest(rows) -> str:
+    """The newest lastmod among sitemap rows ("" when none has one)."""
+    return max((d for r in rows if not isinstance(r, str) and (d := r[1])), default="")
+
+
 def sitemap_index() -> str:
+    """The sitemap index. Each file's lastmod is the newest of its own addresses' (seo102: the company files said the companies list's
+    refresh day, today, every day, whether or not any page in them changed)."""
     site = settings.PUBLIC_SITE_URL
     names = ["pages", "blog", "directory", "themes"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
+    known: dict = {}
     def day(n: str) -> str:
         if n == "pages":
-            return max(d for _, d in site_pages.PAGES)
+            return _newest(_pages_rows(site))
         if n == "blog":                   # the day the newest post changed (BLOG-1); none when the posts can't be read
             try:
                 return blog.latest_day()
@@ -4247,9 +4371,10 @@ def sitemap_index() -> str:
             except Exception as ex:
                 print("sitemap: the themes' day couldn't be read:", str(ex)[:120])
                 return ""
-        if n == "directory":              # the A-Z and index lists change with the companies list (SEO-1)
-            return max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
-        return str(((_setting(f"stocks:list:{REGIONS[n.split('-')[1]]}") or {}).get("at")) or "")[:10]
+        if n == "directory":              # the A-Z and index lists: the newest day one of them changed (seo102)
+            return _newest(directory_urls())
+        bits = n.split("-")
+        return _newest(_stock_rows(site, bits[1], int(bits[2]) - 1, known) or [])
     items = "".join(f"<sitemap><loc>{site}/sitemaps/{n}.xml</loc>" + (f"<lastmod>{d}</lastmod>" if (d := day(n)) else "") + "</sitemap>" for n in names)
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</sitemapindex>\n'
 
@@ -4263,16 +4388,41 @@ def _urlset(rows: list) -> str:
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>\n'
 
 
+def _pages_rows(site: str) -> list[tuple[str, str]]:
+    """The "pages" sitemap's rows: the site's own pages (the day each last changed), /stocks and the market lists (seo102: the newest day
+    one of the market's directory pages changed, as the lists they link change with them, else the companies list's day), StratLab's
+    library strategies and the market pages."""
+    listed = max((_list_day(R) for R in REGIONS.values()), default="")
+    fallback = listed or max(d for _, d in site_pages.PAGES)
+    dirs = directory_urls()
+    by_market = {r: _newest([x for x in dirs if f"/stocks/{r}/" in x[0]]) for r in REGIONS}
+    hubs = [(site + "/stocks", max(by_market.values(), default="") or fallback)] + [(site + f"/stocks/{r}", by_market[r] or fallback) for r in REGIONS]
+    return ([(site + p, d) for p, d in site_pages.PAGES] + hubs + [(site + p, d) for p, d in site_pages.library_pages()]
+            + _market_pages(site, fallback))
+
+
+def _stock_rows(site: str, r: str, i: int, known: dict | None = None) -> list[tuple[str, str | None]] | None:
+    """The rows of "stocks-<r>-<i+1>": the listable companies of that slice A to Z, each with the day its page's reported content last
+    changed (content_days; seo102). A page the change log hasn't seen yet (only before the screens' first gathering of the stored
+    pages, which logs every page it lists) has the companies list's day, as before. None for a file that doesn't exist. `known`
+    keeps a market's listing and change log for the next file of the same call."""
+    region = REGIONS[r]
+    known = known if known is not None else {}
+    if region not in known:
+        known[region] = (sorted(companies(region)), listing(region), content_days(region), _list_day(region) or None)
+    syms, listed, days, listed_day = known[region]
+    if i < 0 or (i * CHUNK >= len(syms) and i > 0):
+        return None
+    return [(site + path(r, s), days.get(s) or listed_day) for s in syms[i * CHUNK:(i + 1) * CHUNK] if listable(region, s, listed)]
+
+
 def sitemap(name: str) -> str | None:
     """One sitemap file: "pages" (the public site pages, with the day each last changed, and StratLab's own library
-    strategies), "blog" (the blog's lists and posts) or "stocks-in-1", "stocks-us-2"… (companies whose page has facts to show; the day is when the list of
-    listed companies was last refreshed); None for any other name."""
+    strategies), "blog" (the blog's lists and posts) or "stocks-in-1", "stocks-us-2"… (companies whose page has facts to show; the day is
+    when the page's reported content last changed); None for any other name."""
     site = settings.PUBLIC_SITE_URL
     if name == "pages":
-        # /stocks is the API's own list of company pages, not one of the site's pages: it changes with the companies list
-        listed = max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
-        return _urlset([(site + p, d) for p, d in site_pages.PAGES] + [(site + p, listed or max(d for _, d in site_pages.PAGES)) for p in ["/stocks"] + [f"/stocks/{r}" for r in REGIONS]]
-                       + [(site + p, d) for p, d in site_pages.library_pages()] + _market_pages(site, listed or max(d for _, d in site_pages.PAGES)))
+        return _urlset(_pages_rows(site))
     if name == "blog":                   # the blog's lists and posts (BLOG-1), each with the day it last changed
         return _urlset(blog.sitemap_urls(site))
     if name == "directory":              # the A-Z and index lists that link every company page (SEO-1)
@@ -4283,14 +4433,8 @@ def sitemap(name: str) -> str | None:
     bits = name.split("-")
     if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
         return None
-    region = REGIONS[bits[1]]
-    syms = sorted(companies(region))
-    i = int(bits[2]) - 1
-    if i < 0 or (i * CHUNK >= len(syms) and i > 0):
-        return None
-    day = str(((_setting(f"stocks:list:{region}") or {}).get("at")) or "")[:10] or None
-    known = listing(region)
-    return _urlset([(site + path(bits[1], s), day) for s in syms[i * CHUNK:(i + 1) * CHUNK] if listable(region, s, known)])
+    rows = _stock_rows(site, bits[1], int(bits[2]) - 1)
+    return None if rows is None else _urlset(rows)
 
 
 def _market_pages(site: str, day: str) -> list[tuple[str, str]]:
@@ -4305,19 +4449,42 @@ def _market_pages(site: str, day: str) -> list[tuple[str, str]]:
     return rows + [(site + "/status", day)]
 
 
+DIR_MOD_KEY = "stocks:dirmod"        # seo102: {directory address: [hash of the companies it lists, the day that list last changed]}
+
+
 def directory_urls() -> list[tuple[str, str | None]]:
-    """(address, day) of every directory page: each market's letter pages (and their later pages) and index lists. The day is
-    that of the companies list, which these pages change with."""
+    """(address, day) of every directory page: each market's letter pages (and their later pages) and index lists. The day is the
+    day the page's list of companies last changed (seo102: it was the companies list's refresh day, today, every day), kept in
+    DIR_MOD_KEY as the sitemap is read: a list first seen takes the companies list's day."""
     site = settings.PUBLIC_SITE_URL
-    out = []
+    pages: list[tuple[str, list[str], str | None]] = []
     for r, R in REGIONS.items():
-        day = str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] or None
+        day = _list_day(R) or None
         d = directory(R)
         for L in [*LETTERS, OTHER]:
-            out += [(site + letter_path(R, L, k), day) for k in range(1, pages_of(d["count"].get(L, 0)) + 1) if d["count"].get(L)]
+            n = d["count"].get(L, 0)
+            if n:
+                syms = d["order"][d["start"][L]:d["start"][L] + n]
+                pages += [(letter_path(R, L, k), syms[(k - 1) * DIR_PAGE:k * DIR_PAGE], day) for k in range(1, pages_of(n) + 1)]
         for slug, (_name, syms, _as_of) in index_lists(R).items():
-            out += [(site + index_path(R, slug, k), day) for k in range(1, pages_of(len(syms)) + 1)]
-    return out
+            pages += [(index_path(R, slug, k), syms[(k - 1) * DIR_PAGE:k * DIR_PAGE], day) for k in range(1, pages_of(len(syms)) + 1)]
+    today = datetime.now(timezone.utc).date().isoformat()
+    old = _setting(DIR_MOD_KEY)
+    old = old if isinstance(old, dict) else {}
+    log: dict[str, list] = {}
+    for p, syms, day in pages:
+        fp = hashlib.sha1(",".join(syms).encode("utf-8")).hexdigest()[:12]
+        was = old.get(p)
+        if isinstance(was, list) and len(was) == 2 and ISO_DAY.match(str(was[1])):
+            log[p] = was if was[0] == fp else [fp, today]
+        else:
+            log[p] = [fp, day or today]
+    if log != old:
+        try:
+            _put(DIR_MOD_KEY, log)
+        except Exception as ex:
+            print("sitemap: could not save the directory's change log", str(ex)[:120])
+    return [(site + p, log[p][1]) for p, _syms, _day in pages]
 
 
 def listing(region: str) -> tuple[set, set, set, bool]:

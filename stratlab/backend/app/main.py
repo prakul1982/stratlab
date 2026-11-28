@@ -699,7 +699,6 @@ app.add_middleware(HeavyGate, routes=UPLOADS, slots_env="UPLOAD_SLOTS")   # file
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"], max_age=7200)   # a browser asks before each call only every 2 h, not 10 min
-app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
 HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|themes(?:/.*)?|r/[^/]+|embed/.+|status|sample-deck|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
@@ -732,6 +731,70 @@ class HeadAsGet:
         await self.app({**scope, "method": "GET"}, receive, drop_body)
 
 
+# seo102: an ETag on every public page, sitemap and robots.txt, and 304 Not Modified when the asker already holds that copy
+# (If-None-Match), so a crawler re-reading 13,000 company pages spends its visit on the pages that changed (Search Console:
+# "Discovered, currently not indexed"); the tag is of the page as the server writes it, before compression (weak: W/)
+CONDITIONAL_TYPES = (b"text/html", b"application/xml", b"text/xml", b"text/plain")
+
+
+def etag_of(body: bytes) -> str:
+    return 'W/"' + hashlib.sha1(body).hexdigest()[:20] + '"'
+
+
+def etag_matches(header: str | None, tag: str) -> bool:
+    """Whether an If-None-Match header names `tag` (weak comparison, RFC 9110 13.1.2), or is "*"."""
+    if not header:
+        return False
+    want = tag.removeprefix("W/")
+    return any(t.strip() == "*" or t.strip().removeprefix("W/") == want for t in header.split(","))
+
+
+class Conditional:
+    """Plain ASGI, for GET on a public page (HEAD_PATHS): a 200 HTML, XML or text answer is sent with its ETag, or as an empty 304 with
+    the same headers when the request's If-None-Match names it. Anything else (another status or type, a cookie, no-store, a tag
+    already set) passes through untouched."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "GET" or not HEAD_PATHS.match(scope["path"]):
+            return await self.app(scope, receive, send)
+        asked = next((v.decode("latin-1") for k, v in scope.get("headers") or [] if k == b"if-none-match"), None)
+        start: dict = {}
+        chunks: list[bytes] = []
+        through = False
+
+        async def hold(message):
+            nonlocal through
+            if message["type"] == "http.response.start":
+                heads = {k.lower(): v for k, v in message.get("headers") or []}
+                if (message.get("status") != 200 or not heads.get(b"content-type", b"").startswith(CONDITIONAL_TYPES)
+                        or b"set-cookie" in heads or b"etag" in heads or b"no-store" in heads.get(b"cache-control", b"")):
+                    through = True
+                    return await send(message)
+                start.update(message)
+                return
+            if message["type"] != "http.response.body" or through:
+                return await send(message)
+            chunks.append(message.get("body") or b"")
+            if message.get("more_body"):
+                return
+            body = b"".join(chunks)
+            tag = etag_of(body)
+            headers = [(k, v) for k, v in start.get("headers") or [] if k.lower() != b"etag"] + [(b"etag", tag.encode())]
+            if etag_matches(asked, tag):
+                kept = [(k, v) for k, v in headers if k.lower() not in (b"content-length", b"content-type")]
+                await send({"type": "http.response.start", "status": 304, "headers": kept})
+                return await send({"type": "http.response.body", "body": b""})
+            await send({**start, "headers": headers})
+            await send({"type": "http.response.body", "body": body})
+
+        await self.app(scope, receive, hold)
+
+
+app.add_middleware(Conditional)   # inside the compression: the tag is of the page itself, whatever encoding it goes out in
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # JSON and pages go compressed (a chart is 5x smaller)
 app.add_middleware(HeadAsGet)     # outside even the compression, so HEAD sees what GET sends
 
 
@@ -5650,7 +5713,7 @@ def stock_page_slash(region: str, symbol: str):
 
 
 @app.get("/stocks/{region}/{symbol}", response_class=HTMLResponse)
-def stock_page(region: str, symbol: str, ref: str | None = None):
+def stock_page(request: Request, region: str, symbol: str, ref: str | None = None):
     """A listed company's public page: facts only, built from stored or cheap data, never AI. Opened from a shared
     card, `ref` is the sharer's invite code, and the page's links into the app carry it."""
     r = stock_pages.REGIONS.get(region.lower())
@@ -5664,6 +5727,7 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     ref = ref if ref and referrals.CODE.match(ref) else None
     if region != region.lower() or symbol != sym:          # one address per company
         return RedirectResponse(stock_pages.path(r, sym) + (f"?ref={ref}" if ref else ""), status_code=301)
+    seen = stock_pages.crawler_visit(request.headers.get("user-agent"))     # seo102: a crawler isn't kept waiting for a rebuild
     try:
         page, stored = stock_page_store.served(r, sym, co)
     except stock_pages.Busy:
@@ -5671,6 +5735,8 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
         # crawlers, and never cached
         return HTMLResponse(stock_pages.busy_page(r, sym, co.get("name")), status_code=503,
                             headers={"Retry-After": "600", "Cache-Control": "no-store"})
+    finally:
+        stock_pages._crawler_visit.reset(seen)
     if stored.get("not_company"):
         return HTMLResponse(page, status_code=404)             # a fund or a note: no company page (R6V-001)
     if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent

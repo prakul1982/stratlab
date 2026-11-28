@@ -310,6 +310,8 @@ def build_index(region: str, store: bool = True) -> dict:
     bought = deals.buys()["buys"] if region == "IN" else {}
     marks = stock_pages.due_marks(region)          # pages behind a results filing a theme saw (stock_pages.mark_due)
     shown, versions = [], []
+    prints: dict[str, tuple[str, str]] = {}       # seo102: what each page reports, for the sitemap's lastmod (stock_pages.note_content)
+    closes: dict[str, str | None] = {}            # seo102: each listed page's close: one a month older than the market's newest is left out
     for key, raw in db.all_settings_with_prefix(prefix):
         stored = db.json_value(raw, {})
         sym = key[len(prefix):]
@@ -341,11 +343,18 @@ def build_index(region: str, store: bool = True) -> dict:
                 old[sym] = (_num(facts.get("market_cap")) or 0.0) + (BEHIND_FIRST if due else 0.0)
         if stock_pages.sitemap_ok(facts):        # never a page whose build couldn't tell a fund from a company (R12-013)
             shown.append(sym)
+            prints[sym] = (stock_pages.content_print(facts), stock_pages.first_day(facts, ages[sym]))
+            closes[sym] = facts.get("price_at")
         r = row(region, sym, stored.get("facts") or {})
         if r:
             if region == "IN":
                 r["insider_buy_at"] = bought.get(sym)
             rows.append(r)
+    newest = stock_pages.newest_day(closes.values())
+    stale = {s for s, d in closes.items() if stock_pages.price_stale({"price_at": d}, newest)}
+    if stale:                                    # seo102: untraded a month: noindex, so not in the sitemap or the directory
+        shown = [s for s in shown if s not in stale]
+        prints = {s: v for s, v in prints.items() if s not in stale}
     rows.sort(key=lambda r: (r["name"].lower(), r["symbol"]))
     if region == "US":
         with_us_red(rows)
@@ -368,6 +377,11 @@ def build_index(region: str, store: bool = True) -> dict:
             db.set_setting(stock_pages.BUILT_KEY + region, json.dumps({"at": index["at"], "pages": sorted(ages), "shown": sorted(shown)}))
         except Exception as e:
             print("screens: could not save the built pages list", region, str(e)[:120])
+        # seo102: the day each listed page's reported content last changed, for the sitemap's lastmod
+        try:
+            stock_pages.note_content(region, prints)
+        except Exception as e:
+            print("screens: could not note the pages' changes", region, str(e)[:120])
         # how far the pages are rebuilt to the facts a page shows now, for Admin (stock_pages.rebuild_progress)
         try:
             db.set_setting(stock_pages.REBUILD_KEY + region, json.dumps({"at": index["at"], "pages": len(ages), **stock_pages.rebuild_counts(versions)}))
