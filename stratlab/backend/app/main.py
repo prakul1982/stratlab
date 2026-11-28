@@ -1128,7 +1128,8 @@ def me(profile=Depends(current_profile)):
     uid = profile["id"]
     # the person's settings read below one by one, in one database call (R11E: 11 to 18 round trips on a cold /me)
     db.prefetch_settings([alerts.ALERT_OFF + uid, daily_report.PREFS + uid, holdings.KEY + uid, user_data.WATCHLIST + uid,
-                          push.KEYS, feedback.NOTE_KEY + uid, admin.TEST_ACCOUNTS])       # (conv101: the test accounts, for `internal`)
+                          push.KEYS, feedback.NOTE_KEY + uid, admin.TEST_ACCOUNTS,       # (conv101: the test accounts, for `internal`)
+                          offers.STUDENT_KEY + uid])                                     # (price102: the person's student request)
     try:
         lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
     except Exception as e:

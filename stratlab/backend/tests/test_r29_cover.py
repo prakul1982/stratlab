@@ -87,10 +87,11 @@ def test_a_kept_deck_is_keyed_by_the_figures_still_being_read_and_one_made_meanw
     monkeypatch.setattr(computed, "put", lambda kind, key, value, **kw: stored.append(key))
     T.DECK_CACHE._d.clear()
     try:
-        a = T.theme_dive_deck(q="Banks", region="US", format="pdf", profile={"id": "u"})
+        # (changed on purpose, price102: a Free deck is marked and kept in memory only, so the shared store's rule is shown on a Basic account)
+        a = T.theme_dive_deck(q="Banks", region="US", format="pdf", profile={"id": "u", "_plan": "basic"})
         dives["now"] = {"metrics_pending": [], "metrics_families": {}}          # the worker has read them: the dive is worked out again
-        b = T.theme_dive_deck(q="Banks", region="US", format="pdf", profile={"id": "u"})
-        c = T.theme_dive_deck(q="Banks", region="US", format="pdf", profile={"id": "u"})
+        b = T.theme_dive_deck(q="Banks", region="US", format="pdf", profile={"id": "u", "_plan": "basic"})
+        c = T.theme_dive_deck(q="Banks", region="US", format="pdf", profile={"id": "u", "_plan": "basic"})
     finally:
         T.DECK_CACHE._d.clear()
     assert a.body == b"deck 2" and b.body == b"deck 0" and c.body == b"deck 0" and built == [2, 0]
