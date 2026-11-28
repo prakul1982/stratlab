@@ -280,3 +280,16 @@ def test_a_theme_post_that_stays_stale_is_worked_out_once_per_rules_and_the_stam
     monkeypatch.setattr(BR, "library_dive", lambda r, t: dives.append(t) or {"x": 1})
     assert BR.refresh_theme_posts_if_due() is not None          # the next check: nothing left it can do, the stamp is marked
     assert dives == ["Chips"] and not BR.theme_posts_due() and BR.refresh_theme_posts_if_due() is None
+
+
+def test_past_the_soft_line_the_caches_are_cut_to_a_quarter_of_their_budget(monkeypatch):
+    from app import memguard
+    from app.intel import net
+    a = net.TTLCache(max_items=100, max_bytes=50_000_000)
+    for i in range(10):
+        a.set(i, "x" * 1_000_000, 60)
+    monkeypatch.setattr(net, "caches", lambda: [a])
+    monkeypatch.setattr(memguard, "CACHE_BUDGET", 16_000_000)
+    assert memguard.over_soft(rss=memguard.SOFT_MB - 1) == {} and a.bytes > 9_000_000          # under the line: nothing cut
+    out = memguard.over_soft(rss=memguard.SOFT_MB + 1)
+    assert a.bytes <= 4_000_000 and out["cache_freed_mb"] > 5 and a.get(9) is not None           # the newest kept
