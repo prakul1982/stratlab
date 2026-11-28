@@ -489,7 +489,7 @@ def test_post_now_sends_the_next_post_at_once_and_a_double_click_is_one_post(w, 
     # the theme posted by hand counts for the 30 days: the next post is another theme, or none
     page = c.get("/admin/social", headers=ADMIN).json()
     x = next(m for m in page["networks"] if m["key"] == "x")
-    assert x["next"] is None and "posted in the last 30 days" in x["next_note"]
+    assert x["next"] is None and x["next_note"].startswith("Every public theme (1) was posted on X in the last 30 days")
 
 
 def test_the_admin_page_previews_the_next_post_per_network(w):

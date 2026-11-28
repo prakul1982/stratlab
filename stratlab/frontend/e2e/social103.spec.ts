@@ -45,7 +45,7 @@ test("social103 Admin → Social: each network's state, its switch off until con
       expect(text).toContain(`?from=${key}`);
       expect(text).not.toMatch(/\b(buy|sell|target|recommend\w*)\b/i);
     } else {
-      expect(text).toMatch(/No theme is ready to post|No post to preview/);
+      expect(text).toMatch(/No public theme page yet|Every public theme|public themes? not posted|No post to preview/);
     }
   }
   await expect(page.getByText("This server is a test copy: it never calls X or LinkedIn.")).toBeVisible();

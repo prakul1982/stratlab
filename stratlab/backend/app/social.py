@@ -592,6 +592,25 @@ def next_post(net: str, today: date | None = None, fresh: bool = False) -> dict 
     return got
 
 
+def no_post_note(net: str, today: date | None = None) -> str:
+    """Why `net` has no next post, in words: no public theme yet, every one posted within REPEAT_DAYS, or none of the rest gives a fit post."""
+    from . import public_themes
+    today = today or datetime.now(IST).date()
+    try:
+        entries = public_themes.entries()
+    except Exception:
+        entries = []
+    if not entries:
+        return "No public theme page yet: the daily post starts once a theme is mapped and checked."
+    skip = social_post.recent(rows(), net, today)
+    left = [e for e in entries if social_post.theme_key(e) not in skip]
+    if not left:
+        return (f"Every public theme ({len(entries)}) was posted on {NAMES[net]} in the last {social_post.REPEAT_DAYS} days; the next one goes "
+                f"once a theme is {social_post.REPEAT_DAYS} days past its post.")
+    return (f"None of the {len(left)} public theme{'s' if len(left) != 1 else ''} not posted in the last {social_post.REPEAT_DAYS} days gives a post "
+            "yet (its page needs at least two layers and eight checked companies).")
+
+
 def forget_preview() -> None:
     with _preview_lock:
         _preview.clear()
@@ -604,8 +623,7 @@ def daily(net: str, today: date) -> dict | None:
     mine = next((r for r in rows() if r.get("net") == net and r.get("kind") == "daily" and r.get("day") == day), None)
     if mine is None:
         post = next_post(net, today, fresh=True)
-        if not post:
-            _note_problem(net, "No theme is ready to post: every public theme was posted in the last 30 days or gives no fit post.")
+        if not post:                                     # nothing for the owner to do: Admin → Social's preview says why
             return None
         row = claim_daily(net, day, post)
         return deliver(row) if row else None
@@ -624,7 +642,7 @@ def post_now(net: str) -> dict:
     today = datetime.now(IST).date()
     post = next_post(net, today, fresh=True)
     if not post:
-        raise SocialError("No theme is ready to post: every public theme was posted in the last 30 days or gives no fit post.")
+        raise SocialError(no_post_note(net, today))
     row = _new_row(net, "manual", today.isoformat(), post)
     _update_rows(lambda rs: rs + [row])
     out = deliver(row)
@@ -756,7 +774,7 @@ def admin_view() -> dict:
         a = auth(net)
         try:
             preview = next_post(net)
-            note = None if preview else "No theme is ready to post: every public theme was posted in the last 30 days or gives no fit post."
+            note = None if preview else no_post_note(net)
         except Exception as e:
             preview, note = None, clean(f"The preview couldn't be built ({e.__class__.__name__}).")
         nets.append({**s[net], "vars": list(VARS[net]), "callback": redirect_uri(net), "scopes": SCOPES[net],
