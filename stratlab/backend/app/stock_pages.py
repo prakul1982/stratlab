@@ -4444,9 +4444,16 @@ SCRAPER_BOTS = ("AhrefsBot", "SemrushBot", "MJ12bot", "DotBot", "DataForSeoBot",
 SCRAPERS = "".join(f"User-agent: {b}\n" for b in SCRAPER_BOTS) + "Disallow: /\n\n"
 
 
+# seo102: the app's own addresses that every public page links (each company page: "Sign in", "backtest an idea", "the full deep dive";
+# each theme page: the theme in the app), about three per page, 40,000 sign-in screens with ?from= variants: rel="nofollow" is only a
+# hint, so crawlers are asked not to spend their visits there. Nothing public lives under them (APP_PATH).
+APP_DISALLOW = ("/research", "/new", "/mine")
+
+
 def robots() -> str:
     site = settings.PUBLIC_SITE_URL
-    return SCRAPERS + f"User-agent: *\nAllow: /\nAllow: /blog\nDisallow: /admin\nDisallow: /account\n\nSitemap: {site}/sitemap.xml\n"
+    app = "".join(f"Disallow: {p}\n" for p in APP_DISALLOW)
+    return SCRAPERS + f"User-agent: *\nAllow: /\nAllow: /blog\nDisallow: /admin\nDisallow: /account\n{app}\nSitemap: {site}/sitemap.xml\n"
 
 
 def _list_day(R: str) -> str:

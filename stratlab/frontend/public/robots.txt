@@ -15,5 +15,8 @@ Allow: /
 Allow: /blog
 Disallow: /admin
 Disallow: /account
+Disallow: /research
+Disallow: /new
+Disallow: /mine
 
 Sitemap: https://stratlab.studio/sitemap.xml

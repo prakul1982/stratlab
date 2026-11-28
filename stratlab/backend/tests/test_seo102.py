@@ -87,7 +87,7 @@ def test_public_pages_sitemaps_and_robots_carry_an_etag_and_answer_304(w):
         assert r.status_code == 200 and tag and tag.startswith('W/"'), u
         again = c.get(u, headers={"If-None-Match": tag})
         assert again.status_code == 304 and again.content == b"" and again.headers["etag"] == tag, u
-        assert again.headers.get("cache-control") == r.headers.get("cache-control"), u
+        assert again.headers.get("cache-control", "").startswith("public, max-age="), u      # the page's own caching, kept on the 304
         assert c.get(u, headers={"If-None-Match": 'W/"other"'}).status_code == 200, u
     r = c.head("/stocks/in/RELIANCE", headers={"If-None-Match": c.get("/stocks/in/RELIANCE").headers["etag"]})
     assert r.status_code == 304
@@ -268,3 +268,21 @@ def test_the_hubs_link_every_later_page_of_a_long_letter(w):
     for href in set(re.findall(r'href="(/stocks/in/browse/[^"]+)"', hub)):
         reached |= set(re.findall(r'href="/stocks/in/(AL\d{4})"', c.get(href).text))
     assert {f"AL{i:04d}" for i in range(900)} <= reached
+
+
+# ---------- 6. robots.txt: the app's sign-in screens are not crawled ----------
+def test_robots_keeps_crawlers_off_the_app_links_and_no_listed_page_is_under_them(w):
+    from pathlib import Path
+    c = w["client"]
+    robots = c.get("/robots.txt").text
+    for p in ("/research", "/new", "/mine"):
+        assert f"Disallow: {p}\n" in robots
+    assert robots == (Path(__file__).resolve().parents[2] / "frontend" / "public" / "robots.txt").read_text()     # the two copies agree
+    listed = []
+    for loc in rows(c.get("/sitemap.xml").content):
+        listed += list(rows(c.get(loc.replace("https://stratlab.studio", "")).content))
+    paths = [re.sub(r"^https://stratlab\.studio", "", u) for u in listed]
+    assert paths and not [p for p in paths if p.startswith(stock_pages.APP_DISALLOW)]
+    t = c.get("/stocks/in/RELIANCE").text
+    for href in re.findall(r'<a ([^>]*)href="(?:https://stratlab\.studio)?(/(?:research|new|mine)[^"]*)"([^>]*)>', t):
+        assert "nofollow" in href[0] + href[2], href                   # and each link there still says nofollow (AS1)
