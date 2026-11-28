@@ -41,7 +41,7 @@ test("LIVE13B-001: the home page's start-up frame is the landing's header and he
   assert.match(login, /<div className=\{`lp-wrap lp-hero-grid\$\{full \? "" : " lp-hero-solo"\}/);
   assert.match(home, new RegExp(`<span class="eyebrow boot-js">${HERO_EYEBROW}</span>\\n<h1 class="serif lp-h1">Is your trading idea <em>skill</em> or luck\\?</h1>\\n<p class="serif lp-lede boot-js">`));
   assert.match(home, /<div class="row wrap g12 boot-js"><a class="btn lp-cta" href="\/login"><svg[^]*?<\/svg>Continue with Google<\/a><a class="btn outline email-way lp-cta-2" href="\/login#email"><svg[^]*?<\/svg>Sign in with email<\/a><a class="btn quiet lp-cta-2" href="\/library">See a verdict that held up, no sign-in<\/a><\/div>/);   // (changed on purpose, conv101 P4: the proof that held up)
-  assert.match(home, /<p class="small muted boot-js">Free to start · No card · No coding<\/p>\n<p class="small muted lp-trust boot-js">StratLab gives facts, not investment advice/);   // (changed on purpose, conv101 P6: the trust line under it)
+  assert.match(home, /<p class="small muted boot-js">Free to start · No card · No coding<\/p>/);
   // the example card's place on a wide screen, so the heading sits where the card centres it
   assert.match(home, /<\/div><div class="boot-demo" aria-hidden="true"><\/div><\/div>\n<\/div>/);
   assert.match(home, /@media \(min-width: 1001px\) \{ \.boot-demo \{ display: block; min-height: 689px; \} \}/);

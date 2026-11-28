@@ -26,7 +26,7 @@ export const BROWSE_COMPANIES: [string, string][] = [["/stocks/in", "India A–Z
 // conv101 (P9, funnel 27 Nov: the home page's title was the brand alone, "StratLab", which says nothing in a search result or a shared link):
 // what StratLab does, in the owner's one tab-title pattern; the description says it in a sentence (index.html carries the same words)
 export const HOME_TITLE = withBrand("Backtest trading ideas on Indian and US stocks");     // the owner's one pattern (18 Nov), "Page · StratLab"
-export const HOME_DESCRIPTION = "Backtest trading ideas, written in plain words, on years of real Indian and US prices after every charge, and see if it's skill or luck. Research companies too.";
+export const HOME_DESCRIPTION = "Backtest trading ideas in plain words on years of real Indian and US prices after costs, and see if it's skill or luck. Research companies too. Facts, not tips.";
 
 export type PageMeta = {
   /** the address the page lives at */

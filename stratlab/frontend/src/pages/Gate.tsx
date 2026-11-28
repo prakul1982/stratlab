@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Card, CardHead } from "../components/kit/Card";
 import { LinkCard } from "../components/kit/LinkCard";
 import { PageHeader } from "../components/kit/PageHeader";
-import { Google } from "../components/Icons";
+import { Google } from "../components/IconsLite";
 import { PublicFrame } from "../components/PublicFrame";
 import { publicGet, type ApiError } from "../lib/http";
 import { describePath } from "../lib/deepLinks";

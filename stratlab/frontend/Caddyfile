@@ -16,8 +16,11 @@
 	@www host www.stratlab.studio
 	redir @www https://stratlab.studio{uri} 308
 
-	# trailingSlash: false
-	@slash path_regexp slash ^(.+)/$
+	# trailingSlash: false (conv101: not for /ingest, PostHog's own addresses, which end in a slash: /ingest/e/, /ingest/i/v0/e/)
+	@slash {
+		path_regexp slash ^(.+)/$
+		not path /ingest/*
+	}
 	redir @slash {re.slash.1} 308
 
 	# LIVE8A-013: /sitemap answered 404 (the sitemap is /sitemap.xml), and /index.html was a second copy of the home page

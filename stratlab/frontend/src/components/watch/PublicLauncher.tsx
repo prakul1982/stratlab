@@ -4,7 +4,7 @@
 import { lazy, Suspense, useCallback, useState, type ComponentType } from "react";
 import { importWithRetry } from "../../lib/lazyRetry";
 import { LAYOUT_KEY, isSheet } from "../../lib/watchKey";
-import { Markets } from "../Icons";
+import { Markets } from "../IconsLite";
 import "./launcher.css";
 
 const load = () => import("./Launcher").then((m) => ({ default: m.MarketsLauncher }));

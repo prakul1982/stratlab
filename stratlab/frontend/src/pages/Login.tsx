@@ -11,7 +11,7 @@ import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
 import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_SPACES } from "../content/intro";
-import { Google } from "../components/Icons";
+import { Google } from "../components/IconsLite";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
@@ -383,8 +383,6 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             {login && emailSignInOn() && (EmailNow ? <EmailNow signup={signup} /> : <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>)}
             {error && <p className="banner" role="alert">{error}</p>}
             {login ? <p className="small muted">Google sign-in reads only your name and email address{emailSignInOn() ? "; email sign-in reads only your email address" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
-            {/* conv101 (P6): what StratLab is and isn't, in the Terms' own words, and where its figures come from, in the first screen */}
-            {full && <p className="small muted lp-trust" data-testid="trust-line">{TRUST_LINE} {DATA_LINE}</p>}
           </div>
           {full && <HeroDemo />}
         </div>
@@ -815,6 +813,9 @@ function GuestTrySection() {
         </div>
         {open ? <Suspense fallback={<div className="lp-card gt-card" aria-busy="true"><span className="lp-skel lp-skel-p" /><span className="lp-skel lp-skel-p" /></div>}><GuestTry /></Suspense>
           : <div><button type="button" className="btn" data-testid="guest-open" onClick={() => setOpen(true)}>Try an idea, free</button></div>}
+        {/* conv101 (P6): what StratLab is and isn't, in the Terms' own words, and where its figures come from, straight under the hero (the hero
+            itself names no "facts": VR5-owner-2) */}
+        <p className="small muted lp-trust" data-testid="trust-line">{TRUST_LINE} {DATA_LINE}</p>
       </div>
     </section>
   );

@@ -15,7 +15,8 @@ test("R5V-020: the consent banner's file does not import the plans, so a policy 
   const vite = read("vite.config.ts");
   assert.match(vite, /\{ name: "plans", test: \/src\[\\\\\/\]lib\[\\\\\/\]plans\\\.ts\$\/ \}/);
   assert.doesNotMatch(vite, /name: "common", test: [^\n]*\|plans\)/);
-  assert.match(vite, /\{ name: "planCore", test: \/src\[\\\\\/\]lib\[\\\\\/\]planCore\\\.ts\$\/ \}/);
+  // (changed on purpose, conv101: the plans' trust and cancel lines, content/trust, ride in the same file)
+  assert.match(vite, /\{ name: "planCore", test: \/src\[\\\\\/\]\(lib\[\\\\\/\]planCore\|content\[\\\\\/\]trust\)\\\.ts\$\/ \}/);
 });
 
 test("VR5-011: the plan table's Free column is wide enough at 390px for the trial note to be two lines", () => {

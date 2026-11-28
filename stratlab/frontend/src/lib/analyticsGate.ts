@@ -44,23 +44,6 @@ export function markInternal(on: boolean): void {
   try { if (on) localStorage.setItem(INTERNAL_KEY, "1"); else localStorage.removeItem(INTERNAL_KEY); } catch { /* storage off: this page view */ }
 }
 
-/** ?internal=1 (or 0) in the address: set or clear the mark, and say so on the page for a few seconds. Returns what it did. */
-export function readInternalSwitch(search: string = typeof location === "undefined" ? "" : location.search): "on" | "off" | null {
-  const v = new URLSearchParams(search).get("internal");
-  if (v !== "1" && v !== "0") return null;
-  markInternal(v === "1");
-  if (typeof document !== "undefined" && document.body) {
-    const note = document.createElement("div");
-    note.setAttribute("role", "status");
-    note.setAttribute("data-internal-note", v);
-    note.textContent = v === "1" ? "This device is now left out of StratLab's analytics." : "This device is counted in StratLab's analytics again.";
-    note.style.cssText = "position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#1D1B17;color:#F5F1E8;padding:10px 16px;border-radius:10px;font:14px/1.4 system-ui,sans-serif;max-width:calc(100vw - 32px)";
-    document.body.appendChild(note);
-    window.setTimeout(() => note.remove(), 6000);
-  }
-  return v === "1" ? "on" : "off";
-}
-
 /** The signed-in account is one of StratLab's own (the server's /me `internal`): left out, and the device marked. */
 export function setAccountInternal(on: boolean): void {
   accountInternal = on;
@@ -70,19 +53,4 @@ export function setAccountInternal(on: boolean): void {
 /** Nothing about this browser's visits goes to analytics (the browser's own wish, a robot, or StratLab's own people). */
 export function analyticsOff(): boolean {
   return doNotTrack() || automated() || internalDevice() || accountInternal;
-}
-
-/** Where the visit came from, carried into the sign-up: ?from=stock|theme|blog|… on a link from a page the server draws, kept 30 days. */
-const FROM_KEY = "stratlab.from";
-const FROM = /^[a-z][a-z0-9_-]{0,23}$/;
-export function rememberFrom(search: string = typeof location === "undefined" ? "" : location.search): void {
-  const v = new URLSearchParams(search).get("from");
-  if (!v || !FROM.test(v)) return;
-  try { localStorage.setItem(FROM_KEY, JSON.stringify({ v, at: Date.now() })); } catch { /* storage off */ }
-}
-export function signupFrom(): string | null {
-  try {
-    const j = JSON.parse(localStorage.getItem(FROM_KEY) || "null");
-    return j && typeof j.v === "string" && FROM.test(j.v) && Date.now() - j.at < 30 * 86_400_000 ? j.v : null;
-  } catch { return null; }
 }

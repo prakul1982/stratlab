@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { publicGet, publicPost, type ApiError } from "../lib/http";
 import { signIn } from "../lib/signin";
 import { track } from "../lib/analytics";
-import { Google } from "./Icons";
+import { Google } from "./IconsLite";
 import { EmailWay } from "./EmailWay";
 import { LIMITS } from "../lib/planCore";
 

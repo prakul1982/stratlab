@@ -11,7 +11,7 @@
 import type { PostHog } from "posthog-js/dist/module.slim.no-external";
 
 import { markSignup } from "./track";
-import { analyticsOff, doNotTrack, readInternalSwitch, rememberFrom, setAccountInternal, signupFrom } from "./analyticsGate";
+import { analyticsOff, doNotTrack, setAccountInternal } from "./analyticsGate";
 
 type Value = string | number | boolean | null | undefined;
 export type Props = Record<string, Value>;
@@ -79,8 +79,9 @@ export { doNotTrack };
 
 // conv101 (T2): ?internal=1 marks this device as StratLab's own (left out of analytics from now on), ?internal=0 undoes it; ?from=… on a
 // link from a page the server draws is kept for the sign-up (lib/analyticsGate.ts)
-if (typeof window !== "undefined") {
-  try { readInternalSwitch(); rememberFrom(); } catch { /* analytics never breaks the page */ }
+// (lib/analyticsExtras, asked for only when the address carries either; an event before it is here is dropped by before_send once the mark is set)
+if (typeof location !== "undefined" && /[?&](internal|from)=/.test(location.search)) {
+  import("./analyticsExtras").then((m) => { m.readInternalSwitch(); m.rememberFrom(); }).catch(() => undefined);
 }
 
 /* ---------- the client, loaded once on demand ---------- */
@@ -226,7 +227,7 @@ export function trackSignup(userId: string, createdAt: string | null | undefined
   if (!createdAt || Date.now() - new Date(createdAt).getTime() > 86_400_000 || analyticsOff()) return;
   const key = "stratlab.signedup";
   try { if (localStorage.getItem(key) === userId) return; } catch { /* storage off */ }
-  void report(signupFrom()).then((r) => {
+  void import("./analyticsExtras").then((m) => report(m.signupFrom())).then((r) => {
     try { localStorage.setItem(key, userId); } catch { /* storage off */ }
     if (r?.first) markSignup();          // the Meta Pixel's CompleteRegistration, if the visitor allowed it (lib/track.ts)
   }).catch(() => undefined);

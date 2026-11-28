@@ -7,8 +7,11 @@ const session = { access_token: "admin-token", token_type: "bearer", expires_in:
   refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
 const HOST = "https://us.i.posthog.com";
 
+// (changed on purpose, conv101 T2: the owner's account is one of StratLab's own, which sends no analytics, so the events are a customer's)
+const customer = { ...session, access_token: "pro-token", user: { ...session.user, id: "u-pro", email: "pro@example.com" } };
+
 /** Open a page signed in, optionally with a PostHog key in config.js; returns every request the page made. */
-async function open(page: Page, path: string, ready: string, key = "") {
+async function open(page: Page, path: string, ready: string, key = "", who = session) {
   const requests: Request[] = [];
   page.on("request", (r) => requests.push(r));
   if (key) {
@@ -19,7 +22,7 @@ async function open(page: Page, path: string, ready: string, key = "") {
     const host = new URL(r.request().url()).hostname;
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
-  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
+  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
   const ask = page.getByText("What brings you here?");
   await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
@@ -98,7 +101,7 @@ test.describe("analytics in the app", () => {
       Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined });
       Object.defineProperty(Navigator.prototype, "userAgent", { get: () => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36" });
     });
-    const rs = await open(page, "/research", "Companies", "phc_test");
+    const rs = await open(page, "/research", "Companies", "phc_test", customer);
     await page.goto("/research/IN/RELIANCE/deep?email=owner%40example.com&ref=owner@example.com");     // a query never goes out
     await expect(page.getByText("Growth and margins").first()).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => events(rs).map((e) => e.event), { timeout: 20_000 }).toEqual(expect.arrayContaining(["$pageview", "deep dive opened"]));
@@ -107,12 +110,21 @@ test.describe("analytics in the app", () => {
     const deep = all.find((e) => e.event === "deep dive opened")!;
     expect(deep.properties.region).toBe("IN");
     expect(all.find((e) => e.event === "$pageview" && String(e.properties.$current_url).endsWith("/research/IN/RELIANCE/deep"))).toBeTruthy();
-    expect(all.some((e) => e.properties.distinct_id === "u-admin"), "identified by the internal user id").toBe(true);
+    expect(all.some((e) => e.properties.distinct_id === "u-pro"), "identified by the internal user id").toBe(true);
     const sent = toPostHog(rs).map((r) => r.postData() || "").join("\n");
     for (const personal of ["owner@example.com", "owner%40example.com", "email="]) expect(sent).not.toContain(personal);
     expect(sent).not.toMatch(/\$snapshot|\$autocapture|\$rageclick/);
-    // the owner's way in, on Admin → Overview
-    await page.goto("/admin");
+  });
+
+  test("the owner's way in to the numbers, on Admin → Overview; the owner's own visits send nothing", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false });
+      Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined });
+      Object.defineProperty(Navigator.prototype, "userAgent", { get: () => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36" });
+    });
+    const rs = await open(page, "/admin", "Needs your attention", "phc_test");
     await expect(page.getByTestId("posthog-dashboard")).toHaveAttribute("href", /^https:\/\/us\.posthog\.com\/?$/);   // safeHref normalises the address
+    await page.waitForTimeout(3000);
+    expect(events(rs).map((e) => e.event)).toEqual([]);
   });
 });

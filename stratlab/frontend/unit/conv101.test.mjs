@@ -21,7 +21,7 @@ function browser({ ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHT
   return { store, added };
 }
 
-const gate = await import("../src/lib/analyticsGate.ts");
+const gate = { ...(await import("../src/lib/analyticsGate.ts")), ...(await import("../src/lib/analyticsExtras.ts")) };
 
 test("T2: a person's browser is counted; Do Not Track, Global Privacy Control, robots and StratLab's own devices are not", () => {
   browser();
@@ -67,6 +67,8 @@ test("T2: an account the server marks as StratLab's own is left out, and marks t
   for (const f of ["src/lib/analyticsGate.ts", "src/lib/analytics.ts", "src/lib/app.tsx"]) assert.doesNotMatch(read(f), /@(stratlab|gmail|example)\.|ADMIN_EMAILS/, f);
   assert.match(read("src/lib/app.tsx"), /internal: me\.internal === true/);
   assert.match(read("src/lib/analytics.ts"), /if \(o\.internal\) \{ setAccountInternal\(true\); return; \}/);
+  // the rarely needed half loads only when the address asks for it
+  assert.match(read("src/lib/analytics.ts"), /typeof location !== "undefined" && \/\[\?&\]\(internal\|from\)=\/\.test\(location\.search\)\) \{\n  import\("\.\/analyticsExtras"\)/);
 });
 
 test("T1: ?from= on a link from a page the server draws is kept for the sign-up, one plain word only, 30 days", () => {
@@ -100,6 +102,10 @@ test("T4: PostHog goes through the site's own /ingest on Vercel and on the Railw
   const caddy = read("Caddyfile");
   assert.match(caddy, /handle_path \/ingest\/\* \{\n\t\treverse_proxy https:\/\/us\.i\.posthog\.com/);
   assert.match(caddy, /handle_path \/ingest\/static\/\* \{/);
+  // the site's trailing-slash redirect leaves PostHog's addresses alone (/ingest/e/ and /ingest/i/v0/e/ end in a slash; a 308 would move a POST)
+  assert.match(caddy, /@slash \{\n\t\tpath_regexp slash \^\(\.\+\)\/\$\n\t\tnot path \/ingest\/\*\n\t\}/);
+  // the API and PostHog blocks come before the site's own files
+  assert.ok(caddy.indexOf("handle_path /ingest/*") < caddy.indexOf("handle @api") && caddy.indexOf("handle @api") < caddy.indexOf("\thandle {"));
   assert.match(read("public/config.js"), /POSTHOG_HOST: "\/ingest"/);
   // the CSP needs nothing new for it: the site's own address is 'self'
   const csp = vercel.headers[0].headers.find((h) => h.key === "Content-Security-Policy").value;

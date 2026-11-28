@@ -165,7 +165,8 @@ test.describe("P4, P6, P7, P10: the landing page and the plans", () => {
     await page.goto("/");
     const trust = page.getByTestId("trust-line");
     await expect(trust).toContainText("not a SEBI-registered investment adviser or research analyst", { timeout: 30_000 });
-    await expect(trust).toBeInViewport();
+    await expect(trust).toBeVisible();
+    expect(await page.locator(".lp-hero").innerText()).not.toMatch(/facts/i);      // the hero names no "facts" (VR5-owner-2)
     const proof = page.getByTestId("hero-proof");
     await expect(proof).toHaveText("See a verdict that held up, no sign-in");
     await expect(proof).toHaveAttribute("href", /^\/library\/seed-/, { timeout: 15_000 });
