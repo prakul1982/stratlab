@@ -15,6 +15,8 @@ import html
 from collections import Counter
 import json
 import re
+import threading
+import time
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -670,6 +672,40 @@ def sitemap_rows(site: str) -> list[tuple[str, str | None]]:
         if indexable(x):
             out.append((site + path(x["region"], x["slug"]), datetime.fromtimestamp(float(x["at"]), timezone.utc).date().isoformat() if x.get("at") else None))
     return out
+
+
+THEMES_OF_FOR = 3600             # seo102: how long the company-to-theme links are kept before they are worked out again
+_THEMES_OF: dict = {}            # region -> (worked out at, {symbol: [(theme page, theme name, layer)]})
+_THEMES_OF_LOCK = threading.Lock()
+
+
+def themes_of(region: str) -> dict[str, list[tuple[str, str, str]]]:
+    """seo102: {page symbol: [(theme page address, theme name, layer name)]} for every theme page offered to search engines (indexable)
+    that lists the company in a layer (its checked companies, share.theme_layers, which every such page lists), so a company's page
+    links to the themes it is in. From the stored entries only, worked out at most once an hour per market (a few KB kept)."""
+    now = time.time()
+    hit = _THEMES_OF.get(region)
+    if hit and now - hit[0] < THEMES_OF_FOR:
+        return hit[1]
+    with _THEMES_OF_LOCK:
+        hit = _THEMES_OF.get(region)
+        if hit and now - hit[0] < THEMES_OF_FOR:
+            return hit[1]
+        known = stock_pages.companies(region)
+        out: dict[str, list[tuple[str, str, str]]] = {}
+        for x in entries(region):
+            p = payload(x)
+            layers = theme_layers(p) if p else []
+            if len(layers) < MIN_LAYERS or len({c["ticker"] for v in layers for c in v["companies"]}) < MIN_MEMBERS:
+                continue
+            label, href = short_label(x["label"]), path(x["region"], x["slug"])
+            for v in layers:
+                for c in v["companies"]:
+                    sym = str(c.get("ticker") or "")
+                    if sym in known and not any(h == href for h, _l, _n in out.get(sym, [])):
+                        out.setdefault(sym, []).append((href, label, v["name"]))
+        _THEMES_OF[region] = (time.time(), out)
+        return out
 
 
 def latest_day() -> str:

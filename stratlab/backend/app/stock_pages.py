@@ -3165,6 +3165,11 @@ def faq_extras(region: str, symbol: str) -> dict:
             got["results"] = {"date": nxt["date"], "when": nxt.get("when"), "purpose": nxt.get("purpose"), "as_of": str(cal.get("at") or "")[:10]}
     except Exception as ex:                      # the calendar unreadable: no such question
         print("stock pages: results date not read:", symbol, str(ex)[:120])
+    try:                                         # seo102: the public theme pages that list the company, for its links to them
+        from . import public_themes
+        got["themes"] = public_themes.themes_of(region).get(symbol) or []
+    except Exception as ex:
+        print("stock pages: themes not read:", symbol, str(ex)[:120])
     if region == "IN":
         try:
             from . import shareholders
@@ -3193,6 +3198,17 @@ def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None 
         out.append((f"What is {name}'s market value?",
                     f"{name}'s market value is {cap} as of {when}: {basis} times the shares in issue."
                     + (f" Its P/E is {_fmt(pe)}, {basis} over earnings per share for the last four reported quarters." if pe is not None else "")))
+    # seo102: two facts each page holds and no other page says the same way: where the company stands by market value in its own
+    # industry, and its latest quarter against the same quarter a year before (neither is shown elsewhere on the page)
+    rank = industry_rank(region, symbol, f)
+    if rank:
+        place, n, ind = rank
+        out.append((f"How large is {name} in its industry?",
+                    f"By market value at the last close, {name} is the {(ordinal(place) + ' ') if place > 1 else ''}largest of the {n:,} companies in {ind} whose market "
+                    "value passed StratLab's checks against their reported figures."))
+    q = quarter_said(f)
+    if q:
+        out.append((f"How did {name}'s latest quarter compare with a year before?", f"{q} As the company reported them."))
     nxt = (extras or {}).get("results")
     if nxt and _date(nxt.get("date")):
         purpose = str(nxt.get("purpose") or "").strip()
@@ -3215,6 +3231,70 @@ def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None 
     return out
 
 
+def ordinal(n: int) -> str:
+    """1 → "", 2 → "2nd", 3 → "3rd", 11 → "11th": the largest is "the largest", not "the 1st largest"."""
+    if n == 1:
+        return ""
+    return f"{n:,}" + ("th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th"))
+
+
+RANK_MIN = 3                     # seo102: an industry of fewer companies with a checked value has no rank question
+
+
+def industry_rank(region: str, symbol: str, f: dict | None) -> tuple[int, int, str] | None:
+    """(place, companies, industry as the page names it) of the company by checked market value among the companies of its own industry
+    in the screens' index, the same rows and checks as its "Same industry" list (_sized, _fresh_rows); None when its own value isn't
+    among them, the page's figures are a year behind or the industry has fewer than RANK_MIN."""
+    f = f or {}
+    ind = _dedupe(f.get("industry") or [])
+    if not ind or figures_stale(f) or cap_text(f) == "–":
+        return None
+    try:
+        rows = _fresh_rows(_sized(region))
+    except Exception:
+        return None
+    same = [r for r in rows if str(r.get("industry") or "").lower() == ind[-1].lower()]
+    place = next((i + 1 for i, r in enumerate(same) if r.get("symbol") == symbol), None)
+    if place is None or len(same) < RANK_MIN:
+        return None
+    return place, len(same), (plain_industry if region == "US" else str)(ind[-1])
+
+
+QUARTER_FRESH_DAYS = 200         # seo102: a latest quarter that ended longer than this before the page's price isn't called the latest
+
+
+def quarter_said(f: dict | None) -> str | None:
+    """"In the quarter to Sep 2026, revenue rose 12.3% and net profit fell 4.0% against the quarter to Sep 2025." from the page's stored
+    latest quarter (facts "q", the results calendar's figures); a change beyond ±NOT_MEANINGFUL, or from a loss (the source gives none),
+    left out. None without one, or when that quarter ended more than QUARTER_FRESH_DAYS before the price."""
+    q = (f or {}).get("q") if isinstance((f or {}).get("q"), dict) else None
+    m = re.fullmatch(r"([A-Za-z]{3} \d{4}) vs ([A-Za-z]{3} \d{4})", str((q or {}).get("of") or "").strip())
+    if not q or not m:
+        return None
+    end, at = _month_end(m.group(1)), str((f or {}).get("price_at") or "")[:10]
+    if not end or not ISO_DAY.match(at) or not 0 <= (date.fromisoformat(at) - date.fromisoformat(end)).days <= QUARTER_FRESH_DAYS:
+        return None
+    bits = []
+    for what, k in (("revenue", "sales"), ("net profit", "profit")):
+        v = _num(q.get(k))
+        if v is None or abs(v) > NOT_MEANINGFUL:
+            continue
+        bits.append(f"{what} was flat" if abs(v) < 0.05 else f"{what} {'rose' if v > 0 else 'fell'} {abs(v):,.1f}%")
+    if not bits:
+        return None
+    return f"In the quarter to {m.group(1)}, {' and '.join(bits)} against the quarter to {m.group(2)}."
+
+
+def themes_html(themes: list | None) -> str:
+    """seo102: the public theme pages that list the company, each a link with the layer it is listed in; "" for none."""
+    rows = [t for t in themes or [] if isinstance(t, (list, tuple)) and len(t) == 3]
+    if not rows:
+        return ""
+    return ('<h2>Themes</h2><p class="small muted" data-themes>StratLab\'s public theme pages that list this company, with the layer it is '
+            'listed in.</p><nav class="links" aria-label="Themes that list this company">'
+            + "".join(f'<a href="{e(href)}">{e(label)}: {e(layer)}</a>' for href, label, layer in rows) + "</nav>")
+
+
 def faq_html(items: list[tuple[str, str]], name: str) -> str:
     if not items:
         return ""
@@ -3228,6 +3308,29 @@ def faq_ld(items: list[tuple[str, str]]) -> list[dict]:
         return []
     return [{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
         {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in items]}]
+
+
+def company_crumbs(region: str, symbol: str, name: str) -> tuple[str, list[dict]]:
+    """seo102: (the visible breadcrumb line, the BreadcrumbList items) of a company page: StratLab › Companies › India › A to Z: R (the
+    directory page that lists it, when it is in the directory) › the company; each a plain link a crawler follows up to the hubs."""
+    where = "India" if region == "IN" else "US"
+    trail = [("Companies", "/stocks"), (where, f"/stocks/{region.lower()}")]
+    try:
+        d = directory(region)
+        i = d["pos"].get(symbol)
+    except Exception:
+        i = None
+    if i is not None:
+        letter = letter_of(label_of(region, symbol))
+        start = d["start"].get(letter)
+        if start is not None:
+            trail.append((f"A to Z: {'0–9' if letter == OTHER else letter}", letter_path(region, letter, (i - start) // DIR_PAGE + 1)))
+    trail.append((name, path(region, symbol)))
+    line, _ld_text = _crumbs(trail)
+    site = settings.PUBLIC_SITE_URL
+    items = [{"@type": "ListItem", "position": k + 1, "name": n, "item": a if a.startswith("http") else site + a}
+             for k, (n, a) in enumerate([("StratLab", site + "/")] + trail)]
+    return line, items
 
 
 def render(f: dict | None, region: str, symbol: str, name: str | None, extras: dict | None = None) -> str:
@@ -3256,15 +3359,14 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     desc = description({**f, "name": name})          # the tidied name, as in the title and the h1 (a filing's capitals stay out of the snippet)
     as_of = as_of_text(f)
     questions = faq_items(f, region, symbol, name, extras) if has_content(f) else []
+    crumbs, trail = company_crumbs(region, symbol, name)
     ld = _ld([{"@context": "https://schema.org", "@type": "Corporation", "name": name, "tickerSymbol": symbol,
                "url": canonical, **({"industry": (plain_industry if region == "US" else str)(f["industry"][-1])} if f.get("industry") else {})},
-              {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
-                  {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
-                  {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
+              {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": trail}, *faq_ld(questions)])
     ind = " · ".join(sector_first(region, symbol, shown_industry(f.get("industry"), plain=region == "US")))
     notes = _notes(f)
     # PUB-2: the name, one quiet line, the price; then the chart; then the key figures; the explanations come last
-    parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
+    parts = [f"""{crumbs}<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 {_sub_line(f.get("exchange") or country, ind)}{_price_block(f, as_of)}
 <p class="small muted" data-advice>Facts from reported results and exchange filings. Not investment advice.</p>""", _cta_top(symbol, test, deep)]
     parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
@@ -3288,6 +3390,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     # P/E that the tiles, the table and the questions already give (a company's market value and P/E were on the page three times)
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
+    parts.append(themes_html((extras or {}).get("themes")))     # seo102: the theme pages that list it
     parts.append(browse_block(region, symbol))        # SEO-1: the companies before and after it A to Z, its letter's list and its indexes
     parts.append(_how(f, [n for n in notes if _is_basis(n)]))       # PUB-2: how each figure is worked out, last and folded
     # a company with a price but no reported numbers to show (a filer whose results aren't filed as data) is a short page
@@ -4203,6 +4306,13 @@ def az_nav(region: str) -> str:
     letters = "".join(f'<a href="{letter_path(region, L)}">{"0–9" if L == OTHER else L}</a>' for L in [*LETTERS, OTHER] if d["count"].get(L))
     n = sum(1 for L in [*LETTERS, OTHER] if d["count"].get(L))
     out = f'<h2>Browse {where} companies A to Z</h2><nav class="links" aria-label="{where} companies by first letter" data-az{_az_style(n)}>{letters}</nav>' if letters else ""
+    # seo102: a long letter's later pages linked here too, so every company page is three links from the home page (home, /stocks, its
+    # letter page), not four (live: 10 of the 72 directory pages were reached only through page 1's pager)
+    more = [(L, k) for L in [*LETTERS, OTHER] for k in range(2, pages_of(d["count"].get(L, 0)) + 1) if d["count"].get(L)]
+    if more:
+        out += (f'<p class="small muted" data-az-more>Letters with more than one page of {where} companies, page by page:</p>'
+                f'<nav class="links" aria-label="Later pages of {where} letters">'
+                + "".join(f'<a href="{letter_path(region, L, k)}">{"0–9" if L == OTHER else L}, page {k}</a>' for L, k in more) + "</nav>")
     return out + index_links(region)
 
 

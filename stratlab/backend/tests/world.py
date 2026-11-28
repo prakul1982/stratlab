@@ -424,6 +424,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     stock_pages._companies.clear()              # public company pages: the list and built pages another test made
     stock_pages._dir.clear()                    # the A-Z and index directories built from it (SEO-1)
     stock_pages._dir_index.clear()
+    stock_pages._NEWEST.clear()                 # seo102: the market's newest close, worked out from another test's index
+    from app import public_themes as _pt
+    _pt._THEMES_OF.clear()                      # seo102: the company-to-theme links another test's themes made
     main.stock_page_store.mem.clear()
     main.chart_cache.clear()                    # a company's chart closes another test read (PUB-1)
     main.chart_reads._d.clear()                 # ...and the reads it was held to
